@@ -24,6 +24,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import forge.StaticData;
+import forge.ai.effect.EffectRelationshipEvaluator;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.card.CardRules;
 import forge.card.CardStateName;
@@ -586,21 +587,38 @@ public class ComputerUtilCard {
         if (Iterables.isEmpty(list)) {
             return null;
         }
-        return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
+        if (!AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_EFFECT_ANALYSIS)) {
+            return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
+        }
+
+        final int synergyWeight = Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.EFFECT_SYNERGY_WEIGHT));
+        if (synergyWeight == 0) {
+            return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
+        }
+
+        final List<Card> candidates = Lists.newArrayList(list);
+        final Map<Card, Integer> relationshipValues =
+                EffectRelationshipEvaluator.evaluateRemovalRelationships(ai, candidates);
+        return Aggregates.itemWithMax(candidates, c -> addSaturated(
+                evaluateRemovalTargetPriority(ai, c),
+                applyEffectSynergyWeight(relationshipValues.getOrDefault(c, 0), synergyWeight)));
+    }
+
+    private static int applyEffectSynergyWeight(final int value, final int percentage) {
+        final long product = (long) value * percentage;
+        final long weighted = (product + (product >= 0 ? 50 : -50)) / 100;
+        return weighted > Integer.MAX_VALUE ? Integer.MAX_VALUE
+                : weighted < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) weighted;
+    }
+
+    private static int addSaturated(final int left, final int right) {
+        final long result = (long) left + right;
+        return result > Integer.MAX_VALUE ? Integer.MAX_VALUE
+                : result < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) result;
     }
 
     private static int evaluateRemovalTargetPriority(final Player ai, final Card c) {
-        int value;
-        if (c.isCreature()) {
-            value = evaluateCreature(c);
-        } else if (c.isLand()) {
-            value = evaluateLandRemovalPriority(ai, c, null, false);
-        } else {
-            value = 50 + 30 * c.getCMC();
-            if (c.isPlaneswalker()) {
-                value += c.getCounters(CounterEnumType.LOYALTY) * 10;
-            }
-        }
+        int value = evaluatePermanent(ai, c);
 
         // tokens are slightly better since they'll be gone forever
         if (c.isToken()) {
@@ -609,6 +627,24 @@ public class ComputerUtilCard {
 
         if (c.getController().isOpponentOf(ai)) {
             value += ComputerUtil.evaluateBoardPosition(ai, c.getController()) / 4;
+        }
+        return value;
+    }
+
+    /**
+     * Returns the base AI value of a permanent without decision-specific adjustments.
+     */
+    public static int evaluatePermanent(final Player ai, final Card c) {
+        if (c.isCreature()) {
+            return evaluateCreature(c);
+        }
+        if (c.isLand()) {
+            return evaluateLandRemovalPriority(ai, c, null, false);
+        }
+
+        int value = 50 + 30 * c.getCMC();
+        if (c.isPlaneswalker()) {
+            value += c.getCounters(CounterEnumType.LOYALTY) * 10;
         }
         return value;
     }
