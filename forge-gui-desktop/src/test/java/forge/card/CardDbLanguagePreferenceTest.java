@@ -26,7 +26,7 @@ public class CardDbLanguagePreferenceTest {
                 "target/test-images/fatpacks", "target/test-images/boosterboxes",
                 "target/test-images/precons", "target/test-images/tournamentpacks");
         CardStorageReader reader = new CardStorageReader("../forge-gui/res/cardsfolder", null, true);
-        CardStorageReader tokenReader = new CardStorageReader("../forge-gui/res/tokenscripts", null, true);
+        CardStorageReader tokenReader = new CardStorageReader("../forge-gui/res/tokenscripts", null, false);
         staticData = new StaticData(reader, tokenReader, null, null,
                 "../forge-gui/res/editions", "target/nonexistent-custom-editions",
                 "../forge-gui/res/blockdata", "", "Latest Art All Editions",
