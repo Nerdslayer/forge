@@ -33,7 +33,7 @@ import forge.game.zone.ZoneType;
 /**
  * Evaluates narrowly supported first-order relationships between effects on permanents.
  */
-public final class EffectSynergyEvaluator {
+final class TriggeredEffectAnalyzer {
     private static final Set<String> ATTACK_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> PHASE_TRIGGER_PARAMS = Set.of(
@@ -45,15 +45,14 @@ public final class EffectSynergyEvaluator {
     private static final Set<String> COUNTER_ABILITY_PARAMS = Set.of(
             "DB", "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "CounterType", "CounterNum",
             "SpellDescription", "StackDescription");
-
-    private EffectSynergyEvaluator() {
+    private TriggeredEffectAnalyzer() {
     }
 
     /**
      * Returns a raw synergy bonus for each supported permanent belonging to an opponent represented
      * in {@code candidates}. Unsupported or malformed effects are ignored.
      */
-    public static Map<Card, Integer> evaluateRemovalSynergies(final Player evaluatingAi,
+    static Map<Card, Integer> evaluateRelationships(final Player evaluatingAi,
             final Iterable<Card> candidates) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
