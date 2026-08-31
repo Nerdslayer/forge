@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+
+      - name: Set up Android SDK
+        uses: maxim-lobanov/setup-android-tools@v1
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+
+      - name: Install Android Maven plugin
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.m2/repository/com/simpligility/maven/plugins/android-maven-plugin/4.6.2"
+          cd "$HOME/.m2/repository/com/simpligility/maven/plugins/android-maven-plugin/4.6.2"
+          curl -L --fail -o android-maven-plugin-4.6.2.jar \
+            https://github.com/Card-Forge/android-maven-plugin/releases/download/4.6.2/android-maven-plugin-4.6.2.jar
+          curl -L --fail -o android-maven-plugin-4.6.2.pom \
+            https://github.com/Card-Forge/android-maven-plugin/releases/download/4.6.2/android-maven-plugin-4.6.2.pom
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 &
+          export DISPLAY=:99
+          mvn -U -B clean verify \
+            -P android-dev-build \
+            -Dandroid.sdk.path="$ANDROID_SDK_ROOT" \
+            -Dandroid.buildToolsVersion=35.0.0 \
+            -Dmaven.test.skip=true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-android-dev
+          path: forge-gui-android/target/forge-dev-android-*-signed-aligned.apk
+          if-no-files-found: error
