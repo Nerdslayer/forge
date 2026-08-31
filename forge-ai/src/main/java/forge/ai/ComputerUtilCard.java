@@ -1911,9 +1911,20 @@ public class ComputerUtilCard {
      */
     public static Card getPumpedCreature(final Player ai, final SpellAbility sa,
                                          final Card c, int toughness, int power, final List<String> keywords) {
+        return getPumpedCreature(ai, sa, c, toughness, power, keywords, true);
+    }
+
+    /** Returns a pumped analysis copy without advancing the live game's timestamp. */
+    public static Card getPumpedCreatureForEvaluation(final Player ai, final SpellAbility sa,
+            final Card c, final int toughness, final int power, final List<String> keywords) {
+        return getPumpedCreature(ai, sa, c, toughness, power, keywords, false);
+    }
+
+    private static Card getPumpedCreature(final Player ai, final SpellAbility sa,
+            final Card c, int toughness, int power, final List<String> keywords,
+            final boolean advanceGameTimestamp) {
         Card pumped = new CardCopyService(c).copyCard(false);
         pumped.setSickness(c.hasSickness());
-        final long timestamp = c.getGame().getNextTimestamp();
         final List<String> kws = Lists.newArrayList();
         final List<String> hiddenKws = Lists.newArrayList();
         for (String kw : keywords) {
@@ -1944,6 +1955,8 @@ public class ComputerUtilCard {
             }
         }
 
+        final long timestamp = advanceGameTimestamp
+                ? c.getGame().getNextTimestamp() : c.getGame().getTimestamp() + 1;
         pumped.addNewPT(c.getCurrentPower(), c.getCurrentToughness(), timestamp, 0);
         pumped.setPTBoost(c.getPTBoostTable());
         pumped.addPTBoost(power + berserkPower, toughness, timestamp, 0);
@@ -1969,8 +1982,10 @@ public class ComputerUtilCard {
                 toCopy.add(copiedKI);
             }
         }
-        final long timestamp2 = c.getGame().getNextTimestamp(); //is this necessary or can the timestamp be re-used?
-        pumped.addChangedCardKeywordsInternal(toCopy, null, false, timestamp2, null, false);
+        final long copiedKeywordTimestamp = advanceGameTimestamp
+                ? c.getGame().getNextTimestamp() : timestamp + 1;
+        pumped.addChangedCardKeywordsInternal(
+                toCopy, null, false, copiedKeywordTimestamp, null, false);
         pumped.updateKeywordsCache();
         applyStaticContPT(ai.getGame(), pumped, new CardCollection(c));
         return pumped;
