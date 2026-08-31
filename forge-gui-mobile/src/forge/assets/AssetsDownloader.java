@@ -32,6 +32,7 @@ import static forge.localinstance.properties.ForgeConstants.RELEASE_URL;
 import static forge.localinstance.properties.ForgeConstants.RES_DIR;
 
 public class AssetsDownloader {
+    private static final String SNAPSHOT_URL_FILE = "snapshot-url.txt";
     private final static ImmutableList<String> downloadIgnoreExit = ImmutableList.of("Download", "Ignore", "Exit");
     private final static ImmutableList<String> downloadExit = ImmutableList.of("Download", "Exit");
 
@@ -51,7 +52,7 @@ public class AssetsDownloader {
         final String apkSize = "12MB";
 
         final boolean isSnapshots = versionString.contains("SNAPSHOT");
-        final String snapsURL = GITHUB_SNAPSHOT_URL;
+        final String snapsURL = getSnapshotUrl();
         // desktop and mobile-dev share the same package
         final String guiChannel = GuiBase.isAndroid() ? "forge/forge-gui-android/" : "forge/forge-gui-desktop/";
         final String releaseURL = RELEASE_URL +  guiChannel;
@@ -317,5 +318,22 @@ public class AssetsDownloader {
             Forge.isMobileAdventureMode = Forge.advStartup;
             Forge.exitAnimation(false);
         }
+    }
+
+    private static String getSnapshotUrl() {
+        if (!GuiBase.isAndroid()) {
+            return GITHUB_SNAPSHOT_URL;
+        }
+
+        FileHandle snapshotUrlFile = Gdx.files.internal(SNAPSHOT_URL_FILE);
+        if (!snapshotUrlFile.exists()) {
+            return GITHUB_SNAPSHOT_URL;
+        }
+
+        String snapshotUrl = snapshotUrlFile.readString().trim();
+        if (snapshotUrl.isEmpty()) {
+            return GITHUB_SNAPSHOT_URL;
+        }
+        return snapshotUrl.endsWith("/") ? snapshotUrl : snapshotUrl + "/";
     }
 }
