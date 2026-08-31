@@ -12,6 +12,7 @@ import forge.ai.AiProps;
 import forge.ai.ComputerUtilCard;
 import forge.ai.LobbyPlayerAi;
 import forge.game.Game;
+import forge.game.ability.AbilityFactory;
 import forge.game.card.Card;
 import forge.game.card.CounterEnumType;
 import forge.game.player.Player;
@@ -147,6 +148,69 @@ public class EffectRelationshipEvaluatorTest extends AITest {
 
         Assert.assertTrue(values.getOrDefault(jet, 0) > 0);
         Assert.assertEquals(values.get(jet), values.get(rosie));
+    }
+
+    @Test
+    public void testPayableActivatedTokenAbilityIsRecognized() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Grizzly Bears", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Token | Cost$ 0 | TokenAmount$ 2 | TokenScript$ w_1_1_soldier"
+                        + " | TokenOwner$ You",
+                producer));
+        final Card consequence = addTokenCounterConsequence("Runeclaw Bear", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testTokenCreatedOnceCountsOneBatchInsteadOfEveryToken() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card oneTokenProducer = addPhaseTokenProducer("Grizzly Bears", opponent, 1);
+        final Card threeTokenProducer = addPhaseTokenProducer("Bear Cub", opponent, 3);
+        final Card batchConsequence = addTokenCounterConsequence(
+                "Balduvian Bears", opponent, "TokenCreatedOnce");
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(oneTokenProducer, threeTokenProducer, batchConsequence));
+
+        Assert.assertEquals(values.get(threeTokenProducer), values.get(oneTokenProducer));
+        Assert.assertEquals(values.get(batchConsequence).intValue(), values.get(oneTokenProducer) * 2);
+    }
+
+    @Test
+    public void testMultipleTokenScriptsProduceIndividualEvents() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card singleProducer = addPhaseTokenProducer("Grizzly Bears", opponent, 1);
+        final Card consequence = addTokenCounterConsequence("Runeclaw Bear", opponent);
+        final int singleValue = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(singleProducer, consequence)).get(singleProducer);
+
+        final Card multiProducer = addCard("Bear Cub", opponent);
+        multiProducer.setSVar("EffectTestToken",
+                "DB$ Token | TokenScript$ w_1_1_soldier,c_a_treasure_sac | TokenOwner$ You");
+        addTrigger(multiProducer,
+                "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | Execute$ EffectTestToken"
+                        + " | TriggerZones$ Battlefield");
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(multiProducer, consequence));
+
+        Assert.assertEquals(values.get(multiProducer).intValue(), singleValue * 2);
     }
 
     @Test
@@ -327,10 +391,16 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     private Card addTokenCounterConsequence(final String cardName, final Player controller) {
+        return addTokenCounterConsequence(cardName, controller, "TokenCreated");
+    }
+
+    private Card addTokenCounterConsequence(final String cardName, final Player controller,
+            final String triggerMode) {
         final Card card = addCard(cardName, controller);
         card.setSVar("EffectTestCounter",
                 "DB$ PutCounter | ValidTgts$ Creature.YouCtrl+Other | CounterType$ P1P1");
-        addTrigger(card, "Mode$ TokenCreated | ValidPlayer$ You | ValidToken$ Card.token+YouCtrl"
+        final String validPlayer = "TokenCreated".equals(triggerMode) ? " | ValidPlayer$ You" : "";
+        addTrigger(card, "Mode$ " + triggerMode + validPlayer + " | ValidToken$ Card.token+YouCtrl"
                 + " | Execute$ EffectTestCounter | TriggerZones$ Battlefield");
         return card;
     }
