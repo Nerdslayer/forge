@@ -1,12 +1,16 @@
 package forge.ai.effect;
 
-import forge.game.card.Card;
-import forge.game.player.Player;
-
 import java.util.List;
 
-record EffectProduction(Card source, EffectType type, List<ProducedEvent> events, Player eventPlayer,
-        int expectedBatches) {
-    record ProducedEvent(Card subject, int occurrences) {
+import forge.game.card.Card;
+
+/** Events a source is expected to produce during the analysis horizon. */
+record EffectProduction(Card source, EffectType type, List<EffectEvent> events, int expectedBatches) {
+    EffectProduction {
+        events = List.copyOf(events);
+        if (source == null || type == null || events.isEmpty() || expectedBatches <= 0
+                || events.stream().anyMatch(event -> event.type() != type)) {
+            throw new IllegalArgumentException("Invalid effect production");
+        }
     }
 }

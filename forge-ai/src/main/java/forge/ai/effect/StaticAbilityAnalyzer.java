@@ -77,14 +77,14 @@ final class StaticAbilityAnalyzer {
 
             final int automaticValue = affected == source ? 0
                     : evaluateAutomaticDelta(evaluatingAi, affected, effect, ability);
-            final int recipientValue = saturatingAdd(automaticValue, hintedValue);
+            final int recipientValue = EffectMath.add(automaticValue, hintedValue);
             if (recipientValue == 0) {
                 continue;
             }
 
-            relationshipValue = saturatingAdd(relationshipValue,
+            relationshipValue = EffectMath.add(relationshipValue,
                     affected.getController().isOpponentOf(evaluatingAi)
-                            ? recipientValue : saturatingNegate(recipientValue));
+                            ? recipientValue : EffectMath.negate(recipientValue));
         }
         return relationshipValue;
     }
@@ -97,7 +97,7 @@ final class StaticAbilityAnalyzer {
             withoutEffect.setZone(affected.getZone());
         }
         removeTrackedChanges(withoutEffect, effect, ability);
-        return saturatingSubtract(withEffect,
+        return EffectMath.subtract(withEffect,
                 ComputerUtilCard.evaluatePermanent(evaluatingAi, withoutEffect));
     }
 
@@ -127,27 +127,11 @@ final class StaticAbilityAnalyzer {
     }
 
     private static void addSaturated(final Map<Card, Integer> values, final Card card, final int amount) {
-        final int result = saturatingAdd(values.getOrDefault(card, 0), amount);
+        final int result = EffectMath.add(values.getOrDefault(card, 0), amount);
         if (result == 0) {
             values.remove(card);
         } else {
             values.put(card, result);
         }
-    }
-
-    private static int saturatingAdd(final int left, final int right) {
-        final long result = (long) left + right;
-        return result > Integer.MAX_VALUE ? Integer.MAX_VALUE
-                : result < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) result;
-    }
-
-    private static int saturatingSubtract(final int left, final int right) {
-        final long result = (long) left - right;
-        return result > Integer.MAX_VALUE ? Integer.MAX_VALUE
-                : result < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) result;
-    }
-
-    private static int saturatingNegate(final int value) {
-        return value == Integer.MIN_VALUE ? Integer.MAX_VALUE : -value;
     }
 }

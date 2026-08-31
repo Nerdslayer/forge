@@ -129,6 +129,139 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testPermanentPtConsequenceUsesCreatureValueDelta() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseTokenProducer("Sol Ring", opponent, 1);
+        final Card consequence = addTokenPumpConsequence(
+                "Grizzly Bears", opponent, "+1", "+1", "Permanent", "Self");
+        final long timestampBeforeAnalysis = game.getTimestamp();
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+        Assert.assertEquals(game.getTimestamp(), timestampBeforeAnalysis,
+                "Analysis-only P/T changes must not consume live game timestamps");
+    }
+
+    @Test
+    public void testPerpetualPtReductionOnAiCreatureIncreasesThreat() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseTokenProducer("Sol Ring", opponent, 1);
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestPump",
+                "DB$ Pump | ValidTgts$ Creature.OppCtrl | NumAtt$ -1 | NumDef$ -1"
+                        + " | Duration$ Perpetual");
+        addTrigger(consequence, "Mode$ TokenCreated | ValidPlayer$ You"
+                + " | ValidToken$ Card.token+YouCtrl | Execute$ EffectTestPump"
+                + " | TriggerZones$ Battlefield");
+        addCard("Runeclaw Bear", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testNegativeTriggeredRelationshipValueIsPreserved() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseTokenProducer("Sol Ring", opponent, 1);
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestCounter",
+                "DB$ PutCounter | ValidTgts$ Creature.OppCtrl | CounterType$ P1P1");
+        addTrigger(consequence, "Mode$ TokenCreated | ValidPlayer$ You"
+                + " | ValidToken$ Card.token+YouCtrl | Execute$ EffectTestCounter"
+                + " | TriggerZones$ Battlefield");
+        addCard("Runeclaw Bear", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) < 0,
+                "A mandatory trigger that benefits the AI should reduce removal priority");
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testTemporaryPtConsequenceIsNotTreatedAsPermanentValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseTokenProducer("Sol Ring", opponent, 1);
+        final Card consequence = addTokenPumpConsequence(
+                "Grizzly Bears", opponent, "+3", "+3", null, "Self");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty());
+    }
+
+    @Test
+    public void testPermanentBasePtAnimationUsesResultingPermanentValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseTokenProducer("Grizzly Bears", opponent, 1);
+        final Card consequence = addCard("Sol Ring", opponent);
+        consequence.setSVar("EffectTestAnimate", "DB$ Animate | Defined$ Self"
+                + " | Power$ 4 | Toughness$ 4 | Types$ Creature,Elemental | Duration$ Permanent");
+        addTrigger(consequence, "Mode$ TokenCreated | ValidPlayer$ You"
+                + " | ValidToken$ Card.token+YouCtrl | Execute$ EffectTestAnimate"
+                + " | TriggerZones$ Battlefield");
+        final long timestampBeforeAnalysis = game.getTimestamp();
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+        Assert.assertEquals(game.getTimestamp(), timestampBeforeAnalysis,
+                "Analysis-only animation must not consume live game timestamps");
+    }
+
+    @Test
+    public void testPermanentPumpAllIncludesMatchingBattlefieldCardsAndCreatedToken() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseTokenProducer("Sol Ring", opponent, 1);
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestPumpAll", "DB$ PumpAll | ValidCards$ Creature.YouCtrl"
+                + " | NumAtt$ +1 | NumDef$ +1 | Duration$ Permanent");
+        addTrigger(consequence, "Mode$ TokenCreated | ValidPlayer$ You"
+                + " | ValidToken$ Card.token+YouCtrl | Execute$ EffectTestPumpAll"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testRoyalTalonJetAndRosieAreRecognizedWhenJetCanBeCrewed() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -187,6 +320,31 @@ public class EffectRelationshipEvaluatorTest extends AITest {
 
         Assert.assertEquals(values.get(threeTokenProducer), values.get(oneTokenProducer));
         Assert.assertEquals(values.get(batchConsequence).intValue(), values.get(oneTokenProducer) * 2);
+    }
+
+    @Test
+    public void testBatchOutcomeRetainsProducedSubjectMultiplicities() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card oneTokenProducer = addPhaseTokenProducer("Sol Ring", opponent, 1);
+        final Card threeTokenProducer = addPhaseTokenProducer("Mox Amber", opponent, 3);
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestPumpAll", "DB$ PumpAll"
+                + " | ValidCards$ Creature.token+YouCtrl | NumAtt$ +1 | NumDef$ +1"
+                + " | Duration$ Permanent");
+        addTrigger(consequence, "Mode$ TokenCreatedOnce | ValidToken$ Card.token+YouCtrl"
+                + " | Execute$ EffectTestPumpAll | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(oneTokenProducer, threeTokenProducer, consequence));
+
+        Assert.assertEquals(values.get(threeTokenProducer).intValue(),
+                values.get(oneTokenProducer) * 3);
+        Assert.assertEquals(values.get(consequence).intValue(),
+                values.get(oneTokenProducer) + values.get(threeTokenProducer));
     }
 
     @Test
@@ -402,6 +560,17 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final String validPlayer = "TokenCreated".equals(triggerMode) ? " | ValidPlayer$ You" : "";
         addTrigger(card, "Mode$ " + triggerMode + validPlayer + " | ValidToken$ Card.token+YouCtrl"
                 + " | Execute$ EffectTestCounter | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addTokenPumpConsequence(final String cardName, final Player controller,
+            final String power, final String toughness, final String duration, final String defined) {
+        final Card card = addCard(cardName, controller);
+        final String durationParam = duration == null ? "" : " | Duration$ " + duration;
+        card.setSVar("EffectTestPump", "DB$ Pump | Defined$ " + defined
+                + " | NumAtt$ " + power + " | NumDef$ " + toughness + durationParam);
+        addTrigger(card, "Mode$ TokenCreated | ValidPlayer$ You | ValidToken$ Card.token+YouCtrl"
+                + " | Execute$ EffectTestPump | TriggerZones$ Battlefield");
         return card;
     }
 

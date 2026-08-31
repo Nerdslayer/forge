@@ -37,18 +37,13 @@ public final class EffectRelationshipEvaluator {
 
     private static void merge(final Map<Card, Integer> destination, final Map<Card, Integer> source) {
         for (final Map.Entry<Card, Integer> entry : source.entrySet()) {
-            final int combined = saturatingAdd(destination.getOrDefault(entry.getKey(), 0), entry.getValue());
+            final int combined = EffectMath.add(
+                    destination.getOrDefault(entry.getKey(), 0), entry.getValue());
             if (combined == 0) {
                 destination.remove(entry.getKey());
             } else {
                 destination.put(entry.getKey(), combined);
             }
         }
-    }
-
-    private static int saturatingAdd(final int left, final int right) {
-        final long result = (long) left + right;
-        return result > Integer.MAX_VALUE ? Integer.MAX_VALUE
-                : result < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) result;
     }
 }

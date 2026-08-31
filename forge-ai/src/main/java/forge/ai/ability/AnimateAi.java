@@ -464,14 +464,24 @@ public class AnimateAi extends SpellAbilityAi {
 
     public static Card becomeAnimated(final Card card, final SpellAbility sa) {
         final Card copy = CardCopyService.getLKICopy(card);
-        becomeAnimated(copy, card.hasSickness(), sa);
+        becomeAnimated(copy, card.hasSickness(), sa,
+                sa.getActivatingPlayer().getGame().getNextTimestamp());
         return copy;
     }
-    private static void becomeAnimated(final Card card, final boolean hasOriginalCardSickness, final SpellAbility sa) {
+
+    /** Returns an animated analysis copy without advancing the live game's timestamp. */
+    public static Card becomeAnimatedForEvaluation(final Card card, final SpellAbility sa) {
+        final Card copy = CardCopyService.getLKICopy(card);
+        becomeAnimated(copy, card.hasSickness(), sa,
+                sa.getActivatingPlayer().getGame().getTimestamp() + 1);
+        return copy;
+    }
+
+    private static void becomeAnimated(final Card card, final boolean hasOriginalCardSickness,
+            final SpellAbility sa, final long timestamp) {
         // duplicating AnimateEffect.resolve
         final Card source = sa.getHostCard();
         final Game game = sa.getActivatingPlayer().getGame();
-        final long timestamp = game.getNextTimestamp();
         card.setSickness(hasOriginalCardSickness);
 
         // AF specific sa
