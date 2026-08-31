@@ -24,6 +24,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import forge.StaticData;
+import forge.ai.effect.EffectSynergyEvaluator;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.card.CardRules;
 import forge.card.CardStateName;
@@ -586,7 +587,30 @@ public class ComputerUtilCard {
         if (Iterables.isEmpty(list)) {
             return null;
         }
-        return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
+        if (!AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_EFFECT_ANALYSIS)) {
+            return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
+        }
+
+        final int synergyWeight = Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.EFFECT_SYNERGY_WEIGHT));
+        if (synergyWeight == 0) {
+            return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
+        }
+
+        final List<Card> candidates = Lists.newArrayList(list);
+        final Map<Card, Integer> synergyValues = EffectSynergyEvaluator.evaluateRemovalSynergies(ai, candidates);
+        return Aggregates.itemWithMax(candidates, c -> addSaturated(
+                evaluateRemovalTargetPriority(ai, c),
+                applyEffectSynergyWeight(synergyValues.getOrDefault(c, 0), synergyWeight)));
+    }
+
+    private static int applyEffectSynergyWeight(final int value, final int percentage) {
+        final long weighted = ((long) value * percentage + 50) / 100;
+        return weighted >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) weighted;
+    }
+
+    private static int addSaturated(final int left, final int right) {
+        final long result = (long) left + right;
+        return result >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) result;
     }
 
     private static int evaluateRemovalTargetPriority(final Player ai, final Card c) {
