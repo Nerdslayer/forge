@@ -11,6 +11,7 @@ import java.util.Set;
 
 import forge.ai.ComputerUtilCard;
 import forge.ai.ComputerUtilCombat;
+import forge.ai.ComputerUtilCost;
 import forge.ai.ability.TokenAi;
 import forge.game.ability.AbilityFactory;
 import forge.game.ability.AbilityKey;
@@ -22,6 +23,7 @@ import forge.game.card.CounterEnumType;
 import forge.game.combat.CombatUtil;
 import forge.game.keyword.Keyword;
 import forge.game.player.Player;
+import forge.game.player.PlayerCollection;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.TargetRestrictions;
 import forge.game.staticability.StaticAbilityCantCrew;
@@ -39,9 +41,10 @@ final class TriggeredEffectAnalyzer {
     private static final Set<String> PHASE_TRIGGER_PARAMS = Set.of(
             "Mode", "Phase", "ValidPlayer", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> TOKEN_CREATED_TRIGGER_PARAMS = Set.of(
-            "Mode", "ValidPlayer", "ValidToken", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
-    private static final Set<String> TOKEN_ABILITY_PARAMS = Set.of(
-            "DB", "TokenScript", "TokenOwner", "TokenAmount", "SpellDescription", "StackDescription");
+            "Mode", "ValidPlayer", "ValidToken", "OnlyFirst", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> TOKEN_CREATED_ONCE_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidToken", "OnlyFirst", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> COUNTER_ABILITY_PARAMS = Set.of(
             "DB", "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "CounterType", "CounterNum",
             "SpellDescription", "StackDescription");
@@ -72,6 +75,16 @@ final class TriggeredEffectAnalyzer {
         final List<EffectConsequence> consequences = new ArrayList<>();
         for (final Player controller : analyzedControllers) {
             for (final Card permanent : controller.getCardsIn(ZoneType.Battlefield)) {
+                for (final SpellAbility ability : permanent.getSpellAbilities()) {
+                    try {
+                        final EffectProduction production = extractActivatedProduction(permanent, ability);
+                        if (production != null) {
+                            productions.add(production);
+                        }
+                    } catch (final RuntimeException ignored) {
+                        // Card scripts are data. Unknown or malformed forms must not disrupt AI decisions.
+                    }
+                }
                 for (final Trigger trigger : permanent.getTriggers()) {
                     try {
                         final EffectProduction production = extractProduction(permanent, trigger);
@@ -92,11 +105,7 @@ final class TriggeredEffectAnalyzer {
         final Map<Card, Integer> bonuses = new HashMap<>();
         for (final EffectProduction production : productions) {
             for (final EffectConsequence consequence : consequences) {
-                if (!matches(production, consequence)) {
-                    continue;
-                }
-                final int targetDelta = findBestCounterDelta(production, consequence);
-                final int relationshipValue = saturatingMultiply(production.expectedOccurrences(), targetDelta);
+                final int relationshipValue = evaluateRelationship(production, consequence);
                 if (relationshipValue <= 0) {
                     continue;
                 }
@@ -136,27 +145,39 @@ final class TriggeredEffectAnalyzer {
             return null;
         }
 
-        final SpellAbility outcome = getCopiedOutcome(source, trigger);
-        if (!isSupportedTokenAbility(outcome)) {
+        final SpellAbility outcome = findDirectTokenOutcome(getCopiedOutcome(source, trigger));
+        if (outcome == null) {
             return null;
         }
-        outcome.setActivatingPlayer(source.getController());
+        return createTokenProduction(source, outcome, expectedOccurrences);
+    }
 
-        final int tokenAmount = AbilityUtils.calculateAmount(source,
-                outcome.getParamOrDefault("TokenAmount", "1"), outcome);
-        if (tokenAmount <= 0) {
+    private static EffectProduction extractActivatedProduction(final Card source, final SpellAbility ability) {
+        if (!source.isInPlay() || !ability.isActivatedAbility()) {
             return null;
         }
-        final Card token = TokenAi.spawnToken(source.getController(), outcome);
-        return new EffectProduction(source, EffectType.TOKEN_CREATED, token, source.getController(),
-                saturatingMultiply(expectedOccurrences, tokenAmount));
+        final SpellAbility copied = ability.copy(source, false);
+        copied.setActivatingPlayer(source.getController());
+        if (!copied.getRestrictions().checkZoneRestrictions(source, copied)
+                || !copied.getRestrictions().checkOtherRestrictions(
+                        source, copied, source.getController())
+                || (copied.getConditions() != null && !copied.getConditions().areMet(copied))
+                || !ComputerUtilCost.canPayCost(copied, source.getController(), false)) {
+            return null;
+        }
+        final SpellAbility outcome = findDirectTokenOutcome(copied);
+        return outcome == null ? null : createTokenProduction(source, outcome, 1);
     }
 
     private static EffectConsequence extractConsequence(final Card source, final Trigger trigger) {
-        if (trigger.getMode() != TriggerType.TokenCreated
+        if ((trigger.getMode() != TriggerType.TokenCreated
+                && trigger.getMode() != TriggerType.TokenCreatedOnce)
                 || !isActiveBattlefieldTrigger(source, trigger)
-                || !hasOnlyParams(trigger, TOKEN_CREATED_TRIGGER_PARAMS)
-                || !"You".equals(trigger.getParam("ValidPlayer"))) {
+                || (trigger.getMode() == TriggerType.TokenCreated
+                        && (!hasOnlyParams(trigger, TOKEN_CREATED_TRIGGER_PARAMS)
+                                || !"You".equals(trigger.getParam("ValidPlayer"))))
+                || (trigger.getMode() == TriggerType.TokenCreatedOnce
+                        && !hasOnlyParams(trigger, TOKEN_CREATED_ONCE_TRIGGER_PARAMS))) {
             return null;
         }
 
@@ -187,15 +208,55 @@ final class TriggeredEffectAnalyzer {
         return outcome == null ? null : outcome.copy(source, false);
     }
 
+    private static SpellAbility findDirectTokenOutcome(final SpellAbility outcome) {
+        SpellAbility current = outcome;
+        while (current != null) {
+            if (current.getApi() == ApiType.Token) {
+                return isSupportedTokenAbility(current) ? current : null;
+            }
+            current = current.getSubAbility();
+        }
+        return null;
+    }
+
     private static boolean isSupportedTokenAbility(final SpellAbility outcome) {
-        if (outcome == null || outcome.getApi() != ApiType.Token || outcome.getSubAbility() != null
-                || !hasOnlyParams(outcome, TOKEN_ABILITY_PARAMS)
-                || !"You".equals(outcome.getParam("TokenOwner"))
-                || !outcome.hasParam("TokenScript")) {
+        if (!outcome.hasParam("TokenScript")
+                || !"You".equals(outcome.getParamOrDefault("TokenOwner", "You"))) {
             return false;
         }
-        final String tokenScript = outcome.getParam("TokenScript");
-        return !tokenScript.isBlank() && !tokenScript.contains(",");
+        for (final String param : outcome.getMapParams().keySet()) {
+            if (param.startsWith("Condition") || param.startsWith("Unless")) {
+                return false;
+            }
+        }
+        return !outcome.getParam("TokenScript").isBlank();
+    }
+
+    private static EffectProduction createTokenProduction(final Card source,
+            final SpellAbility outcome, final int expectedBatches) {
+        outcome.setActivatingPlayer(source.getController());
+        final int tokenAmount = AbilityUtils.calculateAmount(source,
+                outcome.getParamOrDefault("TokenAmount", "1"), outcome);
+        if (tokenAmount <= 0) {
+            return null;
+        }
+
+        final List<EffectProduction.ProducedEvent> events = new ArrayList<>();
+        for (final String script : outcome.getParam("TokenScript").split(",")) {
+            if (script.isBlank()) {
+                return null;
+            }
+            final SpellAbility tokenAbility = outcome.copy(source, false);
+            tokenAbility.setActivatingPlayer(source.getController());
+            tokenAbility.getMapParams().put("TokenScript", script.trim());
+            final Card token = TokenAi.spawnToken(source.getController(), tokenAbility);
+            if (outcome.hasParam("TokenTapped")) {
+                token.setTapped(true);
+            }
+            events.add(new EffectProduction.ProducedEvent(token, tokenAmount));
+        }
+        return events.isEmpty() ? null : new EffectProduction(source, EffectType.TOKEN_CREATED,
+                List.copyOf(events), source.getController(), expectedBatches);
     }
 
     private static boolean isSupportedCounterAbility(final SpellAbility outcome) {
@@ -215,14 +276,70 @@ final class TriggeredEffectAnalyzer {
                 && restrictions.getZone().contains(ZoneType.Battlefield);
     }
 
-    private static boolean matches(final EffectProduction production, final EffectConsequence consequence) {
+    private static int evaluateRelationship(final EffectProduction production,
+            final EffectConsequence consequence) {
         if (production.type() != consequence.observedType()) {
-            return false;
+            return 0;
         }
+        if (consequence.trigger().getMode() == TriggerType.TokenCreatedOnce) {
+            return evaluateBatchRelationship(production, consequence);
+        }
+
+        int value = 0;
+        int eventNumber = production.eventPlayer().getNumTokenCreatedThisTurn();
+        for (final EffectProduction.ProducedEvent event : production.events()) {
+            final int firstEventNumber = saturatingAdd(eventNumber, 1);
+            if (matchesIndividualEvent(production, consequence, event.subject(), firstEventNumber)) {
+                final int matchingOccurrences = consequence.trigger().hasParam("OnlyFirst")
+                        ? 1 : event.occurrences();
+                value = saturatingAdd(value, saturatingMultiply(matchingOccurrences,
+                        findBestCounterDelta(production.eventPlayer(), event.subject(), consequence)));
+            }
+            eventNumber = saturatingAdd(eventNumber, event.occurrences());
+        }
+        return saturatingMultiply(production.expectedBatches(), value);
+    }
+
+    private static int evaluateBatchRelationship(final EffectProduction production,
+            final EffectConsequence consequence) {
+        final Map<AbilityKey, Object> runParams = new EnumMap<>(AbilityKey.class);
+        final List<Card> tokens = new ArrayList<>();
+        for (final EffectProduction.ProducedEvent event : production.events()) {
+            tokens.add(event.subject());
+        }
+        runParams.put(AbilityKey.Cards, tokens);
+        if (production.eventPlayer().getNumTokenCreatedThisTurn() == 0) {
+            runParams.put(AbilityKey.FirstTime, new PlayerCollection(production.eventPlayer()));
+        } else {
+            runParams.put(AbilityKey.FirstTime, new PlayerCollection());
+        }
+        try {
+            if (!(consequence.trigger().checkActivationLimit()
+                    && consequence.trigger().meetsRequirementsOnTriggeredObjects(
+                            consequence.source().getGame(), runParams)
+                    && consequence.trigger().performTest(runParams)
+                    && !StaticAbilityDisableTriggers.disabled(
+                            consequence.source().getGame(), consequence.trigger(), runParams))) {
+                return 0;
+            }
+        } catch (final RuntimeException ignored) {
+            return 0;
+        }
+
+        int bestDelta = 0;
+        for (final EffectProduction.ProducedEvent event : production.events()) {
+            bestDelta = Math.max(bestDelta,
+                    findBestCounterDelta(production.eventPlayer(), event.subject(), consequence));
+        }
+        return saturatingMultiply(production.expectedBatches(), bestDelta);
+    }
+
+    private static boolean matchesIndividualEvent(final EffectProduction production,
+            final EffectConsequence consequence, final Card token, final int eventNumber) {
         final Map<AbilityKey, Object> runParams = new EnumMap<>(AbilityKey.class);
         runParams.put(AbilityKey.Player, production.eventPlayer());
-        runParams.put(AbilityKey.Card, production.eventSubject());
-        runParams.put(AbilityKey.Num, 1);
+        runParams.put(AbilityKey.Card, token);
+        runParams.put(AbilityKey.Num, eventNumber);
         try {
             return consequence.trigger().checkActivationLimit()
                     && consequence.trigger().meetsRequirementsOnTriggeredObjects(
@@ -235,13 +352,13 @@ final class TriggeredEffectAnalyzer {
         }
     }
 
-    private static int findBestCounterDelta(final EffectProduction production,
+    private static int findBestCounterDelta(final Player eventPlayer, final Card eventSubject,
             final EffectConsequence consequence) {
         int bestDelta = 0;
         final List<Card> potentialTargets = new ArrayList<>();
-        potentialTargets.addAll(production.eventPlayer().getCreaturesInPlay());
-        if (production.eventSubject().isCreature()) {
-            potentialTargets.add(production.eventSubject());
+        potentialTargets.addAll(eventPlayer.getCreaturesInPlay());
+        if (eventSubject.isCreature()) {
+            potentialTargets.add(eventSubject);
         }
 
         for (final Card target : potentialTargets) {

@@ -3,6 +3,10 @@ package forge.ai.effect;
 import forge.game.card.Card;
 import forge.game.player.Player;
 
-record EffectProduction(Card source, EffectType type, Card eventSubject, Player eventPlayer,
-        int expectedOccurrences) {
+import java.util.List;
+
+record EffectProduction(Card source, EffectType type, List<ProducedEvent> events, Player eventPlayer,
+        int expectedBatches) {
+    record ProducedEvent(Card subject, int occurrences) {
+    }
 }
