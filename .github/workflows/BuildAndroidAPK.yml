@@ -69,5 +69,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: forge-android-dev
-          path: forge-gui-android/target/forge-dev-android-*-signed-aligned.apk
+          path: forge-gui-android/target/forge-dev-android-*-aligned-debugSigned.apk
           if-no-files-found: error
