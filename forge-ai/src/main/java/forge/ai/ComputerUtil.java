@@ -375,7 +375,7 @@ public class ComputerUtil {
                 final CardCollection nonLandsInHand = CardLists.getNotType(ai.getCardsIn(ZoneType.Hand), "Land");
                 nonLandsInHand.addAll(ai.getCardsIn(ZoneType.Library));
                 final int highestCMC = Math.max(6, Aggregates.max(nonLandsInHand, Card::getCMC));
-                if (landsInPlay.size() + landsInHand >= highestCMC) {
+                if (ai.getLandsInPlay().size() + landsInHand >= highestCMC) {
                     // Don't need more land.
                     return ComputerUtilCard.getWorstLand(landsInPlay);
                 }
@@ -3167,10 +3167,17 @@ public class ComputerUtil {
         return Integer.MIN_VALUE == AiCache.getCached("aiLifeInDanger", () -> predictNextCombatsRemainingLife(ai, serious, false, payment, null),
                 List.of(AiCache::identity, Objects::equals, Objects::equals), ai, serious, payment);
     }
+    public static boolean aiLifeInDanger(Player ai, boolean serious, int payment, final CardCollectionView additionalBlockers) {
+        return Integer.MIN_VALUE == predictNextCombatsRemainingLife(ai, serious, false, payment, null, additionalBlockers, ai.getOpponents());
+    }
     public static int predictNextCombatsRemainingLife(Player ai, boolean serious, boolean checkDiff, int payment, final CardCollection excludedBlockers) {
         return predictNextCombatsRemainingLife(ai, serious, checkDiff, payment, excludedBlockers, ai.getOpponents());
     }
     public static int predictNextCombatsRemainingLife(Player ai, boolean serious, boolean checkDiff, int payment, final CardCollection excludedBlockers, final List<Player> opps) {
+        return predictNextCombatsRemainingLife(ai, serious, checkDiff, payment, excludedBlockers, null, opps);
+    }
+    private static int predictNextCombatsRemainingLife(Player ai, boolean serious, boolean checkDiff, int payment,
+            final CardCollection excludedBlockers, final CardCollectionView additionalBlockers, final List<Player> opps) {
         // life won't change
         int remainingLife = Integer.MAX_VALUE;
 
@@ -3203,7 +3210,7 @@ public class ComputerUtil {
             // TODO if it's next turn ignore mustBlockCards
             AiBlockController block = new AiBlockController(ai, false);
             // TODO for performance skip ahead to safer blocking approach (though probably only when not in checkDiff mode as that could lead to inflated prediction)
-            block.assignBlockersForCombat(combat, excludedBlockers);
+            block.assignBlockersForCombat(combat, excludedBlockers, additionalBlockers);
 
             // TODO predict other, noncombat sources of damage and add them to the "payment" variable.
             // examples : Black Vise, The Rack, known direct damage spells in enemy hand, etc

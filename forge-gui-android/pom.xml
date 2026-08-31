@@ -835,6 +835,52 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.0.0</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.apache.ant</groupId>
+                                <artifactId>ant-nodeps</artifactId>
+                                <version>1.8.1</version>
+                            </dependency>
+                        </dependencies>
+                        <executions>
+                            <execution>
+                                <id>android-dev-assets-packaging</id>
+                                <phase>package</phase>
+                                <configuration>
+                                    <target>
+                                        <copy todir="${project.build.directory}/res">
+                                            <fileset dir="${basedir}/../forge-gui/" includes="LICENSE.txt" />
+                                            <fileset dir="${basedir}/../forge-gui/release-files/" includes="CONTRIBUTORS.txt" />
+                                            <fileset dir="${basedir}/../forge-gui/release-files/" includes="INSTALLATION.txt" />
+                                            <fileset dir="${basedir}/../forge-gui/release-files/" includes="ISSUES.txt" />
+                                            <fileset dir="${basedir}/../forge-gui-desktop/target/" includes="CHANGES.txt" />
+                                            <fileset dir="${basedir}/../forge-gui-mobile-dev/" includes="sentry.properties" />
+                                            <fileset dir="${basedir}/../forge-gui/">
+                                                <include name="res/**" />
+                                                <exclude name="res/cardsfolder/**" />
+                                            </fileset>
+                                        </copy>
+                                        <copy todir="${project.build.directory}/res/res">
+                                            <fileset dir="${project.build.directory}/classes/assets">
+                                                <include name="build.txt" />
+                                            </fileset>
+                                        </copy>
+                                        <mkdir dir="${project.build.directory}/res/res/cardsfolder" />
+                                        <zip destfile="${project.build.directory}/res/res/cardsfolder/cardsfolder.zip" basedir="${basedir}/../forge-gui/res/cardsfolder" level="1" />
+                                        <zip destfile="${project.build.directory}/assets.zip" basedir="${project.build.directory}/res" level="1" excludes="**/*.xcf" />
+                                        <delete dir="${project.build.directory}/res" />
+                                    </target>
+                                </configuration>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
                 </plugins>
             </build>
         </profile>

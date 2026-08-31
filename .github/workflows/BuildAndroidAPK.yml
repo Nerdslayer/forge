@@ -1,0 +1,121 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+
+      - name: Set up Android SDK
+        shell: bash
+        run: |
+          sdk_root="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+
+          test -x "$sdkmanager"
+
+          echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+          echo "$sdk_root/platform-tools" >> "$GITHUB_PATH"
+          echo "$sdk_root/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+          "$sdkmanager" --sdk_root="$sdk_root" --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Install Android Maven plugin
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.m2/repository/com/simpligility/maven/plugins/android-maven-plugin/4.6.2"
+          cd "$HOME/.m2/repository/com/simpligility/maven/plugins/android-maven-plugin/4.6.2"
+          curl -L --fail -o android-maven-plugin-4.6.2.jar \
+            https://github.com/Card-Forge/android-maven-plugin/releases/download/4.6.2/android-maven-plugin-4.6.2.jar
+          curl -L --fail -o android-maven-plugin-4.6.2.pom \
+            https://github.com/Card-Forge/android-maven-plugin/releases/download/4.6.2/android-maven-plugin-4.6.2.pom
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Configure fork snapshot URL
+        shell: bash
+        run: |
+          printf '%s\n' \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/fork-android-snapshot/" \
+            > forge-gui-android/filters/snapshot-url.txt
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 &
+          export DISPLAY=:99
+          mvn -U -B clean verify \
+            -P android-dev-build \
+            -Dandroid.sdk.path="$ANDROID_SDK_ROOT" \
+            -Dandroid.buildToolsVersion=35.0.0 \
+            -Dmaven.test.skip=true
+
+      - name: Prepare fork snapshot files
+        shell: bash
+        run: |
+          mkdir -p forge-gui-android/target/fork-snapshot
+
+          version="$(tr -d '\r\n' < forge-gui-android/target/classes/assets/version.txt)"
+          apk="$(find forge-gui-android/target -maxdepth 1 -name 'forge-dev-android-*-aligned-debugSigned.apk' -print -quit)"
+
+          test -n "$version"
+          test -f "$apk"
+          test -f forge-gui-android/target/assets.zip
+
+          cp "$apk" forge-gui-android/target/fork-snapshot/forge-android-dev.apk
+          cp "$apk" "forge-gui-android/target/fork-snapshot/forge-android-${version}-signed-aligned.apk"
+          cp forge-gui-android/target/assets.zip forge-gui-android/target/fork-snapshot/assets.zip
+          cp forge-gui-android/target/classes/assets/version.txt forge-gui-android/target/fork-snapshot/version.txt
+          cp forge-gui-android/target/classes/assets/build.txt forge-gui-android/target/fork-snapshot/build.txt
+
+      - name: Upload fork snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-android-fork-snapshot
+          path: forge-gui-android/target/fork-snapshot/*
+          if-no-files-found: error
+
+      - name: Publish fork Android snapshot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="fork-android-snapshot"
+          title="Fork Android Snapshot"
+          notes="Android snapshot built from ${GITHUB_REPOSITORY}@${GITHUB_SHA}."
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" forge-gui-android/target/fork-snapshot/* --clobber
+            gh release edit "$tag" --title "$title" --notes "$notes" --prerelease
+          else
+            gh release create "$tag" forge-gui-android/target/fork-snapshot/* \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes "$notes" \
+              --prerelease
+          fi
