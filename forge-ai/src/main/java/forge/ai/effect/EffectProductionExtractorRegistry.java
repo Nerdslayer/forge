@@ -10,7 +10,8 @@ import forge.game.trigger.Trigger;
 /** Shared routing for supported production extractors. */
 final class EffectProductionExtractorRegistry {
     private static final List<EffectProductionExtractor> EXTRACTORS = List.of(
-            TokenProductionExtractor.INSTANCE);
+            TokenProductionExtractor.INSTANCE,
+            CounterProductionExtractor.INSTANCE);
 
     private EffectProductionExtractorRegistry() {
     }

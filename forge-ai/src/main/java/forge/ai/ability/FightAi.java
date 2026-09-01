@@ -59,13 +59,16 @@ public class FightAi extends SpellAbilityAi {
                 return new AiAbilityDecision(0, AiPlayDecision.MissingNeededCards);
             }
             Card fighter1 = fighter1List.get(0);
+            CardCollection safeKillableTargets = new CardCollection();
             for (Card humanCreature : humCreatures) {
                 if (canKill(fighter1, humanCreature, 0)
                         && !canKill(humanCreature, fighter1, 0)) {
-                    // todo: check min/max targets; see if we picked the best matchup
-                    sa.getTargets().add(humanCreature);
-                    return new AiAbilityDecision(100, AiPlayDecision.WillPlay);
+                    safeKillableTargets.add(humanCreature);
                 }
+            }
+            if (!safeKillableTargets.isEmpty()) {
+                sa.getTargets().add(ComputerUtilCard.getBestRemovalTargetAI(ai, safeKillableTargets, sa));
+                return new AiAbilityDecision(100, AiPlayDecision.WillPlay);
             }
             // bail at this point, otherwise the AI will overtarget and waste the activation
             return new AiAbilityDecision(0, AiPlayDecision.TargetingFailed);

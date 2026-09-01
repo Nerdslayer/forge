@@ -655,6 +655,12 @@ public class UIScene extends Scene {
                 e.printStackTrace();
             }
         }
+        // A scene can be created after the application's initial resize callback
+        // (notably during Android startup). Synchronize the viewport here so its
+        // world-to-screen transform also matches the current input coordinates.
+        if (Gdx.graphics.getWidth() > 0 && Gdx.graphics.getHeight() > 0) {
+            stage.getViewport().update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), true);
+        }
         Gdx.input.setInputProcessor(stage);
         updateBG(false);
         super.enter();

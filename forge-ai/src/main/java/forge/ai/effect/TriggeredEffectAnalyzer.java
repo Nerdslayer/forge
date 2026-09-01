@@ -21,7 +21,7 @@ final class TriggeredEffectAnalyzer {
     }
 
     static Map<Card, Integer> evaluateRelationships(final Player evaluatingAi,
-            final Iterable<Card> candidates) {
+            final Iterable<Card> candidates, final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
@@ -33,7 +33,7 @@ final class TriggeredEffectAnalyzer {
 
         final List<EffectProduction> productions = new ArrayList<>();
         final Map<EffectType, List<EffectConsequence>> consequences = new EnumMap<>(EffectType.class);
-        extractEffects(analyzedControllers, productions, consequences);
+        extractEffects(analyzedControllers, productions, consequences, trace);
 
         final Map<Card, Integer> values = new HashMap<>();
         for (final EffectProduction production : productions) {
@@ -44,7 +44,7 @@ final class TriggeredEffectAnalyzer {
             for (final EffectConsequence consequence : consequences.getOrDefault(
                     production.type(), List.of())) {
                 final int relationshipValue = evaluateRelationship(
-                        evaluatingAi, production, consequence, matcher);
+                        evaluatingAi, production, consequence, matcher, trace);
                 if (relationshipValue == 0) {
                     continue;
                 }
@@ -70,26 +70,32 @@ final class TriggeredEffectAnalyzer {
 
     private static void extractEffects(final Iterable<Player> controllers,
             final List<EffectProduction> productions,
-            final Map<EffectType, List<EffectConsequence>> consequences) {
+            final Map<EffectType, List<EffectConsequence>> consequences,
+            final EffectAnalysisTrace trace) {
         for (final Player controller : controllers) {
             for (final Card permanent : controller.getCardsIn(ZoneType.Battlefield)) {
                 for (final SpellAbility ability : permanent.getSpellAbilities()) {
                     try {
-                        productions.addAll(
-                                EffectProductionExtractorRegistry.extract(permanent, ability));
+                        final List<EffectProduction> extracted =
+                                EffectProductionExtractorRegistry.extract(permanent, ability);
+                        productions.addAll(extracted);
+                        extracted.forEach(trace::production);
                     } catch (final RuntimeException ignored) {
                         // Unknown or malformed card scripts must not disrupt AI decisions.
                     }
                 }
                 for (final Trigger trigger : permanent.getTriggers()) {
                     try {
-                        productions.addAll(
-                                EffectProductionExtractorRegistry.extract(permanent, trigger));
+                        final List<EffectProduction> extracted =
+                                EffectProductionExtractorRegistry.extract(permanent, trigger);
+                        productions.addAll(extracted);
+                        extracted.forEach(trace::production);
                         final EffectConsequence consequence =
                                 EffectConsequenceExtractorRegistry.extract(permanent, trigger);
                         if (consequence != null) {
                             consequences.computeIfAbsent(consequence.observedType(), key -> new ArrayList<>())
                                     .add(consequence);
+                            trace.consequence(consequence);
                         }
                     } catch (final RuntimeException ignored) {
                         // Unknown or malformed card scripts must not disrupt AI decisions.
@@ -101,7 +107,7 @@ final class TriggeredEffectAnalyzer {
 
     private static int evaluateRelationship(final Player evaluatingAi,
             final EffectProduction production, final EffectConsequence consequence,
-            final EffectEventMatcher matcher) {
+            final EffectEventMatcher matcher, final EffectAnalysisTrace trace) {
         try {
             int value = 0;
             for (final EffectMatch match : matcher.match(production, consequence)) {
@@ -111,9 +117,16 @@ final class TriggeredEffectAnalyzer {
                 consequence.trigger().setTriggeringObjects(outcome, match.event().triggerParameters());
                 final int outcomeValue = consequence.outcomeEvaluator().evaluateOutcome(
                         outcome, new OutcomeEvaluationContext(evaluatingAi, match.event()));
-                value = EffectMath.add(value, EffectMath.multiply(match.resolutions(), outcomeValue));
+                final int contribution = EffectMath.multiply(match.resolutions(), outcomeValue);
+                trace.triggeredMatch(
+                        production, consequence, match, outcomeValue, contribution);
+                value = EffectMath.add(value, contribution);
             }
-            return EffectMath.multiply(production.expectedBatches(), value);
+            final int totalValue = EffectMath.multiply(production.expectedBatches(), value);
+            if (totalValue != 0) {
+                trace.triggeredRelationship(production, consequence, value, totalValue);
+            }
+            return totalValue;
         } catch (final RuntimeException ignored) {
             return 0;
         }

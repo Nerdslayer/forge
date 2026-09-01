@@ -17,6 +17,12 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     private static final Set<String> TOKEN_CREATED_ONCE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidToken", "OnlyFirst", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
+    private static final Set<String> COUNTER_ADDED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidPlayer", "ValidSource", "CounterType",
+            "CounterAmount", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> COUNTER_ADDED_ONCE_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidEntity", "ValidCard", "ValidPlayer", "ValidSource", "CounterType",
+            "FirstTime", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
 
     private TriggeredConsequenceExtractor() {
     }
@@ -36,14 +42,21 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         outcome.setActivatingPlayer(source.getController());
         outcome.resetTargets();
         final OutcomeEvaluator outcomeEvaluator = OutcomeEvaluatorRegistry.find(outcome);
-        return outcomeEvaluator == null ? null
-                : new EffectConsequence(source, observedType, trigger, outcome, outcomeEvaluator);
+        if (outcomeEvaluator == null) {
+            return null;
+        }
+        final Trigger normalizedTrigger = normalizedTrigger(source, trigger);
+        return new EffectConsequence(source, observedType, normalizedTrigger, outcome, outcomeEvaluator);
     }
 
     private static EffectType observedType(final Trigger trigger) {
-        return trigger.getMode() == TriggerType.TokenCreated
-                || trigger.getMode() == TriggerType.TokenCreatedOnce
-                ? EffectType.TOKEN_CREATED : null;
+        if (trigger.getMode() == TriggerType.TokenCreated
+                || trigger.getMode() == TriggerType.TokenCreatedOnce) {
+            return EffectType.TOKEN_CREATED;
+        }
+        return trigger.getMode() == TriggerType.CounterAdded
+                || trigger.getMode() == TriggerType.CounterAddedOnce
+                ? EffectType.COUNTER_ADDED : null;
     }
 
     private static boolean hasSupportedParameters(final Trigger trigger) {
@@ -51,7 +64,24 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
             return EffectAbilityUtils.hasOnlyParams(trigger, TOKEN_CREATED_TRIGGER_PARAMS)
                     && "You".equals(trigger.getParam("ValidPlayer"));
         }
-        return trigger.getMode() == TriggerType.TokenCreatedOnce
-                && EffectAbilityUtils.hasOnlyParams(trigger, TOKEN_CREATED_ONCE_TRIGGER_PARAMS);
+        if (trigger.getMode() == TriggerType.TokenCreatedOnce) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, TOKEN_CREATED_ONCE_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.CounterAdded) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, COUNTER_ADDED_TRIGGER_PARAMS);
+        }
+        return trigger.getMode() == TriggerType.CounterAddedOnce
+                && EffectAbilityUtils.hasOnlyParams(trigger, COUNTER_ADDED_ONCE_TRIGGER_PARAMS);
+    }
+
+    private static Trigger normalizedTrigger(final Card source, final Trigger trigger) {
+        if ((trigger.getMode() == TriggerType.CounterAdded
+                || trigger.getMode() == TriggerType.CounterAddedOnce)
+                && "Any".equalsIgnoreCase(trigger.getParam("CounterType"))) {
+            final Trigger normalized = trigger.copy(source, true);
+            normalized.removeParam("CounterType");
+            return normalized;
+        }
+        return trigger;
     }
 }

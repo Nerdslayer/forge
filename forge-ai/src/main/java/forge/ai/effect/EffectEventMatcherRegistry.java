@@ -9,6 +9,7 @@ final class EffectEventMatcherRegistry {
 
     static {
         MATCHERS.put(EffectType.TOKEN_CREATED, TokenCreatedEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.COUNTER_ADDED, CounterAddedEventMatcher.INSTANCE);
     }
 
     private EffectEventMatcherRegistry() {

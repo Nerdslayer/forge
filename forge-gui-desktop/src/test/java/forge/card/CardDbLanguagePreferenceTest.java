@@ -1,40 +1,32 @@
 package forge.card;
 
-import forge.CardStorageReader;
-import forge.ImageKeys;
 import forge.StaticData;
+import forge.ai.AITest;
 import forge.item.PaperCard;
-import forge.util.Localizer;
-import org.testng.annotations.BeforeClass;
+import forge.model.FModel;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-
-import java.util.Collections;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 
-public class CardDbLanguagePreferenceTest {
+public class CardDbLanguagePreferenceTest extends AITest {
     private StaticData staticData;
     private CardDb cardDb;
 
-    @BeforeClass
+    @BeforeMethod
     public void setUp() {
-        Localizer.getInstance().initialize("en-US", "../forge-gui/res/languages");
-        ImageKeys.initializeDirs("target/test-images/cards", Collections.emptyMap(),
-                "target/test-images/tokens", "target/test-images/icons", "target/test-images/boosters",
-                "target/test-images/fatpacks", "target/test-images/boosterboxes",
-                "target/test-images/precons", "target/test-images/tournamentpacks");
-        CardStorageReader reader = new CardStorageReader("../forge-gui/res/cardsfolder", null, true);
-        staticData = new StaticData(reader, null,
-                "../forge-gui/res/editions", "target/nonexistent-custom-editions",
-                "../forge-gui/res/blockdata", "Latest Art All Editions", true, false);
+        staticData = FModel.getMagicDb();
         cardDb = staticData.getCommonCards();
+        cardDb.setPreferredCardLanguage("en-US");
     }
 
-    @BeforeMethod
-    public void resetLanguagePreference() {
-        cardDb.setPreferredCardLanguage("en-US");
+    @AfterClass
+    public void restoreLanguagePreference() {
+        if (cardDb != null) {
+            cardDb.setPreferredCardLanguage("en-US");
+        }
     }
 
     @Test

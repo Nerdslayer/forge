@@ -218,7 +218,7 @@ public class DestroyAi extends SpellAbilityAi {
                 Card choice;
                 // If the targets are only of one type, take the best
                 if (CardLists.getNotType(list, "Creature").isEmpty()) {
-                    choice = ComputerUtilCard.getBestRemovalTargetAI(ai, list);
+                    choice = ComputerUtilCard.getBestRemovalTargetAI(ai, list, sa);
                     if ("OppDestroyYours".equals(logic)) {
                         Card aiBest = ComputerUtilCard.getBestCreatureAI(ai.getCreaturesInPlay());
                         if (ComputerUtilCard.evaluateCreature(aiBest) > ComputerUtilCard.evaluateCreature(choice) - 40) {
@@ -236,7 +236,7 @@ public class DestroyAi extends SpellAbilityAi {
                     }
                 } else {
                     // TODO look for "exiled until leaves" of own stuff
-                    choice = ComputerUtilCard.getBestRemovalTargetAI(ai, list);
+                    choice = ComputerUtilCard.getBestRemovalTargetAI(ai, list, sa);
                 }
                 //option to hold removal instead only applies for single targeted removal
                 if (!sa.isTrigger() && sa.getMaxTargets() == 1) {
@@ -379,7 +379,7 @@ public class DestroyAi extends SpellAbilityAi {
                         return new AiAbilityDecision(100, AiPlayDecision.WillPlay);
                     }
                 } else {
-                    Card c = ComputerUtilCard.getBestRemovalTargetAI(ai, preferred);
+                    Card c = ComputerUtilCard.getBestRemovalTargetAI(ai, preferred, sa);
 
                     if (sa.canTarget(c)) {
                         sa.getTargets().add(c);

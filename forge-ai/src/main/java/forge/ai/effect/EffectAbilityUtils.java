@@ -2,6 +2,7 @@ package forge.ai.effect;
 
 import java.util.Set;
 
+import forge.ai.ComputerUtilCost;
 import forge.game.ability.AbilityFactory;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
@@ -28,6 +29,23 @@ final class EffectAbilityUtils {
             outcome = AbilityFactory.getAbility(source, trigger.getParam("Execute"), trigger);
         }
         return outcome == null ? null : outcome.copy(source, false);
+    }
+
+    static SpellAbility copyPayableActivatedAbility(final Card source,
+            final SpellAbility ability) {
+        if (!source.isInPlay() || !ability.isActivatedAbility()) {
+            return null;
+        }
+        final SpellAbility copied = ability.copy(source, false);
+        copied.setActivatingPlayer(source.getController());
+        if (!copied.getRestrictions().checkZoneRestrictions(source, copied)
+                || !copied.getRestrictions().checkOtherRestrictions(
+                        source, copied, source.getController())
+                || (copied.getConditions() != null && !copied.getConditions().areMet(copied))
+                || !ComputerUtilCost.canPayCost(copied, source.getController(), false)) {
+            return null;
+        }
+        return copied;
     }
 
     static SpellAbility findOutcome(final SpellAbility root, final ApiType api) {

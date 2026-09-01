@@ -5,7 +5,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
-import forge.ai.ComputerUtilCost;
 import forge.ai.ability.TokenAi;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
@@ -40,16 +39,8 @@ final class TokenProductionExtractor implements EffectProductionExtractor {
 
     @Override
     public List<EffectProduction> extract(final Card source, final SpellAbility ability) {
-        if (!source.isInPlay() || !ability.isActivatedAbility()) {
-            return List.of();
-        }
-        final SpellAbility copied = ability.copy(source, false);
-        copied.setActivatingPlayer(source.getController());
-        if (!copied.getRestrictions().checkZoneRestrictions(source, copied)
-                || !copied.getRestrictions().checkOtherRestrictions(
-                        source, copied, source.getController())
-                || (copied.getConditions() != null && !copied.getConditions().areMet(copied))
-                || !ComputerUtilCost.canPayCost(copied, source.getController(), false)) {
+        final SpellAbility copied = EffectAbilityUtils.copyPayableActivatedAbility(source, ability);
+        if (copied == null) {
             return List.of();
         }
         final SpellAbility tokenOutcome = findSupportedTokenOutcome(copied);

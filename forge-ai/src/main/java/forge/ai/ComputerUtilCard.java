@@ -24,6 +24,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import forge.StaticData;
+import forge.ai.effect.EffectAnalysisTrace;
 import forge.ai.effect.EffectRelationshipEvaluator;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.card.CardRules;
@@ -584,6 +585,11 @@ public class ComputerUtilCard {
     }
 
     public static Card getBestRemovalTargetAI(final Player ai, final Iterable<Card> list) {
+        return getBestRemovalTargetAI(ai, list, null);
+    }
+
+    public static Card getBestRemovalTargetAI(final Player ai, final Iterable<Card> list,
+            final SpellAbility removalAbility) {
         if (Iterables.isEmpty(list)) {
             return null;
         }
@@ -597,8 +603,29 @@ public class ComputerUtilCard {
         }
 
         final List<Card> candidates = Lists.newArrayList(list);
+        final EffectAnalysisTrace trace = EffectAnalysisTrace.create(ai, removalAbility);
+        trace.context(candidates.size());
         final Map<Card, Integer> relationshipValues =
-                EffectRelationshipEvaluator.evaluateRemovalRelationships(ai, candidates);
+                EffectRelationshipEvaluator.evaluateRemovalRelationships(ai, candidates, trace);
+        if (trace.isEnabled()) {
+            Card selected = null;
+            int highestValue = Integer.MIN_VALUE;
+            for (final Card candidate : candidates) {
+                final int baseValue = evaluateRemovalTargetPriority(ai, candidate);
+                final int relationshipValue = relationshipValues.getOrDefault(candidate, 0);
+                final int weightedAdjustment = applyEffectSynergyWeight(
+                        relationshipValue, synergyWeight);
+                final int finalValue = addSaturated(baseValue, weightedAdjustment);
+                trace.candidate(candidate, baseValue, relationshipValue,
+                        synergyWeight, weightedAdjustment, finalValue);
+                if (finalValue > highestValue) {
+                    highestValue = finalValue;
+                    selected = candidate;
+                }
+            }
+            trace.finish(selected);
+            return selected;
+        }
         return Aggregates.itemWithMax(candidates, c -> addSaturated(
                 evaluateRemovalTargetPriority(ai, c),
                 applyEffectSynergyWeight(relationshipValues.getOrDefault(c, 0), synergyWeight)));

@@ -23,6 +23,12 @@ public final class EffectRelationshipEvaluator {
      */
     public static Map<Card, Integer> evaluateRemovalRelationships(final Player evaluatingAi,
             final Iterable<Card> candidates) {
+        return evaluateRemovalRelationships(evaluatingAi, candidates, EffectAnalysisTrace.disabled());
+    }
+
+    /** Evaluates relationships while optionally collecting a grouped diagnostic trace. */
+    public static Map<Card, Integer> evaluateRemovalRelationships(final Player evaluatingAi,
+            final Iterable<Card> candidates, final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
@@ -30,8 +36,10 @@ public final class EffectRelationshipEvaluator {
         candidates.forEach(candidateList::add);
 
         final Map<Card, Integer> values = new HashMap<>();
-        merge(values, TriggeredEffectAnalyzer.evaluateRelationships(evaluatingAi, candidateList));
-        merge(values, StaticAbilityAnalyzer.evaluateRelationships(evaluatingAi, candidateList));
+        merge(values, TriggeredEffectAnalyzer.evaluateRelationships(
+                evaluatingAi, candidateList, trace));
+        merge(values, StaticAbilityAnalyzer.evaluateRelationships(
+                evaluatingAi, candidateList, trace));
         return values;
     }
 

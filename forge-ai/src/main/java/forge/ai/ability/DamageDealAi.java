@@ -355,7 +355,7 @@ public class DamageDealAi extends DamageAiBase {
 
         Card targetCard = null;
         if (pl.isOpponentOf(ai) && activator.equals(ai) && !killables.isEmpty()) {
-            return ComputerUtilCard.getBestRemovalTargetAI(ai, killables);
+            return ComputerUtilCard.getBestRemovalTargetAI(ai, killables, sa);
         }
 
         if (!mandatory) {
@@ -368,7 +368,7 @@ public class DamageDealAi extends DamageAiBase {
 
         if (!hPlay.isEmpty()) {
             if (pl.isOpponentOf(ai) && activator.equals(ai)) {
-                targetCard = ComputerUtilCard.getBestRemovalTargetAI(ai, controlledByOpps);
+                targetCard = ComputerUtilCard.getBestRemovalTargetAI(ai, controlledByOpps, sa);
             }
             if (targetCard == null) {
                 targetCard = ComputerUtilCard.getWorstCreatureAI(hPlay);
