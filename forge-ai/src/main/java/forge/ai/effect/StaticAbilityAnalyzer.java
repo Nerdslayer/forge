@@ -24,7 +24,7 @@ final class StaticAbilityAnalyzer {
     }
 
     static Map<Card, Integer> evaluateRelationships(final Player evaluatingAi,
-            final Iterable<Card> candidates) {
+            final Iterable<Card> candidates, final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
@@ -45,9 +45,10 @@ final class StaticAbilityAnalyzer {
                 for (final StaticAbility ability : Iterables.concat(
                         source.getStaticAbilities(), source.getHiddenStaticAbilities())) {
                     try {
-                        final int value = evaluateAbility(evaluatingAi, source, ability);
+                        final int value = evaluateAbility(evaluatingAi, source, ability, trace);
                         if (value != 0) {
                             addSaturated(values, source, value);
+                            trace.staticRelationship(source, value);
                         }
                     } catch (final RuntimeException ignored) {
                         // Card scripts are data. Unknown forms must not disrupt AI decisions.
@@ -59,7 +60,7 @@ final class StaticAbilityAnalyzer {
     }
 
     private static int evaluateAbility(final Player evaluatingAi, final Card source,
-            final StaticAbility ability) {
+            final StaticAbility ability, final EffectAnalysisTrace trace) {
         if (!ability.checkConditions(StaticAbilityMode.Continuous)) {
             return 0;
         }
@@ -82,9 +83,10 @@ final class StaticAbilityAnalyzer {
                 continue;
             }
 
-            relationshipValue = EffectMath.add(relationshipValue,
-                    affected.getController().isOpponentOf(evaluatingAi)
-                            ? recipientValue : EffectMath.negate(recipientValue));
+            final int signedValue = affected.getController().isOpponentOf(evaluatingAi)
+                    ? recipientValue : EffectMath.negate(recipientValue);
+            trace.staticRecipient(source, affected, automaticValue, hintedValue, signedValue);
+            relationshipValue = EffectMath.add(relationshipValue, signedValue);
         }
         return relationshipValue;
     }

@@ -722,18 +722,18 @@ public class DuelScene extends ForgeScene {
     }
 
     private String selectAI(String ai) { //Decide opponent AI.
-        String AI = ""; //Use user settings if it's null.
-        if (ai != null) {
-            AI = switch (ai.toLowerCase()) { //We use this way to ensure capitalization is exact.
-                //We don't want misspellings here.
-                case "default" -> "Default";
-                case "reckless" -> "Reckless";
-                case "cautious" -> "Cautious";
-                case "experimental" -> "Experimental";
-                default -> ""; //User settings.
-            };
+        if (ai == null || ai.isBlank()) {
+            return "Mastermind";
         }
-        return AI;
+        return switch (ai.toLowerCase()) { //We use this way to ensure capitalization is exact.
+            //We don't want misspellings here.
+            case "default" -> "Default";
+            case "reckless" -> "Reckless";
+            case "cautious" -> "Cautious";
+            case "experimental" -> "Experimental";
+            case "mastermind" -> "Mastermind";
+            default -> ""; //User settings.
+        };
     }
 
     private FBufferedImage getFBEnemyAvatar() {

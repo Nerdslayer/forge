@@ -372,6 +372,102 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testCounterProductionMatchesExactAndAnyCounterConsequences() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 2, "Self");
+        final Card exactConsequence = addCounterAddedConsequence(
+                "Grizzly Bears", opponent, "CounterAddedOnce", "CHARGE",
+                "ValidCard$ Artifact.YouCtrl");
+        final Card anyConsequence = addCounterAddedConsequence(
+                "Runeclaw Bear", opponent, "CounterAddedOnce", "Any",
+                "ValidCard$ Artifact.YouCtrl");
+        final Card wrongTypeConsequence = addCounterAddedConsequence(
+                "Bear Cub", opponent, "CounterAddedOnce", "P1P1",
+                "ValidCard$ Artifact.YouCtrl");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, exactConsequence, anyConsequence, wrongTypeConsequence));
+
+        Assert.assertTrue(values.getOrDefault(exactConsequence, 0) > 0);
+        Assert.assertEquals(values.get(exactConsequence), values.get(anyConsequence));
+        Assert.assertEquals(values.getOrDefault(wrongTypeConsequence, 0).intValue(), 0);
+        Assert.assertEquals(values.get(producer).intValue(),
+                values.get(exactConsequence) + values.get(anyConsequence));
+    }
+
+    @Test
+    public void testCounterAddedTriggersPerCounterButCounterAddedOnceTriggersPerBatch() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 3, "Self");
+        final Card individualConsequence = addCounterAddedConsequence(
+                "Grizzly Bears", opponent, "CounterAdded", null,
+                "ValidCard$ Artifact.YouCtrl");
+        final Card batchConsequence = addCounterAddedConsequence(
+                "Runeclaw Bear", opponent, "CounterAddedOnce", null,
+                "ValidCard$ Artifact.YouCtrl");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, individualConsequence, batchConsequence));
+
+        Assert.assertEquals(values.get(individualConsequence).intValue(),
+                values.get(batchConsequence) * 3);
+        Assert.assertEquals(values.get(producer).intValue(),
+                values.get(individualConsequence) + values.get(batchConsequence));
+    }
+
+    @Test
+    public void testCounterProductionSupportsPlayerRecipients() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "ENERGY", 2, "You");
+        final Card consequence = addCounterAddedConsequence(
+                "Grizzly Bears", opponent, "CounterAddedOnce", "Any",
+                "ValidPlayer$ You");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testPayableActivatedCounterAbilityIsRecognized() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ PutCounter | Cost$ 0 | Defined$ Self | CounterType$ OIL | CounterNum$ 2",
+                producer));
+        final Card consequence = addCounterAddedConsequence(
+                "Grizzly Bears", opponent, "CounterAddedOnce", null,
+                "ValidCard$ Artifact.YouCtrl");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testStaticPtAbilityAddsItsMarginalValueToTheSource() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -545,6 +641,29 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         addTokenAbility(card, "EffectTestToken", amount);
         addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | Execute$ EffectTestToken"
                 + " | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addPhaseCounterProducer(final String cardName, final Player controller,
+            final String counterType, final int amount, final String defined) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestCounterProduction", "DB$ PutCounter | Defined$ " + defined
+                + " | CounterType$ " + counterType + " | CounterNum$ " + amount);
+        addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestCounterProduction | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addCounterAddedConsequence(final String cardName, final Player controller,
+            final String triggerMode, final String counterType, final String validity) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestCounterOutcome",
+                "DB$ PutCounter | ValidTgts$ Creature.YouCtrl"
+                        + " | CounterType$ P1P1 | CounterNum$ 1");
+        final String counterTypeParam = counterType == null
+                ? "" : " | CounterType$ " + counterType;
+        addTrigger(card, "Mode$ " + triggerMode + " | " + validity + counterTypeParam
+                + " | Execute$ EffectTestCounterOutcome | TriggerZones$ Battlefield");
         return card;
     }
 

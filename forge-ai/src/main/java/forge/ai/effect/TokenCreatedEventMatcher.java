@@ -7,7 +7,6 @@ import java.util.Map;
 
 import forge.game.ability.AbilityKey;
 import forge.game.player.PlayerCollection;
-import forge.game.staticability.StaticAbilityDisableTriggers;
 import forge.game.trigger.TriggerType;
 
 /** Matches token-created events against TokenCreated and TokenCreatedOnce triggers. */
@@ -38,7 +37,7 @@ final class TokenCreatedEventMatcher implements EffectEventMatcher {
             final Map<AbilityKey, Object> runParams = new EnumMap<>(AbilityKey.class);
             runParams.putAll(event.triggerParameters());
             runParams.put(AbilityKey.Num, firstEventNumber);
-            if (passes(consequence, runParams)) {
+            if (EffectEventMatchUtils.passes(consequence, runParams)) {
                 final int resolutions = consequence.trigger().hasParam("OnlyFirst")
                         ? 1 : subject.occurrences();
                 matches.add(new EffectMatch(new EffectEvent(event.type(), event.player(),
@@ -65,24 +64,11 @@ final class TokenCreatedEventMatcher implements EffectEventMatcher {
         } else {
             runParams.put(AbilityKey.FirstTime, new PlayerCollection());
         }
-        if (!passes(consequence, runParams)) {
+        if (!EffectEventMatchUtils.passes(consequence, runParams)) {
             return List.of();
         }
         return List.of(new EffectMatch(new EffectEvent(
                 event.type(), event.player(), subjects, runParams), 1));
     }
 
-    private static boolean passes(final EffectConsequence consequence,
-            final Map<AbilityKey, Object> runParams) {
-        try {
-            return consequence.trigger().checkActivationLimit()
-                    && consequence.trigger().meetsRequirementsOnTriggeredObjects(
-                            consequence.source().getGame(), runParams)
-                    && consequence.trigger().performTest(runParams)
-                    && !StaticAbilityDisableTriggers.disabled(
-                            consequence.source().getGame(), consequence.trigger(), runParams);
-        } catch (final RuntimeException ignored) {
-            return false;
-        }
-    }
 }
