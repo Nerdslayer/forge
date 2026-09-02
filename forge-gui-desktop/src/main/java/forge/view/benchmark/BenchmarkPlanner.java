@@ -24,13 +24,13 @@ final class BenchmarkPlanner {
     }
 
     static List<BenchmarkJob> createJobs(final List<BenchmarkDeck> inputDecks,
-            final int repetitions, final long masterSeed) {
+            final int multiplier, final long masterSeed) {
         final List<BenchmarkDeck> decks = new ArrayList<>(inputDecks);
         decks.sort(Comparator.comparing(deck -> deck.path().toString(), String.CASE_INSENSITIVE_ORDER));
-        final List<BenchmarkJob> jobs = new ArrayList<>(2 * decks.size() * decks.size() * repetitions);
+        final List<BenchmarkJob> jobs = new ArrayList<>(2 * decks.size() * decks.size() * multiplier);
         for (BenchmarkDeck evaluatedDeck : decks) {
             for (BenchmarkDeck opponentDeck : decks) {
-                for (int repetition = 0; repetition < repetitions; repetition++) {
+                for (int repetition = 0; repetition < multiplier; repetition++) {
                     final String pairKey = masterSeed + "|" + evaluatedDeck.id() + "|"
                             + evaluatedDeck.sha256() + "|" + opponentDeck.id() + "|"
                             + opponentDeck.sha256() + "|" + repetition;
