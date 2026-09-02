@@ -13,6 +13,9 @@ import forge.game.trigger.TriggerType;
 final class TokenCreatedEventMatcher implements EffectEventMatcher {
     static final TokenCreatedEventMatcher INSTANCE = new TokenCreatedEventMatcher();
 
+    // TODO(effect analysis): Add semantics for the token trigger parameters currently rejected by
+    // TriggeredConsequenceExtractor and for replacement-modified or cross-player token batches.
+
     private TokenCreatedEventMatcher() {
     }
 

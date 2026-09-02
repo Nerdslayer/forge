@@ -11,6 +11,7 @@ import forge.game.trigger.Trigger;
 final class EffectProductionExtractorRegistry {
     private static final List<EffectProductionExtractor> EXTRACTORS = List.of(
             TokenProductionExtractor.INSTANCE,
+            CopiedTokenProductionExtractor.INSTANCE,
             CounterProductionExtractor.INSTANCE);
 
     private EffectProductionExtractorRegistry() {

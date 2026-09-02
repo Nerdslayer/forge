@@ -5,17 +5,20 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
-import forge.ai.ability.TokenAi;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
+import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
 
 /** Extracts currently supported token-created productions. */
 final class TokenProductionExtractor implements EffectProductionExtractor {
     static final TokenProductionExtractor INSTANCE = new TokenProductionExtractor();
+
+    // TODO(effect analysis): Support conditional, optional, targeted/dynamic-owner, named-action,
+    // ETB, replacement-modified, and additional trigger-origin token productions.
 
     private TokenProductionExtractor() {
     }
@@ -32,9 +35,8 @@ final class TokenProductionExtractor implements EffectProductionExtractor {
 
         final SpellAbility tokenOutcome = findSupportedTokenOutcome(
                 EffectAbilityUtils.copyTriggerOutcome(source, trigger));
-        final EffectProduction production = tokenOutcome == null
-                ? null : createProduction(source, tokenOutcome, expectedBatches);
-        return production == null ? List.of() : List.of(production);
+        return tokenOutcome == null ? List.of()
+                : createProductions(source, tokenOutcome, expectedBatches);
     }
 
     @Override
@@ -44,15 +46,14 @@ final class TokenProductionExtractor implements EffectProductionExtractor {
             return List.of();
         }
         final SpellAbility tokenOutcome = findSupportedTokenOutcome(copied);
-        final EffectProduction production = tokenOutcome == null
-                ? null : createProduction(source, tokenOutcome, 1);
-        return production == null ? List.of() : List.of(production);
+        return tokenOutcome == null ? List.of()
+                : createProductions(source, tokenOutcome, 1);
     }
 
     private static SpellAbility findSupportedTokenOutcome(final SpellAbility root) {
         final SpellAbility outcome = EffectAbilityUtils.findOutcome(root, ApiType.Token);
         if (outcome == null || !outcome.hasParam("TokenScript")
-                || !"You".equals(outcome.getParamOrDefault("TokenOwner", "You"))) {
+                || !hasSupportedOwner(outcome)) {
             return null;
         }
         for (final String param : outcome.getMapParams().keySet()) {
@@ -63,35 +64,36 @@ final class TokenProductionExtractor implements EffectProductionExtractor {
         return outcome.getParam("TokenScript").isBlank() ? null : outcome;
     }
 
-    private static EffectProduction createProduction(final Card source,
+    private static List<EffectProduction> createProductions(final Card source,
             final SpellAbility outcome, final int expectedBatches) {
         outcome.setActivatingPlayer(source.getController());
         final int tokenAmount = AbilityUtils.calculateAmount(source,
                 outcome.getParamOrDefault("TokenAmount", "1"), outcome);
         if (tokenAmount <= 0) {
-            return null;
+            return List.of();
         }
 
-        final List<EffectEvent> events = new ArrayList<>();
-        for (final String script : outcome.getParam("TokenScript").split(",")) {
-            if (script.isBlank()) {
-                return null;
+        final List<EffectProduction> productions = new ArrayList<>();
+        for (final Player owner : EffectTokenUtils.resolvePlayers(
+                outcome, "TokenOwner", "You")) {
+            final List<EffectEvent> events = new ArrayList<>();
+            for (final Card token : EffectTokenUtils.createPrototypes(outcome, owner)) {
+                final Map<AbilityKey, Object> triggerParameters = new EnumMap<>(AbilityKey.class);
+                triggerParameters.put(AbilityKey.Player, owner);
+                triggerParameters.put(AbilityKey.Card, token);
+                events.add(new EffectEvent(EffectType.TOKEN_CREATED, owner,
+                        List.of(new EffectEvent.Subject(token, tokenAmount)), triggerParameters));
             }
-            final SpellAbility tokenAbility = outcome.copy(source, false);
-            tokenAbility.setActivatingPlayer(source.getController());
-            tokenAbility.getMapParams().put("TokenScript", script.trim());
-            final Card token = TokenAi.spawnToken(source.getController(), tokenAbility);
-            if (outcome.hasParam("TokenTapped")) {
-                token.setTapped(true);
+            if (!events.isEmpty()) {
+                productions.add(new EffectProduction(
+                        source, EffectType.TOKEN_CREATED, events, expectedBatches));
             }
-
-            final Map<AbilityKey, Object> triggerParameters = new EnumMap<>(AbilityKey.class);
-            triggerParameters.put(AbilityKey.Player, source.getController());
-            triggerParameters.put(AbilityKey.Card, token);
-            events.add(new EffectEvent(EffectType.TOKEN_CREATED, source.getController(),
-                    List.of(new EffectEvent.Subject(token, tokenAmount)), triggerParameters));
         }
-        return events.isEmpty() ? null : new EffectProduction(
-                source, EffectType.TOKEN_CREATED, events, expectedBatches);
+        return productions;
+    }
+
+    private static boolean hasSupportedOwner(final SpellAbility outcome) {
+        final String owner = outcome.getParamOrDefault("TokenOwner", "You");
+        return "You".equals(owner) || "Opponent".equals(owner);
     }
 }

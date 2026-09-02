@@ -16,6 +16,9 @@ import forge.game.zone.ZoneType;
 
 /** Resolves targeted, defined, and group card recipients for consequence evaluators. */
 final class AffectedCardResolver {
+    // TODO(effect analysis): Support multi-target allocation, divided/up-to choices, non-card and
+    // non-battlefield recipients, and richer chooser behavior. Current targeting chooses one
+    // battlefield card using the consequence controller's perspective.
     private AffectedCardResolver() {
     }
 

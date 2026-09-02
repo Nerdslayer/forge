@@ -17,6 +17,9 @@ import forge.game.zone.ZoneType;
 
 /** Coordinates first-order relationships between normalized events and triggered consequences. */
 final class TriggeredEffectAnalyzer {
+    // TODO(effect analysis): Traverse bounded consequence chains, handle cycles, and analyze
+    // relevant allied effects and non-battlefield zones. This pass is intentionally first-order
+    // and starts from battlefield cards controlled by removal candidates' opponents.
     private TriggeredEffectAnalyzer() {
     }
 

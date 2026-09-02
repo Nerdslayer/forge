@@ -13,6 +13,9 @@ import forge.game.spellability.SpellAbility;
 final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
     static final PermanentPtOutcomeEvaluator INSTANCE = new PermanentPtOutcomeEvaluator();
 
+    // TODO(effect analysis): Value temporary changes with duration/context, P/T switches, other
+    // P/T-changing APIs, unsupported control flow, non-battlefield recipients, and subability chains.
+
     private PermanentPtOutcomeEvaluator() {
     }
 

@@ -12,6 +12,9 @@ import forge.game.spellability.SpellAbility;
 final class CounterOutcomeEvaluator implements OutcomeEvaluator {
     static final CounterOutcomeEvaluator INSTANCE = new CounterOutcomeEvaluator();
 
+    // TODO(effect analysis): Support counter types beyond P1P1, player and defined/group
+    // recipients, dynamic and optional amounts, multiple targets, distribution, and subabilities.
+
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "CounterType", "CounterNum",
             "SpellDescription", "StackDescription");

@@ -33,6 +33,9 @@ final class EffectAbilityUtils {
 
     static SpellAbility copyPayableActivatedAbility(final Card source,
             final SpellAbility ability) {
+        // TODO(effect analysis): Replace this one-use/current-payability gate with occurrence and
+        // likelihood modeling for repeatable activations, competing costs/tap uses, timing,
+        // alternative resources, and future legal targets.
         if (!source.isInPlay() || !ability.isActivatedAbility()) {
             return null;
         }
