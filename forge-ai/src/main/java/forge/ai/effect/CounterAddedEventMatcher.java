@@ -15,6 +15,9 @@ import forge.game.trigger.TriggerType;
 final class CounterAddedEventMatcher implements EffectEventMatcher {
     static final CounterAddedEventMatcher INSTANCE = new CounterAddedEventMatcher();
 
+    // TODO(effect analysis): Add CounterAddedAll and semantics for optional, limited,
+    // replacement-modified, distributed, and other currently rejected counter trigger forms.
+
     private CounterAddedEventMatcher() {
     }
 

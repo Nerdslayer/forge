@@ -13,6 +13,9 @@ import forge.game.trigger.TriggerType;
 
 /** Coarse near-term occurrence estimates shared by production extractors. */
 final class EffectOccurrenceEstimator {
+    // TODO(effect analysis): Add a bounded horizon and likelihood estimates for more trigger
+    // origins, repeated activations, legal targets, resource competition, source survival, and
+    // combat-damage/cast conditions. Current support is a coarse one-batch attack/phase estimate.
     private static final Set<String> ATTACK_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> PHASE_TRIGGER_PARAMS = Set.of(

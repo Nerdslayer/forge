@@ -13,6 +13,8 @@ import forge.game.player.Player;
  * Combines supported relationship values contributed by triggered and static effects.
  */
 public final class EffectRelationshipEvaluator {
+    // TODO(effect analysis): Add explicit consumers for casting, activation, protection, combat,
+    // and other decisions. Relationship values are currently integrated only into removal choice.
     private EffectRelationshipEvaluator() {
     }
 

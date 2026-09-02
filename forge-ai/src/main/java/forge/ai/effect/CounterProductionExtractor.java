@@ -19,6 +19,9 @@ import forge.game.trigger.Trigger;
 final class CounterProductionExtractor implements EffectProductionExtractor {
     static final CounterProductionExtractor INSTANCE = new CounterProductionExtractor();
 
+    // TODO(effect analysis): Support targeted, distributed, multi-type, optional, ETB,
+    // replacement-modified, and additional trigger-origin counter productions.
+
     private CounterProductionExtractor() {
     }
 

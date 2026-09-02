@@ -20,6 +20,9 @@ import forge.game.zone.ZoneType;
 
 /** Evaluates active static abilities as signed changes to their affected cards. */
 final class StaticAbilityAnalyzer {
+    // TODO(effect analysis): Value automatic changes to the source itself, player-affecting static
+    // abilities, restrictions, permissions, costs, replacement effects, and card changes invisible
+    // to evaluatePermanent. Those cases currently need AIEffectValue hints or a dedicated evaluator.
     private StaticAbilityAnalyzer() {
     }
 

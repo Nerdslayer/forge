@@ -11,6 +11,10 @@ import forge.game.trigger.TriggerType;
 final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor {
     static final TriggeredConsequenceExtractor INSTANCE = new TriggeredConsequenceExtractor();
 
+    // TODO(effect analysis): Support the remaining trigger families and richer token/counter
+    // forms, including optional/limited triggers, CounterAddedAll, broader player constraints,
+    // conditions, intervening-if clauses, and triggers active outside the battlefield.
+
     private static final Set<String> TOKEN_CREATED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidToken", "OnlyFirst", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");

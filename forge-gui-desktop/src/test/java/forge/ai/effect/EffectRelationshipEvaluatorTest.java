@@ -401,6 +401,200 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testCreatureTokenOutcomeUsesPrototypeValueAndAmount() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card oneTokenConsequence = addCounterTokenConsequence(
+                "Grizzly Bears", opponent, 1, "w_1_1_soldier");
+        final Card threeTokenConsequence = addCounterTokenConsequence(
+                "Runeclaw Bear", opponent, 3, "w_1_1_soldier");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, oneTokenConsequence, threeTokenConsequence));
+
+        Assert.assertTrue(values.getOrDefault(oneTokenConsequence, 0) > 0);
+        Assert.assertEquals(values.get(threeTokenConsequence).intValue(),
+                values.get(oneTokenConsequence) * 3);
+        Assert.assertEquals(values.get(producer).intValue(),
+                values.get(oneTokenConsequence) + values.get(threeTokenConsequence));
+    }
+
+    @Test
+    public void testMultipleCreatureTokenScriptsAreValuedTogether() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card singleTokenConsequence = addCounterTokenConsequence(
+                "Grizzly Bears", opponent, 1, "w_1_1_soldier");
+        final Card multipleTokenConsequence = addCounterTokenConsequence(
+                "Runeclaw Bear", opponent, 1, "w_1_1_soldier,g_3_3_beast");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, singleTokenConsequence, multipleTokenConsequence));
+
+        Assert.assertTrue(values.get(multipleTokenConsequence)
+                > values.get(singleTokenConsequence));
+    }
+
+    @Test
+    public void testCreatureTokenOutcomeCanUseTriggerAmount() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 3, "Self");
+        final Card fixedConsequence = addCounterTokenConsequence(
+                "Grizzly Bears", opponent, 1, "w_1_1_soldier");
+        final Card dynamicConsequence = addCounterTokenConsequence(
+                "Runeclaw Bear", opponent, "X", "w_1_1_soldier");
+        dynamicConsequence.setSVar("X", "TriggerCount$Amount");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, fixedConsequence, dynamicConsequence));
+
+        Assert.assertEquals(values.get(dynamicConsequence).intValue(),
+                values.get(fixedConsequence) * 3);
+    }
+
+    @Test
+    public void testOpponentOwnedCreatureTokenOutcomeReducesThreat() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTokenConsequence(
+                "Grizzly Bears", opponent, 1, "w_1_1_soldier", "Opponent", "");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(consequence, 0) < 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testOpponentOwnedTokenProductionUsesActualCreator() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseTokenProducer(
+                "Sol Ring", opponent, 1, "Opponent");
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestCounter", "DB$ PutCounter"
+                + " | ValidTgts$ Creature.YouCtrl | CounterType$ P1P1");
+        addTrigger(consequence, "Mode$ TokenCreatedOnce | ValidToken$ Creature.OppCtrl"
+                + " | Execute$ EffectTestCounter | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testTokenCombatEntryFlagsDoNotChangeOutcomeValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card ordinary = addCounterTokenConsequence(
+                "Grizzly Bears", opponent, 1, "w_1_1_soldier");
+        final Card attacking = addCounterTokenConsequence(
+                "Runeclaw Bear", opponent, 1, "w_1_1_soldier",
+                " | TokenAttacking$ True");
+        final Card blocking = addCounterTokenConsequence(
+                "Bear Cub", opponent, 1, "w_1_1_soldier",
+                " | TokenBlocking$ TriggeredCard");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, ordinary, attacking, blocking));
+
+        Assert.assertEquals(values.get(attacking), values.get(ordinary));
+        Assert.assertEquals(values.get(blocking), values.get(ordinary));
+    }
+
+    @Test
+    public void testKnownCopiedPermanentOutcomeUsesCopyValueAndAmount() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card oneCopy = addCounterCopyConsequence(
+                "Grizzly Bears", opponent, 1);
+        final Card twoCopies = addCounterCopyConsequence(
+                "Runeclaw Bear", opponent, 2);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, oneCopy, twoCopies));
+
+        Assert.assertTrue(values.getOrDefault(oneCopy, 0) > 0);
+        Assert.assertEquals(values.get(twoCopies).intValue(), values.get(oneCopy) * 2);
+    }
+
+    @Test
+    public void testKnownCopiedPermanentProducesTokenCreatedEvents() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Grizzly Bears", opponent);
+        producer.setSVar("EffectTestCopy", "DB$ CopyPermanent | Defined$ Self");
+        addTrigger(producer, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestCopy | TriggerZones$ Battlefield");
+        final Card consequence = addTokenCounterConsequence("Runeclaw Bear", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testTemporaryAndNoncreatureTokenOutcomesRemainUnsupported() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card temporaryConsequence = addCounterTokenConsequence(
+                "Grizzly Bears", opponent, 1, "w_1_1_soldier", " | AtEOT$ Exile");
+        final Card noncreatureConsequence = addCounterTokenConsequence(
+                "Runeclaw Bear", opponent, 1, "c_a_treasure_sac");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, temporaryConsequence, noncreatureConsequence));
+
+        Assert.assertTrue(values.isEmpty());
+    }
+
+    @Test
     public void testCounterAddedTriggersPerCounterButCounterAddedOnceTriggersPerBatch() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -637,8 +831,14 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     private Card addPhaseTokenProducer(final String cardName, final Player controller, final int amount) {
+        return addPhaseTokenProducer(cardName, controller, amount, "You");
+    }
+
+    private Card addPhaseTokenProducer(final String cardName, final Player controller,
+            final int amount, final String owner) {
         final Card card = addCard(cardName, controller);
-        addTokenAbility(card, "EffectTestToken", amount);
+        card.setSVar("EffectTestToken", "DB$ Token | TokenScript$ w_1_1_soldier"
+                + " | TokenOwner$ " + owner + " | TokenAmount$ " + amount);
         addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | Execute$ EffectTestToken"
                 + " | TriggerZones$ Battlefield");
         return card;
@@ -664,6 +864,59 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ? "" : " | CounterType$ " + counterType;
         addTrigger(card, "Mode$ " + triggerMode + " | " + validity + counterTypeParam
                 + " | Execute$ EffectTestCounterOutcome | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addCounterTokenConsequence(final String cardName, final Player controller,
+            final int amount, final String tokenScript) {
+        return addCounterTokenConsequence(
+                cardName, controller, Integer.toString(amount), tokenScript, "");
+    }
+
+    private Card addCounterTokenConsequence(final String cardName, final Player controller,
+            final int amount, final String tokenScript, final String extraParams) {
+        return addCounterTokenConsequence(
+                cardName, controller, Integer.toString(amount), tokenScript, extraParams);
+    }
+
+    private Card addCounterTokenConsequence(final String cardName, final Player controller,
+            final String amount, final String tokenScript) {
+        return addCounterTokenConsequence(cardName, controller, amount, tokenScript, "");
+    }
+
+    private Card addCounterTokenConsequence(final String cardName, final Player controller,
+            final String amount, final String tokenScript, final String extraParams) {
+        return addCounterTokenConsequence(
+                cardName, controller, amount, tokenScript, "You", extraParams);
+    }
+
+    private Card addCounterTokenConsequence(final String cardName, final Player controller,
+            final int amount, final String tokenScript, final String owner,
+            final String extraParams) {
+        return addCounterTokenConsequence(cardName, controller,
+                Integer.toString(amount), tokenScript, owner, extraParams);
+    }
+
+    private Card addCounterTokenConsequence(final String cardName, final Player controller,
+            final String amount, final String tokenScript, final String owner,
+            final String extraParams) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestTokenOutcome", "DB$ Token | TokenOwner$ " + owner
+                + " | TokenAmount$ " + amount + " | TokenScript$ " + tokenScript + extraParams);
+        addTrigger(card, "Mode$ CounterAddedOnce | ValidCard$ Artifact.YouCtrl"
+                + " | CounterType$ CHARGE | Execute$ EffectTestTokenOutcome"
+                + " | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addCounterCopyConsequence(final String cardName, final Player controller,
+            final int amount) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestCopyOutcome", "DB$ CopyPermanent | Defined$ TriggeredCard"
+                + " | NumCopies$ " + amount);
+        addTrigger(card, "Mode$ CounterAddedOnce | ValidCard$ Artifact.YouCtrl"
+                + " | CounterType$ CHARGE | Execute$ EffectTestCopyOutcome"
+                + " | TriggerZones$ Battlefield");
         return card;
     }
 

@@ -8,6 +8,8 @@ import forge.game.spellability.SpellAbility;
 final class OutcomeEvaluatorRegistry {
     private static final List<OutcomeEvaluator> EVALUATORS = List.of(
             CounterOutcomeEvaluator.INSTANCE,
+            CopiedPermanentOutcomeEvaluator.INSTANCE,
+            CreatureTokenOutcomeEvaluator.INSTANCE,
             PermanentPtOutcomeEvaluator.INSTANCE);
 
     private OutcomeEvaluatorRegistry() {
