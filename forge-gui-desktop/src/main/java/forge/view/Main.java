@@ -23,6 +23,7 @@ import forge.error.ExceptionHandler;
 import forge.gui.GuiBase;
 import forge.gui.card.CardReaderExperiments;
 import forge.util.BuildInfo;
+import forge.view.benchmark.AiBenchmarkCli;
 import io.sentry.Sentry;
 
 /**
@@ -61,6 +62,11 @@ public final class Main {
             ex.printStackTrace();
             System.err.flush();
         });
+
+        if (args.length > 0 && ("benchmark".equalsIgnoreCase(args[0])
+                || "benchmark-game".equalsIgnoreCase(args[0]))) {
+            System.exit(AiBenchmarkCli.run(args));
+        }
 
         Sentry.init(options -> {
             options.setEnableExternalConfiguration(true);
@@ -113,7 +119,7 @@ public final class Main {
                 break;
 
             default:
-                System.out.println("Unknown mode.\nKnown modes are 'sim', 'parse', 'server'");
+                System.out.println("Unknown mode.\nKnown modes are 'sim', 'parse', 'server', 'benchmark'");
                 break;
         }
 
@@ -122,12 +128,13 @@ public final class Main {
 
     /**
      * Modes that run to completion on the console and never open a window, and so should force
-     * headless AWT. Keep in sync with the named cases of the switch in {@link #main(String[])}.
+     * headless AWT. Keep in sync with the command-line dispatch in {@link #main(String[])}.
      * The switch's {@code default} arm also stays on the console, but an unrecognised argument is
      * not a mode and only prints usage, so it is deliberately not listed here.
      */
     public static boolean isCommandLineMode(final String mode) {
-        return "sim".equals(mode) || "parse".equals(mode) || "server".equals(mode);
+        return "sim".equals(mode) || "parse".equals(mode) || "server".equals(mode)
+                || "benchmark".equals(mode) || "benchmark-game".equals(mode);
     }
 
     @SuppressWarnings("deprecation")
