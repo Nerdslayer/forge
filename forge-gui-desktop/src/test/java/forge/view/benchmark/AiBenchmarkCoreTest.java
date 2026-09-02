@@ -135,6 +135,20 @@ public class AiBenchmarkCoreTest {
         Assert.assertEquals(loaded.stream().map(BenchmarkDeck::name).sorted().toList(), List.of("Alpha", "Beta"));
     }
 
+    @Test
+    public void optionsUseTwentyGeneticDecksWhenNoDeckInputIsProvided() {
+        GuiBase.setInterface(new BenchmarkGuiDesktop());
+
+        final BenchmarkOptions defaultOptions = BenchmarkOptions.parse(new String[] {"benchmark"});
+        final BenchmarkOptions explicitOptions = BenchmarkOptions.parse(new String[] {
+                "benchmark", "--deck", "custom.dck"
+        });
+
+        Assert.assertEquals(defaultOptions.deckDirectory.getFileName().toString(), "TwentyGeneticDecks");
+        Assert.assertEquals(defaultOptions.deckDirectory.getParent().getFileName().toString(), "benchmark");
+        Assert.assertNull(explicitOptions.deckDirectory);
+    }
+
     private static BenchmarkGameResult result(final String jobId, final BenchmarkGameResult.Status status,
             final BenchmarkGameResult.EvaluatedResult evaluatedResult) {
         final BenchmarkGameResult result = new BenchmarkGameResult();

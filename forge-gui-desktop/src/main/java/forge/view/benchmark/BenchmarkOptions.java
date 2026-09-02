@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 
 final class BenchmarkOptions {
     private static final DateTimeFormatter OUTPUT_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final String DEFAULT_DECK_POOL = "TwentyGeneticDecks";
 
     String evaluatedProfile;
     String baselineProfile;
@@ -66,6 +67,9 @@ final class BenchmarkOptions {
                 case "--help", "-h" -> options.help = true;
                 default -> throw new IllegalArgumentException("Unknown benchmark option: " + argument);
             }
+        }
+        if (options.deckDirectory == null && options.deckFiles.isEmpty()) {
+            options.deckDirectory = Path.of(ForgeConstants.RES_DIR, "benchmark", DEFAULT_DECK_POOL);
         }
         if (options.outputDirectory == null) {
             options.outputDirectory = Path.of("ai-benchmark-results",
@@ -210,6 +214,9 @@ final class BenchmarkOptions {
                       [--deck-dir <directory>] [--deck <file> ...] [options]
 
                 Options:
+                  --deck-dir <directory>     Deck pool directory
+                                             (default: res/benchmark/TwentyGeneticDecks)
+                  --deck <file>              Add an explicit deck file; may be repeated
                   --profile-dir <directory>  AI profile directory (default: Forge res/ai)
                   --output <directory>       Run artifact directory
                   --seed <long>              Master seed (generated and recorded when omitted)
