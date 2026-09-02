@@ -27,6 +27,8 @@ public class AiBenchmarkCoreTest {
         final List<BenchmarkJob> jobs = BenchmarkPlanner.createJobs(List.of(beta, alpha), 3, 42L);
 
         Assert.assertEquals(jobs.size(), 24);
+        Assert.assertNotEquals(jobs.get(0).seed(), jobs.get(2).seed(),
+                "Each additional mirrored set must use a different seed");
         for (int index = 0; index < jobs.size(); index += 2) {
             final BenchmarkJob first = jobs.get(index);
             final BenchmarkJob second = jobs.get(index + 1);
@@ -147,6 +149,21 @@ public class AiBenchmarkCoreTest {
         Assert.assertEquals(defaultOptions.deckDirectory.getFileName().toString(), "TwentyGeneticDecks");
         Assert.assertEquals(defaultOptions.deckDirectory.getParent().getFileName().toString(), "benchmark");
         Assert.assertNull(explicitOptions.deckDirectory);
+    }
+
+    @Test
+    public void optionsAcceptMultiplierAndLegacyRepetitionsAlias() {
+        GuiBase.setInterface(new BenchmarkGuiDesktop());
+
+        final BenchmarkOptions multiplier = BenchmarkOptions.parse(new String[] {
+                "benchmark", "--multiplier", "2"
+        });
+        final BenchmarkOptions legacyAlias = BenchmarkOptions.parse(new String[] {
+                "benchmark", "--repetitions", "3"
+        });
+
+        Assert.assertEquals(multiplier.multiplier, 2);
+        Assert.assertEquals(legacyAlias.multiplier, 3);
     }
 
     private static BenchmarkGameResult result(final String jobId, final BenchmarkGameResult.Status status,

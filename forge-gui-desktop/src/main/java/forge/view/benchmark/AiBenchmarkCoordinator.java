@@ -40,7 +40,7 @@ final class AiBenchmarkCoordinator {
         final Instant startedAt = Instant.now();
         final long startedNanos = System.nanoTime();
         final List<BenchmarkDeck> decks = options.loadDecks();
-        final List<BenchmarkJob> jobs = BenchmarkPlanner.createJobs(decks, options.repetitions, options.masterSeed);
+        final List<BenchmarkJob> jobs = BenchmarkPlanner.createJobs(decks, options.multiplier, options.masterSeed);
         evaluatedProfileHash = BenchmarkFiles.sha256(options.profilePath(options.evaluatedProfile));
         baselineProfileHash = BenchmarkFiles.sha256(options.profilePath(options.baselineProfile));
 
@@ -245,8 +245,9 @@ final class AiBenchmarkCoordinator {
         root.put("profileDirectory", options.profileDirectory.toString());
         root.put("masterSeed", options.masterSeed);
         root.put("seedDerivation", BenchmarkPlanner.seedVersion());
-        root.put("repetitions", options.repetitions);
+        root.put("multiplier", options.multiplier);
         root.put("mirroredLegsPerCell", 2);
+        root.put("gamesPerDeckPair", 2 * options.multiplier);
         root.put("workers", options.workers);
         root.put("timeoutSeconds", options.timeoutSeconds);
         root.put("workerHeap", options.workerHeap);
@@ -280,7 +281,7 @@ final class AiBenchmarkCoordinator {
         final StringBuilder value = new StringBuilder("Constructed|")
                 .append(options.evaluatedProfile).append('|').append(evaluatedProfileHash).append('|')
                 .append(options.baselineProfile).append('|').append(baselineProfileHash).append('|')
-                .append(options.masterSeed).append('|').append(options.repetitions).append('|')
+                .append(options.masterSeed).append('|').append(options.multiplier).append('|')
                 .append(options.timeoutSeconds).append('|').append(BenchmarkPlanner.seedVersion());
         decks.stream().sorted(Comparator.comparing(deck -> deck.path().toString(), String.CASE_INSENSITIVE_ORDER))
                 .forEach(deck -> value.append('|').append(deck.path()).append('|').append(deck.sha256()));

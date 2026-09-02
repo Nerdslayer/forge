@@ -37,7 +37,7 @@ final class BenchmarkOptions {
     Path outputDirectory;
     long masterSeed = new java.security.SecureRandom().nextLong();
     boolean seedProvided;
-    int repetitions = 1;
+    int multiplier = 1;
     int workers = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 4));
     long timeoutSeconds = 120;
     String workerHeap = "512m";
@@ -59,7 +59,8 @@ final class BenchmarkOptions {
                     options.masterSeed = parseLong(value(args, ++index, argument), argument);
                     options.seedProvided = true;
                 }
-                case "--repetitions" -> options.repetitions = parseInt(value(args, ++index, argument), argument);
+                case "--multiplier", "--repetitions" ->
+                    options.multiplier = parseInt(value(args, ++index, argument), argument);
                 case "--workers" -> options.workers = parseInt(value(args, ++index, argument), argument);
                 case "--timeout-seconds" -> options.timeoutSeconds = parseLong(value(args, ++index, argument), argument);
                 case "--worker-heap" -> options.workerHeap = value(args, ++index, argument);
@@ -93,8 +94,8 @@ final class BenchmarkOptions {
         if (baselineProfile == null || baselineProfile.isBlank()) {
             throw new IllegalArgumentException("--baseline-profile is required");
         }
-        if (repetitions < 1) {
-            throw new IllegalArgumentException("--repetitions must be at least 1");
+        if (multiplier < 1) {
+            throw new IllegalArgumentException("--multiplier must be a whole number of at least 1");
         }
         if (workers < 1) {
             throw new IllegalArgumentException("--workers must be at least 1");
@@ -220,7 +221,9 @@ final class BenchmarkOptions {
                   --profile-dir <directory>  AI profile directory (default: Forge res/ai)
                   --output <directory>       Run artifact directory
                   --seed <long>              Master seed (generated and recorded when omitted)
-                  --repetitions <count>      Mirrored pairs per deck cell (default: 1)
+                  --multiplier <count>       Mirrored game sets per deck pair (default: 1)
+                                             Each set adds two games with a new seed
+                  --repetitions <count>      Compatibility alias for --multiplier
                   --workers <count>          Maximum concurrent child JVMs (default: min(CPUs, 4))
                   --timeout-seconds <count>  Hard timeout for each game (default: 120)
                   --worker-heap <size>       Maximum heap per worker (default: 512m)
