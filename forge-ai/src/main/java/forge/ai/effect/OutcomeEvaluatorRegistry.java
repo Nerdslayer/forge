@@ -10,7 +10,10 @@ final class OutcomeEvaluatorRegistry {
             CounterOutcomeEvaluator.INSTANCE,
             CopiedPermanentOutcomeEvaluator.INSTANCE,
             CreatureTokenOutcomeEvaluator.INSTANCE,
-            PermanentPtOutcomeEvaluator.INSTANCE);
+            AnimationOutcomeEvaluator.INSTANCE,
+            KeywordOutcomeEvaluator.INSTANCE,
+            PermanentPtOutcomeEvaluator.INSTANCE,
+            StateChangeOutcomeEvaluator.INSTANCE);
 
     private OutcomeEvaluatorRegistry() {
     }

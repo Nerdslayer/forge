@@ -1,9 +1,9 @@
 package forge.ai.effect;
 
+import java.util.Arrays;
 import java.util.List;
 
 import forge.ai.ComputerUtilCard;
-import forge.ai.ability.AnimateAi;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
@@ -25,7 +25,7 @@ final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
                 || (!"Permanent".equals(outcome.getParam("Duration"))
                         && !"Perpetual".equals(outcome.getParam("Duration")))
                 || !changesPowerOrToughness(outcome)
-                || hasUnsupportedControlFlow(outcome)
+                || EffectAbilityUtils.hasUnsupportedControlFlow(outcome)
                 || !affectsBattlefield(outcome)) {
             return false;
         }
@@ -62,10 +62,6 @@ final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
 
     private static int evaluateCardDelta(final SpellAbility outcome, final Card affected,
             final OutcomeEvaluationContext context) {
-        if (outcome.getApi() == ApiType.Animate || outcome.getApi() == ApiType.AnimateAll) {
-            final Card changed = AnimateAi.becomeAnimatedForEvaluation(affected, outcome);
-            return CardStateDeltaEvaluator.evaluateChange(context, affected, changed);
-        }
         if (!affected.isCreature()) {
             return 0;
         }
@@ -76,8 +72,10 @@ final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
             return 0;
         }
 
+        final List<String> keywords = outcome.hasParam("KW")
+                ? Arrays.asList(outcome.getParam("KW").split(" & ")) : List.of();
         final Card changed = ComputerUtilCard.getPumpedCreatureForEvaluation(
-                context.evaluatingAi(), outcome, affected, toughness, power, List.of());
+                context.evaluatingAi(), outcome, affected, toughness, power, keywords);
         return CardStateDeltaEvaluator.evaluateChange(context, affected, changed);
     }
 
@@ -94,34 +92,19 @@ final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
     }
 
     private static boolean affectsBattlefield(final SpellAbility outcome) {
-        final String zoneParam = outcome.getApi() == ApiType.Animate
-                || outcome.getApi() == ApiType.AnimateAll ? "Zone" : "PumpZone";
-        return AffectedCardResolver.affectsOnlyBattlefield(outcome, zoneParam);
+        return AffectedCardResolver.affectsOnlyBattlefield(outcome, "PumpZone");
     }
 
     private static boolean isSupportedApi(final ApiType api) {
-        return api == ApiType.Pump || api == ApiType.PumpAll
-                || api == ApiType.Animate || api == ApiType.AnimateAll;
+        return api == ApiType.Pump || api == ApiType.PumpAll;
     }
 
     private static boolean isGroupEffect(final ApiType api) {
-        return api == ApiType.PumpAll || api == ApiType.AnimateAll;
+        return api == ApiType.PumpAll;
     }
 
     private static boolean changesPowerOrToughness(final SpellAbility outcome) {
-        if (outcome.getApi() == ApiType.Animate || outcome.getApi() == ApiType.AnimateAll) {
-            return outcome.hasParam("Power") || outcome.hasParam("Toughness");
-        }
         return outcome.hasParam("NumAtt") || outcome.hasParam("NumDef");
     }
 
-    private static boolean hasUnsupportedControlFlow(final SpellAbility outcome) {
-        for (final String param : outcome.getMapParams().keySet()) {
-            if (param.startsWith("Condition") || param.startsWith("Unless")
-                    || "Optional".equals(param) || "Radiance".equals(param)) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

@@ -65,4 +65,14 @@ final class EffectAbilityUtils {
     static boolean hasOnlyParams(final Trigger trigger, final Set<String> allowed) {
         return allowed.containsAll(trigger.getMapParams().keySet());
     }
+
+    static boolean hasUnsupportedControlFlow(final SpellAbility ability) {
+        for (final String param : ability.getMapParams().keySet()) {
+            if (param.startsWith("Condition") || param.startsWith("Unless")
+                    || "Optional".equals(param) || "Radiance".equals(param)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

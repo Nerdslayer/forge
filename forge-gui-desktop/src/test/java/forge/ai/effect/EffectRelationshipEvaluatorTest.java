@@ -240,6 +240,91 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testTransformOutcomeUsesResultingPermanentValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Delver of Secrets", opponent,
+                "DB$ SetState | Defined$ Self | Mode$ Transform");
+        final long timestampBeforeAnalysis = game.getTimestamp();
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+        Assert.assertEquals(game.getTimestamp(), timestampBeforeAnalysis,
+                "Analysis-only transform must not consume live game timestamps");
+    }
+
+    @Test
+    public void testTurnFaceDownOutcomeUsesResultingPermanentValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Serra Angel", opponent,
+                "DB$ SetState | Defined$ Self | Mode$ TurnFaceDown");
+        final long timestampBeforeAnalysis = game.getTimestamp();
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) < 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+        Assert.assertEquals(game.getTimestamp(), timestampBeforeAnalysis,
+                "Analysis-only face change must not consume live game timestamps");
+    }
+
+    @Test
+    public void testTurnFaceUpOutcomeUsesKnownAiControlledCard() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ SetState | ValidTgts$ Creature.faceDown+OppCtrl | Mode$ TurnFaceUp");
+        final Card faceDown = addCard("Serra Angel", ai);
+        faceDown.turnFaceDown(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) < 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testTurnFaceUpOutcomeDoesNotReadOpponentHiddenCard() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ SetState | ValidTgts$ Creature.faceDown+YouCtrl | Mode$ TurnFaceUp");
+        final Card hidden = addCard("Serra Angel", opponent);
+        hidden.turnFaceDown(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
     public void testPermanentPumpAllIncludesMatchingBattlefieldCardsAndCreatedToken() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -398,6 +483,121 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         Assert.assertEquals(values.getOrDefault(wrongTypeConsequence, 0).intValue(), 0);
         Assert.assertEquals(values.get(producer).intValue(),
                 values.get(exactConsequence) + values.get(anyConsequence));
+    }
+
+    @Test
+    public void testSupportedCounterOutcomesUsePermanentEvaluation() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card plusCounter = addCounterOutcomeConsequence(
+                "Grizzly Bears", opponent, "P1P1", "Creature.YouCtrl");
+        final Card minusCounter = addCounterOutcomeConsequence(
+                "Runeclaw Bear", opponent, "M1M1", "Creature.YouCtrl");
+        final Card shieldCounter = addCounterOutcomeConsequence(
+                "Bear Cub", opponent, "SHIELD", "Creature.YouCtrl");
+        final Card stunCounter = addCounterOutcomeConsequence(
+                "Centaur Courser", opponent, "STUN", "Creature.YouCtrl");
+        final Card loyaltyCounter = addCounterOutcomeConsequence(
+                "Mox Amber", opponent, "LOYALTY", "Planeswalker.YouCtrl");
+        addCard("Jace Beleren", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, plusCounter, minusCounter,
+                        shieldCounter, stunCounter, loyaltyCounter));
+
+        Assert.assertTrue(values.getOrDefault(plusCounter, 0) > 0);
+        Assert.assertTrue(values.getOrDefault(minusCounter, 0) < 0);
+        Assert.assertTrue(values.getOrDefault(shieldCounter, 0) > 0);
+        Assert.assertTrue(values.getOrDefault(stunCounter, 0) < 0);
+        Assert.assertEquals(values.getOrDefault(loyaltyCounter, 0).intValue(), 10);
+    }
+
+    @Test
+    public void testKeywordAndRestrictionOutcomesUseCreatureEvaluation() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card flyingGain = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Pump | Defined$ Self | KW$ Flying | Duration$ Permanent");
+        final Card flyingLoss = addCounterTriggeredOutcome("Wind Drake", opponent,
+                "DB$ Debuff | Defined$ Self | Keywords$ Flying | Duration$ Permanent");
+        final Card defender = addCounterTriggeredOutcome("Runeclaw Bear", opponent,
+                "DB$ Pump | Defined$ Self | KW$ Defender");
+        final Card defenderLoss = addCounterTriggeredOutcome("Wall of Wood", opponent,
+                "DB$ Animate | Defined$ Self | RemoveKeywords$ Defender"
+                        + " | Duration$ Permanent");
+        final Card combatRestriction = addCounterTriggeredOutcome("Centaur Courser", opponent,
+                "DB$ Pump | Defined$ Self | KW$ HIDDEN CARDNAME can't attack or block.");
+        final Card untapRestriction = addCounterTriggeredOutcome("Craw Wurm", opponent,
+                "DB$ Pump | Defined$ Self"
+                        + " | KW$ HIDDEN This card doesn't untap during your next untap step."
+                        + " | Duration$ Permanent");
+        untapRestriction.setTapped(true);
+        final Card detain = addCounterTriggeredOutcome("Bear Cub", opponent,
+                "DB$ Detain | Defined$ Self");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, flyingGain, flyingLoss, defender, defenderLoss,
+                        combatRestriction, untapRestriction, detain));
+
+        Assert.assertTrue(values.getOrDefault(flyingGain, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(flyingLoss, 0) < 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(defender, 0) < 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(defenderLoss, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(combatRestriction, 0) < 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(untapRestriction, 0) < 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(detain, 0) < 0, values.toString());
+    }
+
+    @Test
+    public void testPersistentPumpIncludesBothPtAndKeywordValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card ptOnly = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Pump | Defined$ Self | NumAtt$ +1 | Duration$ Permanent");
+        final Card ptAndFlying = addCounterTriggeredOutcome("Runeclaw Bear", opponent,
+                "DB$ Pump | Defined$ Self | NumAtt$ +1 | KW$ Flying | Duration$ Permanent");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, ptOnly, ptAndFlying));
+
+        Assert.assertTrue(values.getOrDefault(ptAndFlying, 0)
+                > values.getOrDefault(ptOnly, 0));
+    }
+
+    @Test
+    public void testGroupKeywordOutcomeAggregatesAffectedCreatures() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Mox Amber", opponent,
+                "DB$ PumpAll | ValidCards$ Creature.YouCtrl | KW$ Flying"
+                        + " | Duration$ Permanent");
+        addCard("Grizzly Bears", opponent);
+        addCard("Runeclaw Bear", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(consequence, 0) > 0);
     }
 
     @Test
@@ -864,6 +1064,27 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ? "" : " | CounterType$ " + counterType;
         addTrigger(card, "Mode$ " + triggerMode + " | " + validity + counterTypeParam
                 + " | Execute$ EffectTestCounterOutcome | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addCounterOutcomeConsequence(final String cardName, final Player controller,
+            final String outcomeCounterType, final String validTargets) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestCounterOutcome", "DB$ PutCounter | ValidTgts$ " + validTargets
+                + " | CounterType$ " + outcomeCounterType + " | CounterNum$ 1");
+        addTrigger(card, "Mode$ CounterAddedOnce | ValidCard$ Artifact.YouCtrl"
+                + " | CounterType$ CHARGE | Execute$ EffectTestCounterOutcome"
+                + " | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addCounterTriggeredOutcome(final String cardName, final Player controller,
+            final String outcomeDefinition) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestOutcome", outcomeDefinition);
+        addTrigger(card, "Mode$ CounterAddedOnce | ValidCard$ Artifact.YouCtrl"
+                + " | CounterType$ CHARGE | Execute$ EffectTestOutcome"
+                + " | TriggerZones$ Battlefield");
         return card;
     }
 
