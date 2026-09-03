@@ -14,6 +14,7 @@ final class OutcomeEvaluatorRegistry {
             KeywordOutcomeEvaluator.INSTANCE,
             PermanentPtOutcomeEvaluator.INSTANCE,
             PermanentRemovalOutcomeEvaluator.INSTANCE,
+            SacrificeOutcomeEvaluator.INSTANCE,
             ControlChangeOutcomeEvaluator.INSTANCE,
             AttachmentOutcomeEvaluator.INSTANCE,
             StateChangeOutcomeEvaluator.INSTANCE);
