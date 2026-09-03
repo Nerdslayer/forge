@@ -369,6 +369,50 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testKnownSacrificeOutcomesUseDepartingPermanentValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card selfSacrifice = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Sacrifice | SacValid$ Self");
+        final Card forcedSacrifice = addCounterTriggeredOutcome("Runeclaw Bear", opponent,
+                "DB$ Sacrifice | Defined$ Opponent | SacValid$ Creature");
+        addCard("Serra Angel", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, selfSacrifice, forcedSacrifice));
+
+        Assert.assertTrue(values.getOrDefault(selfSacrifice, 0) < 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(forcedSacrifice, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(),
+                values.get(selfSacrifice) + values.get(forcedSacrifice));
+    }
+
+    @Test
+    public void testPlayerChosenSacrificeOutcomeIsDeferred() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Sacrifice | Defined$ Opponent | SacValid$ Creature");
+        addCard("Serra Angel", ai);
+        addCard("Runeclaw Bear", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
     public void testPermanentControlChangeCountsLossAndGain() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
