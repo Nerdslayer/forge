@@ -114,15 +114,11 @@ public class SetStateAi extends SpellAbilityAi {
     }
 
     private boolean shouldTransformCard(Card card, Player ai, PhaseHandler ph) {
-        if (!card.hasAlternateState()) {
+        final Card transformed = changeStateForEvaluation(card, "Transform");
+        if (transformed == null) {
             System.err.println("Warning: SetState without ALTERNATE on " + card.getName() + ".");
             return false;
         }
-
-        // need a copy for evaluation
-        Card transformed = CardCopyService.getLKICopy(card);
-        transformed.getCurrentState().copyFrom(card.getAlternateState(), true);
-        transformed.updateStateForView();
 
         // TODO: compareCards assumes that a creature will transform into a creature. Need to improve this
         // for other things potentially transforming.
@@ -155,15 +151,48 @@ public class SetStateAi extends SpellAbilityAi {
             }
         }
 
-        // need a copy for evaluation
-        Card transformed = CardCopyService.getLKICopy(card);
-        if (!card.isFaceDown()) {
-            transformed.turnFaceDown(true);
-        } else {
-            transformed.forceTurnFaceUp();
+        final Card transformed = changeStateForEvaluation(card, mode);
+        if (transformed == null) {
+            return false;
         }
-        transformed.updateStateForView();
         return compareCards(card, transformed, ai, ph);
+    }
+
+    /** Returns an analysis copy with the supported destination state's characteristics. */
+    public static Card changeStateForEvaluation(final Card card, final String mode) {
+        final CardState destination;
+        if ("Transform".equals(mode)) {
+            if (card.isFaceDown() || card.hasMergedCard()
+                    || !card.isTransformable() || !card.hasAlternateState()) {
+                return null;
+            }
+            destination = card.getAlternateState();
+        } else if ("Flip".equals(mode)) {
+            if (card.isFaceDown() || card.hasMergedCard() || card.isFlipped()
+                    || !card.isFlipCard() || !card.hasState(CardStateName.Flipped)) {
+                return null;
+            }
+            destination = card.getState(CardStateName.Flipped);
+        } else if ("TurnFaceUp".equals(mode)) {
+            if (!card.isFaceDown() || !card.getRules().getType().isPermanent()
+                    || !card.canBeTurnedFaceUp()) {
+                return null;
+            }
+            destination = card.getState(card.isFlipped()
+                    ? CardStateName.Flipped : CardStateName.Original);
+        } else if ("TurnFaceDown".equals(mode)) {
+            if (card.isFaceDown() || card.isTransformable() || card.isMeldable()) {
+                return null;
+            }
+            destination = card.getFaceDownState();
+        } else {
+            return null;
+        }
+
+        final Card changed = CardCopyService.getLKICopy(card);
+        changed.getCurrentState().copyFrom(destination, true);
+        changed.updateStateForView();
+        return changed;
     }
     
     private boolean compareCards(Card original, Card copy, Player ai, PhaseHandler ph) {
