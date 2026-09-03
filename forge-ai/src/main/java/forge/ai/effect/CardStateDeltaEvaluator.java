@@ -1,9 +1,12 @@
 package forge.ai.effect;
 
+import java.util.Map;
 import java.util.function.ToIntFunction;
 
 import forge.ai.ComputerUtilCard;
 import forge.game.card.Card;
+import forge.game.card.CardCopyService;
+import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 
 /** Shared aggregation and perspective handling for analysis-only card-state changes. */
@@ -42,10 +45,45 @@ final class CardStateDeltaEvaluator {
         return applyPerspective(context, original, EffectMath.negate(value));
     }
 
+    static int evaluateControlChange(final OutcomeEvaluationContext context,
+            final Card original, final Player newController) {
+        if (original.getController() == newController) {
+            return 0;
+        }
+
+        final Card changed = CardCopyService.getLKICopy(original);
+        changed.setController(newController, 0);
+        return evaluateBoardChanges(context, Map.of(original, changed));
+    }
+
+    static int evaluateBoardChanges(final OutcomeEvaluationContext context,
+            final Map<Card, Card> changes) {
+        int before = 0;
+        int after = 0;
+        for (final Map.Entry<Card, Card> change : changes.entrySet()) {
+            final Card original = change.getKey();
+            before = EffectMath.add(before,
+                    signedBoardValue(context, original, original.getController()));
+            final Card changed = change.getValue();
+            if (changed != null) {
+                after = EffectMath.add(after,
+                        signedBoardValue(context, changed, changed.getController()));
+            }
+        }
+        return EffectMath.subtract(before, after);
+    }
+
     private static int applyPerspective(final OutcomeEvaluationContext context,
             final Card original, final int delta) {
         return original.getController().isOpponentOf(context.evaluatingAi())
                 ? delta : EffectMath.negate(delta);
+    }
+
+    private static int signedBoardValue(final OutcomeEvaluationContext context,
+            final Card card, final Player controller) {
+        final int value = ComputerUtilCard.evaluatePermanent(context.evaluatingAi(), card);
+        return controller.isOpponentOf(context.evaluatingAi())
+                ? EffectMath.negate(value) : value;
     }
 
     private static int chooseBest(final SpellAbility outcome,
