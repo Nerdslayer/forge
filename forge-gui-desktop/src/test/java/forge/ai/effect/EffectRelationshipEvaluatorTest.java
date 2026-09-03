@@ -325,6 +325,50 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testDestroyAndPermanentExileOutcomesUseRemovedPermanentValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card destroy = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Destroy | ValidTgts$ Creature.OppCtrl");
+        final Card exile = addCounterTriggeredOutcome("Runeclaw Bear", opponent,
+                "DB$ ChangeZone | ValidTgts$ Creature.OppCtrl"
+                        + " | Origin$ Battlefield | Destination$ Exile");
+        addCard("Serra Angel", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, destroy, exile));
+
+        Assert.assertTrue(values.getOrDefault(destroy, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(destroy), values.get(exile));
+        Assert.assertEquals(values.get(producer).intValue(),
+                values.get(destroy) + values.get(exile));
+    }
+
+    @Test
+    public void testDestroyOutcomeIgnoresPermanentThatWouldRemain() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Destroy | ValidTgts$ Creature.OppCtrl");
+        addCard("Darksteel Myr", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
     public void testPermanentPumpAllIncludesMatchingBattlefieldCardsAndCreatedToken() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

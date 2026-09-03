@@ -34,6 +34,16 @@ final class CardStateDeltaEvaluator {
         final int before = ComputerUtilCard.evaluatePermanent(context.evaluatingAi(), original);
         final int after = ComputerUtilCard.evaluatePermanent(context.evaluatingAi(), changed);
         final int delta = EffectMath.subtract(after, before);
+        return applyPerspective(context, original, delta);
+    }
+
+    static int evaluateDeparture(final OutcomeEvaluationContext context, final Card original) {
+        final int value = ComputerUtilCard.evaluatePermanent(context.evaluatingAi(), original);
+        return applyPerspective(context, original, EffectMath.negate(value));
+    }
+
+    private static int applyPerspective(final OutcomeEvaluationContext context,
+            final Card original, final int delta) {
         return original.getController().isOpponentOf(context.evaluatingAi())
                 ? delta : EffectMath.negate(delta);
     }

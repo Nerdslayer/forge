@@ -13,6 +13,7 @@ final class OutcomeEvaluatorRegistry {
             AnimationOutcomeEvaluator.INSTANCE,
             KeywordOutcomeEvaluator.INSTANCE,
             PermanentPtOutcomeEvaluator.INSTANCE,
+            PermanentRemovalOutcomeEvaluator.INSTANCE,
             StateChangeOutcomeEvaluator.INSTANCE);
 
     private OutcomeEvaluatorRegistry() {
