@@ -369,6 +369,98 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testPermanentControlChangeCountsLossAndGain() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ GainControl | ValidTgts$ Creature.OppCtrl");
+        final Card target = addCard("Serra Angel", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        final int targetValue = ComputerUtilCard.evaluatePermanent(ai, target);
+        Assert.assertEquals(values.get(consequence).intValue(), targetValue * 2);
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testGivingPermanentToAiHasNegativeOutcomeValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ GainControl | Defined$ Self | NewController$ Opponent");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(consequence, 0) < 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testAttachingEquipmentOrCurseAuraUsesResultingCardStates() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card equipment = addCounterTriggeredOutcome("Bonesplitter", opponent,
+                "DB$ Attach | ValidTgts$ Creature.YouCtrl");
+        final Card aura = addCounterTriggeredOutcome("Dead Weight", opponent,
+                "DB$ Attach | ValidTgts$ Creature.OppCtrl");
+        addCard("Craw Wurm", opponent);
+        addCard("Serra Angel", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, equipment, aura));
+
+        Assert.assertTrue(values.getOrDefault(equipment, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(aura, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testUnattachingEquipmentOrAuraUsesResultingCardStates() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card equipment = addCard("Bonesplitter", opponent);
+        equipment.attachToEntity(addCard("Craw Wurm", opponent), null);
+        final Card aura = addCard("Dead Weight", opponent);
+        aura.attachToEntity(addCard("Serra Angel", ai), null);
+        game.getAction().checkStaticAbilities(false);
+
+        final Card detachEquipment = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Unattach | Defined$ Remembered");
+        detachEquipment.addRemembered(equipment);
+        final Card detachAura = addCounterTriggeredOutcome("Runeclaw Bear", opponent,
+                "DB$ Unattach | Defined$ Remembered");
+        detachAura.addRemembered(aura);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, detachEquipment, detachAura));
+
+        Assert.assertTrue(values.getOrDefault(detachEquipment, 0) < 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(detachAura, 0) < 0, values.toString());
+    }
+
+    @Test
     public void testPermanentPumpAllIncludesMatchingBattlefieldCardsAndCreatedToken() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

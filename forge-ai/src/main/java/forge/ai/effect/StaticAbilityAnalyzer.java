@@ -106,7 +106,7 @@ final class StaticAbilityAnalyzer {
                 ComputerUtilCard.evaluatePermanent(evaluatingAi, withoutEffect));
     }
 
-    private static void removeTrackedChanges(final Card card, final StaticEffect effect,
+    static void removeTrackedChanges(final Card card, final StaticEffect effect,
             final StaticAbility ability) {
         final long timestamp = effect.getTimestamp();
         final long staticId = ability.getId();
