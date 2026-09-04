@@ -35,7 +35,7 @@ final class LifeGainProductionExtractor implements EffectProductionExtractor {
     }
 
     @Override
-    public List<EffectProduction> extract(final Card source) {
+    public List<EffectProduction> extract(final Player evaluatingAi, final Card source) {
         if (!source.isInPlay() || source.isPhasedOut() || !source.isCreature()
                 || !source.hasKeyword(Keyword.LIFELINK)
                 || !ComputerUtilCombat.canAttackNextTurn(source)) {
@@ -57,7 +57,8 @@ final class LifeGainProductionExtractor implements EffectProductionExtractor {
     }
 
     @Override
-    public List<EffectProduction> extract(final Card source, final Trigger trigger) {
+    public List<EffectProduction> extract(final Player evaluatingAi, final Card source,
+            final Trigger trigger) {
         if (trigger.getMode() == TriggerType.DamageDone) {
             if (!EffectAbilityUtils.isActiveBattlefieldTrigger(source, trigger)) {
                 return List.of();
@@ -65,7 +66,8 @@ final class LifeGainProductionExtractor implements EffectProductionExtractor {
             final EffectProduction combatProduction = extractCombatDamageProduction(source, trigger);
             return combatProduction == null ? List.of() : List.of(combatProduction);
         }
-        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(source, trigger);
+        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(
+                evaluatingAi, source, trigger);
         if (opportunity == null) {
             return List.of();
         }
@@ -144,7 +146,8 @@ final class LifeGainProductionExtractor implements EffectProductionExtractor {
     }
 
     @Override
-    public List<EffectProduction> extract(final Card source, final SpellAbility ability) {
+    public List<EffectProduction> extract(final Player evaluatingAi, final Card source,
+            final SpellAbility ability) {
         final ProductionOpportunity opportunity =
                 ProductionOpportunity.fromActivatedAbility(source, ability);
         if (opportunity == null) {

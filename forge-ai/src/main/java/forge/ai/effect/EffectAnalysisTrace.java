@@ -187,6 +187,19 @@ public final class EffectAnalysisTrace {
                     AbilityKey.LifeAmount);
             return ", lifeAmount=" + amount;
         }
+        if (production.type() == EffectType.CARD_DRAWN) {
+            return ", drawEvents=" + production.events().size();
+        }
+        if (production.type() == EffectType.DAMAGE_DEALT) {
+            int amount = 0;
+            for (final EffectEvent event : production.events()) {
+                final Object eventAmount = event.triggerParameters().get(AbilityKey.DamageAmount);
+                if (eventAmount instanceof Integer value) {
+                    amount = EffectMath.add(amount, value);
+                }
+            }
+            return ", totalDamage=" + amount;
+        }
         if (production.type() == EffectType.ZONE_CHANGED) {
             final EffectEvent event = production.events().get(0);
             return ", origin=" + event.triggerParameters().get(AbilityKey.Origin)

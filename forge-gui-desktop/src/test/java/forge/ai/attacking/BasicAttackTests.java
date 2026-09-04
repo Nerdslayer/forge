@@ -1,6 +1,7 @@
 package forge.ai.attacking;
 
 import forge.ai.PlayerControllerAi;
+import forge.ai.AttackLikelihoodEvaluator;
 import forge.ai.simulation.SimulationTest;
 import forge.game.Game;
 import forge.game.card.Card;
@@ -11,6 +12,46 @@ import org.testng.AssertJUnit;
 import org.testng.annotations.Test;
 
 public class BasicAttackTests extends SimulationTest {
+
+    @Test
+    public void publicPredictionExpectsUnblockedOpponentToAttack() {
+        Game game = initAndCreateGame();
+        Player observer = game.getPlayers().get(1);
+        Player opponent = game.getPlayers().get(0);
+        Card attacker = addCard("Craw Wurm", opponent);
+        attacker.setSickness(false);
+
+        AssertJUnit.assertEquals(AttackLikelihoodEvaluator.Likelihood.LIKELY,
+                AttackLikelihoodEvaluator.estimateNextTurn(observer, attacker));
+    }
+
+    @Test
+    public void publicPredictionDoesNotExpectOpponentToMakeBadTrade() {
+        Game game = initAndCreateGame();
+        Player observer = game.getPlayers().get(1);
+        Player opponent = game.getPlayers().get(0);
+        Card attacker = addCard("Craw Wurm", opponent);
+        attacker.setSickness(false);
+        addCard("Ankle Biter", observer);
+
+        AssertJUnit.assertEquals(AttackLikelihoodEvaluator.Likelihood.UNLIKELY,
+                AttackLikelihoodEvaluator.estimateNextTurn(observer, attacker));
+    }
+
+    @Test
+    public void ownPredictionUsesAiPredictedCombat() {
+        Game game = initAndCreateGame();
+        Player ai = game.getPlayers().get(1);
+        Player defender = game.getPlayers().get(0);
+        Card attacker = addCard("Grizzly Bears", ai);
+        attacker.setSickness(false);
+        addCard("Ankle Biter", defender);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, ai);
+        game.getAction().checkStateEffects(true);
+
+        AssertJUnit.assertEquals(AttackLikelihoodEvaluator.Likelihood.UNLIKELY,
+                AttackLikelihoodEvaluator.estimateNextTurn(ai, attacker));
+    }
 
     @Test
     public void assaultForLethal() {

@@ -36,7 +36,7 @@ final class TriggeredEffectAnalyzer {
 
         final List<EffectProduction> productions = new ArrayList<>();
         final Map<EffectType, List<EffectConsequence>> consequences = new EnumMap<>(EffectType.class);
-        extractEffects(analyzedControllers, productions, consequences, trace);
+        extractEffects(evaluatingAi, analyzedControllers, productions, consequences, trace);
 
         final Map<Card, Integer> values = new HashMap<>();
         for (final EffectProduction production : productions) {
@@ -71,7 +71,8 @@ final class TriggeredEffectAnalyzer {
         return controllers;
     }
 
-    private static void extractEffects(final Iterable<Player> controllers,
+    private static void extractEffects(final Player evaluatingAi,
+            final Iterable<Player> controllers,
             final List<EffectProduction> productions,
             final Map<EffectType, List<EffectConsequence>> consequences,
             final EffectAnalysisTrace trace) {
@@ -79,7 +80,7 @@ final class TriggeredEffectAnalyzer {
             for (final Card permanent : controller.getCardsIn(ZoneType.Battlefield)) {
                 try {
                     final List<EffectProduction> extracted =
-                            EffectProductionExtractorRegistry.extract(permanent);
+                            EffectProductionExtractorRegistry.extract(evaluatingAi, permanent);
                     productions.addAll(extracted);
                     extracted.forEach(trace::production);
                 } catch (final RuntimeException ignored) {
@@ -88,7 +89,8 @@ final class TriggeredEffectAnalyzer {
                 for (final SpellAbility ability : permanent.getSpellAbilities()) {
                     try {
                         final List<EffectProduction> extracted =
-                                EffectProductionExtractorRegistry.extract(permanent, ability);
+                                EffectProductionExtractorRegistry.extract(
+                                        evaluatingAi, permanent, ability);
                         productions.addAll(extracted);
                         extracted.forEach(trace::production);
                     } catch (final RuntimeException ignored) {
@@ -98,7 +100,8 @@ final class TriggeredEffectAnalyzer {
                 for (final Trigger trigger : permanent.getTriggers()) {
                     try {
                         final List<EffectProduction> extracted =
-                                EffectProductionExtractorRegistry.extract(permanent, trigger);
+                                EffectProductionExtractorRegistry.extract(
+                                        evaluatingAi, permanent, trigger);
                         productions.addAll(extracted);
                         extracted.forEach(trace::production);
                         final EffectConsequence consequence =

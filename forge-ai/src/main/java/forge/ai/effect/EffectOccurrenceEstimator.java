@@ -2,12 +2,9 @@ package forge.ai.effect;
 
 import java.util.Set;
 
-import forge.ai.ComputerUtilCombat;
+import forge.ai.AttackLikelihoodEvaluator;
 import forge.game.card.Card;
-import forge.game.card.CounterEnumType;
-import forge.game.combat.CombatUtil;
-import forge.game.keyword.Keyword;
-import forge.game.staticability.StaticAbilityCantCrew;
+import forge.game.player.Player;
 import forge.game.trigger.Trigger;
 import forge.game.trigger.TriggerType;
 
@@ -24,13 +21,15 @@ final class EffectOccurrenceEstimator {
     private EffectOccurrenceEstimator() {
     }
 
-    static int estimateTriggerBatches(final Card source, final Trigger trigger) {
+    static int estimateTriggerBatches(final Player evaluatingAi, final Card source,
+            final Trigger trigger) {
         if (trigger.getMode() == TriggerType.Attacks) {
             if (!EffectAbilityUtils.hasOnlyParams(trigger, ATTACK_TRIGGER_PARAMS)
                     || !"Card.Self".equals(trigger.getParam("ValidCard"))) {
                 return 0;
             }
-            return canProduceByAttacking(source) ? 1 : 0;
+            return AttackLikelihoodEvaluator.estimateNextTurn(evaluatingAi, source)
+                    .isExpected() ? 1 : 0;
         }
         if (trigger.getMode() == TriggerType.Phase) {
             if (!EffectAbilityUtils.hasOnlyParams(trigger, PHASE_TRIGGER_PARAMS)
@@ -42,33 +41,6 @@ final class EffectOccurrenceEstimator {
             return 1;
         }
         return 0;
-    }
-
-    private static boolean canProduceByAttacking(final Card source) {
-        if (source.isCreature()) {
-            return ComputerUtilCombat.canAttackNextTurn(source);
-        }
-        if (!source.getType().hasSubtype("Vehicle") || !source.hasKeyword(Keyword.CREW)
-                || !CombatUtil.getAllPossibleDefenders(source.getController()).anyMatch(
-                        defender -> CombatUtil.canAttackNextTurn(source, defender))) {
-            return false;
-        }
-
-        final int crewPowerNeeded = source.getKeywordMagnitude(Keyword.CREW);
-        int availablePower = 0;
-        for (final Card creature : source.getController().getCreaturesInPlay()) {
-            if (creature != source && canCrewNextTurn(creature)) {
-                availablePower = EffectMath.add(availablePower, Math.max(0, creature.getNetPower()));
-            }
-        }
-        return availablePower >= crewPowerNeeded;
-    }
-
-    private static boolean canCrewNextTurn(final Card creature) {
-        return !creature.isPhasedOut()
-                && !StaticAbilityCantCrew.cantCrew(creature)
-                && (!creature.isTapped() || (creature.getCounters(CounterEnumType.STUN) == 0
-                        && creature.canUntap(creature.getController(), true)));
     }
 
     private static boolean isSupportedPhase(final String phase) {
