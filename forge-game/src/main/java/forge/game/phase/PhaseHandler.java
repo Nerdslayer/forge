@@ -62,6 +62,8 @@ import java.util.*;
  */
 public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
     private static final long serialVersionUID = 5207222278370963197L;
+    private static final int MAX_AI_PRIORITY_ACTIONS = 200;
+    private static final int MAX_CONSECUTIVE_STACK_RESOLUTIONS = 200;
 
     // used for debugging phase timing
     private final StopWatch sw = new StopWatch();
@@ -93,6 +95,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
 
     /** The need to next phase. */
     private boolean givePriorityToPlayer = false;
+    private int consecutiveStackResolutions = 0;
 
     private final transient Game game;
 
@@ -1077,6 +1080,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
                     final CardZoneTable triggerList = new CardZoneTable(game.getLastStateBattlefield(), game.getLastStateGraveyard());
 
                     if (pPlayerPriority.getController().playChosenSpellAbility(sa)) {
+                        consecutiveStackResolutions = 0;
                         // 117.3c If a player has priority when they cast a spell, activate an ability, [play a land]
                         // that player receives priority afterward.
                         pFirstPriority = pPlayerPriority; // all opponents have to pass before stack is allowed to resolve
@@ -1099,9 +1103,9 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
                     game.copyLastState();
                 }
                 loopCount++;
-            } while (loopCount < 999 || !pPlayerPriority.getController().isAI());
+            } while (loopCount < MAX_AI_PRIORITY_ACTIONS || !pPlayerPriority.getController().isAI());
 
-            if (loopCount >= 999 && pPlayerPriority.getController().isAI()) {
+            if (loopCount >= MAX_AI_PRIORITY_ACTIONS && pPlayerPriority.getController().isAI()) {
                 aiLog.warn("AI looped too much with: " + chosenSa);
             }
 
@@ -1128,6 +1132,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
         }
         if (pFirstPriority == nextPlayer) {
             if (game.getStack().isEmpty()) {
+                consecutiveStackResolutions = 0;
                 if (playerTurn.hasLost()) {
                     setPriority(game.getNextPlayerAfter(playerTurn));
                 } else {
@@ -1140,7 +1145,18 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
                 onPhaseBegin();
             }
             else if (!game.getStack().hasSimultaneousStackEntries()) {
+                final SpellAbility nextSa = game.getStack().peekAbility();
+                if (consecutiveStackResolutions >= MAX_CONSECUTIVE_STACK_RESOLUTIONS
+                        && !nextSa.isOptionalTrigger()) {
+                    aiLog.warn("Stack resolved too many times without a priority action; loop continued with: " + nextSa);
+                    for (final Player p : game.getPlayers()) {
+                        p.intentionalDraw();
+                    }
+                    game.setGameOver(GameEndReason.Draw);
+                    return;
+                }
                 game.getStack().resolveStack();
+                consecutiveStackResolutions++;
             }
         } else {
             pPlayerPriority = nextPlayer;
@@ -1256,6 +1272,11 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
     // just to avoid exposing variable to outer classes
     public void onStackResolved() {
         givePriorityToPlayer = true;
+    }
+
+    public boolean shouldAiDeclineOptionalTrigger() {
+        // TODO: Extend loop escape handling to optional choices inside otherwise mandatory stack objects.
+        return consecutiveStackResolutions >= MAX_CONSECUTIVE_STACK_RESOLUTIONS;
     }
 
     public void endCombat() {
