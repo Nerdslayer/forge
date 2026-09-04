@@ -15,10 +15,104 @@ import forge.game.Game;
 import forge.game.ability.AbilityFactory;
 import forge.game.card.Card;
 import forge.game.card.CounterEnumType;
+import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.trigger.TriggerHandler;
+import forge.game.zone.ZoneType;
 
 public class EffectRelationshipEvaluatorTest extends AITest {
+    @Test
+    public void testExpectedBlockEvaluatesSupportedBlocksOutcome() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        opponent.setLife(1, null);
+
+        final Card attacker = addCard("Grizzly Bears", ai);
+        attacker.setSickness(false);
+        final Card secondAttacker = addCard("Runeclaw Bear", ai);
+        secondAttacker.setSickness(false);
+        final Card blocker = addCard("Bear Cub", opponent);
+        blocker.setSVar("EffectTestBlockOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(blocker, "Mode$ Blocks | ValidCard$ Card.Self"
+                + " | Execute$ EffectTestBlockOutcome | TriggerZones$ Battlefield");
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, ai);
+        game.getAction().checkStateEffects(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(blocker));
+
+        Assert.assertTrue(values.getOrDefault(blocker, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testExpectedBlockedAttackerEvaluatesOutcome() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        ai.setLife(1, null);
+
+        addCard("Grizzly Bears", ai);
+        final Card attacker = addCard("Craw Wurm", opponent);
+        attacker.setSickness(false);
+        attacker.setSVar("EffectTestBlockedOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(attacker, "Mode$ AttackerBlocked | ValidCard$ Card.Self"
+                + " | Execute$ EffectTestBlockedOutcome | TriggerZones$ Battlefield");
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        game.getAction().checkStateEffects(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(attacker));
+
+        Assert.assertTrue(values.getOrDefault(attacker, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testExpectedUnblockedAttackerEvaluatesOutcome() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card attacker = addCard("Grizzly Bears", opponent);
+        attacker.setSickness(false);
+        attacker.setSVar("EffectTestUnblockedOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(attacker, "Mode$ AttackerUnblocked | ValidCard$ Card.Self"
+                + " | Execute$ EffectTestUnblockedOutcome | TriggerZones$ Battlefield");
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        game.getAction().checkStateEffects(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(attacker));
+
+        Assert.assertTrue(values.getOrDefault(attacker, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testExpectedAttackEvaluatesSupportedAttackOutcome() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card attacker = addCard("Grizzly Bears", opponent);
+        attacker.setSickness(false);
+        attacker.setSVar("EffectTestAttackOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(attacker, "Mode$ Attacks | ValidCard$ Card.Self"
+                + " | Execute$ EffectTestAttackOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(attacker));
+
+        Assert.assertTrue(values.getOrDefault(attacker, 0) > 0, values.toString());
+    }
+
     @Test
     public void testProductionAndConsequenceReceiveSameFirstOrderValue() {
         final Game game = initAndCreateGame();
@@ -396,6 +490,164 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
         Assert.assertEquals(values.get(producer), values.get(matchingConsequence));
         Assert.assertFalse(values.containsKey(nonmatchingConsequence), values.toString());
+    }
+
+    @Test
+    public void testFixedDamageMatchesDamageDoneConsequence() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Self", 1);
+        final Card consequence = addDamageCounterConsequence(
+                "Runeclaw Bear", opponent, "DamageDone",
+                "ValidSource$ Creature.YouCtrl | ValidTarget$ Creature.YouCtrl", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testPayableActivatedDamageIsAProduction() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Grizzly Bears", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ DealDamage | Cost$ 0 | Defined$ Self | NumDmg$ 1", producer));
+        final Card consequence = addDamageCounterConsequence(
+                "Runeclaw Bear", opponent, "DamageDone",
+                "ValidSource$ Creature.YouCtrl | ValidTarget$ Creature.YouCtrl", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testDamageConsequenceChecksAmountAndCombatKind() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Self", 1);
+        final Card matching = addDamageCounterConsequence(
+                "Runeclaw Bear", opponent, "DamageDone",
+                "ValidTarget$ Creature.YouCtrl | DamageAmount$ EQ1"
+                        + " | CombatDamage$ False", "1");
+        final Card wrongAmount = addDamageCounterConsequence(
+                "Bear Cub", opponent, "DamageDone",
+                "ValidTarget$ Creature.YouCtrl | DamageAmount$ GE2", "1");
+        final Card combatOnly = addDamageCounterConsequence(
+                "Memnite", opponent, "DamageDone",
+                "ValidTarget$ Creature.YouCtrl | CombatDamage$ True", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, matching, wrongAmount, combatOnly));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(matching));
+        Assert.assertFalse(values.containsKey(wrongAmount), values.toString());
+        Assert.assertFalse(values.containsKey(combatOnly), values.toString());
+    }
+
+    @Test
+    public void testDamageAmountScalesTriggeredOutcome() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card oneDamage = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Self", 1);
+        final Card threeDamage = addPhaseDamageProducer(
+                "Runeclaw Bear", opponent, "DealDamage", "Defined$ Self", 3);
+        final Card consequence = addDamageCounterConsequence(
+                "Bear Cub", opponent, "DamageDone",
+                "ValidSource$ Creature.YouCtrl | ValidTarget$ Creature.YouCtrl",
+                "X");
+        consequence.setSVar("X", "TriggerCount$DamageAmount");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(oneDamage, threeDamage, consequence));
+
+        Assert.assertTrue(values.getOrDefault(oneDamage, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(threeDamage, 0) > values.get(oneDamage),
+                values.toString());
+    }
+
+    @Test
+    public void testDamageDoneOnceGroupsDamageByRecipient() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card oneRecipient = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Self", 1);
+        final Card allRecipients = addPhaseDamageProducer(
+                "Sol Ring", opponent, "DamageAll", "ValidCards$ Creature.YouCtrl", 1);
+        final Card consequence = addDamageCounterConsequence(
+                "Runeclaw Bear", opponent, "DamageDoneOnce",
+                "ValidSource$ Card.YouCtrl | ValidTarget$ Creature.YouCtrl", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(oneRecipient, allRecipients, consequence));
+
+        Assert.assertTrue(values.getOrDefault(oneRecipient, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(allRecipients, 0) > values.get(oneRecipient),
+                values.toString());
+    }
+
+    @Test
+    public void testDamageDealtOnceGroupsDamageBySource() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card oneRecipient = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Self", 1);
+        final Card allRecipients = addPhaseDamageProducer(
+                "Sol Ring", opponent, "DamageAll", "ValidCards$ Creature.YouCtrl", 1);
+        final Card consequence = addDamageCounterConsequence(
+                "Runeclaw Bear", opponent, "DamageDealtOnce",
+                "ValidSource$ Card.YouCtrl | ValidTarget$ Creature.YouCtrl", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(oneRecipient, allRecipients, consequence));
+
+        Assert.assertTrue(values.getOrDefault(oneRecipient, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(allRecipients), values.get(oneRecipient));
+    }
+
+    @Test
+    public void testTargetedDamageIsNotYetAProduction() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Prodigal Pyromancer", opponent);
+        final Card consequence = addDamageCounterConsequence(
+                "Runeclaw Bear", opponent, "DamageDone",
+                "ValidSource$ Creature.YouCtrl | ValidTarget$ Creature", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
     }
 
     @Test
@@ -872,8 +1124,9 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         addCard("Grizzly Bears", opponent);
         values = EffectRelationshipEvaluator.evaluateRemovalRelationships(ai, List.of(rosie, jet));
 
-        Assert.assertTrue(values.getOrDefault(jet, 0) > 0);
-        Assert.assertEquals(values.get(jet), values.get(rosie));
+        Assert.assertTrue(values.getOrDefault(rosie, 0) > 0);
+        Assert.assertTrue(values.get(jet) > values.get(rosie),
+                "Jet should include both its attack outcome and its relationship with Rosie");
     }
 
     @Test
@@ -1370,6 +1623,151 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testDrawProductionCreatesOneEventPerDrawnCard() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 6);
+
+        final Card oneDraw = addPhaseDrawProducer("Grizzly Bears", opponent, 1, "You");
+        final Card threeDraws = addPhaseDrawProducer("Runeclaw Bear", opponent, 3, "You");
+        final Card consequence = addDrawCounterConsequence(
+                "Bear Cub", opponent, "Card.YouCtrl", "");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(oneDraw, threeDraws, consequence));
+
+        Assert.assertTrue(values.getOrDefault(oneDraw, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(threeDraws).intValue(), values.get(oneDraw) * 3);
+        Assert.assertEquals(values.get(consequence).intValue(),
+                values.get(oneDraw) + values.get(threeDraws));
+    }
+
+    @Test
+    public void testDrawNumberMeansOrdinalDrawThisTurn() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 4);
+
+        final Card oneDraw = addPhaseDrawProducer("Grizzly Bears", opponent, 1, "You");
+        final Card twoDraws = addPhaseDrawProducer("Runeclaw Bear", opponent, 2, "You");
+        final Card consequence = addDrawCounterConsequence(
+                "Bear Cub", opponent, "Card.YouCtrl", " | Number$ 2");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(oneDraw, twoDraws, consequence));
+
+        Assert.assertFalse(values.containsKey(oneDraw), values.toString());
+        Assert.assertTrue(values.getOrDefault(twoDraws, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(twoDraws), values.get(consequence));
+    }
+
+    @Test
+    public void testDrawOutsideDrawStepMatchesFirstCardExclusion() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 2);
+
+        final Card producer = addPhaseDrawProducer("Grizzly Bears", opponent, 1, "You");
+        final Card consequence = addDrawCounterConsequence(
+                "Runeclaw Bear", opponent, "Card.YouCtrl",
+                " | FirstCardInDrawStep$ False");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testOpponentDrawMatchesUnknownCardOwnership() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(ai, 2);
+
+        final Card producer = addPhaseDrawProducer(
+                "Grizzly Bears", opponent, 1, "Opponent");
+        final Card consequence = addDrawCounterConsequence(
+                "Runeclaw Bear", opponent, "Card.OppOwn", "");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testOpponentDrawMatchesPlayerConstraint() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(ai, 2);
+
+        final Card producer = addPhaseDrawProducer(
+                "Grizzly Bears", opponent, 1, "Opponent");
+        final Card consequence = addCard("Runeclaw Bear", opponent);
+        consequence.setSVar("EffectTestDrawOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Drawn | ValidPlayer$ Opponent"
+                + " | Execute$ EffectTestDrawOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testDrawnCardCharacteristicFiltersRemainUnsupported() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 2);
+
+        final Card producer = addPhaseDrawProducer("Grizzly Bears", opponent, 1, "You");
+        final Card consequence = addDrawCounterConsequence(
+                "Runeclaw Bear", opponent, "Card.nonLand", "");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
+    public void testPayableActivatedDrawIsAProduction() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 2);
+
+        final Card producer = addCard("Grizzly Bears", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Draw | Cost$ 0 | Defined$ You | NumCards$ 1", producer));
+        final Card consequence = addDrawCounterConsequence(
+                "Runeclaw Bear", opponent, "Card.YouCtrl", "");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testStaticPtAbilityAddsItsMarginalValueToTheSource() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -1570,6 +1968,55 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
                 + " | Execute$ EffectTestLifeGain | TriggerZones$ Battlefield");
         return card;
+    }
+
+    private Card addPhaseDrawProducer(final String cardName, final Player controller,
+            final int amount, final String defined) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestDraw", "DB$ Draw | Defined$ " + defined
+                + " | NumCards$ " + amount);
+        addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestDraw | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addPhaseDamageProducer(final String cardName, final Player controller,
+            final String api, final String recipientDefinition, final int amount) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestDamage", "DB$ " + api + " | " + recipientDefinition
+                + " | NumDmg$ " + amount);
+        addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestDamage | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addDamageCounterConsequence(final String cardName, final Player controller,
+            final String triggerMode, final String triggerRestrictions,
+            final String counterAmount) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestDamageOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1"
+                        + " | CounterNum$ " + counterAmount);
+        addTrigger(card, "Mode$ " + triggerMode + " | " + triggerRestrictions
+                + " | Execute$ EffectTestDamageOutcome | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addDrawCounterConsequence(final String cardName, final Player controller,
+            final String validCard, final String extraTriggerParams) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestDrawOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(card, "Mode$ Drawn | ValidCard$ " + validCard
+                + extraTriggerParams + " | Execute$ EffectTestDrawOutcome"
+                + " | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private void stockLibrary(final Player player, final int amount) {
+        for (int i = 0; i < amount; i++) {
+            addCardToZone("Forest", player, ZoneType.Library);
+        }
     }
 
     private Card addZoneEntryCounterConsequence(final String cardName, final Player controller,

@@ -26,8 +26,10 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
     }
 
     @Override
-    public List<EffectProduction> extract(final Card source, final Trigger trigger) {
-        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(source, trigger);
+    public List<EffectProduction> extract(final Player evaluatingAi, final Card source,
+            final Trigger trigger) {
+        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(
+                evaluatingAi, source, trigger);
         if (opportunity == null) {
             return List.of();
         }
@@ -39,7 +41,8 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
     }
 
     @Override
-    public List<EffectProduction> extract(final Card source, final SpellAbility ability) {
+    public List<EffectProduction> extract(final Player evaluatingAi, final Card source,
+            final SpellAbility ability) {
         final ProductionOpportunity opportunity =
                 ProductionOpportunity.fromActivatedAbility(source, ability);
         if (opportunity == null) {
