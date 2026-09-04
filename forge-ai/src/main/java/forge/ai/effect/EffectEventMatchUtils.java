@@ -13,10 +13,19 @@ final class EffectEventMatchUtils {
     static boolean passes(final EffectConsequence consequence,
             final Map<AbilityKey, Object> runParams) {
         try {
+            return passesCommon(consequence, runParams)
+                    && consequence.trigger().performTest(runParams);
+        } catch (final RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    static boolean passesCommon(final EffectConsequence consequence,
+            final Map<AbilityKey, Object> runParams) {
+        try {
             return consequence.trigger().checkActivationLimit()
                     && consequence.trigger().meetsRequirementsOnTriggeredObjects(
                             consequence.source().getGame(), runParams)
-                    && consequence.trigger().performTest(runParams)
                     && !StaticAbilityDisableTriggers.disabled(
                             consequence.source().getGame(), consequence.trigger(), runParams);
         } catch (final RuntimeException ignored) {

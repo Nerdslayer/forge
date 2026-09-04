@@ -27,29 +27,27 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
 
     @Override
     public List<EffectProduction> extract(final Card source, final Trigger trigger) {
-        if (!EffectAbilityUtils.isActiveBattlefieldTrigger(source, trigger)) {
-            return List.of();
-        }
-        final int expectedBatches = EffectOccurrenceEstimator.estimateTriggerBatches(source, trigger);
-        if (expectedBatches <= 0) {
+        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(source, trigger);
+        if (opportunity == null) {
             return List.of();
         }
         final SpellAbility outcome = findSupportedCounterOutcome(
-                EffectAbilityUtils.copyTriggerOutcome(source, trigger));
+                opportunity.root());
         final EffectProduction production = outcome == null
-                ? null : createProduction(source, outcome, expectedBatches);
+                ? null : createProduction(source, outcome, opportunity.expectedBatches());
         return production == null ? List.of() : List.of(production);
     }
 
     @Override
     public List<EffectProduction> extract(final Card source, final SpellAbility ability) {
-        final SpellAbility copied = EffectAbilityUtils.copyPayableActivatedAbility(source, ability);
-        if (copied == null) {
+        final ProductionOpportunity opportunity =
+                ProductionOpportunity.fromActivatedAbility(source, ability);
+        if (opportunity == null) {
             return List.of();
         }
-        final SpellAbility outcome = findSupportedCounterOutcome(copied);
+        final SpellAbility outcome = findSupportedCounterOutcome(opportunity.root());
         final EffectProduction production = outcome == null
-                ? null : createProduction(source, outcome, 1);
+                ? null : createProduction(source, outcome, opportunity.expectedBatches());
         return production == null ? List.of() : List.of(production);
     }
 

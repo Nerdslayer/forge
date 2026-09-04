@@ -77,6 +77,14 @@ final class TriggeredEffectAnalyzer {
             final EffectAnalysisTrace trace) {
         for (final Player controller : controllers) {
             for (final Card permanent : controller.getCardsIn(ZoneType.Battlefield)) {
+                try {
+                    final List<EffectProduction> extracted =
+                            EffectProductionExtractorRegistry.extract(permanent);
+                    productions.addAll(extracted);
+                    extracted.forEach(trace::production);
+                } catch (final RuntimeException ignored) {
+                    // Unknown or malformed card state must not disrupt AI decisions.
+                }
                 for (final SpellAbility ability : permanent.getSpellAbilities()) {
                     try {
                         final List<EffectProduction> extracted =
