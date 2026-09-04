@@ -12,9 +12,18 @@ final class EffectProductionExtractorRegistry {
     private static final List<EffectProductionExtractor> EXTRACTORS = List.of(
             TokenProductionExtractor.INSTANCE,
             CopiedTokenProductionExtractor.INSTANCE,
-            CounterProductionExtractor.INSTANCE);
+            CounterProductionExtractor.INSTANCE,
+            LifeGainProductionExtractor.INSTANCE);
 
     private EffectProductionExtractorRegistry() {
+    }
+
+    static List<EffectProduction> extract(final Card source) {
+        final List<EffectProduction> productions = new ArrayList<>();
+        for (final EffectProductionExtractor extractor : EXTRACTORS) {
+            productions.addAll(extractor.extract(source));
+        }
+        return productions;
     }
 
     static List<EffectProduction> extract(final Card source, final Trigger trigger) {

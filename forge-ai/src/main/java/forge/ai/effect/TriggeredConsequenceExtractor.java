@@ -27,6 +27,15 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     private static final Set<String> COUNTER_ADDED_ONCE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidEntity", "ValidCard", "ValidPlayer", "ValidSource", "CounterType",
             "FirstTime", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> LIFE_GAINED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidPlayer", "ValidSource", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> CHANGES_ZONE_TRIGGER_PARAMS = Set.of(
+            "Mode", "Origin", "Destination", "ValidCard", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> CHANGES_ZONE_ALL_TRIGGER_PARAMS = Set.of(
+            "Mode", "Origin", "Destination", "ValidCards", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
 
     private TriggeredConsequenceExtractor() {
     }
@@ -58,6 +67,13 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
                 || trigger.getMode() == TriggerType.TokenCreatedOnce) {
             return EffectType.TOKEN_CREATED;
         }
+        if (trigger.getMode() == TriggerType.LifeGained) {
+            return EffectType.LIFE_GAINED;
+        }
+        if (trigger.getMode() == TriggerType.ChangesZone
+                || trigger.getMode() == TriggerType.ChangesZoneAll) {
+            return EffectType.ZONE_CHANGED;
+        }
         return trigger.getMode() == TriggerType.CounterAdded
                 || trigger.getMode() == TriggerType.CounterAddedOnce
                 ? EffectType.COUNTER_ADDED : null;
@@ -73,6 +89,15 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         }
         if (trigger.getMode() == TriggerType.CounterAdded) {
             return EffectAbilityUtils.hasOnlyParams(trigger, COUNTER_ADDED_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.LifeGained) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, LIFE_GAINED_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.ChangesZone) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, CHANGES_ZONE_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.ChangesZoneAll) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, CHANGES_ZONE_ALL_TRIGGER_PARAMS);
         }
         return trigger.getMode() == TriggerType.CounterAddedOnce
                 && EffectAbilityUtils.hasOnlyParams(trigger, COUNTER_ADDED_ONCE_TRIGGER_PARAMS);

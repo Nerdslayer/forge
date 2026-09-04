@@ -177,12 +177,23 @@ public final class EffectAnalysisTrace {
     }
 
     private static String productionDetails(final EffectProduction production) {
-        if (production.type() != EffectType.COUNTER_ADDED) {
-            return "";
+        if (production.type() == EffectType.COUNTER_ADDED) {
+            final Object counterType = production.events().get(0).triggerParameters().get(
+                    AbilityKey.CounterType);
+            return ", counterType=" + counterType;
         }
-        final Object counterType = production.events().get(0).triggerParameters().get(
-                AbilityKey.CounterType);
-        return ", counterType=" + counterType;
+        if (production.type() == EffectType.LIFE_GAINED) {
+            final Object amount = production.events().get(0).triggerParameters().get(
+                    AbilityKey.LifeAmount);
+            return ", lifeAmount=" + amount;
+        }
+        if (production.type() == EffectType.ZONE_CHANGED) {
+            final EffectEvent event = production.events().get(0);
+            return ", origin=" + event.triggerParameters().get(AbilityKey.Origin)
+                    + ", destination="
+                    + event.triggerParameters().get(AbilityKey.Destination);
+        }
+        return "";
     }
 
     private static String observedTypeLabel(final EffectConsequence consequence) {

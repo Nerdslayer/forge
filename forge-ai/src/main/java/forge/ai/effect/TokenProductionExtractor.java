@@ -1,11 +1,8 @@
 package forge.ai.effect;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 
-import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
@@ -18,36 +15,34 @@ final class TokenProductionExtractor implements EffectProductionExtractor {
     static final TokenProductionExtractor INSTANCE = new TokenProductionExtractor();
 
     // TODO(effect analysis): Support conditional, optional, targeted/dynamic-owner, named-action,
-    // ETB, replacement-modified, and additional trigger-origin token productions.
+    // replacement-modified, and additional trigger-origin token productions. Token battlefield
+    // entry is emitted, but self-ETB abilities on newly created token prototypes are not analyzed.
 
     private TokenProductionExtractor() {
     }
 
     @Override
     public List<EffectProduction> extract(final Card source, final Trigger trigger) {
-        if (!EffectAbilityUtils.isActiveBattlefieldTrigger(source, trigger)) {
+        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(source, trigger);
+        if (opportunity == null) {
             return List.of();
         }
-        final int expectedBatches = EffectOccurrenceEstimator.estimateTriggerBatches(source, trigger);
-        if (expectedBatches <= 0) {
-            return List.of();
-        }
-
         final SpellAbility tokenOutcome = findSupportedTokenOutcome(
-                EffectAbilityUtils.copyTriggerOutcome(source, trigger));
+                opportunity.root());
         return tokenOutcome == null ? List.of()
-                : createProductions(source, tokenOutcome, expectedBatches);
+                : createProductions(source, tokenOutcome, opportunity.expectedBatches());
     }
 
     @Override
     public List<EffectProduction> extract(final Card source, final SpellAbility ability) {
-        final SpellAbility copied = EffectAbilityUtils.copyPayableActivatedAbility(source, ability);
-        if (copied == null) {
+        final ProductionOpportunity opportunity =
+                ProductionOpportunity.fromActivatedAbility(source, ability);
+        if (opportunity == null) {
             return List.of();
         }
-        final SpellAbility tokenOutcome = findSupportedTokenOutcome(copied);
+        final SpellAbility tokenOutcome = findSupportedTokenOutcome(opportunity.root());
         return tokenOutcome == null ? List.of()
-                : createProductions(source, tokenOutcome, 1);
+                : createProductions(source, tokenOutcome, opportunity.expectedBatches());
     }
 
     private static SpellAbility findSupportedTokenOutcome(final SpellAbility root) {
@@ -76,18 +71,12 @@ final class TokenProductionExtractor implements EffectProductionExtractor {
         final List<EffectProduction> productions = new ArrayList<>();
         for (final Player owner : EffectTokenUtils.resolvePlayers(
                 outcome, "TokenOwner", "You")) {
-            final List<EffectEvent> events = new ArrayList<>();
+            final List<EffectTokenUtils.ProducedToken> tokens = new ArrayList<>();
             for (final Card token : EffectTokenUtils.createPrototypes(outcome, owner)) {
-                final Map<AbilityKey, Object> triggerParameters = new EnumMap<>(AbilityKey.class);
-                triggerParameters.put(AbilityKey.Player, owner);
-                triggerParameters.put(AbilityKey.Card, token);
-                events.add(new EffectEvent(EffectType.TOKEN_CREATED, owner,
-                        List.of(new EffectEvent.Subject(token, tokenAmount)), triggerParameters));
+                tokens.add(new EffectTokenUtils.ProducedToken(token, tokenAmount));
             }
-            if (!events.isEmpty()) {
-                productions.add(new EffectProduction(
-                        source, EffectType.TOKEN_CREATED, events, expectedBatches));
-            }
+            productions.addAll(EffectTokenUtils.createProductions(
+                    source, owner, tokens, expectedBatches, outcome));
         }
         return productions;
     }

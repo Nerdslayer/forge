@@ -1,11 +1,8 @@
 package forge.ai.effect;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 
-import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
@@ -21,26 +18,26 @@ final class CopiedTokenProductionExtractor implements EffectProductionExtractor 
     // TODO(effect analysis): Support copies selected through targeting, Choices, populate, or
     // DefinedName, plus temporary, attached, conditional, replacement-modified, and unresolved
     // event-dependent copies. This extractor requires an already-resolvable Defined source.
+    // Token battlefield entry is emitted, but self-ETB abilities on the copy are not analyzed.
 
     private CopiedTokenProductionExtractor() {
     }
 
     @Override
     public List<EffectProduction> extract(final Card source, final Trigger trigger) {
-        if (!EffectAbilityUtils.isActiveBattlefieldTrigger(source, trigger)) {
+        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(source, trigger);
+        if (opportunity == null) {
             return List.of();
         }
-        final int expectedBatches = EffectOccurrenceEstimator.estimateTriggerBatches(source, trigger);
-        if (expectedBatches <= 0) {
-            return List.of();
-        }
-        return extract(source, EffectAbilityUtils.copyTriggerOutcome(source, trigger), expectedBatches);
+        return extract(source, opportunity.root(), opportunity.expectedBatches());
     }
 
     @Override
     public List<EffectProduction> extract(final Card source, final SpellAbility ability) {
-        final SpellAbility copied = EffectAbilityUtils.copyPayableActivatedAbility(source, ability);
-        return copied == null ? List.of() : extract(source, copied, 1);
+        final ProductionOpportunity opportunity =
+                ProductionOpportunity.fromActivatedAbility(source, ability);
+        return opportunity == null ? List.of()
+                : extract(source, opportunity.root(), opportunity.expectedBatches());
     }
 
     private static List<EffectProduction> extract(final Card source,
@@ -63,24 +60,17 @@ final class CopiedTokenProductionExtractor implements EffectProductionExtractor 
             final List<EffectProduction> productions = new ArrayList<>();
             for (final Player controller : EffectTokenUtils.resolvePlayers(
                     outcome, "Controller", "You")) {
-                final List<EffectEvent> events = new ArrayList<>();
+                final List<EffectTokenUtils.ProducedToken> tokens = new ArrayList<>();
                 for (final Card original : originals) {
                     if (original.isInstant() || original.isSorcery()) {
                         continue;
                     }
                     final Card token = EffectTokenUtils.createCopyPrototype(
                             outcome, original, controller);
-                    final Map<AbilityKey, Object> triggerParameters =
-                            new EnumMap<>(AbilityKey.class);
-                    triggerParameters.put(AbilityKey.Player, controller);
-                    triggerParameters.put(AbilityKey.Card, token);
-                    events.add(new EffectEvent(EffectType.TOKEN_CREATED, controller,
-                            List.of(new EffectEvent.Subject(token, amount)), triggerParameters));
+                    tokens.add(new EffectTokenUtils.ProducedToken(token, amount));
                 }
-                if (!events.isEmpty()) {
-                    productions.add(new EffectProduction(source, EffectType.TOKEN_CREATED,
-                            events, expectedBatches));
-                }
+                productions.addAll(EffectTokenUtils.createProductions(
+                        source, controller, tokens, expectedBatches, outcome));
             }
             return productions;
         } catch (final RuntimeException ignored) {
