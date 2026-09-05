@@ -9,5 +9,6 @@ enum EffectType {
     CARD_DRAWN,
     DAMAGE_DEALT,
     ATTACKED_OR_BLOCKED,
+    SACRIFICED,
     ZONE_CHANGED
 }

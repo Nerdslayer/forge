@@ -993,6 +993,99 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testSacrificeCostProducesSacrificeAndDiesEvents() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card outlet = addCard("Viscera Seer", opponent);
+        outlet.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Scry | Cost$ Sac<1/Creature.Bear> | ScryNum$ 1", outlet));
+        addCard("Grizzly Bears", opponent);
+        final Card sacrificeConsequence = addSacrificeCounterConsequence(
+                "Memnite", opponent, "Sacrificed", "Creature.YouCtrl", "1");
+        final Card diesConsequence = addDiesCounterConsequence(
+                "Ornithopter", opponent, "Creature.YouCtrl", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(outlet, sacrificeConsequence, diesConsequence));
+
+        Assert.assertTrue(values.getOrDefault(sacrificeConsequence, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(diesConsequence, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(outlet).intValue(),
+                values.get(sacrificeConsequence) + values.get(diesConsequence));
+    }
+
+    @Test
+    public void testSacrificedOnceObservesWholeCostBatch() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card outlet = addCard("Viscera Seer", opponent);
+        outlet.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Scry | Cost$ Sac<2/Creature.Bear> | ScryNum$ 1", outlet));
+        addCard("Grizzly Bears", opponent);
+        addCard("Runeclaw Bear", opponent);
+        final Card consequence = addSacrificeCounterConsequence(
+                "Memnite", opponent, "SacrificedOnce", "Creature.YouCtrl", "X");
+        consequence.setSVar("X", "TriggerCount$Amount");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(outlet, consequence));
+
+        Assert.assertTrue(values.getOrDefault(outlet, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(outlet), values.get(consequence));
+    }
+
+    @Test
+    public void testSelfSacrificeCanMatchOwnDiesTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Grizzly Bears", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Scry | Cost$ Sac<1/CARDNAME> | ScryNum$ 1", producer));
+        producer.setSVar("EffectTestDiesToken",
+                "DB$ Token | TokenScript$ w_1_1_soldier | TokenOwner$ You");
+        addTrigger(producer, "Mode$ ChangesZone | Origin$ Battlefield"
+                + " | Destination$ Graveyard | ValidCard$ Card.Self"
+                + " | Execute$ EffectTestDiesToken | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testTriggeredSacrificeEffectProducesDiesEvent() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.setSVar("EffectTestSacrifice",
+                "DB$ Sacrifice | Defined$ You | SacValid$ Creature.Bear");
+        addTrigger(producer, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestSacrifice | TriggerZones$ Battlefield");
+        addCard("Grizzly Bears", opponent);
+        final Card consequence = addDiesCounterConsequence(
+                "Memnite", opponent, "Creature.YouCtrl", "1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testPermanentControlChangeCountsLossAndGain() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -2039,6 +2132,31 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         addTrigger(card, "Mode$ ChangesZoneAll | Origin$ Any | Destination$ Battlefield"
                 + " | ValidCards$ " + validCards
                 + " | Execute$ EffectTestZoneOutcome | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addDiesCounterConsequence(final String cardName, final Player controller,
+            final String validCard, final String counterAmount) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestDiesOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1"
+                        + " | CounterNum$ " + counterAmount);
+        addTrigger(card, "Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard"
+                + " | ValidCard$ " + validCard + " | Execute$ EffectTestDiesOutcome"
+                + " | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addSacrificeCounterConsequence(final String cardName,
+            final Player controller, final String triggerMode, final String validCard,
+            final String counterAmount) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestSacrificeOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1"
+                        + " | CounterNum$ " + counterAmount);
+        addTrigger(card, "Mode$ " + triggerMode + " | ValidPlayer$ You"
+                + " | ValidCard$ " + validCard + " | Execute$ EffectTestSacrificeOutcome"
+                + " | TriggerZones$ Battlefield");
         return card;
     }
 
