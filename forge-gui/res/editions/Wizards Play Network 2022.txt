@@ -2,6 +2,7 @@
 Code=PW22
 Date=2022-03-05
 Name=Wizards Play Network 2022
+CardLang=mixed
 Type=Promo
 ScryfallCode=PW22
 

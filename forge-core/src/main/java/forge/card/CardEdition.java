@@ -753,7 +753,7 @@ public final class CardEdition implements Comparable<CardEdition> {
             res.scryfallCode = metadata.get("ScryfallCode", res.code);
             res.tokensCode = metadata.get("TokensCode", "T" + res.scryfallCode);
             res.tokenFallbackCode = metadata.get("TokenFallbackCode");
-            res.cardsLanguage = metadata.get("CardLang", "en");
+            res.cardsLanguage = metadata.get("CardLang", "");
             res.boosterArts = metadata.getInt("BoosterCovers", 1);
 
             res.otherMap = otherMap;

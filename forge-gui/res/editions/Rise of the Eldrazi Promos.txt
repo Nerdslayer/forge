@@ -2,6 +2,7 @@
 Code=PROE
 Date=2010-04-23
 Name=Rise of the Eldrazi Promos
+CardLang=mixed
 Type=Promo
 ScryfallCode=PROE
 

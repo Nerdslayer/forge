@@ -607,6 +607,18 @@ public final class CardDb implements ICardDatabase, IDeckGenPool {
                 return englishCards;
             }
         }
+        List<PaperCard> unspecifiedCards = cards.stream()
+                .filter(card -> isPrintingLanguage(card, ""))
+                .collect(Collectors.toList());
+        if (!unspecifiedCards.isEmpty()) {
+            return unspecifiedCards;
+        }
+        List<PaperCard> mixedCards = cards.stream()
+                .filter(card -> isPrintingLanguage(card, "mixed"))
+                .collect(Collectors.toList());
+        if (!mixedCards.isEmpty()) {
+            return mixedCards;
+        }
         return cards;
     }
 
@@ -836,7 +848,12 @@ public final class CardDb implements ICardDatabase, IDeckGenPool {
 
     @Override
     public PaperCard getCardFromEditions(final String cardInfo, final CardArtPreference artPreference, int artIndex, Predicate<PaperCard> filter) {
-        return this.tryToGetCardFromEditions(cardInfo, artPreference, artIndex, filter);
+        return this.tryToGetCardFromEditions(cardInfo, artPreference, artIndex, null, false, filter, false);
+    }
+
+    public PaperCard getCardFromEditionsPreferNonPromo(final String cardInfo, final CardArtPreference artPreference,
+                                                       int artIndex, Predicate<PaperCard> filter) {
+        return this.tryToGetCardFromEditions(cardInfo, artPreference, artIndex, null, false, filter, true);
     }
 
     /*
@@ -858,11 +875,18 @@ public final class CardDb implements ICardDatabase, IDeckGenPool {
 
     // Override when there is no date
     private PaperCard tryToGetCardFromEditions(String cardInfo, CardArtPreference artPreference, int artIndex, Predicate<PaperCard> filter){
-        return this.tryToGetCardFromEditions(cardInfo, artPreference, artIndex, null, false, filter);
+        return this.tryToGetCardFromEditions(cardInfo, artPreference, artIndex, null, false, filter, false);
     }
 
     private PaperCard tryToGetCardFromEditions(String cardInfo, CardArtPreference artPreference, int artIndex,
                                                Date releaseDate, boolean releasedBeforeFlag, Predicate<PaperCard> filter) {
+        return this.tryToGetCardFromEditions(cardInfo, artPreference, artIndex, releaseDate, releasedBeforeFlag,
+                filter, false);
+    }
+
+    private PaperCard tryToGetCardFromEditions(String cardInfo, CardArtPreference artPreference, int artIndex,
+                                               Date releaseDate, boolean releasedBeforeFlag, Predicate<PaperCard> filter,
+                                               boolean preferNonPromo) {
         if (cardInfo == null)
             return null;
         final CardRequest cr = CardRequest.fromString(cardInfo);
@@ -899,6 +923,17 @@ public final class CardDb implements ICardDatabase, IDeckGenPool {
         if (cards.isEmpty())
             return null;
         cards = preferPrintingLanguage(cards);
+        if (preferNonPromo) {
+            List<PaperCard> nonPromoCards = cards.stream()
+                    .filter(card -> {
+                        CardEdition edition = editions.get(card.getEdition());
+                        return edition != null && edition.getType() != Type.PROMO;
+                    })
+                    .collect(Collectors.toList());
+            if (!nonPromoCards.isEmpty()) {
+                cards = nonPromoCards;
+            }
+        }
         if (cards.size() == 1)  // if only one candidate, there's not much else we should do
             return cr.isFoil ? cards.get(0).getFoiled() : cards.get(0);
 

@@ -2,6 +2,7 @@
 Code=PWWK
 Date=2010-02-05
 Name=Worldwake Promos
+CardLang=mixed
 Type=Promo
 ScryfallCode=PWWK
 

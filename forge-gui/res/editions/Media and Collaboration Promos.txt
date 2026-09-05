@@ -2,6 +2,7 @@
 Code=PMEI
 Date=1995-01-01
 Name=Media and Collaboration Promos
+CardLang=mixed
 Type=Promo
 ScryfallCode=PMEI
 

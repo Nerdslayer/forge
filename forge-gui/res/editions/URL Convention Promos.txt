@@ -2,6 +2,7 @@
 Code=PURL
 Date=2009-02-08
 Name=URL Convention Promos
+CardLang=mixed
 Type=Promo
 ScryfallCode=PURL
 
