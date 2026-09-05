@@ -58,6 +58,41 @@ public class AiBenchmarkCoreTest {
     }
 
     @Test
+    public void deckIdentityAndScheduleDoNotDependOnAbsolutePath() throws Exception {
+        final Path firstRoot = java.nio.file.Files.createTempDirectory("forge-ai-benchmark-first");
+        final Path secondRoot = java.nio.file.Files.createTempDirectory("forge-ai-benchmark-second");
+        final String contents = "[metadata]\nName=Stable\n[Main]\n60 Plains\n";
+        final BenchmarkDeck first = BenchmarkDeck.fromPath(
+                java.nio.file.Files.writeString(firstRoot.resolve("Stable.dck"), contents));
+        final BenchmarkDeck second = BenchmarkDeck.fromPath(
+                java.nio.file.Files.writeString(secondRoot.resolve("Stable.dck"),
+                        contents.replace("\n", "\r\n")));
+
+        Assert.assertEquals(second.id(), first.id());
+        Assert.assertEquals(second.sha256(), first.sha256());
+        Assert.assertNotEquals(second.path(), first.path());
+
+        final List<BenchmarkJob> firstJobs = BenchmarkPlanner.createJobs(List.of(first), 2, 1L);
+        final List<BenchmarkJob> secondJobs = BenchmarkPlanner.createJobs(List.of(second), 2, 1L);
+        Assert.assertEquals(ids(secondJobs), ids(firstJobs));
+        Assert.assertEquals(secondJobs.stream().map(BenchmarkJob::seed).toList(),
+                firstJobs.stream().map(BenchmarkJob::seed).toList());
+    }
+
+    @Test
+    public void byteIdenticalDecksWithDifferentNamesRemainDistinct() throws Exception {
+        final Path root = java.nio.file.Files.createTempDirectory("forge-ai-benchmark-names");
+        final String contents = "[Main]\n60 Plains\n";
+        final BenchmarkDeck alpha = BenchmarkDeck.fromPath(
+                java.nio.file.Files.writeString(root.resolve("Alpha.dck"), contents));
+        final BenchmarkDeck beta = BenchmarkDeck.fromPath(
+                java.nio.file.Files.writeString(root.resolve("Beta.dck"), contents));
+
+        Assert.assertNotEquals(beta.id(), alpha.id());
+        Assert.assertEquals(beta.sha256(), alpha.sha256());
+    }
+
+    @Test
     public void gameResultRoundTripsEscapedJsonFields() throws Exception {
         final BenchmarkJob job = BenchmarkPlanner.createJobs(List.of(deck("alpha", "Alpha", "a")), 1, 9L).get(0);
         final BenchmarkGameResult expected = BenchmarkGameResult.forJob(job);

@@ -283,8 +283,8 @@ final class AiBenchmarkCoordinator {
                 .append(options.baselineProfile).append('|').append(baselineProfileHash).append('|')
                 .append(options.masterSeed).append('|').append(options.multiplier).append('|')
                 .append(options.timeoutSeconds).append('|').append(BenchmarkPlanner.seedVersion());
-        decks.stream().sorted(Comparator.comparing(deck -> deck.path().toString(), String.CASE_INSENSITIVE_ORDER))
-                .forEach(deck -> value.append('|').append(deck.path()).append('|').append(deck.sha256()));
+        decks.stream().sorted(Comparator.comparing(BenchmarkDeck::id))
+                .forEach(deck -> value.append('|').append(deck.id()).append('|').append(deck.sha256()));
         return BenchmarkFiles.sha256(value.toString());
     }
 

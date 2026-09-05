@@ -39,6 +39,13 @@ final class BenchmarkFiles {
         return toHex(newDigest().digest(value.getBytes(StandardCharsets.UTF_8)));
     }
 
+    static String normalizedTextSha256(final Path path) throws IOException {
+        final String content = Files.readString(path, StandardCharsets.UTF_8)
+                .replace("\r\n", "\n")
+                .replace('\r', '\n');
+        return sha256(content);
+    }
+
     private static MessageDigest newDigest() {
         try {
             return MessageDigest.getInstance("SHA-256");

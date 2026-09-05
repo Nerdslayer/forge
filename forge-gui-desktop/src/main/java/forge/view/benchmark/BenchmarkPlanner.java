@@ -18,7 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 
 final class BenchmarkPlanner {
-    private static final String SEED_VERSION = "sha256-v1";
+    private static final String SEED_VERSION = "sha256-v2";
 
     private BenchmarkPlanner() {
     }
@@ -26,7 +26,7 @@ final class BenchmarkPlanner {
     static List<BenchmarkJob> createJobs(final List<BenchmarkDeck> inputDecks,
             final int multiplier, final long masterSeed) {
         final List<BenchmarkDeck> decks = new ArrayList<>(inputDecks);
-        decks.sort(Comparator.comparing(deck -> deck.path().toString(), String.CASE_INSENSITIVE_ORDER));
+        decks.sort(Comparator.comparing(BenchmarkDeck::id));
         final List<BenchmarkJob> jobs = new ArrayList<>(2 * decks.size() * decks.size() * multiplier);
         for (BenchmarkDeck evaluatedDeck : decks) {
             for (BenchmarkDeck opponentDeck : decks) {
