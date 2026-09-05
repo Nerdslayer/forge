@@ -67,6 +67,12 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     private static final Set<String> CHANGES_ZONE_ALL_TRIGGER_PARAMS = Set.of(
             "Mode", "Origin", "Destination", "ValidCards", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
+    private static final Set<String> SACRIFICED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidPlayer", "ValidCause", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> SACRIFICED_ONCE_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidPlayer", "ValidCause", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
 
     private TriggeredConsequenceExtractor() {
     }
@@ -113,6 +119,10 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
                 || trigger.getMode() == TriggerType.ChangesZoneAll) {
             return EffectType.ZONE_CHANGED;
         }
+        if (trigger.getMode() == TriggerType.Sacrificed
+                || trigger.getMode() == TriggerType.SacrificedOnce) {
+            return EffectType.SACRIFICED;
+        }
         if (trigger.getMode() == TriggerType.Attacks
                 || trigger.getMode() == TriggerType.Blocks
                 || trigger.getMode() == TriggerType.AttackerBlocked
@@ -156,6 +166,12 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         }
         if (trigger.getMode() == TriggerType.ChangesZoneAll) {
             return EffectAbilityUtils.hasOnlyParams(trigger, CHANGES_ZONE_ALL_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.Sacrificed) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, SACRIFICED_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.SacrificedOnce) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, SACRIFICED_ONCE_TRIGGER_PARAMS);
         }
         if (trigger.getMode() == TriggerType.Attacks) {
             return EffectAbilityUtils.hasOnlyParams(trigger, ATTACKS_TRIGGER_PARAMS);

@@ -17,7 +17,8 @@ final class EffectProductionExtractorRegistry {
             LifeGainProductionExtractor.INSTANCE,
             CardDrawProductionExtractor.INSTANCE,
             DamageProductionExtractor.INSTANCE,
-            AttackProductionExtractor.INSTANCE);
+            AttackProductionExtractor.INSTANCE,
+            SacrificeProductionExtractor.INSTANCE);
 
     private EffectProductionExtractorRegistry() {
     }

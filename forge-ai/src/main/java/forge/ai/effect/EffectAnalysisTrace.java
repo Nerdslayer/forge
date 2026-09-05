@@ -206,6 +206,15 @@ public final class EffectAnalysisTrace {
                     + ", destination="
                     + event.triggerParameters().get(AbilityKey.Destination);
         }
+        if (production.type() == EffectType.SACRIFICED) {
+            int amount = 0;
+            for (final EffectEvent event : production.events()) {
+                for (final EffectEvent.Subject subject : event.subjects()) {
+                    amount = EffectMath.add(amount, subject.occurrences());
+                }
+            }
+            return ", sacrificed=" + amount;
+        }
         return "";
     }
 
