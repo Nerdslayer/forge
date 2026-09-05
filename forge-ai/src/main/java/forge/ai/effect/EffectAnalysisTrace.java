@@ -7,7 +7,7 @@ import forge.game.card.Card;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 
-/** Collects one optional, grouped diagnostic trace for an effect-analysis decision. */
+/** Collects one grouped diagnostic trace for an effect-analysis decision. */
 public final class EffectAnalysisTrace {
     public static final String ENABLE_PROPERTY = "forge.ai.effectAnalysisTrace";
 
@@ -24,7 +24,7 @@ public final class EffectAnalysisTrace {
         this.details = enabled ? new StringBuilder() : null;
     }
 
-    /** Creates a trace controlled by the {@value #ENABLE_PROPERTY} JVM property. */
+    /** Creates a trace enabled by default and overridable by the {@value #ENABLE_PROPERTY} JVM property. */
     public static EffectAnalysisTrace create(final Player evaluatingAi) {
         return create(evaluatingAi, null);
     }
@@ -32,7 +32,7 @@ public final class EffectAnalysisTrace {
     /** Creates a trace for the spell or ability requesting removal-target evaluation. */
     public static EffectAnalysisTrace create(final Player evaluatingAi,
             final SpellAbility removalAbility) {
-        return Boolean.parseBoolean(System.getProperty(ENABLE_PROPERTY, "false"))
+        return Boolean.parseBoolean(System.getProperty(ENABLE_PROPERTY, "true"))
                 ? new EffectAnalysisTrace(evaluatingAi, removalAbility, true) : DISABLED;
     }
 
