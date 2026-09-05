@@ -2,6 +2,7 @@
 Code=PLG24
 Date=2024-08-06
 Name=Love Your LGS 2024
+CardLang=mixed
 Type=Promo
 ScryfallCode=PLG24
 

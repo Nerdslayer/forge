@@ -2,6 +2,7 @@
 Code=INV_AA
 Date=2000-10-02
 Name=Invasion Simplified Chinese Alternate Art
+CardLang=mixed
 Type=Promo
 ScryfallCode=INV
 

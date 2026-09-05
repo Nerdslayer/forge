@@ -928,10 +928,10 @@ public class CardUtil {
         if (editionFilter != null) {
             filter = filter.and(editionFilter);
         }
-        PaperCard card = FModel.getMagicDb().getCommonCards().getCardFromEditions(cardName,
+        PaperCard card = FModel.getMagicDb().getCommonCards().getCardFromEditionsPreferNonPromo(cardName,
                 DEFAULT_CARD_ART_PREFERENCE, IPaperCard.DEFAULT_ART_INDEX, filter);
         if (card == null) {
-            card = FModel.getMagicDb().getCommonCards().getCardFromEditions(cardName,
+            card = FModel.getMagicDb().getCommonCards().getCardFromEditionsPreferNonPromo(cardName,
                     DEFAULT_CARD_ART_PREFERENCE, IPaperCard.DEFAULT_ART_INDEX, editionFilter);
         }
         return card;

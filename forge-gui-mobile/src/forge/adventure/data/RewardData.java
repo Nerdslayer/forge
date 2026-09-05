@@ -184,13 +184,15 @@ public class RewardData implements Serializable {
                     for (RewardData r : cardUnion) {
                         if (r.cardName != null && !r.cardName.isEmpty() ) {
                             PaperCard pc;
+                            CardDb.CardRequest req = CardDb.CardRequest.fromString(r.cardName);
                             if (allCardVariants) {
-                                CardDb.CardRequest req = CardDb.CardRequest.fromString(r.cardName);
                                 pc = (req.edition != null)
                                     ? CardUtil.getCardByNameAndEdition(req.cardName, req.edition)
                                     : CardUtil.getCardByName(req.cardName);
                             } else {
-                                pc = StaticData.instance().getCommonCards().getCard(r.cardName);
+                                pc = req.edition != null
+                                        ? StaticData.instance().getCommonCards().getCard(r.cardName)
+                                        : CardUtil.getCardByName(req.cardName);
                             }
                             if (pc != null)
                                 pool.add(pc);
@@ -235,8 +237,11 @@ public class RewardData implements Serializable {
                                 }
                             }
                         } else {
+                            CardDb.CardRequest request = CardDb.CardRequest.fromString(cardName);
                             for (int i = 0; i < count + addedCount; i++) {
-                                PaperCard card = StaticData.instance().getCommonCards().getCard(cardName);
+                                PaperCard card = request.edition != null
+                                        ? StaticData.instance().getCommonCards().getCard(cardName)
+                                        : CardUtil.getCardByName(request.cardName);
                                 if (card != null)
                                     ret.add(new Reward(card, isNoSell));
                                 else

@@ -2,6 +2,7 @@
 Code=POR
 Date=1997-05-01
 Name=Portal
+CardLang=mixed
 Code2=PT
 Type=Starter
 BoosterCovers=5

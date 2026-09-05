@@ -2,6 +2,7 @@
 Code=PW23
 Date=2023-01-01
 Name=Wizards Play Network 2023
+CardLang=mixed
 Type=Promo
 ScryfallCode=PW23
 

@@ -2,6 +2,7 @@
 Code=PDOM
 Date=2018-04-27
 Name=Dominaria Promos
+CardLang=mixed
 Type=Promo
 ScryfallCode=PDOM
 

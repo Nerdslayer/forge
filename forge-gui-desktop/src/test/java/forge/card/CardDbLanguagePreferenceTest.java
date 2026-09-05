@@ -10,7 +10,9 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 import java.util.Collections;
+import java.util.Set;
 
+import static forge.card.CardDb.CardArtPreference.ORIGINAL_ART_ALL_EDITIONS;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 
@@ -54,7 +56,7 @@ public class CardDbLanguagePreferenceTest {
     }
 
     @Test
-    public void automaticPrintingFallsBackToEnglish() {
+    public void automaticPrintingFallsBackToUnspecifiedLanguage() {
         String cardName = "Earthquake";
 
         staticData.attemptToLoadCard(cardName);
@@ -62,11 +64,11 @@ public class CardDbLanguagePreferenceTest {
 
         PaperCard automaticCard = cardDb.getCard(cardName);
         assertNotNull(automaticCard);
-        assertEquals(staticData.getCardEdition(automaticCard.getEdition()).getCardsLangCode(), "en");
+        assertEquals(staticData.getCardEdition(automaticCard.getEdition()).getCardsLangCode(), "");
 
         PaperCard uniqueCard = cardDb.getUniqueByNameNoAlt(cardName);
         assertNotNull(uniqueCard);
-        assertEquals(staticData.getCardEdition(uniqueCard.getEdition()).getCardsLangCode(), "en");
+        assertEquals(staticData.getCardEdition(uniqueCard.getEdition()).getCardsLangCode(), "");
     }
 
     @Test
@@ -96,5 +98,55 @@ public class CardDbLanguagePreferenceTest {
         assertNotNull(explicitJapaneseCard);
         assertEquals(explicitJapaneseCard.getEdition(), japaneseEdition);
         assertEquals(staticData.getCardEdition(explicitJapaneseCard.getEdition()).getCardsLangCode(), "ja");
+    }
+
+    @Test
+    public void mixedLanguageEditionIsOnlyUsedAsFallback() {
+        String cardName = "Gush";
+
+        staticData.attemptToLoadCard(cardName);
+
+        PaperCard preferredCard = cardDb.getCardFromEditionsPreferNonPromo(cardName,
+                ORIGINAL_ART_ALL_EDITIONS, 1, null);
+        assertNotNull(preferredCard);
+        assertEquals(preferredCard.getEdition(), "MMQ");
+
+        PaperCard fallbackCard = cardDb.getCardFromEditionsPreferNonPromo(cardName,
+                ORIGINAL_ART_ALL_EDITIONS, 1, card -> "PMEI".equals(card.getEdition()));
+        assertNotNull(fallbackCard);
+        assertEquals(fallbackCard.getEdition(), "PMEI");
+        assertEquals(staticData.getCardEdition(fallbackCard.getEdition()).getCardsLangCode(), "mixed");
+    }
+
+    @Test
+    public void nonPromoEditionIsPreferredBeforeOldestPromo() {
+        String cardName = "Scute Swarm";
+        Set<String> editions = Set.of("PRES", "ZNR");
+
+        staticData.attemptToLoadCard(cardName);
+
+        PaperCard nonPromoCard = cardDb.getCardFromEditionsPreferNonPromo(cardName,
+                ORIGINAL_ART_ALL_EDITIONS, 1, card -> editions.contains(card.getEdition()));
+        assertNotNull(nonPromoCard);
+        assertEquals(nonPromoCard.getEdition(), "ZNR");
+
+        PaperCard promoFallback = cardDb.getCardFromEditionsPreferNonPromo(cardName,
+                ORIGINAL_ART_ALL_EDITIONS, 1, card -> "PRES".equals(card.getEdition()));
+        assertNotNull(promoFallback);
+        assertEquals(promoFallback.getEdition(), "PRES");
+    }
+
+    @Test
+    public void selectedLanguageTakesPriorityOverNonPromoEdition() {
+        String cardName = "Earthquake";
+
+        staticData.attemptToLoadCard(cardName);
+        cardDb.setPreferredCardLanguage("ja-JP");
+
+        PaperCard japanesePromo = cardDb.getCardFromEditionsPreferNonPromo(cardName,
+                ORIGINAL_ART_ALL_EDITIONS, 1, null);
+        assertNotNull(japanesePromo);
+        assertEquals(staticData.getCardEdition(japanesePromo.getEdition()).getCardsLangCode(), "ja");
+        assertEquals(staticData.getCardEdition(japanesePromo.getEdition()).getType(), CardEdition.Type.PROMO);
     }
 }
