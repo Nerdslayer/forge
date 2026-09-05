@@ -16,9 +16,11 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.TextureData;
+import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Clipboard;
+import com.badlogic.gdx.utils.Disposable;
 import forge.adventure.scene.DeckSelectScene;
 import forge.adventure.scene.DuelScene;
 import forge.adventure.scene.ForgeScene;
@@ -53,7 +55,6 @@ import forge.screens.ClosingScreen;
 import forge.screens.FScreen;
 import forge.screens.SplashScreen;
 import forge.screens.TransitionScreen;
-import forge.screens.home.AdventureScreen;
 import forge.screens.home.HomeScreen;
 import forge.screens.home.NewGameMenu;
 import forge.screens.match.MatchController;
@@ -66,13 +67,7 @@ import forge.toolbox.FDisplayObject;
 import forge.toolbox.FGestureAdapter;
 import forge.toolbox.FOptionPane;
 import forge.toolbox.FOverlay;
-import forge.util.CardTranslation;
-import forge.util.FileUtil;
-import forge.util.HWInfo;
-import forge.util.Localizer;
-import forge.util.OperatingSystem;
-import forge.util.ScreenUtil;
-import forge.util.Utils;
+import forge.util.*;
 import io.sentry.ScopeType;
 import io.sentry.Sentry;
 
@@ -151,6 +146,8 @@ public class Forge implements ApplicationListener {
     public static boolean createNewAdventureMap = false;
     private static Localizer localizer;
     private static boolean desktopAutoOrientation = true;
+    public static final int LOW_SPRITES_CAP = 30; // max capacity for transition, generated image renders
+    public static final int HIGH_SPRITES_CAP = 700; // max sprite capacity for adventure, classic renders
 
     public static ApplicationListener getApp(HWInfo hwInfo, Clipboard clipboard0, IDeviceAdapter deviceAdapter0, String assetDir0, boolean androidOrientation, boolean isTablet, int AndroidAPI) {
         if (app == null) {
@@ -205,7 +202,7 @@ public class Forge implements ApplicationListener {
         if (!GuiBase.isAndroid() || (androidVersion > 25 && totalDeviceRAM > 3400)) {
             allowCardBG = true;
         }
-        graphics = new Graphics();
+        graphics = new Graphics(Forge.HIGH_SPRITES_CAP);
         splashScreen = new SplashScreen();
         inputProcessor = new MainInputProcessor();
 
@@ -446,7 +443,7 @@ public class Forge implements ApplicationListener {
                 getAssets().fallback_skins().put("transition", new Texture(transitionFile));
             if (titleBGFile.exists())
                 getAssets().fallback_skins().put("title", new Texture(titleBGFile));
-            AdventureScreen.preload();
+            getAssets().setGifAnimation(new FileHandle(ForgeConstants.EFFECTS_DIR + "demo.gif"), Animation.PlayMode.LOOP);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -672,8 +669,11 @@ public class Forge implements ApplicationListener {
             exit(false); //prompt to exit if attempting to go back from home screen
             return;
         }
-        if(currentScreen == null)
+        if (currentScreen == null)
             return;
+        // trigger leave
+        if (currentScene instanceof ForgeScene forgeScene)
+            forgeScene.leave();
         currentScreen.onClose(result -> {
             if (result) {
                 Dscreens.pollFirst();
@@ -969,9 +969,6 @@ public class Forge implements ApplicationListener {
 
     @Override
     public void resize(int width, int height) {
-        // Investigate why this would be 0..
-        if (width < 1 || height < 1)
-            return;
         try {
             if (currentScreen != null) {
                 currentScreen.setSize(width, height);
@@ -1019,22 +1016,47 @@ public class Forge implements ApplicationListener {
             currentScreen.onClose(null);
             currentScreen = null;
         }
-        FOverlay.hideAll();
-        Dscreens.clear();
-        graphics.dispose();
-        SoundSystem.instance.dispose();
-        MapStage.getInstance().disposeWorld();
-        getAssets().dispose();
-
-        AdventureScreen.dispose();
-        Adventure.getInstance().dispose();
-        ScreenUtil.getInstance().dispose();
         try {
-            ExceptionHandler.unregisterErrorHandling();
-            if (lastPreview != null)
-                lastPreview.dispose();
+            FOverlay.hideAll();
         } catch (Exception e) {
             e.printStackTrace();
+        }
+        Dscreens.clear();
+        // don't call getInstance() or they will be recreated on dispose
+        safeDispose( // I need to know what line the startup bug occurs when the app is paused...
+            MapStage.instance,
+            Adventure.instance,
+            ScreenUtil.instance,
+            ShaderUtil.instance,
+            graphics,
+            Assets.instance,
+            lastPreview);
+        try {
+            SoundSystem.instance.dispose();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        try {
+            ExceptionHandler.unregisterErrorHandling();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    public boolean triggerDispose() {
+        dispose();
+        return true;
+    }
+    public static void safeDispose(Disposable... disposables) {
+        for (Disposable d : disposables) {
+            if (d != null) {
+                try {
+                    d.dispose();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    d = null;
+                }
+            }
         }
     }
     /** Retrieve assets.

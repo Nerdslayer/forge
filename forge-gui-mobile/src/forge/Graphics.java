@@ -3,13 +3,11 @@ package forge;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import com.badlogic.gdx.math.Matrix4;
@@ -24,17 +22,18 @@ import forge.assets.FSkinColor;
 import forge.assets.FSkinFont;
 import forge.assets.ImageCache;
 import forge.toolbox.FDisplayObject;
+import forge.util.ShaderUtil;
 import forge.util.TextBounds;
 import forge.util.Utils;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-public class Graphics {
+public class Graphics implements Disposable {
     private static final int GL_BLEND = GL20.GL_BLEND;
     private static final int GL_LINE_SMOOTH = 2848; //create constant here since not in GL20
 
-    private final SpriteBatch batch = new SpriteBatch(600);
+    private final SpriteBatch batch;
     private final ShapeRenderer shapeRenderer = new ShapeRenderer();
     private final Deque<Matrix4> Dtransforms = new ArrayDeque<>();
     private final Vector3 tmp = new Vector3();
@@ -44,52 +43,12 @@ public class Graphics {
     private int failedClipCount;
     private float alphaComposite = 1;
     private int transformCount = 0;
-    private final ShaderProgram shaderOutline = new ShaderProgram(Shaders.outlineVert, Shaders.outlineFrag);
-    private final ShaderProgram shaderGrayscale = new ShaderProgram(Shaders.grayscaleVert, Shaders.grayscaleFrag);
-    private final ShaderProgram shaderWarp = new ShaderProgram(Shaders.grayscaleVert, Shaders.warpFrag);
-    private final ShaderProgram shaderUnderwater = new ShaderProgram(Shaders.grayscaleVert, Shaders.underwaterFrag);
-    private final ShaderProgram shaderNightDay = new ShaderProgram(Shaders.vertexShaderDayNight, Shaders.fragmentShaderDayNight);
-    private final ShaderProgram shaderPixelate = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragPixelateShader);
-    private final ShaderProgram shaderRipple = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragRipple);
-    private final ShaderProgram shaderPixelateWarp = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragPixelateShaderWarp);
-    private final ShaderProgram shaderChromaticAbberation = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragChromaticAbberation);
-    private final ShaderProgram shaderHueShift = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragHueShift);
-    private final ShaderProgram shaderRoundedRect = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragRoundedRect);
-    private final ShaderProgram shaderRoundedRect2 = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragRoundedRect2);
-    private final ShaderProgram shaderNoiseFade = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragNoiseFade);
-    private final ShaderProgram shaderPortal = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragPortal);
-    private final ShaderProgram shaderPixelateSimple = new ShaderProgram(Shaders.vertPixelateShader, Shaders.fragPixelateSimple);
+    private boolean isDisposed = false;
 
-    private Texture dummyTexture = null, backdropTexture = null, grayTexture = null;
-
-    public Graphics() {
-        ShaderProgram.pedantic = false;
+    public Graphics(final int spriteCapacity) {
+        batch = new SpriteBatch(spriteCapacity);
     }
 
-    public ShaderProgram getShaderOutline() {
-        return shaderOutline;
-    }
-
-    public ShaderProgram getShaderGrayscale() {
-        return shaderGrayscale;
-    }
-
-    public ShaderProgram getShaderRoundedRect() {
-        return shaderRoundedRect;
-    }
-
-    public ShaderProgram getShaderWarp() {
-        return shaderWarp;
-    }
-
-    public ShaderProgram getShaderUnderwater() {
-        return shaderUnderwater;
-    }
-
-
-    public ShaderProgram getShaderNightDay() {
-        return shaderNightDay;
-    }
     public void begin(float regionWidth0, float regionHeight0) {
         batch.begin();
         bounds = new Rectangle(0, 0, regionWidth0, regionHeight0);
@@ -106,19 +65,11 @@ public class Graphics {
         }
     }
 
+    @Override
     public void dispose() {
-        safeDispose(shaderOutline, shaderGrayscale, shaderWarp, shaderUnderwater, shaderNightDay, shaderPixelate,
-            shaderRipple, shaderPixelateWarp, shaderChromaticAbberation, shaderHueShift, shaderRoundedRect,
-            shaderRoundedRect2, shaderNoiseFade, shaderPortal, dummyTexture, backdropTexture, grayTexture, batch);
-    }
-
-    public void safeDispose(Disposable... disposables) {
-        for (Disposable d : disposables) {
-            if (d != null) {
-                try {
-                    d.dispose();
-                } catch (Exception ignored) {}
-            }
+        if (!isDisposed) {
+            isDisposed = true;
+            Forge.safeDispose(batch, shapeRenderer);
         }
     }
 
@@ -781,11 +732,11 @@ public class Graphics {
             return;
         if (amount > 0) {
             batch.end();
-            shaderWarp.bind();
-            shaderWarp.setUniformf("u_amount", 0.2f);
-            shaderWarp.setUniformf("u_speed", 0.2f);
-            shaderWarp.setUniformf("u_time", amount);
-            batch.setShader(shaderWarp);
+            ShaderUtil.getInstance().getShaderWarp().bind();
+            ShaderUtil.getInstance().getShaderWarp().setUniformf("u_amount", 0.2f);
+            ShaderUtil.getInstance().getShaderWarp().setUniformf("u_speed", 0.2f);
+            ShaderUtil.getInstance().getShaderWarp().setUniformf("u_time", amount);
+            batch.setShader(ShaderUtil.getInstance().getShaderWarp());
             batch.begin();
             //draw
             image.draw(this, x, y, w, h);
@@ -797,10 +748,10 @@ public class Graphics {
             image.draw(this, x, y, w, h);
         } else {
             batch.end();
-            shaderGrayscale.bind();
-            shaderGrayscale.setUniformf("u_grayness", 1f);
-            shaderGrayscale.setUniformf("u_bias", 1f);
-            batch.setShader(shaderGrayscale);
+            ShaderUtil.getInstance().getShaderGrayscale().bind();
+            ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_grayness", 1f);
+            ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_bias", 1f);
+            batch.setShader(ShaderUtil.getInstance().getShaderGrayscale());
             batch.begin();
             //draw gray
             image.draw(this, x, y, w, h);
@@ -820,10 +771,10 @@ public class Graphics {
                 batch.draw(damage_overlay, adjustX(x), adjustY(y, h), w, h);
         } else {
             batch.end();
-            shaderGrayscale.bind();
-            shaderGrayscale.setUniformf("u_grayness", 1f);
-            shaderGrayscale.setUniformf("u_bias", 0.8f);
-            batch.setShader(shaderGrayscale);
+            ShaderUtil.getInstance().getShaderGrayscale().bind();
+            ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_grayness", 1f);
+            ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_bias", 0.8f);
+            batch.setShader(ShaderUtil.getInstance().getShaderGrayscale());
             batch.begin();
             //draw gray
             image.draw(this, x, y, w, h);
@@ -843,10 +794,10 @@ public class Graphics {
                 batch.draw(damage_overlay, adjustX(x), adjustY(y, h), w, h);
         } else {
             batch.end();
-            shaderGrayscale.bind();
-            shaderGrayscale.setUniformf("u_grayness", 1f);
-            shaderGrayscale.setUniformf("u_bias", 0.8f);
-            batch.setShader(shaderGrayscale);
+            ShaderUtil.getInstance().getShaderGrayscale().bind();
+            ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_grayness", 1f);
+            ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_bias", 0.8f);
+            batch.setShader(ShaderUtil.getInstance().getShaderGrayscale());
             batch.begin();
             //draw gray
             batch.draw(image, adjustX(x), adjustY(y, h), w, h);
@@ -865,10 +816,10 @@ public class Graphics {
                     batch.draw(damage_overlay, adjustX(x), adjustY(y, h), w, h);
             } else {
                 batch.end();
-                shaderGrayscale.bind();
-                shaderGrayscale.setUniformf("u_grayness", 1f);
-                shaderGrayscale.setUniformf("u_bias", 0.8f);
-                batch.setShader(shaderGrayscale);
+                ShaderUtil.getInstance().getShaderGrayscale().bind();
+                ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_grayness", 1f);
+                ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_bias", 0.8f);
+                batch.setShader(ShaderUtil.getInstance().getShaderGrayscale());
                 batch.begin();
                 //draw gray
                 batch.draw(image, adjustX(x), adjustY(y, h), w, h);
@@ -884,10 +835,10 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderGrayscale.bind();
-        shaderGrayscale.setUniformf("u_grayness", percentage);
-        shaderGrayscale.setUniformf("u_bias", 0.6f);
-        batch.setShader(shaderGrayscale);
+        ShaderUtil.getInstance().getShaderGrayscale().bind();
+        ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_grayness", percentage);
+        ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_bias", 0.6f);
+        batch.setShader(ShaderUtil.getInstance().getShaderGrayscale());
         batch.begin();
         //draw gray
         image.draw(this, x, y, w, h);
@@ -901,10 +852,10 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderGrayscale.bind();
-        shaderGrayscale.setUniformf("u_grayness", percentage);
-        shaderGrayscale.setUniformf("u_bias", withDarkOverlay ? 0.5f : 1f);
-        batch.setShader(shaderGrayscale);
+        ShaderUtil.getInstance().getShaderGrayscale().bind();
+        ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_grayness", percentage);
+        ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_bias", withDarkOverlay ? 0.5f : 1f);
+        batch.setShader(ShaderUtil.getInstance().getShaderGrayscale());
         batch.begin();
         //draw gray
         batch.draw(image, x, y, w, h);
@@ -916,10 +867,10 @@ public class Graphics {
 
     public void drawGrayTransitionImage(TextureRegion image, float x, float y, float w, float h, boolean withDarkOverlay, float percentage) {
         batch.end();
-        shaderGrayscale.bind();
-        shaderGrayscale.setUniformf("u_grayness", percentage);
-        shaderGrayscale.setUniformf("u_bias", withDarkOverlay ? 0.5f : 1f);
-        batch.setShader(shaderGrayscale);
+        ShaderUtil.getInstance().getShaderGrayscale().bind();
+        ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_grayness", percentage);
+        ShaderUtil.getInstance().getShaderGrayscale().setUniformf("u_bias", withDarkOverlay ? 0.5f : 1f);
+        batch.setShader(ShaderUtil.getInstance().getShaderGrayscale());
         batch.begin();
         //draw gray
         batch.draw(image, x, y, w, h);
@@ -938,11 +889,11 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderRoundedRect2.bind();
-        shaderRoundedRect2.setUniformf("u_resolution", image.getWidth(), image.getHeight());
-        shaderRoundedRect2.setUniformf("edge_radius", (float)(image.getHeight() / image.getWidth()) * radius);
-        shaderRoundedRect2.setUniformf("u_time", Forge.hueFragTime);
-        batch.setShader(shaderRoundedRect2);
+        ShaderUtil.getInstance().getShaderRoundedRect2().bind();
+        ShaderUtil.getInstance().getShaderRoundedRect2().setUniformf("u_resolution", image.getWidth(), image.getHeight());
+        ShaderUtil.getInstance().getShaderRoundedRect2().setUniformf("edge_radius", (float)(image.getHeight() / image.getWidth()) * radius);
+        ShaderUtil.getInstance().getShaderRoundedRect2().setUniformf("u_time", Forge.hueFragTime);
+        batch.setShader(ShaderUtil.getInstance().getShaderRoundedRect2());
         batch.begin();
         //draw
         if (rotate)
@@ -960,11 +911,11 @@ public class Graphics {
             return;
         float radius = ImageCache.getInstance().getRadius(image);
         batch.end();
-        shaderRoundedRect.bind();
-        shaderRoundedRect.setUniformf("u_resolution", image.getWidth(), image.getHeight());
-        shaderRoundedRect.setUniformf("edge_radius", (float)(image.getHeight() / image.getWidth()) * radius);
-        shaderRoundedRect.setUniformf("u_gray", drawGray ? 0.8f : 0f);
-        batch.setShader(shaderRoundedRect);
+        ShaderUtil.getInstance().getShaderRoundedRect().bind();
+        ShaderUtil.getInstance().getShaderRoundedRect().setUniformf("u_resolution", image.getWidth(), image.getHeight());
+        ShaderUtil.getInstance().getShaderRoundedRect().setUniformf("edge_radius", (float)(image.getHeight() / image.getWidth()) * radius);
+        ShaderUtil.getInstance().getShaderRoundedRect().setUniformf("u_gray", drawGray ? 0.8f : 0f);
+        batch.setShader(ShaderUtil.getInstance().getShaderRoundedRect());
         batch.begin();
         //draw
         batch.draw(image, adjustX(x), adjustY(y, h), w, h);
@@ -987,11 +938,11 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderRoundedRect.bind();
-        shaderRoundedRect.setUniformf("u_resolution", image.getWidth(), image.getHeight());
-        shaderRoundedRect.setUniformf("edge_radius", (float)(image.getHeight() / image.getWidth()) * (ImageCache.getInstance().getRadius(image) * modR));
-        shaderRoundedRect.setUniformf("u_gray", 0f);
-        batch.setShader(shaderRoundedRect);
+        ShaderUtil.getInstance().getShaderRoundedRect().bind();
+        ShaderUtil.getInstance().getShaderRoundedRect().setUniformf("u_resolution", image.getWidth(), image.getHeight());
+        ShaderUtil.getInstance().getShaderRoundedRect().setUniformf("edge_radius", (float)(image.getHeight() / image.getWidth()) * (ImageCache.getInstance().getRadius(image) * modR));
+        ShaderUtil.getInstance().getShaderRoundedRect().setUniformf("u_gray", 0f);
+        batch.setShader(ShaderUtil.getInstance().getShaderRoundedRect());
         batch.begin();
         //draw
         drawRotatedImage(image, x, y, w, h, originX, originY, 0, 0, image.getWidth(), image.getHeight(), rotation);
@@ -1008,9 +959,9 @@ public class Graphics {
             return;
         if (time != null) {
             batch.end();
-            shaderNoiseFade.bind();
-            shaderNoiseFade.setUniformf("u_time", time);
-            batch.setShader(shaderNoiseFade);
+            ShaderUtil.getInstance().getShaderNoiseFade().bind();
+            ShaderUtil.getInstance().getShaderNoiseFade().setUniformf("u_time", time);
+            batch.setShader(ShaderUtil.getInstance().getShaderNoiseFade());
             batch.begin();
             //draw
             batch.draw(image, x, y, w, h);
@@ -1028,11 +979,11 @@ public class Graphics {
             return;
         if (time != null) {
             batch.end();
-            shaderPortal.bind();
-            shaderPortal.setUniformf("u_resolution", image.getRegionWidth(), image.getRegionHeight());
-            shaderPortal.setUniformf("u_time", time);
-            shaderPortal.setUniformf("u_opaque", opaque ? 1f : 0f);
-            batch.setShader(shaderPortal);
+            ShaderUtil.getInstance().getShaderPortal().bind();
+            ShaderUtil.getInstance().getShaderPortal().setUniformf("u_resolution", image.getRegionWidth(), image.getRegionHeight());
+            ShaderUtil.getInstance().getShaderPortal().setUniformf("u_time", time);
+            ShaderUtil.getInstance().getShaderPortal().setUniformf("u_opaque", opaque ? 1f : 0f);
+            batch.setShader(ShaderUtil.getInstance().getShaderPortal());
             batch.begin();
             //draw
             batch.draw(image, x, y, w, h);
@@ -1050,9 +1001,9 @@ public class Graphics {
             return;
         if (time != null) {
             batch.end();
-            shaderHueShift.bind();
-            shaderHueShift.setUniformf("u_time", time);
-            batch.setShader(shaderHueShift);
+            ShaderUtil.getInstance().getShaderHueShift().bind();
+            ShaderUtil.getInstance().getShaderHueShift().setUniformf("u_time", time);
+            batch.setShader(ShaderUtil.getInstance().getShaderHueShift());
             batch.begin();
             //draw
             batch.draw(image, x, y, w, h);
@@ -1070,9 +1021,9 @@ public class Graphics {
             return;
         if (time != null) {
             batch.end();
-            shaderHueShift.bind();
-            shaderHueShift.setUniformf("u_time", time);
-            batch.setShader(shaderHueShift);
+            ShaderUtil.getInstance().getShaderHueShift().bind();
+            ShaderUtil.getInstance().getShaderHueShift().setUniformf("u_time", time);
+            batch.setShader(ShaderUtil.getInstance().getShaderHueShift());
             batch.begin();
             //draw
             batch.draw(image, x, y, w, h);
@@ -1090,9 +1041,9 @@ public class Graphics {
             return;
         if (time != null) {
             batch.end();
-            shaderChromaticAbberation.bind();
-            shaderChromaticAbberation.setUniformf("u_time", time);
-            batch.setShader(shaderChromaticAbberation);
+            ShaderUtil.getInstance().getShaderChromaticAberration().bind();
+            ShaderUtil.getInstance().getShaderChromaticAberration().setUniformf("u_time", time);
+            batch.setShader(ShaderUtil.getInstance().getShaderChromaticAberration());
             batch.begin();
             //draw
             batch.draw(image, x, y, w, h);
@@ -1110,10 +1061,10 @@ public class Graphics {
             return;
         if (amount != null) {
             batch.end();
-            shaderRipple.bind();
-            shaderRipple.setUniformf("u_time", amount);
-            shaderRipple.setUniformf("u_bias", 0.7f);
-            batch.setShader(shaderRipple);
+            ShaderUtil.getInstance().getShaderRipple().bind();
+            ShaderUtil.getInstance().getShaderRipple().setUniformf("u_time", amount);
+            ShaderUtil.getInstance().getShaderRipple().setUniformf("u_bias", 0.7f);
+            batch.setShader(ShaderUtil.getInstance().getShaderRipple());
             batch.begin();
             //draw
             image.draw(this, x, y, w, h);
@@ -1131,12 +1082,12 @@ public class Graphics {
             return;
         if (amount != null) {
             batch.end();
-            shaderPixelate.bind();
-            shaderPixelate.setUniformf("u_resolution", Forge.isLandscapeMode() ? w : h, Forge.isLandscapeMode() ? h : w);
-            shaderPixelate.setUniformf("u_cellSize", amount);
-            shaderPixelate.setUniformf("u_yflip", flipY ? 1f : 0f);
-            shaderPixelate.setUniformf("u_bias", 0.7f);
-            batch.setShader(shaderPixelate);
+            ShaderUtil.getInstance().getShaderPixelate().bind();
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_resolution", Forge.isLandscapeMode() ? w : h, Forge.isLandscapeMode() ? h : w);
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_cellSize", amount);
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_yflip", flipY ? 1f : 0f);
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_bias", 0.7f);
+            batch.setShader(ShaderUtil.getInstance().getShaderPixelate());
             batch.begin();
             //draw
             image.draw(this, x, y, w, h);
@@ -1154,12 +1105,12 @@ public class Graphics {
             return;
         if (amount != null) {
             batch.end();
-            shaderPixelate.bind();
-            shaderPixelate.setUniformf("u_resolution", Forge.isLandscapeMode() ? w : h, Forge.isLandscapeMode() ? h : w);
-            shaderPixelate.setUniformf("u_cellSize", amount);
-            shaderPixelate.setUniformf("u_yflip", flipY ? 1 : 0);
-            shaderPixelate.setUniformf("u_bias", 0.6f);
-            batch.setShader(shaderPixelate);
+            ShaderUtil.getInstance().getShaderPixelate().bind();
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_resolution", Forge.isLandscapeMode() ? w : h, Forge.isLandscapeMode() ? h : w);
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_cellSize", amount);
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_yflip", flipY ? 1 : 0);
+            ShaderUtil.getInstance().getShaderPixelate().setUniformf("u_bias", 0.6f);
+            batch.setShader(ShaderUtil.getInstance().getShaderPixelate());
             batch.begin();
             //draw
             batch.draw(image, x, y, w, h);
@@ -1177,13 +1128,13 @@ public class Graphics {
             return;
         if (amount > 0) {
             batch.end();
-            shaderPixelateWarp.bind();
-            shaderPixelateWarp.setUniformf("u_resolution", image.getRegionWidth(), image.getRegionHeight());
-            shaderPixelateWarp.setUniformf("u_cellSize", amount);
-            shaderPixelateWarp.setUniformf("u_amount", 0.2f * amount);
-            shaderPixelateWarp.setUniformf("u_speed", 0.5f);
-            shaderPixelateWarp.setUniformf("u_time", 0.8f);
-            batch.setShader(shaderPixelateWarp);
+            ShaderUtil.getInstance().getShaderPixelateWarp().bind();
+            ShaderUtil.getInstance().getShaderPixelateWarp().setUniformf("u_resolution", image.getRegionWidth(), image.getRegionHeight());
+            ShaderUtil.getInstance().getShaderPixelateWarp().setUniformf("u_cellSize", amount);
+            ShaderUtil.getInstance().getShaderPixelateWarp().setUniformf("u_amount", 0.2f * amount);
+            ShaderUtil.getInstance().getShaderPixelateWarp().setUniformf("u_speed", 0.5f);
+            ShaderUtil.getInstance().getShaderPixelateWarp().setUniformf("u_time", 0.8f);
+            batch.setShader(ShaderUtil.getInstance().getShaderPixelateWarp());
             batch.begin();
             //draw
             batch.draw(image, x, y, w, h);
@@ -1200,11 +1151,11 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderWarp.bind();
-        shaderWarp.setUniformf("u_amount", 0.2f);
-        shaderWarp.setUniformf("u_speed", 0.5f);
-        shaderWarp.setUniformf("u_time", time);
-        batch.setShader(shaderWarp);
+        ShaderUtil.getInstance().getShaderWarp().bind();
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_amount", 0.2f);
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_speed", 0.5f);
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_time", time);
+        batch.setShader(ShaderUtil.getInstance().getShaderWarp());
         batch.begin();
         //draw
         batch.draw(image, x, y, w, h);
@@ -1218,11 +1169,11 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderWarp.bind();
-        shaderWarp.setUniformf("u_amount", 0.2f);
-        shaderWarp.setUniformf("u_speed", 0.6f);
-        shaderWarp.setUniformf("u_time", time);
-        batch.setShader(shaderWarp);
+        ShaderUtil.getInstance().getShaderWarp().bind();
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_amount", 0.2f);
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_speed", 0.6f);
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_time", time);
+        batch.setShader(ShaderUtil.getInstance().getShaderWarp());
         batch.begin();
         //draw
         batch.draw(image, x, y, w, h);
@@ -1236,11 +1187,11 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderWarp.bind();
-        shaderWarp.setUniformf("u_amount", 0.2f);
-        shaderWarp.setUniformf("u_speed", 0.6f);
-        shaderWarp.setUniformf("u_time", time);
-        batch.setShader(shaderWarp);
+        ShaderUtil.getInstance().getShaderWarp().bind();
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_amount", 0.2f);
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_speed", 0.6f);
+        ShaderUtil.getInstance().getShaderWarp().setUniformf("u_time", time);
+        batch.setShader(ShaderUtil.getInstance().getShaderWarp());
         batch.begin();
         //draw
         image.draw(this, x, y, w, h);
@@ -1254,12 +1205,12 @@ public class Graphics {
         if (image == null)
             return;
         batch.end();
-        shaderUnderwater.bind();
-        shaderUnderwater.setUniformf("u_amount", 10f * time);
-        shaderUnderwater.setUniformf("u_speed", 0.5f * time);
-        shaderUnderwater.setUniformf("u_time", time);
-        shaderUnderwater.setUniformf("u_bias", 0.7f);
-        batch.setShader(shaderUnderwater);
+        ShaderUtil.getInstance().getShaderUnderwater().bind();
+        ShaderUtil.getInstance().getShaderUnderwater().setUniformf("u_amount", 10f * time);
+        ShaderUtil.getInstance().getShaderUnderwater().setUniformf("u_speed", 0.5f * time);
+        ShaderUtil.getInstance().getShaderUnderwater().setUniformf("u_time", time);
+        ShaderUtil.getInstance().getShaderUnderwater().setUniformf("u_bias", 0.7f);
+        batch.setShader(ShaderUtil.getInstance().getShaderUnderwater());
         batch.begin();
         //draw
         image.draw(this, x, y, w, h);
@@ -1274,11 +1225,11 @@ public class Graphics {
             return;
         if (timeOfDay != null) {
             batch.end();
-            shaderNightDay.bind();
-            shaderNightDay.setUniformf("u_timeOfDay", timeOfDay);
-            shaderNightDay.setUniformf("u_time", rippleAmount);
-            shaderNightDay.setUniformf("u_bias",  darkOverlay? 0.7f : 1f);
-            batch.setShader(shaderNightDay);
+            ShaderUtil.getInstance().getShaderNightDay().bind();
+            ShaderUtil.getInstance().getShaderNightDay().setUniformf("u_timeOfDay", timeOfDay);
+            ShaderUtil.getInstance().getShaderNightDay().setUniformf("u_time", rippleAmount);
+            ShaderUtil.getInstance().getShaderNightDay().setUniformf("u_bias",  darkOverlay? 0.7f : 1f);
+            batch.setShader(ShaderUtil.getInstance().getShaderNightDay());
             batch.begin();
             //draw
             image.draw(this, x, y, w, h);
@@ -1293,11 +1244,11 @@ public class Graphics {
 
     public void drawUnderWaterImage(TextureRegion image, float x, float y, float w, float h, float time) {
         batch.end();
-        shaderUnderwater.bind();
-        shaderUnderwater.setUniformf("u_amount", 10f);
-        shaderUnderwater.setUniformf("u_speed", 0.5f);
-        shaderUnderwater.setUniformf("u_time", time);
-        batch.setShader(shaderUnderwater);
+        ShaderUtil.getInstance().getShaderUnderwater().bind();
+        ShaderUtil.getInstance().getShaderUnderwater().setUniformf("u_amount", 10f);
+        ShaderUtil.getInstance().getShaderUnderwater().setUniformf("u_speed", 0.5f);
+        ShaderUtil.getInstance().getShaderUnderwater().setUniformf("u_time", time);
+        batch.setShader(ShaderUtil.getInstance().getShaderUnderwater());
         batch.begin();
         //draw
         batch.draw(image, adjustX(x), adjustY(y, h), w, h);
@@ -1354,12 +1305,12 @@ public class Graphics {
             batch.draw(image, adjustX(x), adjustY(y, h), w, h);
         } else {
             batch.end();
-            shaderOutline.bind();
-            shaderOutline.setUniformf("u_viewportInverse", new Vector2(1f / w, 1f / h));
-            shaderOutline.setUniformf("u_offset", 3f);
-            shaderOutline.setUniformf("u_step", Math.min(1f, w / 70f));
-            shaderOutline.setUniformf("u_color", new Vector3(glowColor.r, glowColor.g, glowColor.b));
-            batch.setShader(shaderOutline);
+            ShaderUtil.getInstance().getShaderOutline().bind();
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_viewportInverse", new Vector2(1f / w, 1f / h));
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_offset", 3f);
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_step", Math.min(1f, w / 70f));
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_color", new Vector3(glowColor.r, glowColor.g, glowColor.b));
+            batch.setShader(ShaderUtil.getInstance().getShaderOutline());
             batch.begin();
             //glow
             batch.draw(glowImageReference, adjustX(x), adjustY(y, h), w, h);
@@ -1380,12 +1331,12 @@ public class Graphics {
             batch.draw(image, adjustX(x), adjustY(yBox, h), w, h);
         } else {
             batch.end();
-            shaderOutline.bind();
-            shaderOutline.setUniformf("u_viewportInverse", new Vector2(1f / w, 1f / h));
-            shaderOutline.setUniformf("u_offset", 3f);
-            shaderOutline.setUniformf("u_step", Math.min(1f, w / 70f));
-            shaderOutline.setUniformf("u_color", new Vector3(glowColor.r, glowColor.g, glowColor.b));
-            batch.setShader(shaderOutline);
+            ShaderUtil.getInstance().getShaderOutline().bind();
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_viewportInverse", new Vector2(1f / w, 1f / h));
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_offset", 3f);
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_step", Math.min(1f, w / 70f));
+            ShaderUtil.getInstance().getShaderOutline().setUniformf("u_color", new Vector3(glowColor.r, glowColor.g, glowColor.b));
+            batch.setShader(ShaderUtil.getInstance().getShaderOutline());
             batch.begin();
             //glow
             batch.draw(glowImageReference, adjustX(x), adjustY(yBox, h), w, h);
@@ -1587,29 +1538,6 @@ public class Graphics {
         int c_b = Integer.parseInt(c.substring(4, 6), 16);
         int brightness = ((c_r * 299) + (c_g * 587) + (c_b * 114)) / 1000;
         return brightness > 155 ? Color.valueOf("#171717") : Color.valueOf("#fffffd");
-    }
-
-    private Texture setTexture(Texture texture, Color color, float alphaComposite) {
-        if (texture != null)
-            return texture;
-        Pixmap P = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        P.setColor(color.r, color.g, color.b, alphaComposite);
-        P.drawPixel(0, 0);
-        texture = new Texture(P);
-        P.dispose();
-        return texture;
-    }
-
-    public Texture getDummyTexture() {
-        return setTexture(dummyTexture, Color.WHITE, 1f);
-    }
-
-    public Texture getBackropTexture() {
-        return setTexture(backdropTexture, Color.BLACK, 0.5f);
-    }
-
-    public Texture getGrayTexture() {
-        return setTexture(grayTexture, Color.DARK_GRAY, 0.5f);
     }
 
     public static void setVideoMode(String videoMode) {

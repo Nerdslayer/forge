@@ -195,7 +195,7 @@ public class UIScene extends Scene {
     public UIScene(String uiFilePath) {
         textboxOpen = false;
         uiFile = uiFilePath;
-        stage = new Stage(new ScalingViewport(Scaling.stretch, getIntendedWidth(), getIntendedHeight()), Adventure.getInstance().getAdventureBatch()) {
+        stage = new Stage(new ScalingViewport(Scaling.stretch, getIntendedWidth(), getIntendedHeight()), Adventure.getInstance().getUiBatch()) {
             @Override
             public boolean keyUp(int keycode) {
                 keyReleased(keycode);
@@ -649,7 +649,7 @@ public class UIScene extends Scene {
             //create from lastPreview from header...
             try {
                 backgroundTexture = new TextureRegion(Forge.lastPreview);
-                backgroundTexture.flip(false, true);
+                //backgroundTexture.flip(false, true);
                 screenImage.setDrawable(new TextureRegionDrawable(backgroundTexture));
             } catch (Exception e) {
                 e.printStackTrace();
