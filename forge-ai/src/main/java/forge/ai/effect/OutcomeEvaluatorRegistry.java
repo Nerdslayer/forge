@@ -7,6 +7,8 @@ import forge.game.spellability.SpellAbility;
 /** Shared routing for consequence outcomes supported by effect relationship analysis. */
 final class OutcomeEvaluatorRegistry {
     private static final List<OutcomeEvaluator> EVALUATORS = List.of(
+            CardDrawOutcomeEvaluator.INSTANCE,
+            ManaOutcomeEvaluator.INSTANCE,
             CounterOutcomeEvaluator.INSTANCE,
             CopiedPermanentOutcomeEvaluator.INSTANCE,
             CreatureTokenOutcomeEvaluator.INSTANCE,

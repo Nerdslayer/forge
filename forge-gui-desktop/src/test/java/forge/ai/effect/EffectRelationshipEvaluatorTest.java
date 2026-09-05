@@ -1861,6 +1861,68 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testDrawOutcomeUsesNonlinearHandValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 4);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Draw | Defined$ You | NumCards$ 2");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 104 + 92, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testDrawOutcomeForEvaluatingAiHasNegativeThreatValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(ai, 2);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Draw | Defined$ Opponent | NumCards$ 1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), -140, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testManaOutcomeUsesSharedManaValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Mana | Defined$ You | Produced$ G | Amount$ 3");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 105, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
     public void testStaticPtAbilityAddsItsMarginalValueToTheSource() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
