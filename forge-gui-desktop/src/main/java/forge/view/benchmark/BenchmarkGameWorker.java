@@ -99,8 +99,10 @@ final class BenchmarkGameWorker {
         if (opponentDeck == null || opponentDeck.isEmpty()) {
             return invalid(result, "Could not load opponent deck: " + options.job.opponentDeck().path());
         }
-        if (!BenchmarkFiles.sha256(options.job.evaluatedDeck().path()).equals(options.job.evaluatedDeck().sha256())
-                || !BenchmarkFiles.sha256(options.job.opponentDeck().path()).equals(options.job.opponentDeck().sha256())) {
+        if (!BenchmarkFiles.normalizedTextSha256(options.job.evaluatedDeck().path())
+                .equals(options.job.evaluatedDeck().sha256())
+                || !BenchmarkFiles.normalizedTextSha256(options.job.opponentDeck().path())
+                .equals(options.job.opponentDeck().sha256())) {
             return invalid(result, "A deck changed after the benchmark schedule was created");
         }
 

@@ -11,16 +11,19 @@ package forge.view.benchmark;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 record BenchmarkDeck(String id, String name, Path path, String sha256) implements BenchmarkJson.JsonMappable {
     static BenchmarkDeck fromPath(final Path input) throws java.io.IOException {
         final Path path = input.toAbsolutePath().normalize();
         final String fileName = path.getFileName().toString();
-        final String name = fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".dck")
+        final String name = fileName.toLowerCase(Locale.ROOT).endsWith(".dck")
                 ? fileName.substring(0, fileName.length() - 4) : fileName;
-        final String hash = BenchmarkFiles.sha256(path);
-        final String id = BenchmarkFiles.sha256(path.toString() + "|" + hash).substring(0, 12);
+        final String hash = BenchmarkFiles.normalizedTextSha256(path);
+        // Keep identity stable when the same deck pool is copied to another worktree or machine.
+        // Including the filename distinguishes intentionally separate, byte-identical deck entries.
+        final String id = BenchmarkFiles.sha256(name.toLowerCase(Locale.ROOT) + "|" + hash).substring(0, 12);
         return new BenchmarkDeck(id, name, path, hash);
     }
 
