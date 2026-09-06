@@ -16,7 +16,7 @@ import forge.game.spellability.SpellAbility;
 final class LifeOutcomeEvaluator implements OutcomeEvaluator {
     static final LifeOutcomeEvaluator INSTANCE = new LifeOutcomeEvaluator();
 
-    // TODO(effect analysis): Support targeted and dynamic recipients, optional/conditional forms,
+    // TODO(effect analysis): Support targeted and broader dynamic recipients, optional/conditional forms,
     // replacement-modified amounts, life payment/exchange/set effects, mixed subability chains,
     // shared-life variants, unequal multiplayer win probabilities, and resources that leave with
     // an eliminated player. Current game-loss prevention is checked without simulating replacements.
@@ -24,7 +24,8 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
             "DB", "Defined", "LifeAmount", "SubAbility",
             "SpellDescription", "StackDescription");
     private static final Set<String> SUPPORTED_RECIPIENTS = Set.of(
-            "You", "Opponent", "Player.Opponent");
+            "You", "Opponent", "Player.Opponent",
+            "TriggeredPlayer", "TriggeredCardController");
 
     private LifeOutcomeEvaluator() {
     }

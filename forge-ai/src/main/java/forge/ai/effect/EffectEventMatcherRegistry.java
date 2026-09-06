@@ -12,6 +12,7 @@ final class EffectEventMatcherRegistry {
         MATCHERS.put(EffectType.COUNTER_ADDED, CounterAddedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.LIFE_GAINED, LifeGainedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.CARD_DRAWN, CardDrawnEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.CARD_DISCARDED, CardDiscardedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.DAMAGE_DEALT, DamageDealtEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.ATTACKED_OR_BLOCKED, AttackEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.SACRIFICED, SacrificeEventMatcher.INSTANCE);

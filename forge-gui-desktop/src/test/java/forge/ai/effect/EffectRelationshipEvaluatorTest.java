@@ -1948,6 +1948,152 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testDiscardProductionMatchesIndividualOwnershipTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Discard | Cost$ 0 | Defined$ You | Mode$ TgtChoose | NumCards$ 2",
+                producer));
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestDiscardCounter",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Discarded | ValidCard$ Card.YouOwn"
+                + " | Execute$ EffectTestDiscardCounter | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 50, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testDiscardProductionIsCappedByHandSize() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Discard | Cost$ 0 | Defined$ You | Mode$ Random | NumCards$ 3",
+                producer));
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestDiscardCounter",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Discarded | ValidCard$ Card.YouOwn"
+                + " | Execute$ EffectTestDiscardCounter | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testDiscardProductionDoesNothingForEmptyHand() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Discard | Cost$ 0 | Defined$ You | Mode$ Random | NumCards$ 3",
+                producer));
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestDiscardCounter",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Discarded | ValidCard$ Card.YouOwn"
+                + " | Execute$ EffectTestDiscardCounter | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertFalse(values.containsKey(producer), values.toString());
+        Assert.assertFalse(values.containsKey(consequence), values.toString());
+    }
+
+    @Test
+    public void testDiscardBatchProvidesAmountToOutcome() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Discard | Cost$ 0 | Defined$ You | Mode$ Random | NumCards$ 2",
+                producer));
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("X", "TriggerCount$Amount");
+        consequence.setSVar("EffectTestDiscardTokens",
+                "DB$ Token | TokenAmount$ X | TokenScript$ b_2_2_zombie"
+                        + " | TokenOwner$ You | TokenTapped$ True");
+        addTrigger(consequence, "Mode$ DiscardedAll | ValidPlayer$ You"
+                + " | Execute$ EffectTestDiscardTokens | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testUnknownDiscardDoesNotMatchCardCharacteristics() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", opponent, ZoneType.Hand);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Discard | Cost$ 0 | Defined$ You | Mode$ TgtChoose | NumCards$ 1",
+                producer));
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestDiscardCounter",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Discarded | ValidCard$ Creature.YouOwn"
+                + " | Execute$ EffectTestDiscardCounter | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertFalse(values.containsKey(producer), values.toString());
+        Assert.assertFalse(values.containsKey(consequence), values.toString());
+    }
+
+    @Test
+    public void testDiscardProductionSupportsLilianaCaressRecipient() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", ai, ZoneType.Hand);
+
+        final Card producer = addCard("Liliana of the Veil", opponent);
+        final Card consequence = addCard("Liliana's Caress", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 31, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
     public void testManaOutcomeUsesSharedManaValue() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

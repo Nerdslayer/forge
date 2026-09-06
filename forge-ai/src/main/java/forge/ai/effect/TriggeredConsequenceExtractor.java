@@ -39,6 +39,13 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
             "Card", "Card.YouCtrl", "Card.YouOwn", "Card.OppCtrl", "Card.OppOwn");
     private static final Set<String> CARD_DRAWN_VALID_PLAYERS = Set.of(
             "Player", "Opponent", "Player.Opponent");
+    private static final Set<String> CARD_DISCARDED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidPlayer", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> CARD_DISCARDED_VALID_CARDS = Set.of(
+            "Card", "Card.YouCtrl", "Card.YouOwn", "Card.OppCtrl", "Card.OppOwn");
+    private static final Set<String> CARD_DISCARDED_VALID_PLAYERS = Set.of(
+            "Player", "You", "Opponent", "Player.Opponent");
     private static final Set<String> DAMAGE_DONE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidSource", "ValidTarget", "CombatDamage", "DamageAmount",
             "Execute", "TriggerZones", "TriggerDescription", "Secondary");
@@ -110,6 +117,10 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         if (trigger.getMode() == TriggerType.Drawn) {
             return EffectType.CARD_DRAWN;
         }
+        if (trigger.getMode() == TriggerType.Discarded
+                || trigger.getMode() == TriggerType.DiscardedAll) {
+            return EffectType.CARD_DISCARDED;
+        }
         if (trigger.getMode() == TriggerType.DamageDone
                 || trigger.getMode() == TriggerType.DamageDoneOnce
                 || trigger.getMode() == TriggerType.DamageDealtOnce) {
@@ -151,6 +162,10 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         }
         if (trigger.getMode() == TriggerType.Drawn) {
             return hasSupportedCardDrawParameters(trigger);
+        }
+        if (trigger.getMode() == TriggerType.Discarded
+                || trigger.getMode() == TriggerType.DiscardedAll) {
+            return hasSupportedCardDiscardParameters(trigger);
         }
         if (trigger.getMode() == TriggerType.DamageDone) {
             return EffectAbilityUtils.hasOnlyParams(trigger, DAMAGE_DONE_TRIGGER_PARAMS);
@@ -212,6 +227,14 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         } catch (final NumberFormatException ignored) {
             return false;
         }
+    }
+
+    private static boolean hasSupportedCardDiscardParameters(final Trigger trigger) {
+        return EffectAbilityUtils.hasOnlyParams(trigger, CARD_DISCARDED_TRIGGER_PARAMS)
+                && (!trigger.hasParam("ValidCard")
+                        || CARD_DISCARDED_VALID_CARDS.contains(trigger.getParam("ValidCard")))
+                && (!trigger.hasParam("ValidPlayer")
+                        || CARD_DISCARDED_VALID_PLAYERS.contains(trigger.getParam("ValidPlayer")));
     }
 
     private static Trigger normalizedTrigger(final Card source, final Trigger trigger) {

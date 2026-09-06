@@ -23,7 +23,7 @@ final class DiscardOutcomeEvaluator implements OutcomeEvaluator {
             "DB", "Defined", "Mode", "NumCards",
             "SpellDescription", "StackDescription");
     private static final Set<String> SUPPORTED_RECIPIENTS = Set.of(
-            "You", "Opponent", "Player.Opponent");
+            "You", "Player", "Opponent", "Player.Opponent");
 
     private DiscardOutcomeEvaluator() {
     }
