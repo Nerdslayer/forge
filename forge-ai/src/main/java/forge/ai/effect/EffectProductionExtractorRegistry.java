@@ -16,6 +16,7 @@ final class EffectProductionExtractorRegistry {
             CounterProductionExtractor.INSTANCE,
             LifeGainProductionExtractor.INSTANCE,
             CardDrawProductionExtractor.INSTANCE,
+            CardDiscardProductionExtractor.INSTANCE,
             DamageProductionExtractor.INSTANCE,
             AttackProductionExtractor.INSTANCE,
             SacrificeProductionExtractor.INSTANCE);
