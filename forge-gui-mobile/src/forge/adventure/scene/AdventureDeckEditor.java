@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -429,6 +430,10 @@ public class AdventureDeckEditor extends FDeckEditor {
         protected void buildMenu(final FDropDownMenu menu, final PaperCard card) {
             super.buildMenu(menu, card);
 
+            if (parentScreen instanceof AdventureDeckEditor adventureEditor) {
+                adventureEditor.addChangeArtMenuItem(menu, card);
+            }
+
             if (!(parentScreen instanceof AdventureDeckEditor adventureEditor) || adventureEditor.getAutoSellPage() == null)
                 return;
 
@@ -780,6 +785,51 @@ public class AdventureDeckEditor extends FDeckEditor {
         });
     }
 
+    private void addChangeArtMenuItem(FDropDownMenu menu, PaperCard card) {
+        if (!getEditorConfig().usePlayerInventory() || Current.player().getCards().count(card) == 0) {
+            return;
+        }
+
+        List<PaperCard> artOptions = new ArrayList<>();
+        artOptions.add(card);
+        for (PaperCard option : FModel.getMagicDb().getCommonCards().getAllCardsNoAlt(card.getName())) {
+            if (!Objects.equals(card.getFunctionalVariant(), option.getFunctionalVariant())) {
+                continue;
+            }
+            PaperCard displayOption = card.isFoil() ? option.getFoiled() : option.getUnFoiled();
+            if (!isSameCardArt(card, displayOption)) {
+                artOptions.add(displayOption);
+            }
+        }
+        if (artOptions.size() < 2) {
+            return;
+        }
+
+        Localizer localizer = Forge.getLocalizer();
+        menu.addItem(new FMenuItem(localizer.getMessage("lblChangeCardArt"),
+                Forge.hdbuttons ? FSkinImage.HDCHOICE : FSkinImage.DECKLIST, event ->
+                GuiChoose.oneOrNone(localizer.getMessage("lblSelectCardArt") + " " + card.getDisplayName(),
+                        artOptions, selectedArt -> {
+                            if (selectedArt == null || isSameCardArt(card, selectedArt)) {
+                                return;
+                            }
+                            PaperCard replacement = selectedArt.copyWithFlags(card.getMarkedFlags().toMap());
+                            if (replacement.getAdventureOriginalRarity() == null) {
+                                replacement = replacement.copyWithAdventureOriginalRarity(card.getRarity());
+                            }
+                            if (Current.player().changeCardArt(card, replacement)) {
+                                refresh();
+                            }
+                        })));
+    }
+
+    private static boolean isSameCardArt(PaperCard first, PaperCard second) {
+        return first.getEdition().equals(second.getEdition())
+                && first.getArtIndex() == second.getArtIndex()
+                && first.getCollectorNumber().equals(second.getCollectorNumber())
+                && first.isFoil() == second.isFoil();
+    }
+
 
     protected AdventureDeckHeader deckHeader;
     protected FDraftLog draftLog;
@@ -1061,6 +1111,14 @@ public class AdventureDeckEditor extends FDeckEditor {
         protected AdventureDeckSectionPage(DeckSection deckSection, ItemManagerConfig config) {
             super(new AdventureCardManager(), deckSection, config, deckSection.getLocalizedShortName(), iconFromDeckSection(deckSection));
             cardManager.setBtnAdvancedSearchOptions(deckSection == DeckSection.Main);
+        }
+
+        @Override
+        protected void addPerCardItems(FDropDownMenu menu, PaperCard card) {
+            super.addPerCardItems(menu, card);
+            if (parentScreen instanceof AdventureDeckEditor adventureEditor) {
+                adventureEditor.addChangeArtMenuItem(menu, card);
+            }
         }
     }
 
