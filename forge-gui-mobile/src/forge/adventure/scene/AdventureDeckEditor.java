@@ -1114,6 +1114,16 @@ public class AdventureDeckEditor extends FDeckEditor {
         }
 
         @Override
+        public void refresh() {
+            Deck currentDeck = parentScreen.getDeck();
+            if (currentDeck == null) {
+                return;
+            }
+            cardManager.setPool(currentDeck.getOrCreate(deckSection));
+            updateCaption();
+        }
+
+        @Override
         protected void addPerCardItems(FDropDownMenu menu, PaperCard card) {
             super.addPerCardItems(menu, card);
             if (parentScreen instanceof AdventureDeckEditor adventureEditor) {
