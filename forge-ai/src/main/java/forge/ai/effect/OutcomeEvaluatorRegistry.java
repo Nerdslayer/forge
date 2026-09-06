@@ -8,7 +8,9 @@ import forge.game.spellability.SpellAbility;
 final class OutcomeEvaluatorRegistry {
     private static final List<OutcomeEvaluator> EVALUATORS = List.of(
             CardDrawOutcomeEvaluator.INSTANCE,
+            DiscardOutcomeEvaluator.INSTANCE,
             ManaOutcomeEvaluator.INSTANCE,
+            LifeOutcomeEvaluator.INSTANCE,
             CounterOutcomeEvaluator.INSTANCE,
             CopiedPermanentOutcomeEvaluator.INSTANCE,
             CreatureTokenOutcomeEvaluator.INSTANCE,

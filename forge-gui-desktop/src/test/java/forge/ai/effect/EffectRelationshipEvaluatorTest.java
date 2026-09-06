@@ -1904,6 +1904,50 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testRandomDiscardOutcomeUsesReverseDrawValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        for (int i = 0; i < 5; i++) {
+            addCardToZone("Forest", opponent, ZoneType.Hand);
+        }
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Discard | Defined$ You | Mode$ Random | NumCards$ 2");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), -196, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testAffectedPlayerChosenDiscardUsesChoiceDiscount() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        for (int i = 0; i < 3; i++) {
+            addCardToZone("Forest", ai, ZoneType.Hand);
+        }
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Discard | Defined$ Opponent | Mode$ TgtChoose | NumCards$ 1");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 77, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
     public void testManaOutcomeUsesSharedManaValue() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -1919,6 +1963,92 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(producer, consequence));
 
         Assert.assertEquals(values.get(producer).intValue(), 105, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testLifeLossOutcomeUsesNonlinearUtility() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        opponent.setLife(11, null);
+
+        final Card lossProducer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card lossConsequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ LoseLife | Defined$ You | LifeAmount$ 5");
+        Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(lossProducer, lossConsequence));
+
+        Assert.assertEquals(values.get(lossProducer).intValue(), -176, values.toString());
+        Assert.assertEquals(values.get(lossConsequence), values.get(lossProducer));
+    }
+
+    @Test
+    public void testLifeGainOutcomeUsesNonlinearUtility() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        opponent.setLife(6, null);
+        final Card gainProducer = addPhaseCounterProducer(
+                "Arcane Signet", opponent, "CHARGE", 1, "Self");
+        final Card gainConsequence = addCounterTriggeredOutcome("Runeclaw Bear", opponent,
+                "DB$ GainLife | Defined$ You | LifeAmount$ 5");
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(gainProducer, gainConsequence));
+
+        Assert.assertEquals(values.get(gainProducer).intValue(), 176, values.toString());
+        Assert.assertEquals(values.get(gainConsequence), values.get(gainProducer));
+    }
+
+    @Test
+    public void testLethalLifeLossAddsTerminalValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        ai.setLife(5, null);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ LoseLife | Defined$ Opponent | LifeAmount$ 5");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 10_467, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testDrainChainValuesBothLifeChanges() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        ai.setLife(5, null);
+        opponent.setLife(5, null);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestGainLife",
+                "DB$ GainLife | Defined$ You | LifeAmount$ AFLifeLost");
+        consequence.setSVar("EffectTestDrain",
+                "DB$ LoseLife | Defined$ Opponent | LifeAmount$ 1"
+                        + " | SubAbility$ EffectTestGainLife");
+        addTrigger(consequence, "Mode$ CounterAddedOnce | ValidCard$ Artifact.YouCtrl"
+                + " | CounterType$ CHARGE | Execute$ EffectTestDrain"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 118, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
