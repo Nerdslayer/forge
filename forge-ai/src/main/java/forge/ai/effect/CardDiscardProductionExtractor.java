@@ -20,11 +20,14 @@ final class CardDiscardProductionExtractor implements EffectProductionExtractor 
     static final CardDiscardProductionExtractor INSTANCE = new CardDiscardProductionExtractor();
 
     // TODO(effect analysis): Support spells and stack objects, discard costs and named actions,
-    // targeted/dynamic recipients, discard-all/defined-card and source-controller choice modes,
+    // dynamic recipients, multiplayer or multi/optional targets, defined-card and
+    // source-controller choice modes,
     // optional/up-to/any-number, restricted subsets, multiple discard steps, replacements, and
     // prediction of chosen or random card characteristics without using hidden information.
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "AB", "DB", "Cost", "Defined", "Mode", "NumCards", "RememberDiscarded", "SubAbility",
+            "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax",
+            "TargetsAtRandom",
             "AILogic", "ActivationFirstCombat", "ActivationLimit", "ActivationPhases",
             "ActivationZone", "Planeswalker", "PlayerTurn", "PowerUp", "PrecostDesc",
             "SorcerySpeed", "Ultimate", "SpellDescription", "StackDescription");
@@ -59,15 +62,15 @@ final class CardDiscardProductionExtractor implements EffectProductionExtractor 
             return List.of();
         }
         discard.setActivatingPlayer(source.getController());
-        final int requested = AbilityUtils.calculateAmount(source,
-                discard.getParamOrDefault("NumCards", "1"), discard);
+        final int requested = "Hand".equals(discard.getParam("Mode")) ? Integer.MAX_VALUE
+                : AbilityUtils.calculateAmount(source,
+                        discard.getParamOrDefault("NumCards", "1"), discard);
         if (requested <= 0) {
             return List.of();
         }
 
         final List<EffectEvent> events = new ArrayList<>();
-        for (final Player recipient : AbilityUtils.getDefinedPlayers(source,
-                discard.getParamOrDefault("Defined", "You"), discard)) {
+        for (final Player recipient : DiscardRecipientResolver.resolve(discard)) {
             if (!recipient.isInGame() || !recipient.canDiscardBy(discard, true)) {
                 continue;
             }
@@ -99,11 +102,12 @@ final class CardDiscardProductionExtractor implements EffectProductionExtractor 
             }
             if (current.getApi() == ApiType.Discard) {
                 final String mode = current.getParam("Mode");
-                return !current.usesTargeting()
-                        && SUPPORTED_PARAMS.containsAll(current.getMapParams().keySet())
-                        && SUPPORTED_RECIPIENTS.contains(
-                                current.getParamOrDefault("Defined", "You"))
-                        && ("Random".equals(mode) || "TgtChoose".equals(mode))
+                return SUPPORTED_PARAMS.containsAll(current.getMapParams().keySet())
+                        && DiscardRecipientResolver.hasSupportedTargetShape(current)
+                        && (current.usesTargeting() || SUPPORTED_RECIPIENTS.contains(
+                                current.getParamOrDefault("Defined", "You")))
+                        && ("Random".equals(mode) || "TgtChoose".equals(mode)
+                                || "Hand".equals(mode))
                         ? current : null;
             }
             current = current.getSubAbility();
