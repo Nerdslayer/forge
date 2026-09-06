@@ -198,6 +198,11 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
             return this;
         return new PaperCard(this, this.flags.withMarkedColors(colors));
     }
+    public PaperCard copyWithAdventureOriginalRarity(CardRarity rarity) {
+        if(Objects.equals(rarity, this.flags.adventureOriginalRarity))
+            return this;
+        return new PaperCard(this, this.flags.withAdventureOriginalRarity(rarity));
+    }
     @Override
     public String getItemType() {
         final Localizer localizer = Localizer.getInstance();
@@ -210,6 +215,9 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
 
     public boolean hasNoSellValue() {
         return this.flags.noSellValue;
+    }
+    public CardRarity getAdventureOriginalRarity() {
+        return this.flags.adventureOriginalRarity;
     }
     public boolean hasImage() {
         return hasImage(false);
@@ -581,6 +589,10 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
          * Removes the sell value of the card in Adventure mode.
          */
         public final boolean noSellValue;
+        /**
+         * Original rarity used for Adventure pricing after a cosmetic art change.
+         */
+        public final CardRarity adventureOriginalRarity;
 
         //TODO: Could probably move foil here.
 
@@ -592,28 +604,37 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
             else
                 markedColors = null;
             noSellValue = flags.containsKey("noSellValue");
+            adventureOriginalRarity = flags.containsKey("adventureOriginalRarity")
+                    ? CardRarity.smartValueOf(flags.get("adventureOriginalRarity")) : null;
         }
 
         //Copy constructor. There are some better ways to do this, and they should be explored once we have more than 4
         //or 5 fields here. Just need to ensure it's impossible to accidentally change a field while the PaperCardFlags
         //object is in use.
-        private PaperCardFlags(PaperCardFlags copyFrom, ColorSet markedColors, Boolean noSellValue) {
+        private PaperCardFlags(PaperCardFlags copyFrom, ColorSet markedColors, Boolean noSellValue,
+                               CardRarity adventureOriginalRarity) {
             if(markedColors == null)
                 markedColors = copyFrom.markedColors;
             else if(markedColors.isColorless())
                 markedColors = null;
             this.markedColors = markedColors;
             this.noSellValue = noSellValue != null ? noSellValue : copyFrom.noSellValue;
+            this.adventureOriginalRarity = adventureOriginalRarity != null
+                    ? adventureOriginalRarity : copyFrom.adventureOriginalRarity;
         }
 
         public PaperCardFlags withMarkedColors(ColorSet markedColors) {
             if(markedColors == null)
                 markedColors = ColorSet.C;
-            return new PaperCardFlags(this, markedColors, null);
+            return new PaperCardFlags(this, markedColors, null, null);
         }
 
         public PaperCardFlags withNoSellValueFlag(boolean noSellValue) {
-            return new PaperCardFlags(this, null, noSellValue);
+            return new PaperCardFlags(this, null, noSellValue, null);
+        }
+
+        public PaperCardFlags withAdventureOriginalRarity(CardRarity rarity) {
+            return new PaperCardFlags(this, null, null, rarity);
         }
 
         private Map<String, String> asMap;
@@ -625,6 +646,8 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
                 out.put("markedColors", markedColors.toString());
             if(noSellValue)
                 out.put("noSellValue", "true");
+            if(adventureOriginalRarity != null)
+                out.put("adventureOriginalRarity", adventureOriginalRarity.toString());
             asMap = out;
             return out;
         }
@@ -639,12 +662,14 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
         @Override
         public boolean equals(Object o) {
             if (!(o instanceof PaperCardFlags that)) return false;
-            return noSellValue == that.noSellValue && Objects.equals(markedColors, that.markedColors);
+            return noSellValue == that.noSellValue
+                    && Objects.equals(markedColors, that.markedColors)
+                    && adventureOriginalRarity == that.adventureOriginalRarity;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(markedColors, noSellValue);
+            return Objects.hash(markedColors, noSellValue, adventureOriginalRarity);
         }
     }
 }

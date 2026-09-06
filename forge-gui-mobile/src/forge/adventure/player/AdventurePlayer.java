@@ -972,6 +972,46 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         newCards.addAll(cardPool);
     }
 
+    /**
+     * Replaces every owned copy of one printing with another art while keeping all Adventure pools and decks in sync.
+     */
+    public boolean changeCardArt(PaperCard currentArt, PaperCard replacementArt) {
+        if (currentArt == null || replacementArt == null || currentArt.equals(replacementArt)
+                || !currentArt.getName().equals(replacementArt.getName())
+                || !Objects.equals(currentArt.getFunctionalVariant(), replacementArt.getFunctionalVariant())) {
+            return false;
+        }
+
+        int ownedCopies = replaceAllCopies(cards, currentArt, replacementArt);
+        if (ownedCopies == 0) {
+            return false;
+        }
+
+        replaceAllCopies(newCards, currentArt, replacementArt);
+        replaceAllCopies(autoSellCards, currentArt, replacementArt);
+        if (favoriteCards.remove(currentArt)) {
+            favoriteCards.add(replacementArt);
+        }
+        if (unsupportedCards.remove(currentArt)) {
+            unsupportedCards.add(replacementArt);
+        }
+        for (Deck ownedDeck : decks) {
+            for (Map.Entry<DeckSection, CardPool> section : ownedDeck) {
+                replaceAllCopies(section.getValue(), currentArt, replacementArt);
+            }
+        }
+        return true;
+    }
+
+    private static int replaceAllCopies(ItemPool<PaperCard> pool, PaperCard currentArt, PaperCard replacementArt) {
+        int count = pool.count(currentArt);
+        if (count > 0) {
+            pool.removeAll(currentArt);
+            pool.add(replacementArt, count);
+        }
+        return count;
+    }
+
     public void addReward(Reward reward) {
         switch (reward.getType()) {
             case Card:

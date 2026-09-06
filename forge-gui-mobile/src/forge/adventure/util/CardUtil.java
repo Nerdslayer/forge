@@ -365,9 +365,10 @@ public class CardUtil {
     public static int getCardPrice(PaperCard card) {
         if (card == null)
             return 0;
-        CardRarity effectiveRarity = card.getRarity();
+        CardRarity effectiveRarity = card.getAdventureOriginalRarity() == null
+                ? card.getRarity() : card.getAdventureOriginalRarity();
 
-        if (card.getRarity() == CardRarity.BasicLand
+        if (effectiveRarity == CardRarity.BasicLand
                 && !card.isVeryBasicLand()
                 && !MagicColor.Constant.SNOW_LANDS.contains(card.getName())
                 && !card.getName().equals("Wastes")) {
