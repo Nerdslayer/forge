@@ -2094,6 +2094,96 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testTargetedDiscardProductionInfersOpponentInTwoPlayerGame() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", ai, ZoneType.Hand);
+
+        final Card producer = addCard("Liliana Vess", opponent);
+        final Card consequence = addCard("Liliana's Caress", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 31, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testTargetedDiscardProductionIsDeferredInMultiplayer() {
+        final Game game = initAndCreateThreePlayerGame();
+        final Player sourceController = game.getPlayers().get(0);
+        final Player ai = game.getPlayers().get(1);
+        final Player otherOpponent = game.getPlayers().get(2);
+        sourceController.setTeam(0);
+        ai.setTeam(1);
+        otherOpponent.setTeam(2);
+        addCardToZone("Forest", ai, ZoneType.Hand);
+
+        final Card producer = addCard("Sol Ring", sourceController);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Discard | Cost$ 0 | ValidTgts$ Opponent"
+                        + " | Mode$ TgtChoose | NumCards$ 1",
+                producer));
+        final Card consequence = addCard("Liliana's Caress", sourceController);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertFalse(values.containsKey(producer), values.toString());
+        Assert.assertFalse(values.containsKey(consequence), values.toString());
+    }
+
+    @Test
+    public void testDiscardHandProductionEmitsEveryCurrentCard() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        for (int i = 0; i < 3; i++) {
+            addCardToZone("Forest", opponent, ZoneType.Hand);
+        }
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Discard | Cost$ 0 | Defined$ You | Mode$ Hand", producer));
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestDiscardCounter",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Discarded | ValidCard$ Card.YouOwn"
+                + " | Execute$ EffectTestDiscardCounter | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 75, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
+    public void testTargetedDiscardHandOutcomeUsesWholeHandValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", ai, ZoneType.Hand);
+        addCardToZone("Forest", ai, ZoneType.Hand);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
+                "DB$ Discard | ValidTgts$ Opponent | Mode$ Hand");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 268, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
+    }
+
+    @Test
     public void testManaOutcomeUsesSharedManaValue() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
