@@ -765,12 +765,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": "$(poi_1)"
                         }
                     ],
                     "name": "\"I have better things to do right now.\" (Decline Quest)",
-                    "text": "The elf says nothing, but looks disappointed. (-1 local reputation)",
+                    "text": "The elf says nothing, but looks disappointed.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -814,12 +813,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -2,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "\"For a $(enemy_2)? No thank you.\" (Decline Quest)",
-                            "text": "The elf says nothing, but looks disappointed. (-2 local reputation)",
+                            "text": "The elf says nothing, but looks disappointed.",
                             "options": [
                                 {
                                     "name": "(Continue)"
@@ -1033,12 +1031,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": "$(poi_1)"
                         }
                     ],
                     "name": "\"That's rather ominous\" (Decline Quest)",
-                    "text": "The silence that follows is much more ominous, but the figure eventually turns away and leaves. (-1 town reputation)",
+                    "text": "The silence that follows is much more ominous, but the figure eventually turns away and leaves.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -1082,12 +1079,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -2,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "\"For a $(enemy_2)? No thank you.\" (Decline Quest)",
-                            "text": "The air grows cold for a moment as they turn and walk away. (-2 town reputation)",
+                            "text": "The air grows cold for a moment as they turn and walk away.",
                             "options": [
                                 {
                                     "name": "(Continue)"
@@ -1279,12 +1275,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -1,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "You shrug your shoulders. It's not your problem. (Decline Quest)",
-                            "text": "The criminal glances at you and hurriedly scampers off. (-1 Reputation)",
+                            "text": "The criminal glances at you and hurriedly scampers off.",
                             "options": [
                                 {
                                     "name": "(Continue)"
@@ -1309,12 +1304,11 @@
                                                 "key": ""
                                             },
                                             "issueQuest": "",
-                                            "addMapReputation": -1,
                                             "POIReference": ""
                                         }
                                     ],
                                     "name": "Definitely not your problem. (Decline Quest)",
-                                    "text": "The $(enemy_2) slips through a crowded gate with his head down and you lose sight of them. (-1 Reputation)",
+                                    "text": "The $(enemy_2) slips through a crowded gate with his head down and you lose sight of them.",
                                     "options": [
                                         {
                                             "name": "(Continue)"
@@ -1371,7 +1365,7 @@
                                         }
                                     ],
                                     "name": "Investigate the dropped bag",
-                                    "text": "They get away, but you find some trinkets and gold inside the bag, all very likely stolen. (-2 reputation)",
+                                    "text": "They get away, but you find some trinkets and gold inside the bag, all very likely stolen.",
                                     "options": [
                                         {
                                             "name": "(Continue, Decline Quest)"
@@ -1708,12 +1702,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -2,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "\"I don't like sand.\" (Decline Quest)",
-                            "text": "The viashino's tail whips back and forth. \"Szil will remember this.\" (-2 reputation)",
+                            "text": "The viashino's tail whips back and forth. \"Szil will remember this.\"",
                             "options": [
                                 {
                                     "name": "(Continue)"
@@ -1736,12 +1729,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": "$(poi_1)"
                         }
                     ],
                     "name": "You walk by without slowing. (Decline Quest)",
-                    "text": "The Viashino's tail twitches as you walk by, but they let you go. (-1 town reputation)",
+                    "text": "The Viashino's tail twitches as you walk by, but they let you go.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -1903,7 +1895,7 @@
                             "options": [
                                 {
                                     "name": "You pause for a moment, considering your words carefully. \"I'm not so sure I'm comfortable with that.\" (Decline Quest)",
-                                    "text": "The wizard frowns and vanishes. His confused companion turns around and walks back the way they had come from. (-1 town reputation)"
+                                    "text": "The wizard frowns and vanishes. His confused companion turns around and walks back the way they had come from."
                                 },
                                 {
                                     "action": [
@@ -1942,12 +1934,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": "$(poi_1)"
                         }
                     ],
                     "name": "\"And a busy one as well.\" (Decline Quest)",
-                    "text": "The wizard frowns and vanishes. His confused companion turns around and walks back the way they had come from. (-1 town reputation)",
+                    "text": "The wizard frowns and vanishes. His confused companion turns around and walks back the way they had come from.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -2023,12 +2014,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -2,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "\"Morelith The Great? More or less average is more like it. I don't have time for this.\" (Decline Quest)",
-                            "text": "The indignant wizard teleports himself and his companion away. The marketplace crowd takes notice and quiets slightly. Perhaps Morelith is an important figure here. (-2 town reputation)",
+                            "text": "The indignant wizard teleports himself and his companion away. The marketplace crowd takes notice and quiets slightly. Perhaps Morelith is an important figure here.",
                             "options": [
                                 {
                                     "name": "(Continue)"
@@ -2301,7 +2291,6 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -2,
                                     "POIReference": ""
                                 }
                             ],
@@ -2510,12 +2499,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": ""
                         }
                     ],
                     "name": "What do you think I'm trying to do? (Decline Quest)",
-                    "text": "Stunned, the Druid watches you leave. (-1 local reputation)",
+                    "text": "Stunned, the Druid watches you leave.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -2563,12 +2551,11 @@
                                                 "key": ""
                                             },
                                             "issueQuest": "",
-                                            "addMapReputation": -1,
                                             "POIReference": ""
                                         }
                                     ],
                                     "name": "\"Sorry, I've got bigger things to worry about right now.\" (Decline Quest)",
-                                    "text": "(-1 Local Reputation) The druid keeps a passive look on her face. \"Soon those things will be balanced as well.\"",
+                                    "text": " The druid keeps a passive look on her face. \"Soon those things will be balanced as well.\"",
                                     "options": [
                                         {
                                             "name": "(Continue)"
@@ -2616,12 +2603,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -1,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "\"I'm not entirely sure I have time for that right now.\"",
-                            "text": "The druids face remains unchanged, but her voice grows a touch more quiet. \"The forest will remember this.\" (-1 Local Reputation)",
+                            "text": "The druids face remains unchanged, but her voice grows a touch more quiet. \"The forest will remember this.\"",
                             "options": [
                                 {
                                     "name": "(Continue)"
@@ -3178,12 +3164,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": ""
                         }
                     ],
                     "name": "\"That doesn't seem to be my problem.\" (Decline Quest)",
-                    "text": "(-1 Local Reputation) He shrugs and moves on. ",
+                    "text": " He shrugs and moves on. ",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -3379,7 +3364,7 @@
                         },
                         {
                             "name": "You glance down at the satchel, surprised at its weight.",
-                            "text": "The gnome demands your attention again before you can investigate. \"Are you deaf and dumb, or just dumb? GET MOVING!!!\" (-1 Local Reputation)",
+                            "text": "The gnome demands your attention again before you can investigate. \"Are you deaf and dumb, or just dumb? GET MOVING!!!\"",
                             "options": [
                                 {
                                     "action": [
@@ -3395,12 +3380,11 @@
                                                 "key": ""
                                             },
                                             "issueQuest": "",
-                                            "addMapReputation": -1,
                                             "POIReference": ""
                                         }
                                     ],
                                     "name": "You drop the satchel. \"What?\" (Decline Quest)",
-                                    "text": "He snatches up the cloth sack and walks away, cursing you the whole way. (-1 Local Reputation)",
+                                    "text": "He snatches up the cloth sack and walks away, cursing you the whole way.",
                                     "options": [
                                         {
                                             "name": "(Continue)"
@@ -3451,12 +3435,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": ""
                         }
                     ],
                     "name": "You hold out your hand. \"Sorry, must be this tall to give orders\" (Decline Quest)",
-                    "text": "(-1 Local Reputation) He scowls and stomps away, one tiny step at a time.",
+                    "text": " He scowls and stomps away, one tiny step at a time.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -3481,12 +3464,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -1,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "You glance down at the satchel, surprised at its weight.",
-                            "text": "The gnome demands your attention again before you can investigate. \"Are you deaf and dumb, or just dumb? GET MOVING!!!\" (-1 Local Reputation)",
+                            "text": "The gnome demands your attention again before you can investigate. \"Are you deaf and dumb, or just dumb? GET MOVING!!!\"",
                             "options": [
                                 {
                                     "action": [
@@ -3502,12 +3484,11 @@
                                                 "key": ""
                                             },
                                             "issueQuest": "",
-                                            "addMapReputation": -1,
                                             "POIReference": ""
                                         }
                                     ],
                                     "name": "You drop the satchel. \"What?\" (Decline Quest)",
-                                    "text": "He snatches up the cloth sack and walks away, cursing you the whole way. (-1 Local Reputation)",
+                                    "text": "He snatches up the cloth sack and walks away, cursing you the whole way.",
                                     "options": [
                                         {
                                             "name": "(Continue)"
@@ -3798,7 +3779,7 @@
                     "options": [
                         {
                             "name": "You give a wry grin. \"I was under the impression that destruction, fire, and ruin were popular hobbies around here.\"",
-                            "text": "(-1 Local Reputation) He scowls at you and continues. \"This is no laughing matter. A spawn of Lathliss seeks a new home, and will come here soon unless we intervene.\"",
+                            "text": " He scowls at you and continues. \"This is no laughing matter. A spawn of Lathliss seeks a new home, and will come here soon unless we intervene.\"",
                             "options": [
                                 {
                                     "name": "\"A fight with a dragon? I look forward to the challenge!\"",
@@ -3906,7 +3887,7 @@
                 },
                 {
                     "name": "\"I'll take my chances, thanks.\" (Decline Quest)",
-                    "text": "He exclaims at you as you walk by. \"Leave. NOW!!! You must leave!!!\" (-2 local reputation)",
+                    "text": "He exclaims at you as you walk by. \"Leave. NOW!!! You must leave!!!\"",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -4174,7 +4155,7 @@
                 },
                 {
                     "name": "You can't put your finger on it, but something seems off about the man. \"This isn't a good time.\" (Decline Quest)",
-                    "text": "He gives you the smallest bow imaginable, just enough to say that one was given, without indicating respect. (-1 Local Reputation)",
+                    "text": "He gives you the smallest bow imaginable, just enough to say that one was given, without indicating respect.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -4421,12 +4402,11 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": ""
                         }
                     ],
                     "name": "\"You have the wrong person. I promise you that.\" (Decline Quest)",
-                    "text": "(-1 Local Reputation) A few other people in the inn stop and look, but the man walks away without making a scene.",
+                    "text": " A few other people in the inn stop and look, but the man walks away without making a scene.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -5082,12 +5062,11 @@
                                         "key": ""
                                     },
                                     "issueQuest": "",
-                                    "addMapReputation": -1,
                                     "POIReference": ""
                                 }
                             ],
                             "name": "\"And what are you hunting, exactly?\"",
-                            "text": "Both elves turn to face you before they move to a table to continue their conversation more privately. It appears that your interjection was undesired. (-1 Local Reputation)",
+                            "text": "Both elves turn to face you before they move to a table to continue their conversation more privately. It appears that your interjection was undesired.",
                             "options": [
                                 {
                                     "name": "Mind your own business from there. (Decline Quest)"
@@ -5123,7 +5102,7 @@
                                         },
                                         {
                                             "name": "\"On second thought, I have better things to do.\" (Decline Quest)",
-                                            "text": "Obviously annoyed at the pointless distraction, the two return to their conversation without you. (-1 Local Reputation)"
+                                            "text": "Obviously annoyed at the pointless distraction, the two return to their conversation without you."
                                         },
                                         {
                                             "name": "\"What's the bounty?\"",
@@ -5399,7 +5378,7 @@
                                                     "options": [
                                                         {
                                                             "name": "\"There. You're solving your own problems. Now get out of here.\" (Decline Quest)",
-                                                            "text": "His brow furrows, not accustomed to being spoken to in such a manner. (-1 Local Reputation)",
+                                                            "text": "His brow furrows, not accustomed to being spoken to in such a manner.",
                                                             "options": [
                                                                 {
                                                                     "name": "\"Go on. Off with you!\"  (Continue)"
@@ -5912,13 +5891,8 @@
                     "text": "She looks surprised, and falls silent for a moment as she tries to remember what to do next. \"I uhhh... ummm...\" She pulls a piece of paper out of her pocket and prepares to read.",
                     "options": [
                         {
-                            "action": [
-                                {
-                                    "addMapReputation": -1
-                                }
-                            ],
                             "name": "Take the paper from her.",
-                            "text": "\"HEY THAT'S MINE!!!\" (-1 Reputation) She finds her full ear-piercing volume again before pulling it away and reading. \"PROVE YOU'RE THE BEST IN THE ARENA! THE TOURNAMENT BEGINS SOON\"",
+                            "text": "\"HEY THAT'S MINE!!!\" She finds her full ear-piercing volume again before pulling it away and reading. \"PROVE YOU'RE THE BEST IN THE ARENA! THE TOURNAMENT BEGINS SOON\"",
                             "options": [
                                 {
                                     "action": [
@@ -6123,7 +6097,6 @@
                                 "key": ""
                             },
                             "issueQuest": "",
-                            "addMapReputation": -1,
                             "POIReference": ""
                         }
                     ],
@@ -6535,7 +6508,7 @@
                         }
                     ],
                     "name": "Sorry, I don't have the time for this. (Decline quest)",
-                    "text": "Figured you weren't up to the challenge, come back to me when you are. (-1 local reputation)",
+                    "text": "Figured you weren't up to the challenge, come back to me when you are.",
                     "options": [
                         {
                             "name": "(Continue)"
@@ -8386,10 +8359,9 @@
                     "text": "\"GOBLINS!!!\" A haggard looking ranger exclaims as he sounds the alarm. \"Goblins are coming, hordes of them! To arms!!!\"",
                     "options": [
                         {
-                            "name": "This isn't your problem, leave it to the town guards. (Decline Quest, -1 local reputation)",
+                            "name": "This isn't your problem, leave it to the town guards. (Decline Quest)",
                             "action": [
                                 {
-                                    "addMapReputation": -1,
                                     "POIReference": "$(poi_3)"
                                 }
                             ]
@@ -8574,10 +8546,9 @@
                     "text": "\"Well\", the man's face twists slightly, \"...we may have sent some adventurers in search of an artifact recently. A portion of the group returned without it, but it appears they were followed.\"",
                     "options": [
                         {
-                            "name": "\"You called this onto yourself, fix it yourself.\" (Decline Quest, -1 local reputation)",
+                            "name": "\"You called this onto yourself, fix it yourself.\" (Decline Quest)",
                             "action": [
                                 {
-                                    "addMapReputation": -1,
                                     "POIReference": "$(poi_3)"
                                 }
                             ]
@@ -8762,10 +8733,9 @@
                     "text": "\"Can you stop them?\" The mayor gives you a hopeful look, knowing that the town's defenders are exhausted from fighting the same undead re-raised over and over.",
                     "options": [
                         {
-                            "name": "\"I have other things to do.\" (Decline Quest, -1 local reputation)",
+                            "name": "\"I have other things to do.\" (Decline Quest)",
                             "action": [
                                 {
-                                    "addMapReputation": -1,
                                     "POIReference": "$(poi_3)"
                                 }
                             ]
@@ -8949,10 +8919,9 @@
                     "text": "\"You see, I took this cutting from a giant tree. I mean GIANT. Biggest tree I've ever seen.\" Outside the town, you hear shouting. \"And, well, turns out, the elves seem to disagree with me having taken it...\"",
                     "options": [
                         {
-                            "name": "\"Then I suggest you give it back. Quickly.\" (Decline Quest, -1 local reputation)",
+                            "name": "\"Then I suggest you give it back. Quickly.\" (Decline Quest)",
                             "action": [
                                 {
-                                    "addMapReputation": -1,
                                     "POIReference": "$(poi_3)"
                                 }
                             ]
@@ -9137,10 +9106,9 @@
                     "text": "Defending the town will not be simple, but can you really just let them be conquered?",
                     "options": [
                         {
-                            "name": "\"This is not my fight.\" (Decline Quest, -1 local reputation)",
+                            "name": "\"This is not my fight.\" (Decline Quest)",
                             "action": [
                                 {
-                                    "addMapReputation": -1,
                                     "POIReference": "$(poi_3)"
                                 }
                             ]
