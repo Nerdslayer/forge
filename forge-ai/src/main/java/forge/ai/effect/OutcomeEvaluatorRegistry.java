@@ -11,6 +11,7 @@ final class OutcomeEvaluatorRegistry {
             DiscardOutcomeEvaluator.INSTANCE,
             ManaOutcomeEvaluator.INSTANCE,
             LifeOutcomeEvaluator.INSTANCE,
+            PlayerDamageOutcomeEvaluator.INSTANCE,
             CounterOutcomeEvaluator.INSTANCE,
             CopiedPermanentOutcomeEvaluator.INSTANCE,
             CreatureTokenOutcomeEvaluator.INSTANCE,

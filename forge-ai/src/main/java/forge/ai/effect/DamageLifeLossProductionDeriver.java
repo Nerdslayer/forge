@@ -11,17 +11,14 @@ import forge.ai.ComputerUtilCombat;
 import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
 import forge.game.player.Player;
-import forge.game.replacement.ReplacementEffect;
-import forge.game.replacement.ReplacementType;
 import forge.game.spellability.SpellAbility;
-import forge.game.zone.ZoneType;
 
 /** Derives life-loss productions from supported damage dealt to players. */
 final class DamageLifeLossProductionDeriver {
-    // TODO(effect analysis): Support ordinary combat and targeted damage when those production
-    // forms exist, improve replacement prediction instead of rejecting applicable LifeReduced
-    // effects, and account for damage redirection, damage that changes recipients or sources,
-    // optional prevention, and other damage-to-life-loss rule variants.
+    // TODO(effect analysis): Support blocked/trample and other complex combat, mixed/permanent
+    // targets, improve replacement prediction instead of rejecting applicable LifeReduced effects,
+    // and account for damage redirection, damage that changes recipients or sources, optional
+    // prevention, and other damage-to-life-loss rule variants.
     private DamageLifeLossProductionDeriver() {
     }
 
@@ -47,10 +44,13 @@ final class DamageLifeLossProductionDeriver {
                 continue;
             }
 
-            final int predictedAmount = ComputerUtilCombat.predictDamageTo(
-                    recipient, nominalAmount, damageSource, isCombat);
+            final int predictedAmount = damageEvent.triggerParameters().containsKey(
+                    AbilityKey.PreventedAmount) ? nominalAmount
+                    : ComputerUtilCombat.predictDamageTo(
+                            recipient, nominalAmount, damageSource, isCombat);
             if (predictedAmount <= 0
-                    || hasApplicableLifeReductionReplacement(recipient, predictedAmount)) {
+                    || LifeLossPrediction.hasApplicableLifeReductionReplacement(
+                            recipient, predictedAmount, true)) {
                 continue;
             }
 
@@ -71,32 +71,4 @@ final class DamageLifeLossProductionDeriver {
                 production.expectedBatches()));
     }
 
-    private static boolean hasApplicableLifeReductionReplacement(
-            final Player recipient, final int amount) {
-        final Map<AbilityKey, Object> runParams = AbilityKey.mapFromAffected(recipient);
-        runParams.put(AbilityKey.Amount, amount);
-        runParams.put(AbilityKey.IsDamage, true);
-
-        for (final Card card : recipient.getGame().getCardsIn(
-                ZoneType.STATIC_ABILITIES_SOURCE_ZONES)) {
-            for (final ReplacementEffect replacement : card.getReplacementEffects()) {
-                if (replacement.getMode() != ReplacementType.LifeReduced
-                        || replacement.isSuppressed()) {
-                    continue;
-                }
-                try {
-                    if (replacement.zonesCheck(card.getZone())
-                            && replacement.requirementsCheck(recipient.getGame())
-                            && replacement.canReplace(runParams)) {
-                        return true;
-                    }
-                } catch (final RuntimeException ignored) {
-                    // An active life-reduction replacement that cannot be predicted safely means
-                    // the derived amount is unknown, so fail closed.
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 }
