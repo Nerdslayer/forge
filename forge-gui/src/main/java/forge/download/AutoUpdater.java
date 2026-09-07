@@ -12,7 +12,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -26,6 +28,7 @@ import static forge.localinstance.properties.ForgeConstants.RELEASE_URL;
 
 public class AutoUpdater {
     private static final boolean VERSION_FROM_METADATA = true;
+    private static final String SNAPSHOT_URL_FILE = "snapshot-url.txt";
     private static final Localizer localizer = Localizer.getInstance();
 
     public static String[] updateChannels = new String[]{ "none", "snapshot", "release"};
@@ -34,6 +37,7 @@ public class AutoUpdater {
     private String updateChannel;
     private String version;
     private final String buildVersion;
+    private final String snapshotUrl;
     private String versionUrlString;
     private String packageUrl;
     private String packagePath;
@@ -44,6 +48,7 @@ public class AutoUpdater {
         isLoading = loading;
         updateChannel = FModel.getPreferences().getPref(ForgePreferences.FPref.AUTO_UPDATE);
         buildVersion = BuildInfo.getVersionString();
+        snapshotUrl = getSnapshotUrl();
     }
 
     public Date getSnapsBuildDate() {
@@ -93,7 +98,7 @@ public class AutoUpdater {
                 return false;
             }
 
-            versionUrlString = GITHUB_SNAPSHOT_URL + "version.txt";
+            versionUrlString = snapshotUrl + "version.txt";
         } else {
             if (!updateChannel.equalsIgnoreCase(localizer.getMessageorUseDefault("lblRelease", "Release"))) {
                 System.out.println("Release build versions must use release update channel to work");
@@ -132,7 +137,7 @@ public class AutoUpdater {
         try {
             retrieveVersion();
             if (buildVersion.contains("SNAPSHOT")) {
-                URL url = new URL(GITHUB_SNAPSHOT_URL + "build.txt");
+                URL url = new URL(snapshotUrl + "build.txt");
                 SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                 snapsBuildDate = simpleDateFormat.parse(FileUtil.readFileToString(url));
                 buildDate = BuildInfo.getTimestamp().toString();
@@ -163,7 +168,24 @@ public class AutoUpdater {
         if (updateChannel.equalsIgnoreCase(localizer.getMessageorUseDefault("lblRelease", "Release"))) {
             packageUrl = RELEASE_URL + "forge/forge-gui-desktop/" + version + "/forge-gui-desktop-" + version + ".tar.bz2";
         } else {
-            packageUrl = GITHUB_SNAPSHOT_URL + "forge-installer-" + version + ".jar";
+            packageUrl = snapshotUrl + "forge-installer-" + version + ".jar";
+        }
+    }
+
+    private static String getSnapshotUrl() {
+        ClassLoader classLoader = AutoUpdater.class.getClassLoader();
+        try (InputStream stream = classLoader.getResourceAsStream(SNAPSHOT_URL_FILE)) {
+            if (stream == null) {
+                return GITHUB_SNAPSHOT_URL;
+            }
+
+            String snapshotUrl = new String(stream.readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (snapshotUrl.isEmpty()) {
+                return GITHUB_SNAPSHOT_URL;
+            }
+            return snapshotUrl.endsWith("/") ? snapshotUrl : snapshotUrl + "/";
+        } catch (IOException e) {
+            return GITHUB_SNAPSHOT_URL;
         }
     }
 

@@ -84,7 +84,7 @@ public class AssetsDownloader {
                     //current release on github is tar.bz2, update this to jar installer in the future...
                     filename = isSnapshots ? "forge-installer-" + version + ".jar" : releaseTag.replace("forge-", "forge-gui-desktop-") + ".tar.bz2";
                     String releaseBZ2URL = GITHUB_FORGE_URL + "releases/download/" + releaseTag + "/" + filename;
-                    String snapsBZ2URL = GITHUB_SNAPSHOT_URL + filename;
+                    String snapsBZ2URL = snapsURL + filename;
                     installerURL = isSnapshots ? snapsBZ2URL : releaseBZ2URL;
                 }
                 String snapsBuildDate = "", buildDate = "";
@@ -324,11 +324,9 @@ public class AssetsDownloader {
     }
 
     private static String getSnapshotUrl() {
-        if (!GuiBase.isAndroid()) {
-            return GITHUB_SNAPSHOT_URL;
-        }
-
-        FileHandle snapshotUrlFile = Gdx.files.internal(SNAPSHOT_URL_FILE);
+        FileHandle snapshotUrlFile = GuiBase.isAndroid()
+                ? Gdx.files.internal(SNAPSHOT_URL_FILE)
+                : Gdx.files.classpath(SNAPSHOT_URL_FILE);
         if (!snapshotUrlFile.exists()) {
             return GITHUB_SNAPSHOT_URL;
         }
