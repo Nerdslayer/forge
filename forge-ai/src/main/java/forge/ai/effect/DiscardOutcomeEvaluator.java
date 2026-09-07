@@ -35,7 +35,7 @@ final class DiscardOutcomeEvaluator implements OutcomeEvaluator {
                 || outcome.getApi() != ApiType.Discard
                 || outcome.getSubAbility() != null
                 || !SUPPORTED_PARAMS.containsAll(outcome.getMapParams().keySet())
-                || !DiscardRecipientResolver.hasSupportedTargetShape(outcome)
+                || !PlayerRecipientResolver.hasSupportedTargetShape(outcome)
                 || (!outcome.usesTargeting() && !SUPPORTED_RECIPIENTS.contains(
                         outcome.getParamOrDefault("Defined", "You")))
                 || outcome.getParamOrDefault("NumCards", "1").isBlank()) {
@@ -58,7 +58,7 @@ final class DiscardOutcomeEvaluator implements OutcomeEvaluator {
             if (requested <= 0) {
                 return 0;
             }
-            final List<Player> recipients = DiscardRecipientResolver.resolve(outcome);
+            final List<Player> recipients = PlayerRecipientResolver.resolve(outcome);
             for (final Player recipient : recipients) {
                 if (!recipient.isInGame() || !recipient.canDiscardBy(outcome, true)) {
                     continue;

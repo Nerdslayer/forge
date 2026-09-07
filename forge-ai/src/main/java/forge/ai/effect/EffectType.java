@@ -6,6 +6,7 @@ enum EffectType {
     TOKEN_CREATED,
     COUNTER_ADDED,
     LIFE_GAINED,
+    LIFE_LOST,
     CARD_DRAWN,
     CARD_DISCARDED,
     DAMAGE_DEALT,

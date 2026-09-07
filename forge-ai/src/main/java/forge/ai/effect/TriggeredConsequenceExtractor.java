@@ -32,6 +32,12 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     private static final Set<String> LIFE_GAINED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidSource", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
+    private static final Set<String> LIFE_LOST_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidPlayer", "LifeAmount", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> LIFE_LOST_ALL_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidPlayer", "ValidAmountEach", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
     private static final Set<String> CARD_DRAWN_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidPlayer", "Number", "FirstCardInDrawStep",
             "Execute", "TriggerZones", "TriggerDescription", "Secondary");
@@ -114,6 +120,10 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         if (trigger.getMode() == TriggerType.LifeGained) {
             return EffectType.LIFE_GAINED;
         }
+        if (trigger.getMode() == TriggerType.LifeLost
+                || trigger.getMode() == TriggerType.LifeLostAll) {
+            return EffectType.LIFE_LOST;
+        }
         if (trigger.getMode() == TriggerType.Drawn) {
             return EffectType.CARD_DRAWN;
         }
@@ -159,6 +169,12 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         }
         if (trigger.getMode() == TriggerType.LifeGained) {
             return EffectAbilityUtils.hasOnlyParams(trigger, LIFE_GAINED_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.LifeLost) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, LIFE_LOST_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.LifeLostAll) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, LIFE_LOST_ALL_TRIGGER_PARAMS);
         }
         if (trigger.getMode() == TriggerType.Drawn) {
             return hasSupportedCardDrawParameters(trigger);

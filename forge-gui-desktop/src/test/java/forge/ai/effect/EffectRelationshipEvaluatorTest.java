@@ -493,6 +493,161 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testPhaseLifeLossProductionMatchesVilisDrawConsequence() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCardToZone("Forest", opponent, ZoneType.Library);
+
+        final Card producer = addCard("Moroii", opponent);
+        final Card consequence = addCard("Vilis, Broker of Blood", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testTargetedLifeLossProductionInfersOpponentInTwoPlayerGame() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Cackling Imp", opponent);
+        producer.setSickness(false);
+        final Card consequence = addCard("Exquisite Blood", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testLifeLostAllConsequenceReceivesResolutionBatch() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseLifeLossProducer(
+                "Grizzly Bears", opponent, 1, "Opponent");
+        final Card consequence = addCard("Runeclaw Bear", opponent);
+        consequence.setSVar("EffectTestLifeLossOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ LifeLostAll | ValidPlayer$ Opponent"
+                + " | ValidAmountEach$ EQ1 | Execute$ EffectTestLifeLossOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testPlayerDamageProducesLifeLossForExquisiteBlood() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Opponent", 2);
+        final Card consequence = addCard("Exquisite Blood", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testDamageAllProducesLifeLostAllResolutionBatch() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DamageAll", "ValidPlayers$ Player", 1);
+        final Card consequence = addCard("Runeclaw Bear", opponent);
+        consequence.setSVar("EffectTestDamageLifeLossOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ LifeLostAll | ValidPlayer$ Opponent"
+                + " | ValidAmountEach$ EQ1 | Execute$ EffectTestDamageLifeLossOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testInfectDamageDoesNotProduceLifeLoss() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Opponent", 2);
+        producer.addIntrinsicKeyword("Infect");
+        final Card consequence = addCard("Exquisite Blood", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
+    public void testPreventedPlayerDamageDoesNotProduceLifeLoss() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCard("Glacial Chasm", ai);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Opponent", 2);
+        final Card consequence = addCard("Exquisite Blood", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
+    public void testLifeReductionReplacementDefersDamageDerivedLifeLoss() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        ai.setLife(2, null);
+        addCard("Ali from Cairo", ai);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DealDamage", "Defined$ Opponent", 3);
+        final Card consequence = addCard("Exquisite Blood", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
     public void testFixedDamageMatchesDamageDoneConsequence() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -2488,6 +2643,16 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 + " | LifeAmount$ " + amount);
         addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
                 + " | Execute$ EffectTestLifeGain | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addPhaseLifeLossProducer(final String cardName, final Player controller,
+            final int amount, final String defined) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestLifeLoss", "DB$ LoseLife | Defined$ " + defined
+                + " | LifeAmount$ " + amount);
+        addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestLifeLoss | TriggerZones$ Battlefield");
         return card;
     }
 

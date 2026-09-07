@@ -15,6 +15,7 @@ final class EffectProductionExtractorRegistry {
             CopiedTokenProductionExtractor.INSTANCE,
             CounterProductionExtractor.INSTANCE,
             LifeGainProductionExtractor.INSTANCE,
+            LifeLossProductionExtractor.INSTANCE,
             CardDrawProductionExtractor.INSTANCE,
             CardDiscardProductionExtractor.INSTANCE,
             DamageProductionExtractor.INSTANCE,
@@ -29,7 +30,7 @@ final class EffectProductionExtractorRegistry {
         for (final EffectProductionExtractor extractor : EXTRACTORS) {
             productions.addAll(extractor.extract(evaluatingAi, source));
         }
-        return productions;
+        return withDerivedProductions(productions);
     }
 
     static List<EffectProduction> extract(final Player evaluatingAi, final Card source,
@@ -38,7 +39,7 @@ final class EffectProductionExtractorRegistry {
         for (final EffectProductionExtractor extractor : EXTRACTORS) {
             productions.addAll(extractor.extract(evaluatingAi, source, trigger));
         }
-        return productions;
+        return withDerivedProductions(productions);
     }
 
     static List<EffectProduction> extract(final Player evaluatingAi, final Card source,
@@ -47,6 +48,16 @@ final class EffectProductionExtractorRegistry {
         for (final EffectProductionExtractor extractor : EXTRACTORS) {
             productions.addAll(extractor.extract(evaluatingAi, source, ability));
         }
+        return withDerivedProductions(productions);
+    }
+
+    private static List<EffectProduction> withDerivedProductions(
+            final List<EffectProduction> productions) {
+        final List<EffectProduction> derived = new ArrayList<>();
+        for (final EffectProduction production : productions) {
+            derived.addAll(DamageLifeLossProductionDeriver.derive(production));
+        }
+        productions.addAll(derived);
         return productions;
     }
 }

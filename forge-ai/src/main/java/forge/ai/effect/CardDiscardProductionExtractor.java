@@ -70,7 +70,7 @@ final class CardDiscardProductionExtractor implements EffectProductionExtractor 
         }
 
         final List<EffectEvent> events = new ArrayList<>();
-        for (final Player recipient : DiscardRecipientResolver.resolve(discard)) {
+        for (final Player recipient : PlayerRecipientResolver.resolve(discard)) {
             if (!recipient.isInGame() || !recipient.canDiscardBy(discard, true)) {
                 continue;
             }
@@ -103,7 +103,7 @@ final class CardDiscardProductionExtractor implements EffectProductionExtractor 
             if (current.getApi() == ApiType.Discard) {
                 final String mode = current.getParam("Mode");
                 return SUPPORTED_PARAMS.containsAll(current.getMapParams().keySet())
-                        && DiscardRecipientResolver.hasSupportedTargetShape(current)
+                        && PlayerRecipientResolver.hasSupportedTargetShape(current)
                         && (current.usesTargeting() || SUPPORTED_RECIPIENTS.contains(
                                 current.getParamOrDefault("Defined", "You")))
                         && ("Random".equals(mode) || "TgtChoose".equals(mode)
