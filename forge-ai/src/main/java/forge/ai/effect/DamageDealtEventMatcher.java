@@ -16,8 +16,8 @@ final class DamageDealtEventMatcher implements EffectEventMatcher {
     static final DamageDealtEventMatcher INSTANCE = new DamageDealtEventMatcher();
 
     // TODO(effect analysis): Support DamageAll/ExcessDamage trigger families, FirstTime,
-    // cause-relative and source-relative restrictions, optional/limited triggers, combat damage,
-    // prevention and replacement-modified batches, and mixed combat/noncombat damage tables.
+    // cause-relative and source-relative restrictions, optional/limited triggers, blocked/trample
+    // and other complex combat, replacement-modified batches, and mixed combat/noncombat tables.
 
     private DamageDealtEventMatcher() {
     }
@@ -118,7 +118,10 @@ final class DamageDealtEventMatcher implements EffectEventMatcher {
     private static Map<AbilityKey, Object> commonBatchParameters(
             final EffectProduction production) {
         final Map<AbilityKey, Object> result = new EnumMap<>(AbilityKey.class);
-        result.put(AbilityKey.IsCombatDamage, false);
+        final Object combatDamage = production.events().get(0)
+                .triggerParameters().get(AbilityKey.IsCombatDamage);
+        result.put(AbilityKey.IsCombatDamage,
+                combatDamage instanceof Boolean value && value);
         result.put(AbilityKey.Cause,
                 production.events().get(0).triggerParameters().get(AbilityKey.Cause));
         return result;

@@ -56,6 +56,12 @@ final class EffectProductionExtractorRegistry {
         final List<EffectProduction> derived = new ArrayList<>();
         for (final EffectProduction production : productions) {
             derived.addAll(DamageLifeLossProductionDeriver.derive(production));
+            final List<EffectProduction> combatDamage =
+                    CombatDamageProductionDeriver.derive(production);
+            derived.addAll(combatDamage);
+            for (final EffectProduction damageProduction : combatDamage) {
+                derived.addAll(DamageLifeLossProductionDeriver.derive(damageProduction));
+            }
         }
         productions.addAll(derived);
         return productions;

@@ -10,6 +10,8 @@ import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
+import forge.game.cost.CostPart;
+import forge.game.cost.CostPayLife;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
@@ -18,8 +20,8 @@ import forge.game.trigger.Trigger;
 final class LifeLossProductionExtractor implements EffectProductionExtractor {
     static final LifeLossProductionExtractor INSTANCE = new LifeLossProductionExtractor();
 
-    // TODO(effect analysis): Support life payment, exchange/set-life effects, spells and stack
-    // objects, dynamic recipients,
+    // TODO(effect analysis): Support choice-dependent, repeated, multiple-part, non-activated, and
+    // future life payments; exchange/set-life effects; spells and stack objects; dynamic recipients;
     // multiplayer or multi/optional targets, replacement-modified amounts, additional trigger
     // origins, multiple LoseLife steps, conditional forms, and later consequence chains.
     private static final Set<String> SUPPORTED_RECIPIENTS = Set.of(
@@ -50,10 +52,19 @@ final class LifeLossProductionExtractor implements EffectProductionExtractor {
         if (opportunity == null) {
             return List.of();
         }
+        final List<EffectProduction> productions = new ArrayList<>();
+        final EffectProduction paymentProduction = createLifePaymentProduction(
+                source, opportunity.root(), opportunity.expectedBatches());
+        if (paymentProduction != null) {
+            productions.add(paymentProduction);
+        }
         final SpellAbility outcome = findSupportedLifeLossOutcome(opportunity.root());
         final EffectProduction production = outcome == null ? null
                 : createProduction(source, outcome, opportunity.expectedBatches());
-        return production == null ? List.of() : List.of(production);
+        if (production != null) {
+            productions.add(production);
+        }
+        return productions;
     }
 
     private static SpellAbility findSupportedLifeLossOutcome(final SpellAbility root) {
@@ -91,15 +102,52 @@ final class LifeLossProductionExtractor implements EffectProductionExtractor {
             if (!recipient.isInGame() || !recipient.canLoseLife()) {
                 continue;
             }
-            final Map<AbilityKey, Object> triggerParameters = new EnumMap<>(AbilityKey.class);
-            triggerParameters.put(AbilityKey.Player, recipient);
-            triggerParameters.put(AbilityKey.LifeAmount, amount);
-            triggerParameters.put(AbilityKey.FirstTime, recipient.getLifeLostThisTurn() == 0);
-            triggerParameters.put(AbilityKey.SpellAbility, outcome);
-            events.add(new EffectEvent(EffectType.LIFE_LOST, recipient,
-                    List.of(new EffectEvent.Subject(recipient, 1)), triggerParameters));
+            events.add(createLifeLossEvent(recipient, amount, outcome));
         }
         return events.isEmpty() ? null : new EffectProduction(
                 source, EffectType.LIFE_LOST, events, expectedBatches);
+    }
+
+    private static EffectProduction createLifePaymentProduction(final Card source,
+            final SpellAbility ability, final int expectedBatches) {
+        if (ability.getPayCosts() == null) {
+            return null;
+        }
+        CostPayLife lifePayment = null;
+        for (final CostPart part : ability.getPayCosts().getCostParts()) {
+            if (!(part instanceof CostPayLife candidate)) {
+                continue;
+            }
+            if (lifePayment != null) {
+                return null;
+            }
+            lifePayment = candidate;
+        }
+        if (lifePayment == null) {
+            return null;
+        }
+
+        final Player payer = ability.getActivatingPlayer();
+        final int amount = lifePayment.getAbilityAmount(ability);
+        if (payer == null || amount <= 0 || !payer.canLoseLife()
+                || (amount >= payer.getLife() && !payer.cantLoseForZeroOrLessLife())
+                || LifeLossPrediction.hasApplicablePayLifeReplacement(payer, amount, ability)
+                || LifeLossPrediction.hasApplicableLifeReductionReplacement(
+                        payer, amount, false)) {
+            return null;
+        }
+        return new EffectProduction(source, EffectType.LIFE_LOST,
+                List.of(createLifeLossEvent(payer, amount, ability)), expectedBatches);
+    }
+
+    private static EffectEvent createLifeLossEvent(final Player recipient, final int amount,
+            final SpellAbility cause) {
+        final Map<AbilityKey, Object> triggerParameters = new EnumMap<>(AbilityKey.class);
+        triggerParameters.put(AbilityKey.Player, recipient);
+        triggerParameters.put(AbilityKey.LifeAmount, amount);
+        triggerParameters.put(AbilityKey.FirstTime, recipient.getLifeLostThisTurn() == 0);
+        triggerParameters.put(AbilityKey.SpellAbility, cause);
+        return new EffectEvent(EffectType.LIFE_LOST, recipient,
+                List.of(new EffectEvent.Subject(recipient, 1)), triggerParameters);
     }
 }
