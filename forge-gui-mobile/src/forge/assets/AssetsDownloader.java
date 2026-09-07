@@ -93,8 +93,12 @@ public class AssetsDownloader {
                     snapsTimestamp = format.parse(FileUtil.readFileToString(url));
                     snapsBuildDate = snapsTimestamp.toString();
                     if (!GuiBase.isAndroid()) {
-                        buildDate = BuildInfo.getTimestamp().toString();
-                        verifyUpdatable = BuildInfo.verifyTimestamp(snapsTimestamp);
+                        buildTimeStamp = BuildInfo.getTimestamp();
+                        buildDate = buildTimeStamp.toString();
+                        // Official snapshots update daily; custom snapshots can update on every build.
+                        verifyUpdatable = isCustomSnapshot
+                                ? buildTimeStamp.before(snapsTimestamp)
+                                : BuildInfo.verifyTimestamp(snapsTimestamp);
                     } else {
                         if (buildTxtFileHandle.exists()) {
                             buildTimeStamp = format.parse(buildTxtFileHandle.readString());

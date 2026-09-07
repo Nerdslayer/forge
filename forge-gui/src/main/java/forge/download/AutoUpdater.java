@@ -140,8 +140,12 @@ public class AutoUpdater {
                 URL url = new URL(snapshotUrl + "build.txt");
                 SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                 snapsBuildDate = simpleDateFormat.parse(FileUtil.readFileToString(url));
-                buildDate = BuildInfo.getTimestamp().toString();
-                return BuildInfo.verifyTimestamp(snapsBuildDate);
+                Date buildTimestamp = BuildInfo.getTimestamp();
+                buildDate = buildTimestamp.toString();
+                // Official snapshots update daily; custom snapshots can update on every build.
+                return !GITHUB_SNAPSHOT_URL.equals(snapshotUrl)
+                        ? buildTimestamp.before(snapsBuildDate)
+                        : BuildInfo.verifyTimestamp(snapsBuildDate);
             }
             if (StringUtils.isEmpty(version) ) {
                 return false;
