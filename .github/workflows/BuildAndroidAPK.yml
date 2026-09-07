@@ -4,13 +4,18 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - integration
+
+concurrency:
+  group: fork-android-snapshot
+  cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
   build:
+    if: github.repository == 'Nerdslayer/forge' && github.ref == 'refs/heads/integration'
     runs-on: ubuntu-latest
 
     steps:
@@ -80,12 +85,14 @@ jobs:
         run: |
           mkdir -p forge-gui-android/target/fork-snapshot
 
+          expected_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/fork-android-snapshot/"
           version="$(tr -d '\r\n' < forge-gui-android/target/classes/assets/version.txt)"
           apk="$(find forge-gui-android/target -maxdepth 1 -name 'forge-dev-android-*-aligned-debugSigned.apk' -print -quit)"
 
           test -n "$version"
           test -f "$apk"
           test -f forge-gui-android/target/assets.zip
+          test "$(unzip -p "$apk" assets/snapshot-url.txt | tr -d '\r\n')" = "$expected_url"
 
           cp "$apk" forge-gui-android/target/fork-snapshot/forge-android-dev.apk
           cp "$apk" "forge-gui-android/target/fork-snapshot/forge-android-${version}-signed-aligned.apk"
@@ -108,12 +115,20 @@ jobs:
           tag="fork-android-snapshot"
           title="Fork Android Snapshot"
           notes="Android snapshot built from ${GITHUB_REPOSITORY}@${GITHUB_SHA}."
+          release_dir="forge-gui-android/target/fork-snapshot"
+
+          git tag --force "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag" --force
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" forge-gui-android/target/fork-snapshot/* --clobber
+            gh release view "$tag" --json assets --jq '.assets[].name' |
+              while IFS= read -r asset; do
+                gh release delete-asset "$tag" "$asset" --yes
+              done
+            gh release upload "$tag" "$release_dir"/*
             gh release edit "$tag" --title "$title" --notes "$notes" --prerelease
           else
-            gh release create "$tag" forge-gui-android/target/fork-snapshot/* \
+            gh release create "$tag" "$release_dir"/* \
               --target "$GITHUB_SHA" \
               --title "$title" \
               --notes "$notes" \
