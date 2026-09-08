@@ -1,6 +1,7 @@
 package forge.ai.effect;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -50,5 +51,34 @@ final class PermanentDepartureEventFactory {
                     zoneEvents, expectedBatches));
         }
         return productions;
+    }
+
+    static List<EffectProduction> createBattlefieldToGraveyardProduction(
+            final Card source, final SpellAbility cause, final Collection<Card> departed,
+            final int expectedBatches) {
+        return createZoneChangeProduction(source, cause, departed,
+                ZoneType.Battlefield, ZoneType.Graveyard, expectedBatches);
+    }
+
+    static List<EffectProduction> createZoneChangeProduction(
+            final Card source, final SpellAbility cause, final Collection<Card> movedCards,
+            final ZoneType origin, final ZoneType destination, final int expectedBatches) {
+        if (movedCards.isEmpty()) {
+            return List.of();
+        }
+
+        final List<EffectEvent> zoneEvents = new ArrayList<>();
+        for (final Card card : movedCards) {
+            final Map<AbilityKey, Object> zoneParameters = new EnumMap<>(AbilityKey.class);
+            zoneParameters.put(AbilityKey.Card, card);
+            zoneParameters.put(AbilityKey.CardLKI, card);
+            zoneParameters.put(AbilityKey.Cause, cause);
+            zoneParameters.put(AbilityKey.Origin, origin.name());
+            zoneParameters.put(AbilityKey.Destination, destination.name());
+            zoneEvents.add(new EffectEvent(EffectType.ZONE_CHANGED, card.getController(),
+                    List.of(new EffectEvent.Subject(card, 1)), zoneParameters));
+        }
+        return List.of(new EffectProduction(source, EffectType.ZONE_CHANGED,
+                zoneEvents, expectedBatches));
     }
 }

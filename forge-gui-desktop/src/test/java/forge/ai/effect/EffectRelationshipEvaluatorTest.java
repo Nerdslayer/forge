@@ -1392,6 +1392,250 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testDestroyAllProducesIndividualAndBatchDiesEvents() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        final SpellAbility destroyAll = AbilityFactory.getAbility(
+                "AB$ DestroyAll | Cost$ 0 | ValidCards$ Creature.Bear+YouCtrl", producer);
+        producer.addSpellAbility(destroyAll);
+        addCard("Grizzly Bears", opponent);
+        addCard("Runeclaw Bear", opponent);
+        final Card individualConsequence = addDiesCounterConsequence(
+                "Memnite", opponent, "Creature.Bear+YouCtrl", "1");
+        final Card batchConsequence = addDiesBatchCounterConsequence(
+                "Ornithopter", opponent, "Creature.Bear+YouCtrl", "X");
+        batchConsequence.setSVar("X", "TriggerCount$Amount");
+
+        final List<EffectProduction> productions = EffectProductionExtractorRegistry.extract(
+                ai, producer, destroyAll);
+        final EffectProduction departure = productions.stream()
+                .filter(production -> production.type() == EffectType.ZONE_CHANGED)
+                .findFirst().orElseThrow();
+        Assert.assertEquals(departure.events().size(), 2);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, individualConsequence, batchConsequence));
+
+        Assert.assertTrue(values.getOrDefault(individualConsequence, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(batchConsequence, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(),
+                values.get(individualConsequence) + values.get(batchConsequence));
+    }
+
+    @Test
+    public void testNevinyrralsDiskRecognizesBloodArtistDeaths() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        addCard("Forest", opponent);
+
+        final Card producer = addCard("Nevinyrral's Disk", opponent);
+        final Card consequence = addCard("Blood Artist", opponent);
+        addCard("Grizzly Bears", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(consequence, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testSingleLegalDestroyTargetProducesDiesEvent() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        final SpellAbility destroy = AbilityFactory.getAbility(
+                "AB$ Destroy | Cost$ 0 | ValidTgts$ Creature.OppCtrl", producer);
+        producer.addSpellAbility(destroy);
+        addCard("Grizzly Bears", ai);
+
+        final List<EffectProduction> productions = EffectProductionExtractorRegistry.extract(
+                ai, producer, destroy);
+
+        Assert.assertTrue(productions.stream()
+                .anyMatch(production -> production.type() == EffectType.ZONE_CHANGED),
+                productions.toString());
+    }
+
+    @Test
+    public void testDestroyTargetChoiceSelectsHighestValueOpponentPermanent() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        final SpellAbility destroy = AbilityFactory.getAbility(
+                "AB$ Destroy | Cost$ 0 | ValidTgts$ Creature.OppCtrl", producer);
+        producer.addSpellAbility(destroy);
+        addCard("Grizzly Bears", ai);
+        final Card expected = addCard("Serra Angel", ai);
+
+        final List<EffectProduction> productions = EffectProductionExtractorRegistry.extract(
+                ai, producer, destroy);
+
+        final EffectProduction departure = productions.stream()
+                .filter(production -> production.type() == EffectType.ZONE_CHANGED)
+                .findFirst().orElseThrow();
+        Assert.assertEquals(departure.events().get(0).subjects().get(0).value(), expected);
+    }
+
+    @Test
+    public void testIndestructibleAndShieldedCardsDoNotProduceDiesEvents() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        final SpellAbility destroyAll = AbilityFactory.getAbility(
+                "AB$ DestroyAll | Cost$ 0 | ValidCards$ Creature.OppCtrl", producer);
+        producer.addSpellAbility(destroyAll);
+        addCard("Darksteel Myr", ai);
+        final Card shielded = addCard("Grizzly Bears", ai);
+        shielded.setCounters(CounterEnumType.SHIELD, 1);
+
+        final List<EffectProduction> productions = EffectProductionExtractorRegistry.extract(
+                ai, producer, destroyAll);
+
+        Assert.assertFalse(productions.stream()
+                .anyMatch(production -> production.type() == EffectType.ZONE_CHANGED),
+                productions.toString());
+    }
+
+    @Test
+    public void testGraveyardReplacementDefersDestroyDeathEvent() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        final SpellAbility destroyAll = AbilityFactory.getAbility(
+                "AB$ DestroyAll | Cost$ 0 | ValidCards$ Creature.OppCtrl", producer);
+        producer.addSpellAbility(destroyAll);
+        addCard("Rest in Peace", opponent);
+        addCard("Grizzly Bears", ai);
+
+        final List<EffectProduction> productions = EffectProductionExtractorRegistry.extract(
+                ai, producer, destroyAll);
+
+        Assert.assertFalse(productions.stream()
+                .anyMatch(production -> production.type() == EffectType.ZONE_CHANGED),
+                productions.toString());
+    }
+
+    @Test
+    public void testSelfBounceMatchesLeavesBattlefieldConsequence() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Grizzly Bears", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ ChangeZone | Cost$ 0 | Defined$ Self"
+                        + " | Origin$ Battlefield | Destination$ Hand", producer));
+        final Card consequence = addCard("Ninth Bridge Patrol", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testBrittleEffigyExileMatchesSoulherder() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        for (int i = 0; i < 4; i++) {
+            addCard("Forest", opponent);
+        }
+
+        final Card producer = addCard("Brittle Effigy", opponent);
+        final Card consequence = addCard("Soulherder", opponent);
+        addCard("Serra Angel", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testBounceDoesNotMatchExiledConsequence() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ ChangeZone | Cost$ 0 | ValidTgts$ Creature.OppCtrl"
+                        + " | Origin$ Battlefield | Destination$ Hand", producer));
+        final Card consequence = addCard("Soulherder", opponent);
+        addCard("Serra Angel", ai);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
+    public void testChangeZoneAllPreservesDepartureBatch() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ ChangeZoneAll | Cost$ 0 | ChangeType$ Creature.Bear+YouCtrl"
+                        + " | Origin$ Battlefield | Destination$ Hand", producer));
+        addCard("Grizzly Bears", opponent);
+        addCard("Runeclaw Bear", opponent);
+        final Card consequence = addZoneDepartureBatchCounterConsequence(
+                "Memnite", opponent, "Hand", "Creature.Bear+YouCtrl", "X");
+        consequence.setSVar("X", "TriggerCount$Amount");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testLinkedBlinkProductionIsDeferred() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Aetherling", opponent);
+        final Card consequence = addCard("Soulherder", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
     public void testPermanentControlChangeCountsLossAndGain() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -3020,6 +3264,31 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         addTrigger(card, "Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard"
                 + " | ValidCard$ " + validCard + " | Execute$ EffectTestDiesOutcome"
                 + " | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addDiesBatchCounterConsequence(final String cardName,
+            final Player controller, final String validCards, final String counterAmount) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestDiesOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1"
+                        + " | CounterNum$ " + counterAmount);
+        addTrigger(card, "Mode$ ChangesZoneAll | Origin$ Battlefield"
+                + " | Destination$ Graveyard | ValidCards$ " + validCards
+                + " | Execute$ EffectTestDiesOutcome | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addZoneDepartureBatchCounterConsequence(final String cardName,
+            final Player controller, final String destination, final String validCards,
+            final String counterAmount) {
+        final Card card = addCard(cardName, controller);
+        card.setSVar("EffectTestZoneOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1"
+                        + " | CounterNum$ " + counterAmount);
+        addTrigger(card, "Mode$ ChangesZoneAll | Origin$ Battlefield"
+                + " | Destination$ " + destination + " | ValidCards$ " + validCards
+                + " | Execute$ EffectTestZoneOutcome | TriggerZones$ Battlefield");
         return card;
     }
 

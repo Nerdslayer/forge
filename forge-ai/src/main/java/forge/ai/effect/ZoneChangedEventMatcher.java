@@ -104,6 +104,10 @@ final class ZoneChangedEventMatcher implements EffectEventMatcher {
 
     private static boolean matches(final Trigger trigger, final Card moved,
             final Map<AbilityKey, Object> runParams) {
+        if (trigger.getMode() == TriggerType.Exiled) {
+            return ZoneType.Exile.name().equals(runParams.get(AbilityKey.Destination))
+                    && trigger.performTest(runParams);
+        }
         return matchesZone(trigger, "Origin", runParams.get(AbilityKey.Origin))
                 && matchesZone(trigger, "Destination", runParams.get(AbilityKey.Destination))
                 && trigger.matchesValidParam("ValidCard", moved);

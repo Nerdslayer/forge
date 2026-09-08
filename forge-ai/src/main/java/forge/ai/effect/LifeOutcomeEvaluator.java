@@ -14,16 +14,20 @@ import forge.game.spellability.SpellAbility;
 final class LifeOutcomeEvaluator implements OutcomeEvaluator {
     static final LifeOutcomeEvaluator INSTANCE = new LifeOutcomeEvaluator();
 
-    // TODO(effect analysis): Support targeted and broader dynamic recipients, optional/conditional forms,
-    // replacement-modified amounts, life payment/exchange/set effects, mixed subability chains,
-    // shared-life variants, unequal multiplayer win probabilities, and resources that leave with
-    // an eliminated player. Current game-loss prevention is checked without simulating replacements.
+    // TODO(effect analysis): Support beneficial targeted life changes, broader dynamic and
+    // multiplayer recipients, optional/conditional forms, replacement-modified amounts, life
+    // payment/exchange/set effects, mixed subability chains, shared-life variants, unequal
+    // multiplayer win probabilities, and resources that leave with an eliminated player. Current
+    // game-loss prevention is checked without simulating replacements.
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "Defined", "LifeAmount", "SubAbility",
+            "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax",
             "SpellDescription", "StackDescription");
     private static final Set<String> SUPPORTED_RECIPIENTS = Set.of(
             "You", "Opponent", "Player.Opponent",
             "TriggeredPlayer", "TriggeredCardController");
+    private static final Set<String> SUPPORTED_TARGETS = Set.of(
+            "Player", "Opponent", "Player.Opponent");
 
     private LifeOutcomeEvaluator() {
     }
@@ -60,8 +64,10 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
                         ? lastLifeLost : AbilityUtils.calculateAmount(current.getHostCard(),
                                 amountDefinition, current);
                 if (amount > 0) {
-                    final List<Player> recipients = AbilityUtils.getDefinedPlayers(
-                            current.getHostCard(), current.getParamOrDefault("Defined", "You"), current);
+                    final List<Player> recipients = current.usesTargeting()
+                            ? PlayerRecipientResolver.resolve(current)
+                            : AbilityUtils.getDefinedPlayers(current.getHostCard(),
+                                    current.getParamOrDefault("Defined", "You"), current);
                     int lostThisPart = 0;
                     for (final Player recipient : recipients) {
                         if (!recipient.isInGame()
@@ -90,12 +96,20 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
     }
 
     private static boolean supportsPart(final SpellAbility outcome) {
-        return (outcome.getApi() == ApiType.GainLife || outcome.getApi() == ApiType.LoseLife)
-                && !outcome.usesTargeting()
-                && SUPPORTED_PARAMS.containsAll(outcome.getMapParams().keySet())
-                && SUPPORTED_RECIPIENTS.contains(outcome.getParamOrDefault("Defined", "You"))
-                && outcome.hasParam("LifeAmount")
-                && !outcome.getParam("LifeAmount").isBlank();
+        if ((outcome.getApi() != ApiType.GainLife && outcome.getApi() != ApiType.LoseLife)
+                || !SUPPORTED_PARAMS.containsAll(outcome.getMapParams().keySet())
+                || !outcome.hasParam("LifeAmount")
+                || outcome.getParam("LifeAmount").isBlank()) {
+            return false;
+        }
+        if (outcome.usesTargeting()) {
+            // In 1v1, harmful mandatory life loss has an unambiguous rational recipient. Applying
+            // the same rule to life gain would incorrectly assume the opponent is chosen.
+            return outcome.getApi() == ApiType.LoseLife
+                    && PlayerRecipientResolver.hasSupportedTargetShape(outcome)
+                    && SUPPORTED_TARGETS.contains(outcome.getParam("ValidTgts"));
+        }
+        return SUPPORTED_RECIPIENTS.contains(outcome.getParamOrDefault("Defined", "You"));
     }
 
     private static int saturatedAdd(final int left, final int right) {
