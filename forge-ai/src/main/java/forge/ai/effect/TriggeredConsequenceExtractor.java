@@ -80,6 +80,9 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     private static final Set<String> CHANGES_ZONE_ALL_TRIGGER_PARAMS = Set.of(
             "Mode", "Origin", "Destination", "ValidCards", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
+    private static final Set<String> EXILED_TRIGGER_PARAMS = Set.of(
+            "Mode", "Origin", "ValidCard", "ValidCause", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
     private static final Set<String> SACRIFICED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidPlayer", "ValidCause", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -137,7 +140,8 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
             return EffectType.DAMAGE_DEALT;
         }
         if (trigger.getMode() == TriggerType.ChangesZone
-                || trigger.getMode() == TriggerType.ChangesZoneAll) {
+                || trigger.getMode() == TriggerType.ChangesZoneAll
+                || trigger.getMode() == TriggerType.Exiled) {
             return EffectType.ZONE_CHANGED;
         }
         if (trigger.getMode() == TriggerType.Sacrificed
@@ -197,6 +201,9 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         }
         if (trigger.getMode() == TriggerType.ChangesZoneAll) {
             return EffectAbilityUtils.hasOnlyParams(trigger, CHANGES_ZONE_ALL_TRIGGER_PARAMS);
+        }
+        if (trigger.getMode() == TriggerType.Exiled) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, EXILED_TRIGGER_PARAMS);
         }
         if (trigger.getMode() == TriggerType.Sacrificed) {
             return EffectAbilityUtils.hasOnlyParams(trigger, SACRIFICED_TRIGGER_PARAMS);

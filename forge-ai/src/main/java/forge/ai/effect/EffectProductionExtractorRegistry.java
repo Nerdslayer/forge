@@ -20,6 +20,8 @@ final class EffectProductionExtractorRegistry {
             CardDiscardProductionExtractor.INSTANCE,
             DamageProductionExtractor.INSTANCE,
             AttackProductionExtractor.INSTANCE,
+            DestroyProductionExtractor.INSTANCE,
+            ZoneChangeProductionExtractor.INSTANCE,
             SacrificeProductionExtractor.INSTANCE);
 
     private EffectProductionExtractorRegistry() {
