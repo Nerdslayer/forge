@@ -15,7 +15,8 @@ final class CreatureTokenOutcomeEvaluator implements OutcomeEvaluator {
     static final CreatureTokenOutcomeEvaluator INSTANCE = new CreatureTokenOutcomeEvaluator();
 
     // TODO(effect analysis): Value noncreature, temporary, attached, conditional,
-    // replacement-modified, targeted-owner, and other dynamic-owner token outcomes.
+    // replacement-modified, targeted-owner, and other dynamic-owner token outcomes. Materialize
+    // distinct projected tokens before allowing a subsequent board-dependent outcome.
 
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "TokenScript", "TokenOwner", "TokenAmount", "TokenPower",
@@ -58,7 +59,7 @@ final class CreatureTokenOutcomeEvaluator implements OutcomeEvaluator {
             for (final Player owner : owners) {
                 final List<Card> tokens = EffectTokenUtils.createPrototypes(outcome, owner);
                 if (tokens.isEmpty() || tokens.stream().anyMatch(token -> !token.isCreature())) {
-                    return 0;
+                    return context.unsupported();
                 }
                 for (final Card token : tokens) {
                     final int tokenValue = ComputerUtilCard.evaluatePermanent(
@@ -67,9 +68,10 @@ final class CreatureTokenOutcomeEvaluator implements OutcomeEvaluator {
                             ? tokenValue : EffectMath.negate(tokenValue));
                 }
             }
+            if (context.state() != null) { context.state().unprojectedBoard = true; }
             return EffectMath.multiply(value, amount);
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 

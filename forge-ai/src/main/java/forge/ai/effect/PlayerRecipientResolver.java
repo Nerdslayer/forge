@@ -22,6 +22,15 @@ final class PlayerRecipientResolver {
                 && "1".equals(restrictions.getMaxTargets());
     }
 
+    static List<Player> resolve(final SpellAbility ability, final OutcomeEvaluationContext context) {
+        if (context.state() != null && ability.usesTargeting()) {
+            final List<Player> players = new java.util.ArrayList<>();
+            ability.getTargets().getTargetPlayers().forEach(players::add);
+            return players;
+        }
+        return resolve(ability);
+    }
+
     static List<Player> resolve(final SpellAbility ability) {
         if (!ability.usesTargeting()) {
             return AbilityUtils.getDefinedPlayers(ability.getHostCard(),

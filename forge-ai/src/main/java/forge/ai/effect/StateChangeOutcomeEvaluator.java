@@ -45,7 +45,7 @@ final class StateChangeOutcomeEvaluator implements OutcomeEvaluator {
                     affected -> evaluateCardDelta(outcome, affected, context));
         } catch (final RuntimeException ignored) {
             // Dynamic, illegal, or malformed state changes contribute no outcome value.
-            return 0;
+            return context.unsupported();
         }
     }
 

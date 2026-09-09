@@ -1,5 +1,7 @@
 package forge.ai.effect;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import forge.game.ability.AbilityUtils;
@@ -7,6 +9,7 @@ import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardCopyService;
 import forge.game.card.CounterEnumType;
+import forge.game.card.CounterKeywordType;
 import forge.game.card.CounterType;
 import forge.game.spellability.SpellAbility;
 
@@ -14,10 +17,13 @@ import forge.game.spellability.SpellAbility;
 final class CounterOutcomeEvaluator implements OutcomeEvaluator {
     static final CounterOutcomeEvaluator INSTANCE = new CounterOutcomeEvaluator();
 
+    // The planner handles fixed counter choices, target groups, and sequences.
     // TODO(effect analysis): Support additional counter types, player/group recipients, optional
-    // and choice-dependent amounts, multiple targets, distribution, and subabilities. Dynamic
-    // amounts that cannot currently be calculated fail closed. Stun counters receive
-    // CreatureEvaluator's counter penalty but do not simulate the associated tap.
+    // and multi-counter choices and distribution. Fixed lists mean "choose one";
+    // ChooseDifferent, RandomType, UniqueType, CounterTypePerDefined,
+    // and similar modifiers remain unsupported. Dynamic amounts that cannot currently be calculated
+    // fail closed. Stun counters receive CreatureEvaluator's counter penalty but do not simulate
+    // the associated tap.
 
     private static final Set<CounterEnumType> SUPPORTED_COUNTER_TYPES = Set.of(
             CounterEnumType.P1P1, CounterEnumType.M1M1, CounterEnumType.LOYALTY,
@@ -36,37 +42,41 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
                 || outcome.getSubAbility() != null || !outcome.hasParam("CounterType")) {
             return false;
         }
-        final CounterType counterType = CounterType.getType(outcome.getParam("CounterType"));
+        final List<CounterType> counterTypes = parseCounterTypes(
+                outcome.getParam("CounterType"));
         return SUPPORTED_PARAMS.containsAll(outcome.getMapParams().keySet())
-                && SUPPORTED_COUNTER_TYPES.contains(counterType)
+                && !counterTypes.isEmpty()
+                && counterTypes.stream().allMatch(CounterOutcomeEvaluator::supportsCounterType)
                 && !outcome.getParamOrDefault("CounterNum", "1").isBlank()
                 && (outcome.usesTargeting()
                         ? AffectedCardResolver.supportsSingleBattlefieldTarget(outcome)
-                        : outcome.hasParam("Defined"));
+                        : !outcome.hasParam("Defined")
+                                || !outcome.getParam("Defined").isBlank());
     }
 
     @Override
     public int evaluateOutcome(final SpellAbility outcome, final OutcomeEvaluationContext context) {
-        final CounterEnumType counterType = (CounterEnumType) CounterType.getType(
-                outcome.getParam("CounterType"));
         final int counterAmount = AbilityUtils.calculateAmount(outcome.getHostCard(),
                 outcome.getParamOrDefault("CounterNum", "1"), outcome);
         if (counterAmount <= 0) {
             return 0;
         }
+        final List<CounterType> types = parseCounterTypes(outcome.getParam("CounterType"));
+        if (types.size() > 1) {
+            return PlannedOutcomeEvaluator.INSTANCE.evaluateOutcome(outcome, context);
+        }
+        final CounterType counterType = types.get(0);
         final AffectedCardResolver.Resolution resolution = outcome.usesTargeting()
                 ? AffectedCardResolver.targeted(outcome, context,
-                        card -> supportsRecipient(card, counterType)
-                                && card.canReceiveCounters(counterType))
+                        card -> supportsRecipient(card, counterType) && card.canReceiveCounters(counterType))
                 : AffectedCardResolver.defined(outcome, context,
-                        card -> supportsRecipient(card, counterType)
-                                && card.canReceiveCounters(counterType));
+                        card -> supportsRecipient(card, counterType) && card.canReceiveCounters(counterType));
         return CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
                 target -> evaluateTarget(context, target, counterType, counterAmount));
     }
 
     private static int evaluateTarget(final OutcomeEvaluationContext context,
-            final Card target, final CounterEnumType counterType, final int counterAmount) {
+            final Card target, final CounterType counterType, final int counterAmount) {
         try {
             final Card changed = CardCopyService.getLKICopy(target);
             if (target.getZone() != null) {
@@ -74,15 +84,39 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
             }
             changed.setCounters(counterType, EffectMath.add(
                     changed.getCounters(counterType), counterAmount));
+            if (counterType instanceof CounterKeywordType) {
+                changed.addChangedCardKeywords(List.of(counterType.toString()), List.of(),
+                        false, context.timestamp(target.getGame()), null, false);
+                changed.updateKeywordsCache();
+            }
             return CardStateDeltaEvaluator.evaluateChange(context, target, changed);
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 
-    private static boolean supportsRecipient(final Card card,
-            final CounterEnumType counterType) {
+    private static boolean supportsRecipient(final Card card, final CounterType counterType) {
         return counterType == CounterEnumType.LOYALTY
                 ? card.isPlaneswalker() : card.isCreature();
+    }
+
+    private static boolean supportsCounterType(final CounterType counterType) {
+        return SUPPORTED_COUNTER_TYPES.contains(counterType)
+                || counterType instanceof CounterKeywordType;
+    }
+
+    private static List<CounterType> parseCounterTypes(final String definition) {
+        final List<CounterType> types = new ArrayList<>();
+        if (definition == null || definition.isBlank()) {
+            return types;
+        }
+        for (final String name : definition.split(",")) {
+            final CounterType type = CounterType.getType(name.trim());
+            if (type == null || types.contains(type)) {
+                continue;
+            }
+            types.add(type);
+        }
+        return types;
     }
 }

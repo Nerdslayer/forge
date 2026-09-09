@@ -31,6 +31,19 @@ final class EffectEventMatchUtils {
         return passesCommon(consequence, consequence.trigger(), runParams);
     }
 
+    static boolean passesWithoutTriggeredObjectRequirements(
+            final EffectConsequence consequence, final Map<AbilityKey, Object> runParams) {
+        final Trigger trigger = consequence.trigger();
+        try {
+            return trigger.checkActivationLimit()
+                    && !StaticAbilityDisableTriggers.disabled(
+                            consequence.source().getGame(), trigger, runParams)
+                    && trigger.performTest(runParams);
+        } catch (final RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private static boolean passesCommon(final EffectConsequence consequence,
             final Trigger trigger, final Map<AbilityKey, Object> runParams) {
         try {

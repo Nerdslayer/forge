@@ -13,6 +13,7 @@ import forge.ai.ComputerUtilCard;
 import forge.ai.LobbyPlayerAi;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
+import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
 import forge.game.card.CounterEnumType;
 import forge.game.phase.PhaseType;
@@ -112,6 +113,91 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(attacker));
 
         Assert.assertTrue(values.getOrDefault(attacker, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testExpectedAttackProducesImmediateTapTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card attacker = addCard("Grizzly Bears", opponent);
+        attacker.setSickness(false);
+        attacker.setSVar("EffectTestTapOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(attacker, "Mode$ Taps | ValidCard$ Card.Self | Attacker$ True"
+                + " | Execute$ EffectTestTapOutcome | TriggerZones$ Battlefield");
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        game.getAction().checkStateEffects(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(attacker));
+
+        Assert.assertTrue(values.getOrDefault(attacker, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testVigilanceAttackDoesNotProduceTapTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card attacker = addCard("Serra Angel", opponent);
+        attacker.setSickness(false);
+        attacker.setSVar("EffectTestTapOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(attacker, "Mode$ Taps | ValidCard$ Card.Self | Attacker$ True"
+                + " | Execute$ EffectTestTapOutcome | TriggerZones$ Battlefield");
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        game.getAction().checkStateEffects(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(attacker));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
+    public void testReluctantRoleModelValuesPredictedSurvivalCounter() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card roleModel = addCard("Reluctant Role Model", opponent);
+        roleModel.setSickness(false);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        game.getAction().checkStateEffects(true);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(roleModel));
+
+        Assert.assertTrue(values.getOrDefault(roleModel, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testLethalCombatOmitsSecondMainTappedCheckpoint() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        ai.setLife(1, null);
+
+        addCard("Grizzly Bears", ai);
+        final Card roleModel = addCard("Reluctant Role Model", opponent);
+        roleModel.setSickness(false);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        game.getAction().checkStateEffects(true);
+
+        final EffectProduction tapProduction = EffectProductionExtractorRegistry.extract(
+                ai, roleModel).stream()
+                .filter(production -> production.type() == EffectType.TAPPED_OR_UNTAPPED)
+                .findFirst().orElseThrow();
+
+        Assert.assertFalse(tapProduction.events().stream().anyMatch(event ->
+                event.triggerParameters().get(AbilityKey.Phase) == PhaseType.MAIN2));
     }
 
     @Test
@@ -1279,7 +1365,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
-    public void testPlayerChosenSacrificeOutcomeIsDeferred() {
+    public void testPlayerChosenSacrificeUsesLeastValuableCreature() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
         final Player opponent = game.getPlayers().get(0);
@@ -1290,12 +1376,12 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Card consequence = addCounterTriggeredOutcome("Grizzly Bears", opponent,
                 "DB$ Sacrifice | Defined$ Opponent | SacValid$ Creature");
         addCard("Serra Angel", ai);
-        addCard("Runeclaw Bear", ai);
+        final Card cheaper = addCard("Runeclaw Bear", ai);
 
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertTrue(values.isEmpty(), values.toString());
+        Assert.assertEquals(values.get(consequence).intValue(), ComputerUtilCard.evaluatePermanent(ai, cheaper));
     }
 
     @Test

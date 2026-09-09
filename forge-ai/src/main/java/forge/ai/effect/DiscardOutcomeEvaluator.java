@@ -16,9 +16,10 @@ final class DiscardOutcomeEvaluator implements OutcomeEvaluator {
 
     // TODO(effect analysis): Support source-controller-selected discard, restricted card subsets,
     // discard-unless, optional/up-to/any-number forms, reveal/look and defined-card modes,
-    // dynamic recipients, multiplayer or multi/optional targets, mixed discard/draw chains,
+    // richer dynamic recipients beyond the planner's bound target references,
     // replacement effects, known/revealed card quality, and graveyard, madness, reanimation, or
-    // discard-cost synergies. Current chosen-discard value assumes optimal affected-player choice.
+    // discard-cost synergies. The planner composes mixed chains and target groups. Current
+    // chosen-discard value assumes optimal affected-player choice without reading hidden cards.
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "Defined", "Mode", "NumCards", "ValidTgts", "ValidTgtsDesc", "TgtPrompt",
             "TargetMin", "TargetMax", "TargetsAtRandom",
@@ -36,7 +37,7 @@ final class DiscardOutcomeEvaluator implements OutcomeEvaluator {
                 || outcome.getSubAbility() != null
                 || !SUPPORTED_PARAMS.containsAll(outcome.getMapParams().keySet())
                 || !PlayerRecipientResolver.hasSupportedTargetShape(outcome)
-                || (!outcome.usesTargeting() && !SUPPORTED_RECIPIENTS.contains(
+                || (!outcome.usesTargeting() && !SpellAbilityOutcomePlanner.sharedPlayer(outcome) && !SUPPORTED_RECIPIENTS.contains(
                         outcome.getParamOrDefault("Defined", "You")))
                 || outcome.getParamOrDefault("NumCards", "1").isBlank()) {
             return false;
@@ -58,22 +59,26 @@ final class DiscardOutcomeEvaluator implements OutcomeEvaluator {
             if (requested <= 0) {
                 return 0;
             }
-            final List<Player> recipients = PlayerRecipientResolver.resolve(outcome);
+            final List<Player> recipients = PlayerRecipientResolver.resolve(outcome, context);
             for (final Player recipient : recipients) {
                 if (!recipient.isInGame() || !recipient.canDiscardBy(outcome, true)) {
                     continue;
                 }
-                final int handSize = recipient.getCardsIn(ZoneType.Hand).size();
+                final int handSize = context.state() == null ? recipient.getCardsIn(ZoneType.Hand).size()
+                        : context.state().hand(recipient);
                 final int discardValue = randomOrWholeHand
                         ? PlayerResourceValueEvaluator.evaluateRandomDiscard(handSize, requested)
                         : PlayerResourceValueEvaluator.evaluateChosenDiscard(handSize, requested);
                 value = EffectMath.add(value,
                         recipient.isOpponentOf(context.evaluatingAi())
                                 ? EffectMath.negate(discardValue) : discardValue);
+                if (context.state() != null) {
+                    context.state().hands.put(recipient, Math.max(0, handSize - requested));
+                }
             }
             return value;
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 }

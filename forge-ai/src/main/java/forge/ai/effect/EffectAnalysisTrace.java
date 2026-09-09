@@ -84,6 +84,13 @@ public final class EffectAnalysisTrace {
                 consequence.outcome().getApi());
     }
 
+    void outcomePlan(final OutcomePlan<OutcomeState> plan) {
+        if (!isEnabled()) { return; }
+        line("  Outcome plan: supported=%s, value=%.2f, reason=%s, decisions=%s, randomBranches=%d",
+                plan.supported(), plan.value(), plan.reason(), plan.decisions(), plan.branches().size());
+        for (final OutcomePlan<OutcomeState> branch : plan.branches()) { outcomePlan(branch); }
+    }
+
     void triggeredMatch(final EffectProduction production,
             final EffectConsequence consequence, final EffectMatch match,
             final int valuePerResolution, final int contribution) {
@@ -215,10 +222,20 @@ public final class EffectAnalysisTrace {
             }
             return ", sacrificed=" + amount;
         }
+        if (production.type() == EffectType.TAPPED_OR_UNTAPPED) {
+            final long checkpoints = production.events().stream().filter(event ->
+                    event.triggerParameters().containsKey(AbilityKey.Phase)).count();
+            return ", immediate=" + (production.events().size() - checkpoints)
+                    + ", checkpoints=" + checkpoints;
+        }
         return "";
     }
 
     private static String observedTypeLabel(final EffectConsequence consequence) {
+        if (consequence.observedType() == EffectType.TAPPED_OR_UNTAPPED) {
+            return consequence.observedType() + "(mode="
+                    + consequence.trigger().getMode() + ")";
+        }
         if (consequence.observedType() != EffectType.COUNTER_ADDED) {
             return consequence.observedType().toString();
         }

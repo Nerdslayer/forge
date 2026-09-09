@@ -29,10 +29,11 @@ final class PlayerDamageOutcomeEvaluator implements OutcomeEvaluator {
     private static final Set<String> SUPPORTED_TARGETS = Set.of(
             "Player", "Opponent", "Player.Opponent");
 
-    // TODO(effect analysis): Support combat damage; planeswalker/battle and creature damage;
-    // targeted forms with multiple legal player choices; random, optional, divided, excess, and
+    // The planner handles player targets and chains; TargetedDamageOutcomeEvaluator handles
+    // supported card targets. TODO(effect analysis): Combat and battle damage;
+    // optional, divided, excess, and
     // redirected damage; non-Self damage sources; no-prevention and replacement-modified amounts;
-    // infect/poison value; dynamic player definitions; and damage embedded in subability chains.
+    // infect/poison value and richer dynamic player definitions.
     // DamageAll currently values only its player recipients even when it also damages cards.
 
     private PlayerDamageOutcomeEvaluator() {
@@ -51,7 +52,7 @@ final class PlayerDamageOutcomeEvaluator implements OutcomeEvaluator {
                     && PlayerRecipientResolver.hasSupportedTargetShape(outcome)
                     && (outcome.usesTargeting()
                             ? SUPPORTED_TARGETS.contains(outcome.getParam("ValidTgts"))
-                            : SUPPORTED_RECIPIENTS.contains(
+                            : SpellAbilityOutcomePlanner.sharedPlayer(outcome) || SUPPORTED_RECIPIENTS.contains(
                                     outcome.getParamOrDefault("Defined", "Self")));
         }
         return outcome.getApi() == ApiType.DamageAll
@@ -73,7 +74,7 @@ final class PlayerDamageOutcomeEvaluator implements OutcomeEvaluator {
 
             final Card source = outcome.getHostCard();
             final Map<Player, Integer> projectedLife = new LinkedHashMap<>();
-            for (final Player recipient : resolveRecipients(outcome)) {
+            for (final Player recipient : resolveRecipients(outcome, context)) {
                 if (!recipient.isInGame() || !recipient.canLoseLife()
                         || source.isInfectDamage(recipient)) {
                     continue;
@@ -85,19 +86,20 @@ final class PlayerDamageOutcomeEvaluator implements OutcomeEvaluator {
                                 recipient, predictedDamage, true)) {
                     continue;
                 }
-                final int before = projectedLife.getOrDefault(recipient, recipient.getLife());
+                final int before = projectedLife.getOrDefault(recipient, context.state() == null
+                        ? recipient.getLife() : context.state().life.getOrDefault(recipient, recipient.getLife()));
                 projectedLife.put(recipient,
                         PlayerLifeOutcomeValue.saturatedSubtract(before, predictedDamage));
             }
-            return PlayerLifeOutcomeValue.evaluate(context.evaluatingAi(), projectedLife);
+            return PlayerLifeOutcomeValue.evaluate(context, projectedLife);
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 
-    private static List<Player> resolveRecipients(final SpellAbility outcome) {
+    private static List<Player> resolveRecipients(final SpellAbility outcome, final OutcomeEvaluationContext context) {
         if (outcome.getApi() == ApiType.DealDamage) {
-            return PlayerRecipientResolver.resolve(outcome);
+            return PlayerRecipientResolver.resolve(outcome, context);
         }
         return new ArrayList<>(AbilityUtils.getDefinedPlayers(
                 outcome.getHostCard(), outcome.getParam("ValidPlayers"), outcome));

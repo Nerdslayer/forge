@@ -4,7 +4,8 @@ import forge.game.spellability.SpellAbility;
 
 /**
  * Evaluates the marginal value of one supported consequence outcome independently of the event
- * that caused it.
+ * that caused it. Atomic implementations are reused by SpellAbilityOutcomePlanner, which binds
+ * targets and composes choices/sequences. The scalar API remains for existing callers.
  */
 interface OutcomeEvaluator {
     /** Returns whether this evaluator can safely value the supplied outcome form. */

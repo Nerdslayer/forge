@@ -16,15 +16,24 @@ import forge.game.zone.ZoneType;
 
 /** Resolves targeted, defined, and group card recipients for consequence evaluators. */
 final class AffectedCardResolver {
-    // TODO(effect analysis): Support multi-target allocation, divided/up-to choices, non-card and
-    // non-battlefield recipients, and richer chooser behavior. Current targeting chooses one
-    // battlefield card using the consequence controller's perspective.
+    // TODO(effect analysis): Divided allocation and non-battlefield recipients. The planner binds
+    // single/group/up-to targets; the choose-one path remains for legacy scalar callers.
     private AffectedCardResolver() {
     }
 
     static Resolution targeted(final SpellAbility outcome, final OutcomeEvaluationContext context,
             final Predicate<Card> additionalFilter) {
         final List<WeightedCard> cards = new ArrayList<>();
+        if (unprojected(context)) { return new Resolution(cards, false); }
+        if (context.state() != null) {
+            for (final Card selected : outcome.getTargets().getTargetCards()) {
+                final Card projected = context.state().card(selected);
+                if (projected != null && additionalFilter.test(projected)) {
+                    cards.add(new WeightedCard(projected, 1));
+                }
+            }
+            return new Resolution(cards, false);
+        }
         for (final Card candidate : allPotentialCards(outcome, context).keySet()) {
             final SpellAbility targetCheck = outcome.copy(outcome.getHostCard(), false);
             targetCheck.setActivatingPlayer(outcome.getActivatingPlayer());
@@ -38,11 +47,13 @@ final class AffectedCardResolver {
 
     static Resolution defined(final SpellAbility outcome, final OutcomeEvaluationContext context,
             final Predicate<Card> additionalFilter) {
+        if (unprojected(context)) { return new Resolution(List.of(), false); }
         final Map<Card, Integer> weights = allPotentialCards(outcome, context);
         final List<WeightedCard> cards = new ArrayList<>();
-        for (final Card card : AbilityUtils.getDefinedCards(outcome.getHostCard(),
+        for (final Card original : AbilityUtils.getDefinedCards(outcome.getHostCard(),
                 outcome.getParamOrDefault("Defined", "Self"), outcome)) {
-            if (additionalFilter.test(card)) {
+            final Card card = context.state() == null ? original : context.state().card(original);
+            if (card != null && additionalFilter.test(card)) {
                 cards.add(new WeightedCard(card, weights.getOrDefault(card, 1)));
             }
         }
@@ -51,6 +62,7 @@ final class AffectedCardResolver {
 
     static Resolution group(final SpellAbility outcome, final OutcomeEvaluationContext context,
             final Predicate<Card> additionalFilter) {
+        if (unprojected(context)) { return new Resolution(List.of(), false); }
         final Map<Card, Integer> weights = allPotentialCards(outcome, context);
         final CardCollection candidates = new CardCollection(weights.keySet());
         final CardCollectionView matching = AbilityUtils.filterListByType(candidates,
@@ -62,6 +74,12 @@ final class AffectedCardResolver {
             }
         }
         return new Resolution(cards, false);
+    }
+
+    private static boolean unprojected(final OutcomeEvaluationContext context) {
+        if (context.state() == null || !context.state().unprojectedBoard) { return false; }
+        context.unsupported();
+        return true;
     }
 
     static boolean supportsSingleBattlefieldTarget(final SpellAbility outcome) {
@@ -87,8 +105,10 @@ final class AffectedCardResolver {
             final OutcomeEvaluationContext context) {
         final Map<Card, Integer> weights = new LinkedHashMap<>();
         for (final Card card : outcome.getHostCard().getGame().getCardsIn(ZoneType.Battlefield)) {
-            weights.put(card, 1);
+            final Card projected = context.state() == null ? card : context.state().card(card);
+            if (projected != null) { weights.put(projected, 1); }
         }
+        if (context.event() == null) { return weights; }
         for (final EffectEvent.Subject subject : context.event().subjects()) {
             if (subject.value() instanceof Card card) {
                 weights.merge(card, subject.occurrences(), Math::max);

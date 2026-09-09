@@ -15,11 +15,13 @@ import forge.game.zone.ZoneType;
 final class CardDrawOutcomeEvaluator implements OutcomeEvaluator {
     static final CardDrawOutcomeEvaluator INSTANCE = new CardDrawOutcomeEvaluator();
 
-    // TODO(effect analysis): Support targeted and dynamic recipients, optional and up-to draws,
-    // compound draw/discard or draw/life outcomes, replacement effects, hand-size limits, card
+    // Targeted recipients and mixed sequences are composed by the shared planner.
+    // TODO(effect analysis): Support richer dynamic recipients, optional and up-to draw amounts,
+    // replacement effects, hand-size limits, card
     // quality, timing, and drawing from an insufficient library (including losing the game).
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "Defined", "NumCards", "Reveal", "RememberDrawn",
+            "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax",
             "SpellDescription", "StackDescription");
 
     private CardDrawOutcomeEvaluator() {
@@ -30,7 +32,6 @@ final class CardDrawOutcomeEvaluator implements OutcomeEvaluator {
         return outcome != null
                 && outcome.getApi() == ApiType.Draw
                 && outcome.getSubAbility() == null
-                && !outcome.usesTargeting()
                 && !outcome.hasParam("OptionalDecider")
                 && !outcome.hasParam("Upto")
                 && SUPPORTED_PARAMS.containsAll(outcome.getMapParams().keySet())
@@ -49,26 +50,34 @@ final class CardDrawOutcomeEvaluator implements OutcomeEvaluator {
             }
 
             int value = 0;
-            final List<Player> recipients = AbilityUtils.getDefinedPlayers(outcome.getHostCard(),
-                    outcome.getParamOrDefault("Defined", "You"), outcome);
+            final List<Player> recipients = PlayerRecipientResolver.resolve(outcome, context);
             for (final Player recipient : recipients) {
+                final int library = context.state() == null ? recipient.getCardsIn(ZoneType.Library).size()
+                        : context.state().library(recipient);
+                final int hand = context.state() == null ? recipient.getCardsIn(ZoneType.Hand).size()
+                        : context.state().hand(recipient);
                 final int amount = Math.min(requested, Math.min(
                         StaticAbilityCantDraw.canDrawAmount(recipient, requested),
-                        recipient.getCardsIn(ZoneType.Library).size()));
+                        library));
                 final int drawValue = PlayerResourceValueEvaluator.evaluateCardDraw(
-                        recipient.getCardsIn(ZoneType.Hand).size(), amount);
+                        hand, amount);
+                if (context.state() != null) {
+                    context.state().hands.put(recipient, EffectMath.add(hand, amount));
+                    context.state().libraries.put(recipient, library - amount);
+                }
                 value = EffectMath.add(value,
                         orientForRecipient(context, recipient, drawValue));
             }
             return value;
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 
     private static boolean hasSupportedRecipient(final SpellAbility outcome) {
         final String defined = outcome.getParamOrDefault("Defined", "You");
-        return "You".equals(defined) || "Opponent".equals(defined);
+        return outcome.usesTargeting() || "You".equals(defined) || "Opponent".equals(defined)
+                || SpellAbilityOutcomePlanner.sharedPlayer(outcome);
     }
 
     private static int orientForRecipient(final OutcomeEvaluationContext context,

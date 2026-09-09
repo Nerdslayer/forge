@@ -55,7 +55,7 @@ final class PermanentRemovalOutcomeEvaluator implements OutcomeEvaluator {
                     affected -> CardStateDeltaEvaluator.evaluateDeparture(context, affected));
         } catch (final RuntimeException ignored) {
             // Dynamic or malformed script forms contribute no outcome value.
-            return 0;
+            return context.unsupported();
         }
     }
 

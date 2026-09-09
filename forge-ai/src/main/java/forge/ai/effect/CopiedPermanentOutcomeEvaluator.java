@@ -80,9 +80,11 @@ final class CopiedPermanentOutcomeEvaluator implements OutcomeEvaluator {
                                     ? tokenValue : EffectMath.negate(tokenValue));
                 }
             }
+            // TODO(effect analysis): Materialize distinct projected copies for later board effects.
+            if (context.state() != null) { context.state().unprojectedBoard = true; }
             return EffectMath.multiply(value, amount);
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 }

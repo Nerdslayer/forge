@@ -16,6 +16,9 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     // conditions, intervening-if clauses, and triggers active outside the battlefield. Combat
     // support excludes group declaration/once triggers, attacked-alone, first-attack,
     // poisoned-player, complex blocker-count, and multi-defender conditions.
+    // Tap support currently covers straightforward became-tapped triggers and the specific
+    // second-main self-tapped checkpoint used by survival abilities; other phase/state conditions,
+    // untap triggers, TapAll, TapsForMana, and timing windows remain unsupported.
 
     private static final Set<String> TOKEN_CREATED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidToken", "OnlyFirst", "Execute", "TriggerZones",
@@ -74,6 +77,12 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     private static final Set<String> ATTACKER_UNBLOCKED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidDefender", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
+    private static final Set<String> TAPS_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "Attacker", "FirstTime", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> SECOND_MAIN_TAPPED_TRIGGER_PARAMS = Set.of(
+            "Mode", "Phase", "PhaseCount", "ValidPlayer", "PresentDefined", "IsPresent",
+            "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> CHANGES_ZONE_TRIGGER_PARAMS = Set.of(
             "Mode", "Origin", "Destination", "ValidCard", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -96,7 +105,10 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     @Override
     public EffectConsequence extract(final Card source, final Trigger trigger) {
         final EffectType observedType = observedType(trigger);
-        if (observedType == null || !EffectAbilityUtils.isActiveBattlefieldTrigger(source, trigger)
+        final boolean active = isSecondMainTappedCheckpoint(trigger)
+                ? EffectAbilityUtils.isActiveBattlefieldTriggerIgnoringRequirements(source, trigger)
+                : EffectAbilityUtils.isActiveBattlefieldTrigger(source, trigger);
+        if (observedType == null || !active
                 || !hasSupportedParameters(trigger)) {
             return null;
         }
@@ -154,6 +166,9 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
                 || trigger.getMode() == TriggerType.AttackerBlockedByCreature
                 || trigger.getMode() == TriggerType.AttackerUnblocked) {
             return EffectType.ATTACKED_OR_BLOCKED;
+        }
+        if (trigger.getMode() == TriggerType.Taps || isSecondMainTappedCheckpoint(trigger)) {
+            return EffectType.TAPPED_OR_UNTAPPED;
         }
         return trigger.getMode() == TriggerType.CounterAdded
                 || trigger.getMode() == TriggerType.CounterAddedOnce
@@ -227,6 +242,13 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
         if (trigger.getMode() == TriggerType.AttackerUnblocked) {
             return EffectAbilityUtils.hasOnlyParams(trigger, ATTACKER_UNBLOCKED_TRIGGER_PARAMS);
         }
+        if (trigger.getMode() == TriggerType.Taps) {
+            return EffectAbilityUtils.hasOnlyParams(trigger, TAPS_TRIGGER_PARAMS);
+        }
+        if (isSecondMainTappedCheckpoint(trigger)) {
+            return EffectAbilityUtils.hasOnlyParams(
+                    trigger, SECOND_MAIN_TAPPED_TRIGGER_PARAMS);
+        }
         return trigger.getMode() == TriggerType.CounterAddedOnce
                 && EffectAbilityUtils.hasOnlyParams(trigger, COUNTER_ADDED_ONCE_TRIGGER_PARAMS);
     }
@@ -258,6 +280,15 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
                         || CARD_DISCARDED_VALID_CARDS.contains(trigger.getParam("ValidCard")))
                 && (!trigger.hasParam("ValidPlayer")
                         || CARD_DISCARDED_VALID_PLAYERS.contains(trigger.getParam("ValidPlayer")));
+    }
+
+    private static boolean isSecondMainTappedCheckpoint(final Trigger trigger) {
+        return trigger.getMode() == TriggerType.Phase
+                && "Main".equals(trigger.getParam("Phase"))
+                && "2".equals(trigger.getParam("PhaseCount"))
+                && "You".equals(trigger.getParam("ValidPlayer"))
+                && "Self".equals(trigger.getParam("PresentDefined"))
+                && "Card.tapped".equals(trigger.getParam("IsPresent"));
     }
 
     private static Trigger normalizedTrigger(final Card source, final Trigger trigger) {

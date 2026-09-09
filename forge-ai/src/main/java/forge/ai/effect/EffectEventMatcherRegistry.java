@@ -16,6 +16,7 @@ final class EffectEventMatcherRegistry {
         MATCHERS.put(EffectType.CARD_DISCARDED, CardDiscardedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.DAMAGE_DEALT, DamageDealtEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.ATTACKED_OR_BLOCKED, AttackEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.TAPPED_OR_UNTAPPED, TapEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.SACRIFICED, SacrificeEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.ZONE_CHANGED, ZoneChangedEventMatcher.INSTANCE);
     }
