@@ -12,6 +12,13 @@ final class PlayerLifeOutcomeValue {
     private PlayerLifeOutcomeValue() {
     }
 
+    static int evaluate(final OutcomeEvaluationContext context, final Map<Player, Integer> projectedLife) {
+        if (context.state() == null) { return evaluate(context.evaluatingAi(), projectedLife); }
+        final int before = evaluate(context.evaluatingAi(), context.state().life);
+        context.state().life.putAll(projectedLife);
+        return EffectMath.subtract(evaluate(context.evaluatingAi(), context.state().life), before);
+    }
+
     static int evaluate(final Player evaluatingAi,
             final Map<Player, Integer> projectedLife) {
         int evaluatingAiUtility = 0;

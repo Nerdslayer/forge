@@ -15,12 +15,17 @@ final class EffectAbilityUtils {
     }
 
     static boolean isActiveBattlefieldTrigger(final Card source, final Trigger trigger) {
+        return isActiveBattlefieldTriggerIgnoringRequirements(source, trigger)
+                && trigger.requirementsCheck(source.getGame());
+    }
+
+    static boolean isActiveBattlefieldTriggerIgnoringRequirements(
+            final Card source, final Trigger trigger) {
         return source.isInPlay()
                 && !source.isPhasedOut()
                 && !trigger.isSuppressed()
                 && !source.getGame().getTriggerHandler().isTriggerSuppressed(trigger.getMode())
-                && trigger.zonesCheck(source.getZone())
-                && trigger.requirementsCheck(source.getGame());
+                && trigger.zonesCheck(source.getZone());
     }
 
     static SpellAbility copyTriggerOutcome(final Card source, final Trigger trigger) {

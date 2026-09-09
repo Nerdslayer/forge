@@ -57,7 +57,7 @@ final class AttachmentOutcomeEvaluator implements OutcomeEvaluator {
                     ? evaluateAttach(outcome, context) : evaluateUnattach(outcome, context);
         } catch (final RuntimeException ignored) {
             // Dynamic, illegal, or malformed attachment changes contribute no outcome value.
-            return 0;
+            return context.unsupported();
         }
     }
 

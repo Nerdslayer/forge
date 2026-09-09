@@ -12,6 +12,7 @@ final class OutcomeEvaluatorRegistry {
             ManaOutcomeEvaluator.INSTANCE,
             LifeOutcomeEvaluator.INSTANCE,
             PlayerDamageOutcomeEvaluator.INSTANCE,
+            TargetedDamageOutcomeEvaluator.INSTANCE,
             CounterOutcomeEvaluator.INSTANCE,
             CopiedPermanentOutcomeEvaluator.INSTANCE,
             CreatureTokenOutcomeEvaluator.INSTANCE,
@@ -28,6 +29,13 @@ final class OutcomeEvaluatorRegistry {
     }
 
     static OutcomeEvaluator find(final SpellAbility outcome) {
+        if (SpellAbilityOutcomePlanner.supports(outcome)) {
+            return PlannedOutcomeEvaluator.INSTANCE;
+        }
+        return findAtomic(outcome);
+    }
+
+    static OutcomeEvaluator findAtomic(final SpellAbility outcome) {
         for (final OutcomeEvaluator evaluator : EVALUATORS) {
             if (evaluator.supports(outcome)) {
                 return evaluator;

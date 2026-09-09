@@ -6,12 +6,14 @@ import java.util.List;
 import java.util.Map;
 
 import forge.ai.AttackLikelihoodEvaluator;
+import forge.ai.ComputerUtilCombat;
 import forge.ai.NextCombatPrediction;
 import forge.game.GameEntity;
 import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.combat.Combat;
+import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
@@ -22,7 +24,9 @@ final class AttackProductionExtractor implements EffectProductionExtractor {
 
     // TODO(effect analysis): Add declaration/once-per-combat groups, attacking alone, complete
     // public attack-group prediction, combat changes after declaration, attack costs, and
-    // likelihood weighting between the current expected/unexpected categories.
+    // likelihood weighting between the current expected/unexpected categories. Combat-tap
+    // prediction does not yet model replacement effects, extra combats, postcombat untaps,
+    // collective blocker damage, or delayed self-sacrifice and other leave-combat effects.
 
     private AttackProductionExtractor() {
     }
@@ -34,13 +38,79 @@ final class AttackProductionExtractor implements EffectProductionExtractor {
         }
 
         final List<EffectEvent> events = new ArrayList<>();
-        if (AttackLikelihoodEvaluator.estimateNextTurn(evaluatingAi, source).isExpected()) {
+        final boolean expectedAttack = AttackLikelihoodEvaluator
+                .estimateNextTurn(evaluatingAi, source).isExpected();
+        if (expectedAttack) {
             events.add(createAttackEvent(evaluatingAi, source));
             addAttackerDispositionEvents(events, evaluatingAi, source);
         }
         addBlockEvent(events, evaluatingAi, source);
-        return events.isEmpty() ? List.of() : List.of(new EffectProduction(
+        if (events.isEmpty()) {
+            return List.of();
+        }
+        final List<EffectProduction> productions = new ArrayList<>();
+        productions.add(new EffectProduction(
                 source, EffectType.ATTACKED_OR_BLOCKED, events, 1));
+        final EffectProduction tapProduction = expectedAttack
+                ? createCombatTapProduction(evaluatingAi, source) : null;
+        if (tapProduction != null) {
+            productions.add(tapProduction);
+        }
+        return productions;
+    }
+
+    private static EffectProduction createCombatTapProduction(
+            final Player evaluatingAi, final Card attacker) {
+        if (attacker.attackVigilance()) {
+            return null;
+        }
+
+        final List<EffectEvent> tapEvents = new ArrayList<>();
+        final Map<AbilityKey, Object> tapParams = new EnumMap<>(AbilityKey.class);
+        tapParams.put(AbilityKey.Card, attacker);
+        tapParams.put(AbilityKey.Attacker, true);
+        tapParams.put(AbilityKey.FirstTime, true);
+        tapEvents.add(new EffectEvent(EffectType.TAPPED_OR_UNTAPPED,
+                attacker.getController(), List.of(new EffectEvent.Subject(attacker, 1)), tapParams));
+
+        final Combat combat = findPredictedCombat(evaluatingAi, attacker);
+        if (combat != null && combat.isAttacking(attacker)
+                && isExpectedToSurviveCombat(attacker, combat)) {
+            final Map<AbilityKey, Object> checkpointParams = new EnumMap<>(AbilityKey.class);
+            checkpointParams.put(AbilityKey.Card, attacker);
+            checkpointParams.put(AbilityKey.Player, attacker.getController());
+            checkpointParams.put(AbilityKey.Phase, PhaseType.MAIN2);
+            tapEvents.add(new EffectEvent(EffectType.TAPPED_OR_UNTAPPED,
+                    attacker.getController(), List.of(new EffectEvent.Subject(attacker, 1)),
+                    checkpointParams));
+        }
+        return new EffectProduction(attacker, EffectType.TAPPED_OR_UNTAPPED, tapEvents, 1);
+    }
+
+    private static Combat findPredictedCombat(final Player evaluatingAi, final Card attacker) {
+        if (attacker.getController() == evaluatingAi) {
+            for (final Player opponent : evaluatingAi.getOpponents()) {
+                final Combat combat = NextCombatPrediction.predict(
+                        evaluatingAi, evaluatingAi, opponent);
+                if (combat != null && combat.isAttacking(attacker)) {
+                    return combat;
+                }
+            }
+            return null;
+        }
+        return NextCombatPrediction.predict(
+                evaluatingAi, attacker.getController(), evaluatingAi);
+    }
+
+    private static boolean isExpectedToSurviveCombat(
+            final Card attacker, final Combat combat) {
+        for (final Card blocker : combat.getBlockers(attacker)) {
+            if (ComputerUtilCombat.canDestroyAttacker(attacker.getController(),
+                    attacker, blocker, combat, false)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static EffectEvent createAttackEvent(final Player evaluatingAi, final Card source) {

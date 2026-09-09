@@ -49,7 +49,7 @@ final class AnimationOutcomeEvaluator implements OutcomeEvaluator {
                     affected -> evaluateCardDelta(outcome, affected, context));
         } catch (final RuntimeException ignored) {
             // Dynamic or malformed script forms contribute no outcome value.
-            return 0;
+            return context.unsupported();
         }
     }
 

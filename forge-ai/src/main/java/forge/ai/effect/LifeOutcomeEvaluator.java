@@ -14,9 +14,10 @@ import forge.game.spellability.SpellAbility;
 final class LifeOutcomeEvaluator implements OutcomeEvaluator {
     static final LifeOutcomeEvaluator INSTANCE = new LifeOutcomeEvaluator();
 
-    // TODO(effect analysis): Support beneficial targeted life changes, broader dynamic and
+    // The planner handles both beneficial/harmful targets and mixed sequences.
+    // TODO(effect analysis): Support broader dynamic and
     // multiplayer recipients, optional/conditional forms, replacement-modified amounts, life
-    // payment/exchange/set effects, mixed subability chains, shared-life variants, unequal
+    // payment/exchange/set effects, shared-life variants, unequal
     // multiplayer win probabilities, and resources that leave with an eliminated player. Current
     // game-loss prevention is checked without simulating replacements.
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
@@ -27,7 +28,7 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
             "You", "Opponent", "Player.Opponent",
             "TriggeredPlayer", "TriggeredCardController");
     private static final Set<String> SUPPORTED_TARGETS = Set.of(
-            "Player", "Opponent", "Player.Opponent");
+            "Player", "Opponent", "Player.Opponent", "Player.You", "You");
 
     private LifeOutcomeEvaluator() {
     }
@@ -52,7 +53,7 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
             final OutcomeEvaluationContext context) {
         try {
             final Map<Player, Integer> projectedLife = new LinkedHashMap<>();
-            int lastLifeLost = 0;
+            int lastLifeLost = context.state() == null ? 0 : context.state().lastLifeLost;
             SpellAbility current = outcome;
             while (current != null) {
                 final boolean losesLife = current.getApi() == ApiType.LoseLife;
@@ -65,7 +66,7 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
                                 amountDefinition, current);
                 if (amount > 0) {
                     final List<Player> recipients = current.usesTargeting()
-                            ? PlayerRecipientResolver.resolve(current)
+                            ? PlayerRecipientResolver.resolve(current, context)
                             : AbilityUtils.getDefinedPlayers(current.getHostCard(),
                                     current.getParamOrDefault("Defined", "You"), current);
                     int lostThisPart = 0;
@@ -74,7 +75,8 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
                                 || (losesLife ? !recipient.canLoseLife() : !recipient.canGainLife())) {
                             continue;
                         }
-                        final int before = projectedLife.getOrDefault(recipient, recipient.getLife());
+                        final int before = projectedLife.getOrDefault(recipient, context.state() == null
+                                ? recipient.getLife() : context.state().life.getOrDefault(recipient, recipient.getLife()));
                         final int after = losesLife
                                 ? saturatedSubtract(before, amount) : saturatedAdd(before, amount);
                         projectedLife.put(recipient, after);
@@ -89,9 +91,10 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
                 current = current.getSubAbility();
             }
 
-            return PlayerLifeOutcomeValue.evaluate(context.evaluatingAi(), projectedLife);
+            if (context.state() != null) { context.state().lastLifeLost = lastLifeLost; }
+            return PlayerLifeOutcomeValue.evaluate(context, projectedLife);
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 
@@ -103,13 +106,12 @@ final class LifeOutcomeEvaluator implements OutcomeEvaluator {
             return false;
         }
         if (outcome.usesTargeting()) {
-            // In 1v1, harmful mandatory life loss has an unambiguous rational recipient. Applying
-            // the same rule to life gain would incorrectly assume the opponent is chosen.
-            return outcome.getApi() == ApiType.LoseLife
-                    && PlayerRecipientResolver.hasSupportedTargetShape(outcome)
+            // The planner assigns recipients using the complete outcome value, including gains.
+            return PlayerRecipientResolver.hasSupportedTargetShape(outcome)
                     && SUPPORTED_TARGETS.contains(outcome.getParam("ValidTgts"));
         }
-        return SUPPORTED_RECIPIENTS.contains(outcome.getParamOrDefault("Defined", "You"));
+        return SUPPORTED_RECIPIENTS.contains(outcome.getParamOrDefault("Defined", "You"))
+                || SpellAbilityOutcomePlanner.sharedPlayer(outcome);
     }
 
     private static int saturatedAdd(final int left, final int right) {

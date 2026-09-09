@@ -56,7 +56,7 @@ final class ManaOutcomeEvaluator implements OutcomeEvaluator {
             }
             return value;
         } catch (final RuntimeException ignored) {
-            return 0;
+            return context.unsupported();
         }
     }
 

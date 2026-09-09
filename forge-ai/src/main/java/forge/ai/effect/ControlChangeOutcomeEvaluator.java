@@ -54,7 +54,7 @@ final class ControlChangeOutcomeEvaluator implements OutcomeEvaluator {
                             context, affected, newController));
         } catch (final RuntimeException ignored) {
             // Dynamic, illegal, or malformed control changes contribute no outcome value.
-            return 0;
+            return context.unsupported();
         }
     }
 

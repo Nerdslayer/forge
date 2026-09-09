@@ -129,8 +129,16 @@ final class TriggeredEffectAnalyzer {
                 outcome.setActivatingPlayer(consequence.source().getController());
                 outcome.resetTargets();
                 consequence.trigger().setTriggeringObjects(outcome, match.event().triggerParameters());
-                final int outcomeValue = consequence.outcomeEvaluator().evaluateOutcome(
-                        outcome, new OutcomeEvaluationContext(evaluatingAi, match.event()));
+                final int outcomeValue;
+                if (consequence.outcomeEvaluator() == PlannedOutcomeEvaluator.INSTANCE) {
+                    final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
+                            outcome, evaluatingAi, match.event());
+                    trace.outcomePlan(plan);
+                    outcomeValue = PlannedOutcomeEvaluator.score(plan);
+                } else {
+                    outcomeValue = consequence.outcomeEvaluator().evaluateOutcome(
+                            outcome, new OutcomeEvaluationContext(evaluatingAi, match.event()));
+                }
                 final int contribution = EffectMath.multiply(match.resolutions(), outcomeValue);
                 trace.triggeredMatch(
                         production, consequence, match, outcomeValue, contribution);

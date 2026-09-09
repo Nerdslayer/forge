@@ -7,22 +7,19 @@ import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
-import forge.game.card.CardCollectionView;
 import forge.game.card.CardLists;
 import forge.game.card.CardPredicates;
 import forge.game.player.Player;
-import forge.game.player.PlayerCollection;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
 
-/** Values sacrifices whose affected battlefield permanents are known without a choice. */
+/** Values fixed self-sacrifice and supplies legal selections to the shared outcome planner. */
 final class SacrificeOutcomeEvaluator implements OutcomeEvaluator {
     static final SacrificeOutcomeEvaluator INSTANCE = new SacrificeOutcomeEvaluator();
 
-    // TODO(effect analysis): Support player-chosen sacrifices by modeling the affected player's
-    // choice, targeted players, optional/random/SacEachValid forms, variable amounts, sacrifice
-    // and zone-change replacements, death/leave/sacrifice triggers, commanders and graveyard
-    // value, downstream static-effect changes, multiple outcome branches, and subability chains.
+    // TODO(effect analysis): Optional/random/SacEachValid forms, variable amounts, sacrifice and
+    // zone-change replacements, death/leave/sacrifice triggers, commanders and graveyard value,
+    // and downstream static-effect changes. The planner handles player choices and sequences.
 
     private SacrificeOutcomeEvaluator() {
     }
@@ -30,7 +27,7 @@ final class SacrificeOutcomeEvaluator implements OutcomeEvaluator {
     @Override
     public boolean supports(final SpellAbility outcome) {
         if (outcome == null || outcome.getApi() != ApiType.Sacrifice
-                || outcome.getSubAbility() != null || outcome.usesTargeting()
+                || outcome.getSubAbility() != null
                 || outcome.hasParam("SacEachValid") || outcome.hasParam("Random")
                 || outcome.hasParam("Destroy") || outcome.hasParam("Echo")
                 || outcome.hasParam("CumulativeUpkeep")
@@ -44,53 +41,45 @@ final class SacrificeOutcomeEvaluator implements OutcomeEvaluator {
     public int evaluateOutcome(final SpellAbility outcome,
             final OutcomeEvaluationContext context) {
         try {
-            final List<Card> sacrificed = resolveKnownSacrifices(outcome);
-            if (sacrificed.isEmpty()) {
-                return 0;
+            if (!"Self".equals(outcome.getParamOrDefault("SacValid", "Self"))) {
+                return PlannedOutcomeEvaluator.INSTANCE.evaluateOutcome(outcome, context);
             }
-
-            int value = 0;
-            for (final Card card : sacrificed) {
-                value = EffectMath.add(value,
-                        CardStateDeltaEvaluator.evaluateDeparture(context, card));
-            }
-            return value;
+            final Card source = context.state() == null ? outcome.getHostCard()
+                    : context.state().card(outcome.getHostCard());
+            return source != null && source.canBeSacrificedBy(outcome, true)
+                    ? CardStateDeltaEvaluator.evaluateDeparture(context, source) : 0;
         } catch (final RuntimeException ignored) {
             // Dynamic, choice-dependent, or malformed sacrifice forms contribute no value.
-            return 0;
+            return context.unsupported();
         }
     }
 
-    private static List<Card> resolveKnownSacrifices(final SpellAbility outcome) {
-        final String valid = outcome.getParamOrDefault("SacValid", "Self");
-        if ("Self".equals(valid)) {
-            final Card source = outcome.getHostCard();
-            return source.canBeSacrificedBy(outcome, true)
-                    ? List.of(source) : List.of();
+    static List<List<Card>> choices(final SpellAbility outcome, final Player player, final OutcomeState state) {
+        if (state.unprojectedBoard) { throw new IllegalArgumentException("Unprojected token/copy recipients"); }
+        final CardCollection candidates = new CardCollection();
+        for (final Card original : player.getGame().getCardsIn(ZoneType.Battlefield)) {
+            final Card card = state.card(original);
+            if (card != null && card.getController() == player) { candidates.add(card); }
         }
+        final List<Card> legal = new ArrayList<>(CardLists.filter(
+                AbilityUtils.filterListByType(candidates, outcome.getParam("SacValid"), outcome),
+                CardPredicates.canBeSacrificedBy(outcome, true)));
+        final int amount = Math.min(fixedAmount(outcome), legal.size());
+        if (outcome.hasParam("StrictAmount") && amount < fixedAmount(outcome)) { return List.of(List.of()); }
+        final List<List<Card>> choices = new ArrayList<>();
+        sacrificeGroups(legal, amount, 0, new ArrayList<>(), choices);
+        return choices;
+    }
 
-        final PlayerCollection affectedPlayers = AbilityUtils.getDefinedPlayers(
-                outcome.getHostCard(), outcome.getParamOrDefault("Defined", "Self"), outcome);
-        if (affectedPlayers.isEmpty()) {
-            return List.of();
+    private static void sacrificeGroups(final List<Card> legal, final int amount, final int start,
+            final List<Card> selected, final List<List<Card>> choices) {
+        if (choices.size() > 1024 || amount > 8) { throw new IllegalArgumentException("Sacrifice choice limit exceeded"); }
+        if (selected.size() == amount) { choices.add(List.copyOf(selected)); return; }
+        for (int i = start; i < legal.size(); i++) {
+            selected.add(legal.get(i));
+            sacrificeGroups(legal, amount, i + 1, selected, choices);
+            selected.remove(selected.size() - 1);
         }
-
-        final int amount = fixedAmount(outcome);
-        final List<Card> sacrificed = new ArrayList<>();
-        for (final Player player : affectedPlayers) {
-            final CardCollection battlefield = new CardCollection(
-                    player.getCardsIn(ZoneType.Battlefield));
-            final CardCollectionView legal = CardLists.filter(
-                    AbilityUtils.filterListByType(battlefield, valid, outcome),
-                    CardPredicates.canBeSacrificedBy(outcome, true));
-            // If there are more legal permanents than the amount, the affected player chooses.
-            // Requiring an exact count also avoids guessing undersized/StrictAmount behavior.
-            if (legal.size() != amount) {
-                return List.of();
-            }
-            sacrificed.addAll(legal);
-        }
-        return sacrificed;
     }
 
     private static int fixedAmount(final SpellAbility outcome) {

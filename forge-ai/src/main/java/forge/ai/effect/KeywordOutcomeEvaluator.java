@@ -45,7 +45,7 @@ final class KeywordOutcomeEvaluator implements OutcomeEvaluator {
                     affected -> evaluateCardDelta(outcome, affected, context));
         } catch (final RuntimeException ignored) {
             // Dynamic or malformed script forms contribute no outcome value.
-            return 0;
+            return context.unsupported();
         }
     }
 
@@ -66,12 +66,12 @@ final class KeywordOutcomeEvaluator implements OutcomeEvaluator {
         if (affected.getZone() != null) {
             changed.setZone(affected.getZone());
         }
-        applyChange(outcome, changed);
+        applyChange(outcome, changed, context);
         return CardStateDeltaEvaluator.evaluateChange(context, affected, changed);
     }
 
-    private static void applyChange(final SpellAbility outcome, final Card changed) {
-        final long timestamp = outcome.getHostCard().getGame().getTimestamp() + 1;
+    private static void applyChange(final SpellAbility outcome, final Card changed, final OutcomeEvaluationContext context) {
+        final long timestamp = context.timestamp(outcome.getHostCard().getGame());
         if (outcome.getApi() == ApiType.Detain) {
             changed.detain(outcome.getActivatingPlayer());
             return;
