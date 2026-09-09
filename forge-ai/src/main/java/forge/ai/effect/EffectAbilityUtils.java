@@ -36,11 +36,10 @@ final class EffectAbilityUtils {
         return outcome == null ? null : outcome.copy(source, false);
     }
 
-    static SpellAbility copyPayableActivatedAbility(final Card source,
+    static SpellAbility copyActivatedAbility(final Card source,
             final SpellAbility ability) {
-        // TODO(effect analysis): Replace this one-use/current-payability gate with occurrence and
-        // likelihood modeling for repeatable activations, competing costs/tap uses, timing,
-        // alternative resources, and future legal targets.
+        // Payability and expected-use estimation are intentionally separate. An ability that is
+        // not payable this moment may still be usable after the next untap or land drop.
         if (!source.isInPlay() || !ability.isActivatedAbility()) {
             return null;
         }
@@ -50,10 +49,17 @@ final class EffectAbilityUtils {
                 || !copied.getRestrictions().checkOtherRestrictions(
                         source, copied, source.getController())
                 || (copied.getConditions() != null && !copied.getConditions().areMet(copied))
-                || !ComputerUtilCost.canPayCost(copied, source.getController(), false)) {
+                || copied.getPayCosts() == null) {
             return null;
         }
         return copied;
+    }
+
+    static SpellAbility copyPayableActivatedAbility(final Card source,
+            final SpellAbility ability) {
+        final SpellAbility copied = copyActivatedAbility(source, ability);
+        return copied != null && ComputerUtilCost.canPayCost(
+                copied, source.getController(), false) ? copied : null;
     }
 
     static SpellAbility findOutcome(final SpellAbility root, final ApiType api) {

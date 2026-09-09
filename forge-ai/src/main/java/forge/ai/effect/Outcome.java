@@ -18,6 +18,18 @@ public sealed interface Outcome<S> {
         public Sequence { children = List.copyOf(children); }
     }
 
+    /**
+     * One simultaneous event. All preparers read the same pre-event state and return immutable
+     * descriptions, not updated states. The committer combines them into one isolated transition.
+     * Choices belong outside this node, so no event is applied until every choice is bound.
+     * A null preparation or transition means unsupported. Combining overlapping changes is the
+     * committer's responsibility: independently evaluated states/scores cannot safely be summed.
+     */
+    record Batch<S, D>(String description, List<Function<S, D>> preparations,
+            BiFunction<S, List<D>, Transition<S>> commit) implements Outcome<S> {
+        public Batch { preparations = List.copyOf(preparations); }
+    }
+
     /** A resolution-time choice whose legal options depend on the current projected state. */
     record Deferred<S>(Function<S, Outcome<S>> build) implements Outcome<S> { }
 

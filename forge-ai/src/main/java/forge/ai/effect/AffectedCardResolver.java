@@ -104,7 +104,9 @@ final class AffectedCardResolver {
     private static Map<Card, Integer> allPotentialCards(final SpellAbility outcome,
             final OutcomeEvaluationContext context) {
         final Map<Card, Integer> weights = new LinkedHashMap<>();
-        for (final Card card : outcome.getHostCard().getGame().getCardsIn(ZoneType.Battlefield)) {
+        for (final Card card : context.state() == null
+                ? outcome.getHostCard().getGame().getCardsIn(ZoneType.Battlefield)
+                : context.state().battlefield(context.evaluatingAi())) {
             final Card projected = context.state() == null ? card : context.state().card(card);
             if (projected != null) { weights.put(projected, 1); }
         }

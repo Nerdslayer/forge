@@ -209,6 +209,18 @@ public class CardCopyService {
     }
 
     public Card getLKICopy(Map<Integer, Card> cachedMap) {
+        return getLKICopy(cachedMap, copyFrom == null ? 0 : copyFrom.getId());
+    }
+
+    /** Analysis-only copy with a caller-owned identity; does not allocate a live game card ID. */
+    public Card getLKICopyWithId(final int id) {
+        if (copyFrom instanceof DetachedCardEffect) {
+            throw new IllegalArgumentException("Detached effects require their original identity");
+        }
+        return getLKICopy(Maps.newHashMap(), id);
+    }
+
+    private Card getLKICopy(final Map<Integer, Card> cachedMap, final int id) {
         if (copyFrom == null) {
             return null;
         }
@@ -228,7 +240,7 @@ public class CardCopyService {
         if(copyFrom instanceof DetachedCardEffect)
             newCopy = new DetachedCardEffect((DetachedCardEffect) copyFrom, false);
         else
-            newCopy = new Card(copyFrom.getId(), copyFrom.getPaperCard(), copyFrom.getGame(), null);
+            newCopy = new Card(id, copyFrom.getPaperCard(), copyFrom.getGame(), null);
         cachedMap.put(copyFrom.getId(), newCopy);
         newCopy.setSetCode(copyFrom.getSetCode());
         newCopy.setOwner(copyFrom.getOwner());

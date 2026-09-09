@@ -107,7 +107,7 @@ final class DamageProductionExtractor implements EffectProductionExtractor {
     }
 
     private static EffectProduction createProduction(final Card source,
-            final SpellAbility outcome, final int expectedBatches) {
+            final SpellAbility outcome, final double expectedBatches) {
         outcome.setActivatingPlayer(source.getController());
         final int amount = AbilityUtils.calculateAmount(
                 source, outcome.getParam("NumDmg"), outcome);

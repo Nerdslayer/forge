@@ -23,6 +23,12 @@ final class EffectMath {
                 : result < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) result;
     }
 
+    static int multiply(final double left, final int right) {
+        final double result = left * right;
+        return result >= Integer.MAX_VALUE ? Integer.MAX_VALUE
+                : result <= Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) Math.round(result);
+    }
+
     static int negate(final int value) {
         return value == Integer.MIN_VALUE ? Integer.MAX_VALUE : -value;
     }

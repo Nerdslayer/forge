@@ -198,26 +198,43 @@ public final class SpellAbilityOutcomePlanner {
     private static Outcome<OutcomeState> sacrifice(final SpellAbility ability, final Player ai,
             final EffectEvent event, final OutcomeState initial) {
         final SpellAbility bound = boundCopy(ability, initial);
-        final List<Outcome<OutcomeState>> players = new ArrayList<>();
-        for (final Player player : PlayerRecipientResolver.resolve(bound, new OutcomeEvaluationContext(ai, event, initial))) {
+        final List<Player> affected = PlayerRecipientResolver.resolve(bound, new OutcomeEvaluationContext(ai, event, initial));
+        final forge.game.Game game = ai.getGame();
+        final List<Player> players = new ArrayList<>(game.getPhaseHandler().getPlayerTurn() == null
+                ? game.getPlayersInTurnOrder() : game.getPlayersInTurnOrder(game.getPhaseHandler().getPlayerTurn()));
+        players.removeIf(player -> !affected.contains(player));
+        final List<java.util.function.Function<OutcomeState, List<forge.game.card.Card>>> preparations = new ArrayList<>();
+        for (final Player player : players) {
             final String slot = "sacrifice:" + ability.getId() + ":" + player.getId();
-            final Outcome<OutcomeState> effect = new Outcome.Atomic<>("Sacrifice " + ability.getMapParams(), state -> {
-                final OutcomeState next = state.copy();
-                final OutcomeEvaluationContext context = new OutcomeEvaluationContext(ai, event, next);
-                int value = 0;
-                for (final forge.game.card.Card card : next.sacrifices.get(slot)) {
-                    value = EffectMath.add(value, CardStateDeltaEvaluator.evaluateDeparture(context, card));
-                }
-                return new Outcome.Transition<>((double) value, next);
-            });
-            players.add(new Outcome.Target<>(slot,
+            preparations.add(state -> state.sacrifices.get(slot));
+        }
+        // TODO(effect analysis): Shared-team choice ordering, replacements and death triggers.
+        // Ordinary APNAP choices happen before any departure; the batch has one board delta.
+        Outcome<OutcomeState> result = new Outcome.Batch<>("Simultaneous sacrifice " + ability.getMapParams(),
+                preparations, (state, groups) -> {
+                    final java.util.Map<forge.game.card.Card, forge.game.card.Card> changes = new java.util.LinkedHashMap<>();
+                    for (final List<forge.game.card.Card> group : groups) {
+                        for (final forge.game.card.Card selected : group) {
+                            final forge.game.card.Card card = state.card(selected);
+                            if (card != null) { changes.put(card, null); }
+                        }
+                    }
+                    final OutcomeState next = state.copy();
+                    final int value = CardStateDeltaEvaluator.evaluateBoardChanges(
+                            new OutcomeEvaluationContext(ai, event, next), changes);
+                    return new Outcome.Transition<>((double) value, next, bound);
+                });
+        for (int i = players.size() - 1; i >= 0; i--) {
+            final Player player = players.get(i);
+            final String slot = "sacrifice:" + ability.getId() + ":" + player.getId();
+            result = new Outcome.Target<>(slot,
                     state -> SacrificeOutcomeEvaluator.choices(bound, player, state), (state, selected) -> {
                         final OutcomeState next = state.copy();
                         next.sacrifices.put(slot, selected);
                         return next;
-                    }, effect, player.isOpponentOf(ai)));
+                    }, result, player.isOpponentOf(ai));
         }
-        return new Outcome.Sequence<>(players);
+        return result;
     }
 
     private static Outcome<OutcomeState> atomic(final SpellAbility ability, final Player ai,
@@ -248,7 +265,7 @@ public final class SpellAbilityOutcomePlanner {
         // the overlay. Never silently read their stale live-game values after earlier effects.
         if (state.unprojectedBindings && ability.getMapParams().values().stream().anyMatch(v ->
                 v.contains("Remembered") || v.contains("Imprinted") || v.contains("Chosen"))) { return false; }
-        if (state.cards.isEmpty() && state.life.isEmpty() && state.hands.isEmpty() && !state.unprojectedBoard) {
+        if (state.cards.isEmpty() && state.createdTokens.isEmpty() && state.life.isEmpty() && state.hands.isEmpty() && !state.unprojectedBoard) {
             return true;
         }
         for (final String name : List.of("NumCards", "LifeAmount", "NumDmg", "CounterNum", "NumAtt", "NumDef", "Amount",
