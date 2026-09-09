@@ -9,6 +9,59 @@ import org.testng.annotations.Test;
 
 /** Algebra regressions independent of card scripts and live game mutation. */
 public class OutcomePlannerTest {
+    private static Outcome<Integer> simultaneousAdds() {
+        return new Outcome.Batch<Integer, Integer>("batch", List.of(s -> s, s -> s), (s, amounts) -> {
+            final int delta = amounts.stream().mapToInt(Integer::intValue).sum();
+            return new Outcome.Transition<>((double) delta, s + delta);
+        });
+    }
+
+    @Test
+    public void batchReadsOneSnapshotAndContinuationSeesOnlyCommittedState() {
+        final Outcome<Integer> doubleValue = new Outcome.Atomic<>(s -> new Outcome.Transition<>((double) s, s * 2));
+        final OutcomePlanner<Integer> planner = new OutcomePlanner<>();
+        final OutcomePlan<Integer> sequential = planner.evaluate(new Outcome.Sequence<>(List.of(doubleValue, doubleValue)), 2);
+        final OutcomePlan<Integer> batch = planner.evaluate(simultaneousAdds(), 2);
+        Assert.assertEquals(sequential.state(), Integer.valueOf(8));
+        Assert.assertEquals(batch.state(), Integer.valueOf(6));
+        Assert.assertEquals(batch.value(), 4.0);
+        final OutcomePlan<Integer> continued = planner.evaluate(new Outcome.Sequence<>(List.of(
+                simultaneousAdds(), new Outcome.Atomic<>(s -> new Outcome.Transition<>((double) s, s)))), 2);
+        Assert.assertEquals(continued.value(), 10.0);
+        Assert.assertEquals(continued.state(), Integer.valueOf(6));
+    }
+
+    @Test
+    public void batchFailureDoesNotCommitAndConsumesSearchBudget() {
+        final boolean[] committed = {false};
+        final Outcome<Integer> unsupported = new Outcome.Batch<Integer, Integer>("unsupported",
+                List.of(s -> s, s -> null), (s, parts) -> {
+                    committed[0] = true;
+                    return new Outcome.Transition<>(0, 999);
+                });
+        final OutcomePlan<Integer> result = new OutcomePlanner<Integer>().evaluate(unsupported, 2);
+        Assert.assertFalse(result.supported());
+        Assert.assertFalse(committed[0]);
+        Assert.assertEquals(result.state(), Integer.valueOf(2));
+        Assert.assertFalse(new OutcomePlanner<Integer>(2).evaluate(simultaneousAdds(), 2).supported());
+    }
+
+    @Test
+    public void batchComposesWithChoicesAndRandomBranches() {
+        final Outcome<Integer> choice = new Outcome.Target<>("binding", s -> List.of(1, 2),
+                (s, selected) -> selected, simultaneousAdds(), true);
+        final OutcomePlan<Integer> chosen = new OutcomePlanner<Integer>().evaluate(choice, 0);
+        Assert.assertEquals(chosen.state(), Integer.valueOf(6));
+        Assert.assertEquals(chosen.value(), 4.0);
+        final Outcome<Integer> random = new Outcome.Random<>("random", List.of(
+                new Outcome.Weighted<>(add(1), 1), new Outcome.Weighted<>(add(2), 1)));
+        final OutcomePlan<Integer> result = new OutcomePlanner<Integer>().evaluate(
+                new Outcome.Sequence<>(List.of(random, simultaneousAdds())), 0);
+        Assert.assertEquals(result.value(), 4.5);
+        Assert.assertEquals(result.branches().get(0).state(), Integer.valueOf(3));
+        Assert.assertEquals(result.branches().get(1).state(), Integer.valueOf(6));
+    }
+
     private static Outcome<Integer> add(final int amount) {
         return new Outcome.Atomic<>(s -> new Outcome.Transition<>((double) amount, s + amount));
     }

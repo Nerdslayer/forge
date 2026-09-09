@@ -3,6 +3,8 @@ package forge.ai.effect;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
@@ -31,7 +33,7 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
 
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "CounterType", "CounterNum",
-            "Defined", "SpellDescription", "StackDescription");
+            "Defined", "EachFromSource", "SpellDescription", "StackDescription");
 
     private CounterOutcomeEvaluator() {
     }
@@ -42,10 +44,11 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
                 || outcome.getSubAbility() != null || !outcome.hasParam("CounterType")) {
             return false;
         }
-        final List<CounterType> counterTypes = parseCounterTypes(
-                outcome.getParam("CounterType"));
+        final boolean transfer = "EachFromSource".equals(outcome.getParam("CounterType"))
+                && outcome.hasParam("EachFromSource") && !outcome.getParam("EachFromSource").isBlank();
+        final List<CounterType> counterTypes = transfer ? List.of() : parseCounterTypes(outcome.getParam("CounterType"));
         return SUPPORTED_PARAMS.containsAll(outcome.getMapParams().keySet())
-                && !counterTypes.isEmpty()
+                && (transfer || !outcome.hasParam("EachFromSource") && !counterTypes.isEmpty())
                 && counterTypes.stream().allMatch(CounterOutcomeEvaluator::supportsCounterType)
                 && !outcome.getParamOrDefault("CounterNum", "1").isBlank()
                 && (outcome.usesTargeting()
@@ -56,6 +59,7 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
 
     @Override
     public int evaluateOutcome(final SpellAbility outcome, final OutcomeEvaluationContext context) {
+        if (outcome.hasParam("EachFromSource")) { return evaluateTransfer(outcome, context); }
         final int counterAmount = AbilityUtils.calculateAmount(outcome.getHostCard(),
                 outcome.getParamOrDefault("CounterNum", "1"), outcome);
         if (counterAmount <= 0) {
@@ -98,6 +102,51 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
     private static boolean supportsRecipient(final Card card, final CounterType counterType) {
         return counterType == CounterEnumType.LOYALTY
                 ? card.isPlaneswalker() : card.isCreature();
+    }
+
+    private static int evaluateTransfer(final SpellAbility outcome, final OutcomeEvaluationContext context) {
+        // TODO(effect analysis): Counter replacements and unsupported counter types; this copies
+        // counters, not MoveCounter (which must also remove them from its source).
+        try {
+            final Map<CounterType, Integer> counters = new LinkedHashMap<>();
+            final String definition = outcome.getParam("EachFromSource");
+            final List<Card> sources = AbilityUtils.getDefinedCards(outcome.getHostCard(), definition, outcome);
+            if (sources.isEmpty()) { return context.unsupported(); }
+            for (final Card original : sources) {
+                // Explicit LKI references must retain the counters at the time the card died.
+                final Card source = context.state() == null || definition.contains("LKI")
+                        ? original : context.state().card(original);
+                if (source == null) { continue; }
+                for (final var entry : source.getCounters().entrySet()) {
+                    if (!supportsCounterType(entry.getElement())) { return context.unsupported(); }
+                    final int amount = outcome.hasParam("CounterNum")
+                            ? AbilityUtils.calculateAmount(outcome.getHostCard(), outcome.getParam("CounterNum"), outcome)
+                            : entry.getCount();
+                    if (amount > 0) { counters.merge(entry.getElement(), amount, EffectMath::add); }
+                }
+            }
+            final AffectedCardResolver.Resolution recipients = outcome.usesTargeting()
+                    ? AffectedCardResolver.targeted(outcome, context, card -> true)
+                    : AffectedCardResolver.defined(outcome, context, card -> true);
+            return CardStateDeltaEvaluator.evaluate(outcome, context, recipients, target -> {
+                final Card changed = CardCopyService.getLKICopy(target);
+                if (target.getZone() != null) { changed.setZone(target.getZone()); }
+                for (final var entry : counters.entrySet()) {
+                    final CounterType type = entry.getKey();
+                    if (!target.canReceiveCounters(type)) { continue; }
+                    if (!supportsRecipient(target, type)) { return context.unsupported(); }
+                    changed.setCounters(type, EffectMath.add(changed.getCounters(type), entry.getValue()));
+                    if (type instanceof CounterKeywordType) {
+                        changed.addChangedCardKeywords(List.of(type.toString()), List.of(), false,
+                                context.timestamp(target.getGame()), null, false);
+                    }
+                }
+                changed.updateKeywordsCache();
+                return CardStateDeltaEvaluator.evaluateChange(context, target, changed);
+            });
+        } catch (final RuntimeException ignored) {
+            return context.unsupported();
+        }
     }
 
     private static boolean supportsCounterType(final CounterType counterType) {

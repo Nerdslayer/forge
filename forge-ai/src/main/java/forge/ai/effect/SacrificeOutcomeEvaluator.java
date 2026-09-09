@@ -8,10 +8,8 @@ import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardLists;
-import forge.game.card.CardPredicates;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
-import forge.game.zone.ZoneType;
 
 /** Values fixed self-sacrifice and supplies legal selections to the shared outcome planner. */
 final class SacrificeOutcomeEvaluator implements OutcomeEvaluator {
@@ -57,13 +55,16 @@ final class SacrificeOutcomeEvaluator implements OutcomeEvaluator {
     static List<List<Card>> choices(final SpellAbility outcome, final Player player, final OutcomeState state) {
         if (state.unprojectedBoard) { throw new IllegalArgumentException("Unprojected token/copy recipients"); }
         final CardCollection candidates = new CardCollection();
-        for (final Card original : player.getGame().getCardsIn(ZoneType.Battlefield)) {
+        for (final Card original : state.battlefield(player)) {
             final Card card = state.card(original);
             if (card != null && card.getController() == player) { candidates.add(card); }
         }
         final List<Card> legal = new ArrayList<>(CardLists.filter(
                 AbilityUtils.filterListByType(candidates, outcome.getParam("SacValid"), outcome),
-                CardPredicates.canBeSacrificedBy(outcome, true)));
+                card -> state.createdTokens.contains(card)
+                        ? !card.isImmutable() && !card.isPhasedOut()
+                                && !forge.game.staticability.StaticAbilityCantSacrifice.cantSacrifice(card, outcome, true)
+                        : card.canBeSacrificedBy(outcome, true)));
         final int amount = Math.min(fixedAmount(outcome), legal.size());
         if (outcome.hasParam("StrictAmount") && amount < fixedAmount(outcome)) { return List.of(List.of()); }
         final List<List<Card>> choices = new ArrayList<>();

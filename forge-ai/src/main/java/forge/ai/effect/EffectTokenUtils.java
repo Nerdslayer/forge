@@ -27,6 +27,9 @@ final class EffectTokenUtils {
     }
 
     static List<Card> createPrototypes(final SpellAbility outcome, final Player owner) {
+        // TODO(effect analysis): Forge's existing prototype helpers allocate game card IDs (and
+        // token-edition pins). Provide side-effect-free prototype construction before using this
+        // planner in determinism-sensitive search; projected token identities themselves are local.
         // TODO(effect analysis): Account for the immediate tactical value of TokenAttacking and
         // TokenBlocking. They are currently accepted but valued like otherwise identical tokens
         // outside combat; TokenTapped still affects the ordinary permanent evaluation.
@@ -74,7 +77,7 @@ final class EffectTokenUtils {
 
     static List<EffectProduction> createProductions(final Card source,
             final Player controller, final List<ProducedToken> tokens,
-            final int expectedBatches, final SpellAbility cause) {
+            final double expectedBatches, final SpellAbility cause) {
         final List<EffectEvent> tokenEvents = new ArrayList<>();
         final List<EffectEvent> zoneEvents = new ArrayList<>();
         for (final ProducedToken produced : tokens) {

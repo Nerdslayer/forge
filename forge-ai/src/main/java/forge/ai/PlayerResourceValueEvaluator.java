@@ -20,6 +20,7 @@ public final class PlayerResourceValueEvaluator {
     private static final int EMPTY_HAND_CARD_VALUE = 140;
     private static final int CARD_VALUE_LOSS_PER_EXISTING_CARD = 12;
     private static final int MINIMUM_CARD_VALUE = 60;
+    private static final int AVERAGE_CARD_HAND_SIZE = 3;
 
     private PlayerResourceValueEvaluator() {
     }
@@ -82,6 +83,16 @@ public final class PlayerResourceValueEvaluator {
         }
         final long value = (long) MANA_VALUE * amount;
         return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
+    }
+
+    /**
+     * Returns the initial opportunity-cost estimate for casting an average card with the given
+     * mana value. The medium-hand calibration keeps this comparison separate from the nonlinear
+     * value of actually drawing into a player's current hand.
+     */
+    public static int evaluateAverageCardPlay(final int manaCost) {
+        final int safeManaCost = Math.max(0, manaCost);
+        return saturatedAdd(evaluateMana(safeManaCost), evaluateNextCard(AVERAGE_CARD_HAND_SIZE));
     }
 
     /**

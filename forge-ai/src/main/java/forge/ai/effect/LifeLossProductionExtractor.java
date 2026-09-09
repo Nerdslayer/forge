@@ -89,7 +89,7 @@ final class LifeLossProductionExtractor implements EffectProductionExtractor {
     }
 
     private static EffectProduction createProduction(final Card source,
-            final SpellAbility outcome, final int expectedBatches) {
+            final SpellAbility outcome, final double expectedBatches) {
         outcome.setActivatingPlayer(source.getController());
         final int amount = AbilityUtils.calculateAmount(
                 source, outcome.getParam("LifeAmount"), outcome);
@@ -109,7 +109,7 @@ final class LifeLossProductionExtractor implements EffectProductionExtractor {
     }
 
     private static EffectProduction createLifePaymentProduction(final Card source,
-            final SpellAbility ability, final int expectedBatches) {
+            final SpellAbility ability, final double expectedBatches) {
         if (ability.getPayCosts() == null) {
             return null;
         }

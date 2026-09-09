@@ -14,6 +14,95 @@ import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
 
 public class SpellAbilityOutcomePlannerTest extends AITest {
+    @Test
+    public void simultaneousSacrificeBindsAllPlayersInActivePlayerOrder() {
+        final Card source = source();
+        final Player ai = source.getController();
+        final Player active = ai.getOpponents().get(0);
+        source.getGame().getPhaseHandler().devModeSet(forge.game.phase.PhaseType.MAIN1, active);
+        final SpellAbility sacrifice = ability(source, "DB$ Sacrifice | Defined$ Player | SacValid$ Creature");
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(sacrifice, ai);
+        Assert.assertTrue(plan.supported(), plan.reason());
+        Assert.assertEquals(plan.decisions().size(), 3);
+        Assert.assertEquals(plan.decisions().get(0).id(), "sacrifice:" + sacrifice.getId() + ":" + active.getId());
+        Assert.assertEquals(plan.decisions().get(1).id(), "sacrifice:" + sacrifice.getId() + ":" + ai.getId());
+        Assert.assertEquals(plan.decisions().get(2).kind(), OutcomePlan.DecisionKind.EFFECT);
+        Assert.assertEquals(plan.state().battlefield(ai).stream().filter(Card::isCreature).count(), 0L);
+        Assert.assertEquals(ai.getCreaturesInPlay().size(), 1);
+        Assert.assertEquals(active.getCreaturesInPlay().size(), 1);
+    }
+
+    @Test
+    public void copiedOpponentTokensCanBeSacrificedDuringResolution() {
+        final Card source = source();
+        final Player player = source.getController();
+        final Card creature = player.getCreaturesInPlay().get(0);
+        creature.setSVar("SacCopies", "DB$ Sacrifice | Defined$ Opponent | SacValid$ Creature.token | Amount$ 2");
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(ability(creature,
+                "DB$ CopyPermanent | Defined$ Self | Controller$ Opponent | NumCopies$ 2 | SubAbility$ SacCopies"), player);
+        Assert.assertTrue(plan.supported(), plan.reason());
+        Assert.assertEquals(plan.state().createdTokens.size(), 2);
+        Assert.assertEquals(plan.state().battlefield(player).stream().filter(Card::isToken).count(), 0L);
+        Assert.assertEquals(plan.value(), 0.0);
+    }
+
+    @Test
+    public void counterTransferPreservesHistoricalSourceAndSupportsAmountOverride() {
+        final Card source = source();
+        final Player player = source.getController();
+        final Card creature = player.getCreaturesInPlay().get(0);
+        creature.setCounters(CounterEnumType.P1P1, 3);
+        final Card historical = forge.game.card.CardCopyService.getLKICopy(creature);
+        creature.setCounters(CounterEnumType.P1P1, 0);
+        final SpellAbility transfer = ability(source, "DB$ PutCounter | ValidTgts$ Creature.YouCtrl"
+                + " | CounterType$ EachFromSource | EachFromSource$ TriggeredCardLKICopy");
+        transfer.setTriggeringObject(forge.game.ability.AbilityKey.Card, historical);
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(transfer, player);
+        Assert.assertTrue(plan.supported(), plan.reason());
+        Assert.assertEquals(plan.state().card(creature).getCounters(CounterEnumType.P1P1), 3);
+        final SpellAbility limited = ability(source, "DB$ PutCounter | ValidTgts$ Creature.YouCtrl"
+                + " | CounterType$ EachFromSource | EachFromSource$ TriggeredCardLKICopy | CounterNum$ 1");
+        limited.setTriggeringObject(forge.game.ability.AbilityKey.Card, historical);
+        final OutcomePlan<OutcomeState> override = SpellAbilityOutcomePlanner.evaluate(limited, player);
+        Assert.assertTrue(override.supported(), override.reason());
+        Assert.assertEquals(override.state().card(creature).getCounters(CounterEnumType.P1P1), 1);
+        Assert.assertEquals(creature.getCounters(CounterEnumType.P1P1), 0);
+    }
+
+    @Test
+    public void createdTokensAreDistinctSacrificeChoicesWithoutLiveMutation() {
+        final Card source = source();
+        final Player player = source.getController();
+        final int before = player.getCreaturesInPlay().size();
+        source.setSVar("SacToken", "DB$ Sacrifice | Defined$ You | SacValid$ Creature.token | Amount$ 1");
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(ability(source,
+                "DB$ Token | TokenScript$ br_1_1_goblin | TokenAmount$ 2 | SubAbility$ SacToken"), player);
+        Assert.assertTrue(plan.supported(), plan.reason());
+        Assert.assertEquals(plan.state().createdTokens.size(), 2);
+        Assert.assertNotEquals(plan.state().createdTokens.get(0).getId(), plan.state().createdTokens.get(1).getId());
+        Assert.assertEquals(plan.state().battlefield(player).stream().filter(Card::isToken).count(), 1L);
+        Assert.assertEquals(player.getCreaturesInPlay().size(), before);
+        Assert.assertTrue(plan.value() < 0);
+    }
+
+    @Test
+    public void transferredCountersUseCombinedDeltaAndRejectUnknownTypes() {
+        final Card source = source();
+        final Player player = source.getController();
+        final Card creature = player.getCreaturesInPlay().get(0);
+        creature.setCounters(CounterEnumType.P1P1, 2);
+        creature.setCounters(forge.game.card.CounterType.getType("Flying"), 1);
+        final SpellAbility transfer = ability(creature,
+                "DB$ PutCounter | Defined$ Self | CounterType$ EachFromSource | EachFromSource$ Self");
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(transfer, player);
+        Assert.assertTrue(plan.supported(), plan.reason());
+        Assert.assertEquals(plan.state().card(creature).getCounters(CounterEnumType.P1P1), 4);
+        Assert.assertEquals(plan.state().card(creature).getCounters(forge.game.card.CounterType.getType("Flying")), 2);
+        Assert.assertEquals(creature.getCounters(CounterEnumType.P1P1), 2);
+        creature.setCounters(CounterEnumType.CHARGE, 1);
+        Assert.assertFalse(SpellAbilityOutcomePlanner.evaluate(transfer, player).supported());
+    }
+
     private Card source() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

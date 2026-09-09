@@ -70,9 +70,25 @@ public final class EffectAnalysisTrace {
         if (!isEnabled()) {
             return;
         }
-        line("Production: %s -> %s%s, batches=%d, events=%d, subjects=%s",
+        line("Production: %s -> %s%s, batches=%.2f, events=%d, subjects=%s",
                 cardLabel(production.source()), production.type(), productionDetails(production),
                 production.expectedBatches(), production.events().size(), subjects(production));
+    }
+
+    void activationEstimate(final Card source, final SpellAbility ability,
+            final ActivationUseEstimate estimate) {
+        if (!isEnabled()) {
+            return;
+        }
+        line("Activation estimate: %s, ability=%s, supported=%s, outcomeSupported=%s, "
+                        + "outcome=%d, averageCard=%d, currentUses=%d, nextUses(noLand=%d, withLand=%d), "
+                        + "landProbability=%.2f, opportunityUses=%.2f, willingness=%.2f, "
+                        + "expectedUses=%.2f, reason=%s",
+                cardLabel(source), ability.getApi(), estimate.supported(), estimate.outcomeSupported(),
+                estimate.outcomeValue(), estimate.averageCardPlayValue(), estimate.currentUses(),
+                estimate.noLandUses(), estimate.withLandUses(), estimate.nextLandProbability(),
+                estimate.opportunityUses(), estimate.willingness(), estimate.expectedUses(),
+                estimate.reason());
     }
 
     void consequence(final EffectConsequence consequence) {
@@ -108,7 +124,7 @@ public final class EffectAnalysisTrace {
         if (!isEnabled()) {
             return;
         }
-        line("Triggered relationship: %s <-> %s, per-batch=%d, batches=%d, total=%d",
+        line("Triggered relationship: %s <-> %s, per-batch=%d, batches=%.2f, total=%d",
                 cardLabel(production.source()), cardLabel(consequence.source()),
                 valueBeforeBatches, production.expectedBatches(), totalValue);
     }

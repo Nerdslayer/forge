@@ -19,7 +19,7 @@ final class PermanentDepartureEventFactory {
 
     static List<EffectProduction> createSacrificeProductions(final Card source,
             final SpellAbility cause, final Map<Player, List<Card>> sacrificedByPlayer,
-            final int expectedBatches) {
+            final double expectedBatches) {
         final List<EffectProduction> productions = new ArrayList<>();
         for (final Map.Entry<Player, List<Card>> entry : sacrificedByPlayer.entrySet()) {
             if (entry.getValue().isEmpty()) {
@@ -55,14 +55,14 @@ final class PermanentDepartureEventFactory {
 
     static List<EffectProduction> createBattlefieldToGraveyardProduction(
             final Card source, final SpellAbility cause, final Collection<Card> departed,
-            final int expectedBatches) {
+            final double expectedBatches) {
         return createZoneChangeProduction(source, cause, departed,
                 ZoneType.Battlefield, ZoneType.Graveyard, expectedBatches);
     }
 
     static List<EffectProduction> createZoneChangeProduction(
             final Card source, final SpellAbility cause, final Collection<Card> movedCards,
-            final ZoneType origin, final ZoneType destination, final int expectedBatches) {
+            final ZoneType origin, final ZoneType destination, final double expectedBatches) {
         if (movedCards.isEmpty()) {
             return List.of();
         }

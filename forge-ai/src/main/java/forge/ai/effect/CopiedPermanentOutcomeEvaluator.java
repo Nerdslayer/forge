@@ -72,7 +72,10 @@ final class CopiedPermanentOutcomeEvaluator implements OutcomeEvaluator {
                         continue;
                     }
                     final Card token = EffectTokenUtils.createCopyPrototype(
-                            outcome, original, controller);
+                            outcome, context.state() == null ? original : context.state().card(original), controller);
+                    if (context.state() != null) {
+                        for (int i = 0; i < amount; i++) { context.state().addToken(token); }
+                    }
                     final int tokenValue = ComputerUtilCard.evaluatePermanent(
                             context.evaluatingAi(), token);
                     value = EffectMath.add(value,
@@ -80,8 +83,7 @@ final class CopiedPermanentOutcomeEvaluator implements OutcomeEvaluator {
                                     ? tokenValue : EffectMath.negate(tokenValue));
                 }
             }
-            // TODO(effect analysis): Materialize distinct projected copies for later board effects.
-            if (context.state() != null) { context.state().unprojectedBoard = true; }
+            // TODO(effect analysis): Recompute downstream static relationships and ETB effects.
             return EffectMath.multiply(value, amount);
         } catch (final RuntimeException ignored) {
             return context.unsupported();

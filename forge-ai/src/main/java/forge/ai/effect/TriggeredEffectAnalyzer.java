@@ -93,6 +93,10 @@ final class TriggeredEffectAnalyzer {
                                         evaluatingAi, permanent, ability);
                         productions.addAll(extracted);
                         extracted.forEach(trace::production);
+                        if (ability.isActivatedAbility() && !extracted.isEmpty()) {
+                            trace.activationEstimate(permanent, ability,
+                                    ActivatedAbilityUseEvaluator.estimate(permanent, ability));
+                        }
                     } catch (final RuntimeException ignored) {
                         // Unknown or malformed card scripts must not disrupt AI decisions.
                     }

@@ -63,7 +63,7 @@ final class TokenProductionExtractor implements EffectProductionExtractor {
     }
 
     private static List<EffectProduction> createProductions(final Card source,
-            final SpellAbility outcome, final int expectedBatches) {
+            final SpellAbility outcome, final double expectedBatches) {
         outcome.setActivatingPlayer(source.getController());
         final int tokenAmount = AbilityUtils.calculateAmount(source,
                 outcome.getParamOrDefault("TokenAmount", "1"), outcome);

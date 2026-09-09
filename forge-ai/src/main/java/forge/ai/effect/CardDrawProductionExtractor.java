@@ -80,7 +80,7 @@ final class CardDrawProductionExtractor implements EffectProductionExtractor {
     }
 
     private static EffectProduction createProduction(final Card source,
-            final SpellAbility outcome, final int expectedBatches,
+            final SpellAbility outcome, final double expectedBatches,
             final boolean useCurrentDrawCount) {
         outcome.setActivatingPlayer(source.getController());
         final int requestedAmount = AbilityUtils.calculateAmount(source,

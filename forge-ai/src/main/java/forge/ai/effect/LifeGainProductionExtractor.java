@@ -175,12 +175,12 @@ final class LifeGainProductionExtractor implements EffectProductionExtractor {
     }
 
     private static EffectProduction createProduction(final Card source,
-            final SpellAbility outcome, final int expectedBatches) {
+            final SpellAbility outcome, final double expectedBatches) {
         return createProduction(source, outcome, expectedBatches, Map.of(), true);
     }
 
     private static EffectProduction createProduction(final Card source,
-            final SpellAbility outcome, final int expectedBatches,
+            final SpellAbility outcome, final double expectedBatches,
             final Map<AbilityKey, Object> originatingParameters, final boolean mayBeFirstGain) {
         outcome.setActivatingPlayer(source.getController());
         final int amount = AbilityUtils.calculateAmount(

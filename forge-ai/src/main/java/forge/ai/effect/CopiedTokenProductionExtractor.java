@@ -44,7 +44,7 @@ final class CopiedTokenProductionExtractor implements EffectProductionExtractor 
     }
 
     private static List<EffectProduction> extract(final Card source,
-            final SpellAbility root, final int expectedBatches) {
+            final SpellAbility root, final double expectedBatches) {
         final SpellAbility outcome = EffectAbilityUtils.findOutcome(root, ApiType.CopyPermanent);
         if (!CopiedPermanentOutcomeEvaluator.supportsKnownCopy(outcome)) {
             return List.of();

@@ -58,6 +58,9 @@ public final class OutcomePlanner<S> {
         if (outcome instanceof Outcome.Sequence<S> sequence) {
             return sequence(sequence.children(), 0, state, next);
         }
+        if (outcome instanceof Outcome.Batch<S, ?> batch) {
+            return batch(batch, state, next);
+        }
         if (outcome instanceof Outcome.Deferred<S> deferred) {
             return solve(deferred.build().apply(state), state, next);
         }
@@ -96,6 +99,20 @@ public final class OutcomePlanner<S> {
                 List.of(new OutcomePlan.Decision(DecisionKind.RANDOM, random.id(),
                         random.options().stream().map(Outcome.Weighted::weight).toList())),
                 branches, true, "");
+    }
+
+    private <D> OutcomePlan<S> batch(final Outcome.Batch<S, D> batch, final S state,
+            final Function<S, OutcomePlan<S>> next) {
+        return solve(new Outcome.Atomic<S>(batch.description(), snapshot -> {
+            final List<D> prepared = new ArrayList<>();
+            for (final Function<S, D> prepare : batch.preparations()) {
+                if (--remaining < 0) { throw new SearchLimit(); }
+                final D change = prepare.apply(snapshot);
+                if (change == null) { return null; }
+                prepared.add(change);
+            }
+            return batch.commit().apply(snapshot, List.copyOf(prepared));
+        }), state, next);
     }
 
     private OutcomePlan<S> sequence(final List<Outcome<S>> children, final int index,
