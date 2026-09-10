@@ -108,6 +108,40 @@ public class OutcomePlannerTest {
     }
 
     @Test
+    public void randomReportsUnresolvedProbabilityWithoutRenormalizingKnownValue() {
+        final Outcome<Integer> unsupported = new Outcome.Atomic<>(s -> null);
+        final OutcomePlan<Integer> result = new OutcomePlanner<Integer>().evaluate(new Outcome.Random<>("roll",
+                List.of(new Outcome.Weighted<>(add(4), 1), new Outcome.Weighted<>(unsupported, 3))), 0);
+        Assert.assertTrue(result.supported());
+        Assert.assertEquals(result.completeness(), OutcomePlan.Completeness.PARTIAL);
+        Assert.assertEquals(result.value(), 1.0);
+        Assert.assertEquals(result.unresolvedProbability(), .75);
+        Assert.assertEquals(result.branches().size(), 2);
+    }
+
+    @Test
+    public void choicesReportUnresolvedAlternativesInsteadOfTreatingThemAsProbabilities() {
+        final Outcome<Integer> unsupported = new Outcome.Atomic<>(s -> null);
+        final OutcomePlan<Integer> result = new OutcomePlanner<Integer>().evaluate(new Outcome.Choice<>("mode",
+                List.of(add(4), unsupported), 1, 1, false, true), 0);
+        Assert.assertTrue(result.supported());
+        Assert.assertEquals(result.completeness(), OutcomePlan.Completeness.PARTIAL);
+        Assert.assertEquals(result.value(), 4.0);
+        Assert.assertEquals(result.unresolvedProbability(), 0.0);
+        Assert.assertFalse(result.unresolvedAlternatives().isEmpty());
+    }
+
+    @Test
+    public void unavailableTargetIsDistinctFromUnsupportedTargetEvaluation() {
+        final Outcome<Integer> target = new Outcome.Target<>("target", s -> List.of(),
+                (s, selected) -> s, add(1), true);
+        final OutcomePlan<Integer> result = new OutcomePlanner<Integer>().evaluate(target, 0);
+        Assert.assertFalse(result.supported());
+        Assert.assertTrue(result.unavailable());
+        Assert.assertEquals(result.completeness(), OutcomePlan.Completeness.UNAVAILABLE);
+    }
+
+    @Test
     public void decisionsBeforeRandomCannotSeeItsResult() {
         final Outcome<Integer> random = new Outcome.Random<>("roll", List.of(
                 new Outcome.Weighted<>(new Outcome.Atomic<>(s -> new Outcome.Transition<>(s == 1 ? 10 : 0, s)), 1),

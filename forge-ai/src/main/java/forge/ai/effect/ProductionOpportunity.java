@@ -12,13 +12,13 @@ record ProductionOpportunity(SpellAbility root, double expectedBatches) {
         if (!EffectAbilityUtils.isActiveBattlefieldTrigger(source, trigger)) {
             return null;
         }
-        final int expectedBatches = EffectOccurrenceEstimator.estimateTriggerBatches(
-                evaluatingAi, source, trigger);
-        if (expectedBatches <= 0) {
+        final AbilityOccurrenceEstimate estimate = AbilityOccurrenceEstimator.estimateTriggered(
+                source, trigger, new SituationalAbilityOccurrenceContext(evaluatingAi));
+        if (!estimate.supported() || estimate.expectedOccurrences() <= 0) {
             return null;
         }
         final SpellAbility root = EffectAbilityUtils.copyTriggerOutcome(source, trigger);
-        return root == null ? null : new ProductionOpportunity(root, expectedBatches);
+        return root == null ? null : new ProductionOpportunity(root, estimate.expectedOccurrences());
     }
 
     static ProductionOpportunity fromActivatedAbility(final Card source,

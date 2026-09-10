@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.function.Function;
 
 import forge.ai.effect.OutcomePlan.DecisionKind;
+import forge.ai.effect.OutcomePlan.Completeness;
 
 /** Bounded exhaustive planning; continuation evaluation keeps choices and later effects coupled. */
 public final class OutcomePlanner<S> {
@@ -50,7 +51,8 @@ public final class OutcomePlanner<S> {
             }
             final OutcomePlan<S> tail = next.apply(change.state());
             final OutcomePlan<S> plan = new OutcomePlan<>(change.value() + tail.value(), tail.state(),
-                    tail.decisions(), tail.branches(), tail.supported(), tail.reason());
+                    tail.decisions(), tail.branches(), tail.supported(), tail.reason(), tail.completeness(),
+                    tail.unresolvedProbability(), tail.unresolvedAlternatives());
             if (atom.description().isEmpty() && change.resolvedEffect() == null) { return plan; }
             return decision(plan, DecisionKind.EFFECT, atom.description(), change.resolvedEffect() == null
                     ? List.of() : List.of(change.resolvedEffect()));
@@ -71,34 +73,54 @@ public final class OutcomePlanner<S> {
             final List<List<Integer>> selections = new ArrayList<>();
             combinations(choice, 0, new ArrayList<>(), selections);
             OutcomePlan<S> best = null;
+            final List<String> unresolved = new ArrayList<>();
             for (final List<Integer> selected : selections) {
                 final List<Outcome<S>> children = new ArrayList<>();
                 for (final int index : selected) { children.add(choice.options().get(index)); }
                 final OutcomePlan<S> candidate = sequence(children, 0, state, next);
-                if (!candidate.supported() && !candidate.unavailable()) { return candidate; }
-                if (candidate.supported() && better(candidate, best, choice.maximize())) {
+                if (!candidate.unavailable() && betterCandidate(candidate, best, choice.maximize())) {
                     best = decision(candidate, DecisionKind.CHOICE, choice.id(), selected);
                 }
+                if (!candidate.complete() && !candidate.unavailable()) {
+                    unresolved.add(choice.id() + " " + selected + ": " + reason(candidate));
+                }
             }
-            return best == null ? OutcomePlan.unsupported(state, "No legal choice") : best;
+            if (best == null) {
+                return unresolved.isEmpty() ? OutcomePlan.unsupported(state, "No legal choice")
+                        : OutcomePlan.partial(0, state, List.of(), List.of(),
+                                "Choice has no fully evaluated alternative", 0, unresolved);
+            }
+            if (unresolved.isEmpty()) { return best; }
+            return partial(best, "Choice has unresolved alternatives", unresolved);
         }
         final Outcome.Random<S> random = (Outcome.Random<S>) outcome;
         final List<OutcomePlan<S>> branches = new ArrayList<>();
         double total = 0;
-        double weight = 0;
-        final double scale = random.options().stream().mapToDouble(Outcome.Weighted::weight).max().orElseThrow();
+        double unresolvedWeight = 0;
+        boolean supported = false;
+        final List<String> unresolved = new ArrayList<>();
+        final double totalWeight = random.options().stream().mapToDouble(Outcome.Weighted::weight).sum();
         for (final Outcome.Weighted<S> option : random.options()) {
             final OutcomePlan<S> branch = solve(option.outcome(), state, next);
-            if (!branch.supported()) { return branch; }
             branches.add(branch);
-            total += (option.weight() / scale) * branch.value();
-            weight += option.weight() / scale;
+            supported |= branch.supported();
+            final double probability = option.weight() / totalWeight;
+            total += probability * branch.value();
+            if (!branch.complete() && !branch.unavailable()) {
+                unresolvedWeight += probability;
+                unresolved.add(random.id() + " branch: " + reason(branch));
+            }
         }
         // There is no single resulting state. Each branch includes its own continuation.
-        return new OutcomePlan<>(total / weight, state,
-                List.of(new OutcomePlan.Decision(DecisionKind.RANDOM, random.id(),
-                        random.options().stream().map(Outcome.Weighted::weight).toList())),
-                branches, true, "");
+        final List<OutcomePlan.Decision> decisions = List.of(new OutcomePlan.Decision(DecisionKind.RANDOM,
+                random.id(), random.options().stream().map(Outcome.Weighted::weight).toList()));
+        if (unresolved.isEmpty()) {
+            return new OutcomePlan<>(total, state, decisions, branches, true, "",
+                    Completeness.COMPLETE, 0, List.of());
+        }
+        return new OutcomePlan<>(total, state, decisions, branches, supported,
+                "Random outcome has unresolved branches", Completeness.PARTIAL,
+                unresolvedWeight, unresolved);
     }
 
     private <D> OutcomePlan<S> batch(final Outcome.Batch<S, D> batch, final S state,
@@ -125,14 +147,23 @@ public final class OutcomePlanner<S> {
     private <T> OutcomePlan<S> target(final Outcome.Target<S, T> target, final S state,
             final Function<S, OutcomePlan<S>> next) {
         OutcomePlan<S> best = null;
+        final List<String> unresolved = new ArrayList<>();
         for (final T candidate : target.candidates().apply(state)) {
             final OutcomePlan<S> plan = solve(target.child(), target.bind().apply(state, candidate), next);
-            if (!plan.supported() && !plan.unavailable()) { return plan; }
-            if (plan.supported() && better(plan, best, target.maximize())) {
+            if (!plan.unavailable() && betterCandidate(plan, best, target.maximize())) {
                 best = decision(plan, DecisionKind.TARGET, target.id(), List.of(candidate));
             }
+            if (!plan.complete() && !plan.unavailable()) {
+                unresolved.add(target.id() + " " + candidate + ": " + reason(plan));
+            }
         }
-        return best == null ? OutcomePlan.unsupported(state, "No legal target") : best;
+        if (best == null) {
+            return unresolved.isEmpty() ? OutcomePlan.unsupported(state, "No legal target")
+                    : OutcomePlan.partial(0, state, List.of(), List.of(),
+                            "Target has no fully evaluated candidate", 0, unresolved);
+        }
+        if (unresolved.isEmpty()) { return best; }
+        return partial(best, "Target has unresolved candidates", unresolved);
     }
 
     private void combinations(final Outcome.Choice<S> choice, final int start,
@@ -152,13 +183,30 @@ public final class OutcomePlanner<S> {
         return best == null || (maximize ? candidate.value() > best.value() : candidate.value() < best.value());
     }
 
+    private static <S> boolean betterCandidate(final OutcomePlan<S> candidate,
+            final OutcomePlan<S> best, final boolean maximize) {
+        return best == null || candidate.complete() && !best.complete()
+                || candidate.complete() == best.complete() && better(candidate, best, maximize);
+    }
+
+    private static <S> String reason(final OutcomePlan<S> plan) {
+        return plan.reason().isBlank() ? plan.completeness().name() : plan.reason();
+    }
+
     private static <S> OutcomePlan<S> decision(final OutcomePlan<S> plan,
             final DecisionKind kind, final String id, final List<?> selections) {
         final List<OutcomePlan.Decision> decisions = new ArrayList<>();
         decisions.add(new OutcomePlan.Decision(kind, id, selections));
         decisions.addAll(plan.decisions());
         return new OutcomePlan<>(plan.value(), plan.state(), decisions,
-                plan.branches(), plan.supported(), plan.reason());
+                plan.branches(), plan.supported(), plan.reason(), plan.completeness(),
+                plan.unresolvedProbability(), plan.unresolvedAlternatives());
+    }
+
+    private static <S> OutcomePlan<S> partial(final OutcomePlan<S> plan, final String reason,
+            final List<String> unresolved) {
+        return new OutcomePlan<>(plan.value(), plan.state(), plan.decisions(), plan.branches(), plan.supported(),
+                reason, Completeness.PARTIAL, plan.unresolvedProbability(), unresolved);
     }
 
     private static final class SearchLimit extends RuntimeException {
