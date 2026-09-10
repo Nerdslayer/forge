@@ -102,8 +102,10 @@ public final class EffectAnalysisTrace {
 
     void outcomePlan(final OutcomePlan<OutcomeState> plan) {
         if (!isEnabled()) { return; }
-        line("  Outcome plan: supported=%s, value=%.2f, reason=%s, decisions=%s, randomBranches=%d",
-                plan.supported(), plan.value(), plan.reason(), plan.decisions(), plan.branches().size());
+        line("  Outcome plan: supported=%s, completeness=%s, value=%.2f, unresolvedProbability=%.3f, "
+                        + "reason=%s, unresolvedAlternatives=%s, decisions=%s, randomBranches=%d",
+                plan.supported(), plan.completeness(), plan.value(), plan.unresolvedProbability(),
+                plan.reason(), plan.unresolvedAlternatives(), plan.decisions(), plan.branches().size());
         for (final OutcomePlan<OutcomeState> branch : plan.branches()) { outcomePlan(branch); }
     }
 
