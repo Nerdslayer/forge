@@ -44,6 +44,9 @@ public final class OutcomePlanner<S> {
     private OutcomePlan<S> solveNode(final Outcome<S> outcome, final S state,
             final Function<S, OutcomePlan<S>> next) {
         if (--remaining < 0) { throw new SearchLimit(); }
+        if (outcome instanceof Outcome.Unresolved<S> unresolved) {
+            return OutcomePlan.unsupported(state, unresolved.reason());
+        }
         if (outcome instanceof Outcome.Atomic<S> atom) {
             final Outcome.Transition<S> change = atom.evaluate().apply(state);
             if (change == null || !Double.isFinite(change.value())) {

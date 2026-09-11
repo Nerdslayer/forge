@@ -6,6 +6,9 @@ import java.util.function.Function;
 
 /** Composable, side-effect-free descriptions. State transitions must return isolated states. */
 public sealed interface Outcome<S> {
+    /** Explicitly unmodeled semantics, including a stable diagnostic reason. */
+    record Unresolved<S>(String reason) implements Outcome<S> { }
+
     record Transition<S>(double value, S state, Object resolvedEffect) {
         public Transition(final double value, final S state) { this(value, state, null); }
     }

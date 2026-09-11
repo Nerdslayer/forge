@@ -26,7 +26,7 @@ public record IntrinsicEvaluationSettings(int maximumExpectedOccurrencesPerAbili
     }
 
     public static IntrinsicEvaluationSettings defaults() {
-        return new IntrinsicEvaluationSettings(8, 2, 4, 24, 4, 32, 4096,
+        return new IntrinsicEvaluationSettings(8, 3, 4, 24, 4, 32, 4096,
                 0.75, 1.50, 200, 60, 500);
     }
 

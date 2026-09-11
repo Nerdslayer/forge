@@ -43,8 +43,9 @@ final class CardDrawOutcomeEvaluator implements OutcomeEvaluator {
     public int evaluateOutcome(final SpellAbility outcome,
             final OutcomeEvaluationContext context) {
         try {
-            final int requested = AbilityUtils.calculateAmount(outcome.getHostCard(),
-                    outcome.getParamOrDefault("NumCards", "1"), outcome);
+            final int requested = DrawOutcomeDescription.parse(outcome.getApi().name(), outcome.getMapParams())
+                    .map(DrawOutcomeDescription::amount).orElseGet(() -> AbilityUtils.calculateAmount(outcome.getHostCard(),
+                            outcome.getParamOrDefault("NumCards", "1"), outcome));
             if (requested <= 0) {
                 return 0;
             }

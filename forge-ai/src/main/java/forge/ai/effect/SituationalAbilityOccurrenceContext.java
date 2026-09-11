@@ -46,7 +46,7 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
         }
         if (trigger.getMode() == TriggerType.Phase) {
             if (!EffectAbilityUtils.hasOnlyParams(trigger, PHASE_TRIGGER_PARAMS)
-                    || !isSupportedPhase(trigger.getParam("Phase"))
+                    || ScheduledTriggerParser.parse(trigger.getMapParams()).isEmpty()
                     || (trigger.hasParam("ValidPlayer")
                             && !"You".equals(trigger.getParam("ValidPlayer")))) {
                 return AbilityOccurrenceRequest.unsupported("Unsupported phase trigger");
@@ -97,10 +97,6 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
     private static AbilityOccurrenceRequest supportedTrigger(final double opportunity,
             final String reason) {
         return new AbilityOccurrenceRequest(opportunity, 1, 1, 1, 1, 1, true, reason);
-    }
-
-    private static boolean isSupportedPhase(final String phase) {
-        return "Upkeep".equalsIgnoreCase(phase) || "End of Turn".equalsIgnoreCase(phase);
     }
 
     private static boolean supportedCost(final forge.game.cost.Cost cost) {

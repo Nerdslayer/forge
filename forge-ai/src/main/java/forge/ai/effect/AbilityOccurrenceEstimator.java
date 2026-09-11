@@ -70,6 +70,11 @@ final class AbilityOccurrenceEstimator {
         return 1 - Math.pow(1 - LAND_PER_HAND_CARD, handSize);
     }
 
+    /** Returns the bounded discount for a relative turn boundary. */
+    static double turnDiscount(final int turnNumber) {
+        return Math.pow(NEXT_TURN_DISCOUNT, Math.max(0, turnNumber - 1));
+    }
+
     private static int usesForTurn(final int availableMana, final int manaCost,
             final boolean hasTapCost, final boolean sourceTapped, final boolean assumeUntapped) {
         if (hasTapCost) {

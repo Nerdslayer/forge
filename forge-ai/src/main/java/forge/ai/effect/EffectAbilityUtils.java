@@ -29,11 +29,17 @@ final class EffectAbilityUtils {
     }
 
     static SpellAbility copyTriggerOutcome(final Card source, final Trigger trigger) {
+        final SpellAbility outcome = resolveTriggerOutcome(source, trigger);
+        return outcome == null ? null : outcome.copy(source, false);
+    }
+
+    /** Structural readers can inspect this root without copying or changing it. */
+    static SpellAbility resolveTriggerOutcome(final Card source, final Trigger trigger) {
         SpellAbility outcome = trigger.getOverridingAbility();
         if (outcome == null && trigger.hasParam("Execute")) {
             outcome = AbilityFactory.getAbility(source, trigger.getParam("Execute"), trigger);
         }
-        return outcome == null ? null : outcome.copy(source, false);
+        return outcome;
     }
 
     static SpellAbility copyActivatedAbility(final Card source,
