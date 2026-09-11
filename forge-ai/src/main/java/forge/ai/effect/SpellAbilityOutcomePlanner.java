@@ -136,22 +136,46 @@ public final class SpellAbilityOutcomePlanner {
 
     private static Outcome<OutcomeState> compile(final SpellAbility first, final Player ai,
             final EffectEvent event, final int depth) {
-        if (depth > 24) { throw new IllegalArgumentException("Outcome nesting limit exceeded"); }
-        final List<Outcome<OutcomeState>> children = new ArrayList<>();
-        final List<SpellAbility> targeted = new ArrayList<>();
-        for (SpellAbility current = first; current != null; current = current.getSubAbility()) {
-            children.add(part(current, ai, event, depth));
-            if (current.usesTargeting()) { targeted.add(current); }
-        }
-        Outcome<OutcomeState> result = new Outcome.Sequence<>(children);
-        // Bind the entire chain before valuing any effect. Shared references see that assignment.
-        for (int i = targeted.size() - 1; i >= 0; i--) {
-            final SpellAbility owner = targeted.get(i);
-            result = new Outcome.Target<>("target:" + owner.getId(),
-                    state -> targets(owner, state, event), (state, selected) -> state.bind(owner, selected),
-                    result, owner.getActivatingPlayer().isOpponentOf(ai));
-        }
-        return result;
+        final java.util.Map<String, SpellAbility> bindings = new java.util.HashMap<>();
+        final AbilityOutcomeDescription description = AbilityOutcomeParser.parse(first, "root", bindings);
+        return new OutcomeDescriptionCompiler<>(new OutcomeDescriptionCompiler.Backend<OutcomeState>() {
+            @Override
+            public Outcome<OutcomeState> atomic(final AbilityOutcomeDescription node) {
+                return part(bindings.get(node.path()), ai, event, depth);
+            }
+
+            @Override
+            public boolean maximize(final AbilityOutcomeDescription node, final boolean opponentChooses) {
+                final Player controller = bindings.get(node.path()).getActivatingPlayer();
+                return (opponentChooses ? controller.getOpponents().get(0) : controller).isOpponentOf(ai);
+            }
+
+            @Override
+            public String decisionId(final AbilityOutcomeDescription node, final boolean random) {
+                return (random ? "random:" : "choice:") + bindings.get(node.path()).getId();
+            }
+
+            @Override
+            public int amount(final AbilityOutcomeDescription node, final String expression) {
+                final SpellAbility ability = bindings.get(node.path());
+                return AbilityUtils.calculateAmount(ability.getHostCard(), expression, ability);
+            }
+
+            @Override
+            public Outcome<OutcomeState> bindTargets(final List<AbilityOutcomeDescription> chain,
+                    final Outcome<OutcomeState> child) {
+                Outcome<OutcomeState> result = child;
+                for (int i = chain.size() - 1; i >= 0; i--) {
+                    final SpellAbility owner = bindings.get(chain.get(i).path());
+                    if (owner != null && owner.usesTargeting()) {
+                        result = new Outcome.Target<>("target:" + owner.getId(),
+                                state -> targets(owner, state, event), (state, selected) -> state.bind(owner, selected),
+                                result, owner.getActivatingPlayer().isOpponentOf(ai));
+                    }
+                }
+                return result;
+            }
+        }).compile(description);
     }
 
     private static Outcome<OutcomeState> part(final SpellAbility ability, final Player ai,
@@ -161,29 +185,7 @@ public final class SpellAbilityOutcomePlanner {
             return new Outcome.Deferred<>(state -> knownDependencies(ability, state)
                     ? sacrifice(ability, ai, event, state) : new Outcome.Atomic<>(s -> null));
         }
-        if (modal(ability)) {
-            final List<Outcome<OutcomeState>> options = new ArrayList<>();
-            for (final SpellAbility option : ability.getAdditionalAbilityList("Choices")) {
-                options.add(compile(option, ai, event, depth + 1));
-            }
-            final int max = AbilityUtils.calculateAmount(ability.getHostCard(),
-                    ability.getParamOrDefault(ability.getApi() == ApiType.Charm ? "CharmNum" : "ChoiceAmount", "1"), ability);
-            final int min = AbilityUtils.calculateAmount(ability.getHostCard(),
-                    ability.getParamOrDefault("MinCharmNum", Integer.toString(max)), ability);
-            if (max > 8) { throw new IllegalArgumentException("Too many modal selections"); }
-            if (ability.hasParam("Random") || ability.hasParam("AtRandom")) {
-                if (min != max || ability.hasParam("CanRepeatModes")) {
-                    throw new IllegalArgumentException("Unsupported random selection cardinality");
-                }
-                final List<Outcome.Weighted<OutcomeState>> branches = new ArrayList<>();
-                randomGroups(options, max, 0, new ArrayList<>(), branches);
-                return new Outcome.Random<>("random:" + ability.getId(), branches);
-            }
-            final Player chooser = ability.hasParam("Chooser") || "Opponent".equals(ability.getParam("Defined"))
-                    ? ability.getActivatingPlayer().getOpponents().get(0) : ability.getActivatingPlayer();
-            return new Outcome.Choice<>("choice:" + ability.getId(), options, min, max,
-                    ability.hasParam("CanRepeatModes"), chooser.isOpponentOf(ai));
-        }
+
         if (counterChoice(ability)) {
             final List<Outcome<OutcomeState>> options = new ArrayList<>();
             for (final String type : ability.getParam("CounterType").split(",")) {
@@ -278,20 +280,7 @@ public final class SpellAbilityOutcomePlanner {
         return true;
     }
 
-    private static void randomGroups(final List<Outcome<OutcomeState>> options, final int count,
-            final int start, final List<Outcome<OutcomeState>> selected,
-            final List<Outcome.Weighted<OutcomeState>> branches) {
-        if (branches.size() > 1024) { throw new IllegalArgumentException("Random branch limit exceeded"); }
-        if (selected.size() == count) {
-            branches.add(new Outcome.Weighted<>(new Outcome.Sequence<>(selected), 1));
-            return;
-        }
-        for (int i = start; i < options.size(); i++) {
-            selected.add(options.get(i));
-            randomGroups(options, count, i + 1, selected, branches);
-            selected.remove(selected.size() - 1);
-        }
-    }
+
 
     private static SpellAbility leaf(final SpellAbility original) {
         final SpellAbility copy = original.copy(original.getHostCard(), false);

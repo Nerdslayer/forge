@@ -60,7 +60,9 @@ public final class IntrinsicReferenceAggregator {
         if (Math.abs(totalProbability - 1) > PROBABILITY_EPSILON) {
             throw new IllegalArgumentException("Reference case probabilities must sum to one");
         }
-        return new IntrinsicReferenceAggregate(value, complete, unavailable, partial, unsupported,
-                unresolvedRandom, unresolvedReasons);
+        // A normalized Cartesian distribution can sum to 1 + a few ulps. The total has been
+        // validated above; clamp that rounding noise without renormalizing unsupported cases.
+        return new IntrinsicReferenceAggregate(value, Math.min(1, complete), Math.min(1, unavailable),
+                Math.min(1, partial), Math.min(1, unsupported), Math.min(1, unresolvedRandom), unresolvedReasons);
     }
 }

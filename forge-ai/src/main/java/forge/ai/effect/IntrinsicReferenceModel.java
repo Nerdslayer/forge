@@ -21,12 +21,44 @@ public final class IntrinsicReferenceModel {
     public static final String PERMANENT_PROFILE = "permanentProfile";
 
     public enum PermanentKind {
-        PLAYER, CREATURE, PERMANENT, ARTIFACT, ENCHANTMENT, PLANESWALKER, LAND, TOKEN
+        PLAYER, CREATURE, AURA, PERMANENT, ARTIFACT, ENCHANTMENT, PLANESWALKER, LAND, TOKEN
     }
 
     public enum EventType {
         ATTACK, COMBAT_DAMAGE, SPELL_CAST, CREATURE_DIED, PERMANENT_SACRIFICED,
         TOKEN_CREATED, COUNTER_ADDED, TAPPED
+    }
+
+    /**
+     * Per-turn intrinsic hazards before the independent game-continuation hazard is applied.
+     *
+     * <p>Removal is split because toughness is especially relevant to damage and -X/-X effects,
+     * while hexproof, shroud, ward, and similar characteristics primarily affect targeted or
+     * otherwise non-damage removal. The two-argument constructor is retained as a compatibility
+     * convenience for callers with one coarse removal estimate.</p>
+     */
+    public record SurvivalProfile(double nonDamageRemovalHazard, double damageRemovalHazard,
+            double combatHazard) {
+        public SurvivalProfile(final double removalHazard, final double combatHazard) {
+            this(removalHazard * .5, removalHazard * .5, combatHazard);
+        }
+
+        public SurvivalProfile {
+            if (!validProbability(nonDamageRemovalHazard)
+                    || !validProbability(damageRemovalHazard)
+                    || !validProbability(combatHazard)) {
+                throw new IllegalArgumentException("Survival hazards must be probabilities");
+            }
+        }
+
+        /** Returns the combined removal hazard for callers that do not need the split buckets. */
+        public double removalHazard() {
+            return 1 - (1 - nonDamageRemovalHazard) * (1 - damageRemovalHazard);
+        }
+
+        private static boolean validProbability(final double value) {
+            return Double.isFinite(value) && value >= 0 && value <= 1;
+        }
     }
 
     public record CreatureProfile(boolean present, int power, int toughness,
@@ -44,7 +76,13 @@ public final class IntrinsicReferenceModel {
     }
 
     public record PermanentProfile(boolean present, PermanentKind kind, boolean controlledByAi,
-            int power, int toughness, Set<String> keywords) {
+            int power, int toughness, Set<String> keywords, boolean basicLand) {
+        public PermanentProfile(final boolean present, final PermanentKind kind,
+                final boolean controlledByAi, final int power, final int toughness,
+                final Set<String> keywords) {
+            this(present, kind, controlledByAi, power, toughness, keywords, false);
+        }
+
         public PermanentProfile {
             if (kind == null) {
                 throw new IllegalArgumentException("Reference permanent needs a kind");
@@ -57,7 +95,7 @@ public final class IntrinsicReferenceModel {
 
         public static PermanentProfile absent() {
             return new PermanentProfile(false, PermanentKind.PERMANENT, false,
-                    0, 0, Set.of());
+                    0, 0, Set.of(), false);
         }
     }
 
@@ -70,6 +108,8 @@ public final class IntrinsicReferenceModel {
     private final WeightedDistribution<PermanentProfile> permanentProfiles;
     private final Map<PermanentKind, WeightedDistribution<Boolean>> targetAvailability;
     private final Map<EventType, WeightedDistribution<Double>> eventRates;
+    private final Map<PermanentKind, SurvivalProfile> survivalProfiles;
+    private final double gameEndHazardPerTurn;
 
     public IntrinsicReferenceModel(final WeightedDistribution<Integer> lifeTotals,
             final WeightedDistribution<Integer> handSizes,
@@ -80,6 +120,22 @@ public final class IntrinsicReferenceModel {
             final WeightedDistribution<PermanentProfile> permanentProfiles,
             final Map<PermanentKind, WeightedDistribution<Boolean>> targetAvailability,
             final Map<EventType, WeightedDistribution<Double>> eventRates) {
+        this(lifeTotals, handSizes, availableMana, friendlyCreatureCounts,
+                opposingCreatureCounts, creatureProfiles, permanentProfiles, targetAvailability,
+                eventRates, defaultSurvivalProfiles(), .02);
+    }
+
+    public IntrinsicReferenceModel(final WeightedDistribution<Integer> lifeTotals,
+            final WeightedDistribution<Integer> handSizes,
+            final WeightedDistribution<Integer> availableMana,
+            final WeightedDistribution<Integer> friendlyCreatureCounts,
+            final WeightedDistribution<Integer> opposingCreatureCounts,
+            final WeightedDistribution<CreatureProfile> creatureProfiles,
+            final WeightedDistribution<PermanentProfile> permanentProfiles,
+            final Map<PermanentKind, WeightedDistribution<Boolean>> targetAvailability,
+            final Map<EventType, WeightedDistribution<Double>> eventRates,
+            final Map<PermanentKind, SurvivalProfile> survivalProfiles,
+            final double gameEndHazardPerTurn) {
         this.lifeTotals = require(lifeTotals, "lifeTotals");
         this.handSizes = require(handSizes, "handSizes");
         this.availableMana = require(availableMana, "availableMana");
@@ -89,12 +145,19 @@ public final class IntrinsicReferenceModel {
         this.permanentProfiles = require(permanentProfiles, "permanentProfiles");
         this.targetAvailability = copyAvailability(targetAvailability);
         this.eventRates = copyEventRates(eventRates);
+        this.survivalProfiles = copySurvivalProfiles(survivalProfiles);
+        if (!Double.isFinite(gameEndHazardPerTurn) || gameEndHazardPerTurn < 0
+                || gameEndHazardPerTurn > 1) {
+            throw new IllegalArgumentException("gameEndHazardPerTurn must be a probability");
+        }
+        this.gameEndHazardPerTurn = gameEndHazardPerTurn;
     }
 
     public static IntrinsicReferenceModel defaults() {
         final Map<PermanentKind, WeightedDistribution<Boolean>> availability = new EnumMap<>(PermanentKind.class);
         availability.put(PermanentKind.PLAYER, booleanDistribution(1.0, 0));
         availability.put(PermanentKind.CREATURE, booleanDistribution(0.65, 0.35));
+        availability.put(PermanentKind.AURA, booleanDistribution(0.25, 0.75));
         availability.put(PermanentKind.PERMANENT, booleanDistribution(0.75, 0.25));
         availability.put(PermanentKind.ARTIFACT, booleanDistribution(0.35, 0.65));
         availability.put(PermanentKind.ENCHANTMENT, booleanDistribution(0.30, 0.70));
@@ -177,6 +240,14 @@ public final class IntrinsicReferenceModel {
         return eventRates.get(type);
     }
 
+    public SurvivalProfile survivalProfile(final PermanentKind kind) {
+        return survivalProfiles.getOrDefault(kind, survivalProfiles.get(PermanentKind.PERMANENT));
+    }
+
+    public double gameEndHazardPerTurn() {
+        return gameEndHazardPerTurn;
+    }
+
     private static WeightedDistribution<Integer> lifeDistribution() {
         return integerDistribution(1, .005, 2, .01, 3, .015, 4, .02,
                 5, .05, 10, .20, 15, .30, 20, .40);
@@ -236,6 +307,36 @@ public final class IntrinsicReferenceModel {
         final Map<EventType, WeightedDistribution<Double>> copy = new EnumMap<>(EventType.class);
         source.forEach((type, distribution) -> copy.put(require(type, "event type"),
                 require(distribution, "event rate")));
+        return Map.copyOf(copy);
+    }
+
+    private static Map<PermanentKind, SurvivalProfile> defaultSurvivalProfiles() {
+        final Map<PermanentKind, SurvivalProfile> profiles = new EnumMap<>(PermanentKind.class);
+        profiles.put(PermanentKind.PLAYER, new SurvivalProfile(0, 0, 0));
+        profiles.put(PermanentKind.AURA, new SurvivalProfile(.08, .06, 0));
+        // Combat hazard is deliberately a small residual for forced or unavoidable combat.
+        // Voluntary attacks should be handled by attack occurrence analysis instead.
+        profiles.put(PermanentKind.CREATURE, new SurvivalProfile(.05, .05, .02));
+        profiles.put(PermanentKind.PLANESWALKER, new SurvivalProfile(.045, .035, .025));
+        profiles.put(PermanentKind.ARTIFACT, new SurvivalProfile(.04, 0, 0));
+        profiles.put(PermanentKind.ENCHANTMENT, new SurvivalProfile(.03, 0, 0));
+        profiles.put(PermanentKind.LAND, new SurvivalProfile(.02, 0, 0));
+        profiles.put(PermanentKind.TOKEN, new SurvivalProfile(.04, .04, .02));
+        profiles.put(PermanentKind.PERMANENT, new SurvivalProfile(.045, .035, 0));
+        return Map.copyOf(profiles);
+    }
+
+    private static Map<PermanentKind, SurvivalProfile> copySurvivalProfiles(
+            final Map<PermanentKind, SurvivalProfile> source) {
+        if (source == null) {
+            throw new IllegalArgumentException("survivalProfiles is required");
+        }
+        final Map<PermanentKind, SurvivalProfile> copy = new EnumMap<>(PermanentKind.class);
+        source.forEach((kind, profile) -> copy.put(require(kind, "survival kind"),
+                require(profile, "survival profile")));
+        if (!copy.containsKey(PermanentKind.PERMANENT)) {
+            throw new IllegalArgumentException("A default permanent survival profile is required");
+        }
         return Map.copyOf(copy);
     }
 }
