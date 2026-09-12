@@ -975,7 +975,7 @@
     "difficulty": 2,
     "speed": 20,
     "scale": 1.6,
-    "life": 18,
+    "life": 25,
     "rewards": [
       {
         "type": "card",
@@ -11212,7 +11212,7 @@
     "difficulty": 0.3,
     "speed": 20,
     "scale": 2,
-    "life": 18,
+    "life": 22,
     "rewards": [
       {
         "type": "card",
