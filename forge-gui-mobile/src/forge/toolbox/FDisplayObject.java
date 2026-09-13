@@ -187,6 +187,10 @@ public abstract class FDisplayObject {
         return false;
     }
 
+    public boolean scrolled(float amountX, float amountY) {
+        return false;
+    }
+
     public boolean keyDown(int keyCode) {
         return false;
     }
