@@ -26,6 +26,7 @@ import forge.gui.framework.EDocID;
 import forge.gui.framework.ICDoc;
 import forge.menus.IMenuProvider;
 import forge.screens.match.controllers.CDetailPicture;
+import forge.screens.workshop.controllers.CCardCreator;
 import forge.screens.workshop.menus.CWorkshopUIMenus;
 import forge.screens.workshop.views.VWorkshopCatalog;
 
@@ -65,6 +66,7 @@ public enum CWorkshopUI implements ICDoc, IMenuProvider {
     @Override
     public void initialize() {
         Singletons.getControl().getForgeMenu().setProvider(this);
+        CCardCreator.SINGLETON_INSTANCE.refreshViews();
     }
 
     /* (non-Javadoc)

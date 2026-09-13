@@ -50,6 +50,9 @@ public enum VWorkshopUI implements IVTopLevelUI {
      */
     @Override
     public boolean onClosing(FScreen screen) {
+        if (!CCardScript.SINGLETON_INSTANCE.canSwitchAway(false)) {
+            return false;
+        }
     	//don't close tab, but return to home screen if this called
         Singletons.getControl().setCurrentScreen(FScreen.HOME_SCREEN);
     	return false;

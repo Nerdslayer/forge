@@ -22,6 +22,7 @@ import forge.util.FileUtil;
 
 import java.io.File;
 import java.io.PrintWriter;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -43,11 +44,11 @@ public final class CardScriptInfo {
     }
 
     public boolean canEdit() {
-        return file != null;
+        return file != null && isCustomFile(file);
     }
 
     public boolean trySetText(final String text0) {
-        if (file == null) { return false; }
+        if (!canEdit()) { return false; }
 
         try (PrintWriter p = new PrintWriter(file)) {
             p.print(text0);
@@ -61,6 +62,15 @@ public final class CardScriptInfo {
         catch (final Exception ex) {
             System.err.println("Problem writing file - " + file);
             ex.printStackTrace();
+            return false;
+        }
+    }
+
+    private static boolean isCustomFile(final File candidate) {
+        try {
+            final Path root = Path.of(ForgeConstants.USER_CUSTOM_CARDS_DIR).toAbsolutePath().normalize();
+            return candidate.toPath().toAbsolutePath().normalize().startsWith(root);
+        } catch (final RuntimeException ex) {
             return false;
         }
     }

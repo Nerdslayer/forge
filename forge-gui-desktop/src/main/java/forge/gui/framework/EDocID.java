@@ -33,6 +33,7 @@ import forge.screens.home.settings.VSubmenuDownloaders;
 import forge.screens.home.settings.VSubmenuPreferences;
 import forge.screens.home.settings.VSubmenuReleaseNotes;
 import forge.screens.workshop.views.VCardDesigner;
+import forge.screens.workshop.views.VCardEvaluation;
 import forge.screens.workshop.views.VCardScript;
 import forge.screens.workshop.views.VWorkshopCatalog;
 
@@ -60,6 +61,7 @@ public enum EDocID {
 
     WORKSHOP_CATALOG (VWorkshopCatalog.SINGLETON_INSTANCE),
     WORKSHOP_CARDDESIGNER (VCardDesigner.SINGLETON_INSTANCE),
+    WORKSHOP_CARDEVALUATION (VCardEvaluation.SINGLETON_INSTANCE),
     WORKSHOP_CARDSCRIPT (VCardScript.SINGLETON_INSTANCE),
 
     HOME_QUESTSTART (VSubmenuQuestStart.SINGLETON_INSTANCE),
