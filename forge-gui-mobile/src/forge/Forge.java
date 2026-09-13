@@ -1533,6 +1533,19 @@ public class Forge implements ApplicationListener {
                 return zoom(mouseMovedX, mouseMovedY, -Utils.AVG_FINGER_WIDTH * amountY);
             }
 
+            if (!KeyInputAdapter.isShiftKeyDown()) {
+                try {
+                    for (FDisplayObject listener : potentialListeners) {
+                        if (listener.scrolled(amountX, amountY)) {
+                            return true;
+                        }
+                    }
+                } catch (Exception ex) {
+                    BugReporter.reportException(ex);
+                    return true;
+                }
+            }
+
             boolean handled;
             if (KeyInputAdapter.isShiftKeyDown()) {
                 handled = pan(mouseMovedX, mouseMovedY, -Utils.AVG_FINGER_WIDTH * amountY, 0, false);

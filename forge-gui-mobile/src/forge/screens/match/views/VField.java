@@ -7,6 +7,7 @@ import forge.game.card.CardView;
 import forge.game.card.CardView.CardStateView;
 import forge.game.player.PlayerView;
 import forge.gui.FThreads;
+import forge.gui.GuiBase;
 import forge.localinstance.properties.ForgePreferences;
 import forge.model.FModel;
 import forge.screens.match.MatchController;
@@ -15,6 +16,7 @@ import forge.screens.match.views.VCardDisplayArea.CardAreaPanel;
 import forge.toolbox.FCardPanel;
 import forge.toolbox.FContainer;
 import forge.toolbox.FDisplayObject;
+import forge.util.Utils;
 import forge.util.collect.FCollectionView;
 
 public class VField extends FContainer {
@@ -273,6 +275,22 @@ public class VField extends FContainer {
 
         @Override
         public void update() { //no logic needed
+        }
+
+        @Override
+        public boolean scrolled(float amountX, float amountY) {
+            if (!GuiBase.getInterface().isRunningOnDesktop() || amountY == 0) {
+                return false;
+            }
+
+            if (getMaxScrollLeft() <= 0) {
+                return false;
+            }
+
+            float oldScrollLeft = getScrollLeft();
+            //Match Shift+wheel scrolling: positive wheel amounts move the viewport right.
+            setScrollLeft(oldScrollLeft + Utils.AVG_FINGER_WIDTH * amountY);
+            return true;
         }
 
         @Override
