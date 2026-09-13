@@ -2,7 +2,6 @@ package forge.screens.workshop.controllers;
 
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
-import java.util.Arrays;
 import java.util.Map.Entry;
 
 import javax.swing.JTextPane;
@@ -11,25 +10,13 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.Style;
 import javax.swing.text.StyledDocument;
 
-import com.google.common.collect.ImmutableList;
-
-import forge.Singletons;
-import forge.card.CardDb;
-import forge.card.CardRules;
-import forge.game.card.Card;
 import forge.gui.card.CardScriptInfo;
 import forge.gui.card.CardScriptParser;
-import forge.gui.framework.FScreen;
 import forge.gui.framework.ICDoc;
 import forge.item.PaperCard;
-import forge.localinstance.properties.ForgePreferences.FPref;
-import forge.model.FModel;
 import forge.screens.workshop.menus.WorkshopFileMenu;
-import forge.screens.workshop.views.VCardDesigner;
 import forge.screens.workshop.views.VCardScript;
 import forge.screens.workshop.views.VWorkshopCatalog;
-import forge.toolbox.FOptionPane;
-import forge.util.Localizer;
 
 /**
  * Controls the "card script" panel in the workshop UI.
@@ -50,10 +37,12 @@ public enum CCardScript implements ICDoc {
         VCardScript.SINGLETON_INSTANCE.getTxtScript().getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void removeUpdate(final DocumentEvent arg0) {
+                importRawTextIfNeeded();
                 updateDirtyFlag();
             }
             @Override
             public void insertUpdate(final DocumentEvent arg0) {
+                importRawTextIfNeeded();
                 updateDirtyFlag();
             }
             @Override
@@ -73,12 +62,18 @@ public enum CCardScript implements ICDoc {
     }
 
     private void updateDirtyFlag() {
-        final boolean isTextNowDirty = !refreshing && currentScriptInfo != null && !VCardScript.SINGLETON_INSTANCE.getTxtScript().getText().equals(currentScriptInfo.getText());
+        final boolean isTextNowDirty = !refreshing && CCardCreator.SINGLETON_INSTANCE.getSession().isDirty();
         if (isTextDirty == isTextNowDirty) { return; }
         isTextDirty = isTextNowDirty;
-        VCardDesigner.SINGLETON_INSTANCE.getBtnSaveCard().setEnabled(isTextNowDirty);
         VCardScript.SINGLETON_INSTANCE.getTabLabel().setText((isTextNowDirty ? "*" : "") + "Card Script");
         WorkshopFileMenu.updateSaveEnabled();
+    }
+
+    private void importRawTextIfNeeded() {
+        if (!refreshing && !VCardScript.SINGLETON_INSTANCE.isLoadingSession()
+                && CCardCreator.SINGLETON_INSTANCE.getSession().isEditable()) {
+            CCardCreator.SINGLETON_INSTANCE.getSession().setRawScript(VCardScript.SINGLETON_INSTANCE.getTxtScript().getText());
+        }
     }
 
     public PaperCard getCurrentCard() {
@@ -86,97 +81,48 @@ public enum CCardScript implements ICDoc {
     }
 
     public void showCard(final PaperCard card) {
-        if (currentCard == card || switchInProgress) { return; }
+        if ((currentCard == card && CCardCreator.SINGLETON_INSTANCE.getSession().getSelectedCard() == card)
+                || switchInProgress) { return; }
 
-        if (!canSwitchAway(true)) { //ensure current card saved before changing to a different card
+        if (!CCardCreator.SINGLETON_INSTANCE.showCard(card)) { //ensure current card saved before changing to a different card
             VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().setSelectedItem(currentCard); //return selection to current card //TODO: fix so clicking away again doesn't cause weird selection problems
             return;
         }
 
         currentCard = card;
         currentScriptInfo = card != null ? CardScriptInfo.getScriptFor(currentCard.getRules().getNormalizedName()) : null;
-        refresh();
+        CCardCreator.SINGLETON_INSTANCE.refreshViews();
     }
 
     public void refresh() {
         if (refreshing) { return; }
         refreshing = true;
         final JTextPane txtScript = VCardScript.SINGLETON_INSTANCE.getTxtScript();
-        txtScript.setText(currentScriptInfo != null ? currentScriptInfo.getText() : "");
-        txtScript.setEditable(currentScriptInfo != null && currentScriptInfo.canEdit());
+        VCardScript.SINGLETON_INSTANCE.loadSession(CCardCreator.SINGLETON_INSTANCE.getSession());
         txtScript.setCaretPosition(0); //keep scrolled to top
 
         final StyledDocument doc = VCardScript.SINGLETON_INSTANCE.getDoc();
         final Style error = VCardScript.SINGLETON_INSTANCE.getErrorStyle();
         final Style empty = VCardScript.SINGLETON_INSTANCE.getEmptyStyle();
         doc.setCharacterAttributes(0, 9999, empty, true);
-        if (FModel.getPreferences().getPrefBoolean(FPref.DEV_WORKSHOP_SYNTAX) && currentScriptInfo != null) {
-            for (final Entry<Integer, Integer> region : new CardScriptParser(currentScriptInfo.getText()).getErrorRegions().entrySet()) {
+        if (CCardCreator.SINGLETON_INSTANCE.getSession().getRawScript() != null) {
+            for (final Entry<Integer, Integer> region : new CardScriptParser(CCardCreator.SINGLETON_INSTANCE.getSession().getRawScript()).getErrorRegions().entrySet()) {
                 doc.setCharacterAttributes(region.getKey(), region.getValue(), error, true);
             }
         }
         refreshing = false;
+        updateDirtyFlag();
     }
 
     public boolean hasChanges() {
-        return currentScriptInfo != null && isTextDirty;
+        return CCardCreator.SINGLETON_INSTANCE.getSession().isDirty();
     }
-
-    private static final ImmutableList<String> switchAwayOptions = ImmutableList.of(
-        Localizer.getInstance().getMessage("lblSave"),
-        Localizer.getInstance().getMessage("lblDontSave"),
-        Localizer.getInstance().getMessage("lblCancel")
-    );
     public boolean canSwitchAway(final boolean isCardChanging) {
-        if (switchInProgress) { return false; }
-        if (!hasChanges()) { return true; }
-
-        switchInProgress = true;
-        Singletons.getControl().ensureScreenActive(FScreen.WORKSHOP_SCREEN); //ensure Workshop is active before showing dialog
-        final int choice = FOptionPane.showOptionDialog(
-                Localizer.getInstance().getMessage("lblSaveChangesToDestConfirm", currentCard.toString()),
-                Localizer.getInstance().getMessage("lblSaveChangesConfirm"),
-                FOptionPane.QUESTION_ICON,
-                switchAwayOptions);
-        switchInProgress = false;
-
-        if (choice == -1 || choice == 2) { return false; }
-
-        if (choice == 0 && !saveChanges()) { return false; }
-
-        if (!isCardChanging) {
-            refresh(); //refresh if current card isn't changing to restore script text from file
-        }
-        return true;
+        return !switchInProgress && CCardCreator.SINGLETON_INSTANCE.canSwitchAway();
     }
 
     public boolean saveChanges() {
-        if (!hasChanges()) { return true; } //not need if text hasn't been changed
-
-        final String text = VCardScript.SINGLETON_INSTANCE.getTxtScript().getText();
-        if (!currentScriptInfo.trySetText(text)) {
-            return false;
-        }
-
-        updateDirtyFlag();
-
-        final String oldName = currentCard.getName();
-
-        final CardRules newRules = CardRules.fromScript(Arrays.asList(text.split("\n")));
-        final CardDb cardDb = newRules.isVariant() ? FModel.getMagicDb().getVariantCards() :
-            FModel.getMagicDb().getCommonCards();
-
-        cardDb.getEditor().putCard(newRules);
-        if (newRules.getName().equals(oldName)) {
-            Card.updateCard(currentCard);
-        } else {
-            currentCard = cardDb.getCard(newRules.getName());
-        }
-
-        VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().repaint();
-        VWorkshopCatalog.SINGLETON_INSTANCE.getCDetailPicture().showItem(currentCard);
-        refresh();
-        return true;
+        return CCardCreator.SINGLETON_INSTANCE.save();
     }
 
     //========== Overridden methods

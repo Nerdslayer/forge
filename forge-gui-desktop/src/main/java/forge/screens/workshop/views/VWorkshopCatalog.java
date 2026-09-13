@@ -90,4 +90,12 @@ public enum VWorkshopCatalog implements IVDoc<CWorkshopCatalog> {
     public CDetailPicture getCDetailPicture() {
         return cDetailPicture;
     }
+
+    /** Refreshes the catalog after the creator adds a custom definition to the in-memory database. */
+    public void refreshPool(final PaperCard preferredCard) {
+        final Iterable<PaperCard> allCards = Iterables.concat(FModel.getMagicDb().getCommonCards().getAllCards(), FModel.getMagicDb().getVariantCards().getAllCards());
+        cardManager.setPool(ItemPool.createFrom(allCards, PaperCard.class), true);
+        if (preferredCard != null) cardManager.setSelectedItem(preferredCard);
+        cardManager.repaint();
+    }
 }

@@ -14,6 +14,7 @@ import forge.gui.framework.DragTab;
 import forge.gui.framework.EDocID;
 import forge.gui.framework.IVDoc;
 import forge.screens.workshop.controllers.CCardScript;
+import forge.screens.workshop.cardcreator.CardEditorSession;
 import forge.toolbox.FScrollPane;
 import forge.toolbox.FTextPane;
 import forge.util.Localizer;
@@ -37,6 +38,7 @@ public enum VCardScript implements IVDoc<CCardScript> {
     private final StyledDocument doc;
     private final Style error;
     private final Style empty;
+    private boolean loadingSession;
 
     //========== Constructor
     VCardScript() {
@@ -65,6 +67,21 @@ public enum VCardScript implements IVDoc<CCardScript> {
 
     public Style getEmptyStyle() {
         return empty;
+    }
+
+    public boolean isLoadingSession() {
+        return loadingSession;
+    }
+
+    public void loadSession(final CardEditorSession session) {
+        loadingSession = true;
+        try {
+            txtScript.setText(session.getRawScript());
+            txtScript.setEditable(session.isEditable());
+            doc.setCharacterAttributes(0, Math.max(1, doc.getLength()), empty, true);
+        } finally {
+            loadingSession = false;
+        }
     }
 
     //========== Overridden methods

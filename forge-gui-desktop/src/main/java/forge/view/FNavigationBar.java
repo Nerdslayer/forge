@@ -27,7 +27,6 @@ import forge.Singletons;
 import forge.gamemodes.match.AbstractGuiGame;
 import forge.gui.framework.FScreen;
 import forge.gui.framework.ILocalRepaint;
-import forge.localinstance.properties.ForgePreferences;
 import forge.menus.ForgeMenu;
 import forge.menus.LayoutMenu;
 import forge.toolbox.FButton;
@@ -95,10 +94,9 @@ public class FNavigationBar extends FTitleBarBase {
 
         addNavigationTab(FScreen.HOME_SCREEN);
         addNavigationTab(FScreen.DECK_EDITOR_CONSTRUCTED);
-        if (ForgePreferences.DEV_MODE) {
-            //TODO: Make Workshop available outside developer mode when custom cards supported
-            addNavigationTab(FScreen.WORKSHOP_SCREEN);
-        }
+        // Workshop now provides a safe public Card Creator; raw script editing remains restricted
+        // to custom cards by CardScriptInfo.
+        addNavigationTab(FScreen.WORKSHOP_SCREEN);
 
         super.addControls();
 
