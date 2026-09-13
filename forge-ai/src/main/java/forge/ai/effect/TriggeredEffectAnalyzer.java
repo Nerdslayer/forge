@@ -25,6 +25,12 @@ final class TriggeredEffectAnalyzer {
 
     static Map<Card, Integer> evaluateRelationships(final Player evaluatingAi,
             final Iterable<Card> candidates, final EffectAnalysisTrace trace) {
+        return sumContributions(evaluateContributions(evaluatingAi, candidates, trace));
+    }
+
+    static Map<Card, List<AbilityValueContribution>> evaluateContributions(
+            final Player evaluatingAi, final Iterable<Card> candidates,
+            final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
@@ -38,7 +44,7 @@ final class TriggeredEffectAnalyzer {
         final Map<EffectType, List<EffectConsequence>> consequences = new EnumMap<>(EffectType.class);
         extractEffects(evaluatingAi, analyzedControllers, productions, consequences, trace);
 
-        final Map<Card, Integer> values = new HashMap<>();
+        final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
         for (final EffectProduction production : productions) {
             final EffectEventMatcher matcher = EffectEventMatcherRegistry.find(production.type());
             if (matcher == null) {
@@ -51,9 +57,21 @@ final class TriggeredEffectAnalyzer {
                 if (relationshipValue == 0) {
                     continue;
                 }
-                addSaturated(values, production.source(), relationshipValue);
+                final String opportunityKey = production.ability().path() + "->"
+                        + consequence.ability().path() + ":" + production.type();
+                addContribution(values, AbilityValueContribution.counted(
+                        production.source(), production.source(), production.ability(),
+                        consequence.source(), consequence.ability(), AbilityValueKind.KNOWN_RELATIONSHIP,
+                        relationshipValue, opportunityKey,
+                        "Known " + production.type() + " relationship to "
+                                + consequence.source().getName()));
                 if (production.source() != consequence.source()) {
-                    addSaturated(values, consequence.source(), relationshipValue);
+                    addContribution(values, AbilityValueContribution.counted(
+                            consequence.source(), production.source(), production.ability(),
+                            consequence.source(), consequence.ability(), AbilityValueKind.KNOWN_RELATIONSHIP,
+                            relationshipValue, opportunityKey,
+                            "Known " + production.type() + " relationship from "
+                                    + production.source().getName()));
                 }
             }
         }
@@ -158,13 +176,25 @@ final class TriggeredEffectAnalyzer {
         }
     }
 
-    private static void addSaturated(final Map<Card, Integer> values, final Card card,
-            final int amount) {
-        final int result = EffectMath.add(values.getOrDefault(card, 0), amount);
-        if (result == 0) {
-            values.remove(card);
-        } else {
-            values.put(card, result);
+    private static void addContribution(final Map<Card, List<AbilityValueContribution>> values,
+            final AbilityValueContribution contribution) {
+        values.computeIfAbsent(contribution.candidate(), key -> new ArrayList<>()).add(contribution);
+    }
+
+    private static Map<Card, Integer> sumContributions(
+            final Map<Card, List<AbilityValueContribution>> contributions) {
+        final Map<Card, Integer> values = new HashMap<>();
+        for (final Map.Entry<Card, List<AbilityValueContribution>> entry : contributions.entrySet()) {
+            int value = 0;
+            for (final AbilityValueContribution contribution : entry.getValue()) {
+                if (contribution.counted()) {
+                    value = EffectMath.add(value, contribution.value());
+                }
+            }
+            if (value != 0) {
+                values.put(entry.getKey(), value);
+            }
         }
+        return values;
     }
 }

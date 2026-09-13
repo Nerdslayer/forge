@@ -146,7 +146,20 @@ public final class EffectAnalysisTrace {
         }
     }
 
-    /** Records the final removal score assembled for one candidate. */
+    /** Records admitted future value and why individual ability contributions were kept or skipped. */
+    public void abilityPotential(final Card card, final int intrinsicValue, final int intrinsicWeight,
+            final java.util.List<String> reasons) {
+        if (!isEnabled()) {
+            return;
+        }
+        line("Ability potential: %s, admitted-future=%d, intrinsic-weight=%d%%",
+                cardLabel(card), intrinsicValue, intrinsicWeight);
+        for (final String reason : reasons) {
+            line("  Ability attribution: %s", reason);
+        }
+    }
+
+    /** Records the final removal score, whose adjustment includes independently weighted future value. */
     public void candidate(final Card card, final int baseValue, final int relationshipValue,
             final int synergyWeight, final int weightedAdjustment, final int finalValue) {
         if (!isEnabled()) {

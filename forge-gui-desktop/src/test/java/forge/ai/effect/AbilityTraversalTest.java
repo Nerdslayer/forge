@@ -28,6 +28,17 @@ public class AbilityTraversalTest extends AITest {
         Assert.assertTrue(results.stream().anyMatch(r -> !r.contribution().complete()));
     }
 
+    @Test
+    public void definitionTokenOutcomeUsesStaticTokenProfile() {
+        host();
+        final List<IntrinsicAbilityEvaluator.AbilityValue> results = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluateDefinition(
+                        forge.StaticData.instance().getCommonCards().getCard("Wolverine Riders"),
+                        CardStateName.Original);
+        Assert.assertTrue(results.stream().anyMatch(r -> r.contribution().complete()
+                && r.contribution().value() > 0), results.toString());
+    }
+
     private Card host() {
         final forge.game.Game game = initAndCreateGame();
         return addCard("Grizzly Bears", game.getPlayers().get(0));
@@ -77,6 +88,51 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicBackendRejectsUnsupportedOutcomeFamilies() {
+        final IntrinsicReferenceModel.PermanentProfile friendly = new IntrinsicReferenceModel.PermanentProfile(
+                true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());
+        final IntrinsicReferenceModel.PermanentProfile opposing = new IntrinsicReferenceModel.PermanentProfile(
+                true, IntrinsicReferenceModel.PermanentKind.CREATURE, false, 3, 3, Set.of());
+        final IntrinsicDrawOutcomeBackend.State state = new IntrinsicDrawOutcomeBackend.State(
+                3, 3, 20, 20, 3, 3, 2, 2,
+                new IntrinsicReferenceModel.CreatureProfile(true, 2, 2, Set.of(), false, false),
+                new IntrinsicReferenceModel.CreatureProfile(true, 3, 3, Set.of(), false, false),
+                friendly, opposing, friendly, null);
+        final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(
+                IntrinsicEvaluationSettings.defaults(), friendly);
+        final List<AbilityOutcomeDescription> outcomes = List.of(
+                description("DamageAll", Map.of("NumDmg", "1", "Defined", "Opponent")),
+                description("Token", Map.of("TokenScript", "Soldier", "TokenAmount", "X")),
+                description("Pump", Map.of("NumAtt", "1", "NumDef", "1", "Defined", "YouCtrl")),
+                description("Debuff", Map.of("Keywords", "Flying", "Defined", "OpponentCtrl")),
+                description("Detain", Map.of("Defined", "OpponentCtrl")),
+                description("Animate", Map.of("Power", "4", "Toughness", "4", "Defined", "YouCtrl")),
+                description("Destroy", Map.of("Defined", "OpponentCtrl")),
+                description("ChangeZone", Map.of("Origin", "Battlefield", "Destination", "Exile",
+                        "Defined", "OpponentCtrl")),
+                description("Sacrifice", Map.of("Defined", "Self")),
+                description("GainControl", Map.of("NewController", "You", "Defined", "OpponentCtrl")),
+                description("CopyPermanent", Map.of("Defined", "OpponentCtrl")),
+                description("Attach", Map.of("Defined", "YouCtrl")),
+                description("Unattach", Map.of("Defined", "YouCtrl")),
+                description("SetState", Map.of("Mode", "Transform", "Defined", "Self")));
+        for (final AbilityOutcomeDescription description : outcomes) {
+            final Outcome<IntrinsicDrawOutcomeBackend.State> compiled = new OutcomeDescriptionCompiler<>(backend)
+                    .compile(description);
+            final OutcomePlan<IntrinsicDrawOutcomeBackend.State> plan = new OutcomePlanner<IntrinsicDrawOutcomeBackend.State>()
+                    .evaluate(compiled, state);
+            Assert.assertEquals(plan.completeness(), OutcomePlan.Completeness.UNSUPPORTED,
+                    description.api() + ": " + plan);
+            Assert.assertEquals(plan.value(), 0.0);
+        }
+    }
+
+    private static AbilityOutcomeDescription description(final String api,
+            final Map<String, String> parameters) {
+        return new AbilityOutcomeDescription(api, api, parameters, List.of(), null, "");
+    }
+
+    @Test
     public void scheduledDrawTraversesAndUsesReferenceHandDistribution() {
         final Card card = host();
         final Trigger trigger = TriggerHandler.parseTrigger(
@@ -98,6 +154,62 @@ public class AbilityTraversalTest extends AITest {
         Assert.assertEquals(trigger.getOverridingAbility().getParam("NumCards"), "1");
         Assert.assertFalse(CardAbilityTraversal.inspectDefinition(card.getPaperCard(), CardStateName.Original)
                 .stream().anyMatch(a -> a.origin() == CardAbilityTraversal.Origin.TRIGGER));
+    }
+
+    @Test
+    public void relationshipSupportedEventTriggersHaveIntrinsicAdapters() {
+        final List<Map<String, String>> parameters = List.of(
+                Map.of("Mode", "TokenCreated", "ValidPlayer", "You"),
+                Map.of("Mode", "TokenCreatedOnce"),
+                Map.of("Mode", "CounterAdded"),
+                Map.of("Mode", "CounterAddedOnce"),
+                Map.of("Mode", "LifeGained"),
+                Map.of("Mode", "LifeLost"),
+                Map.of("Mode", "LifeLostAll"),
+                Map.of("Mode", "Drawn", "ValidPlayer", "Player"),
+                Map.of("Mode", "Discarded"),
+                Map.of("Mode", "DiscardedAll"),
+                Map.of("Mode", "DamageDone"),
+                Map.of("Mode", "DamageDoneOnce"),
+                Map.of("Mode", "DamageDealtOnce"),
+                Map.of("Mode", "ChangesZone", "Origin", "Battlefield", "Destination", "Graveyard"),
+                Map.of("Mode", "ChangesZoneAll", "Origin", "Battlefield", "Destination", "Graveyard"),
+                Map.of("Mode", "Exiled", "Origin", "Battlefield"),
+                Map.of("Mode", "Sacrificed"),
+                Map.of("Mode", "SacrificedOnce"),
+                Map.of("Mode", "Attacks", "ValidCard", "Card.Self"),
+                Map.of("Mode", "Blocks", "ValidCard", "Card.Self"),
+                Map.of("Mode", "AttackerBlocked", "ValidCard", "Card.Self"),
+                Map.of("Mode", "AttackerBlockedByCreature", "ValidCard", "Card.Self"),
+                Map.of("Mode", "AttackerUnblocked", "ValidCard", "Card.Self"),
+                Map.of("Mode", "Taps", "ValidCard", "Card.Self"),
+                Map.of("Mode", "Phase", "Phase", "Main", "PhaseCount", "2",
+                        "ValidPlayer", "You", "PresentDefined", "Self", "IsPresent", "Card.tapped"));
+
+        for (final Map<String, String> parameter : parameters) {
+            Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(parameter).isPresent(), parameter.toString());
+        }
+    }
+
+    @Test
+    public void eventTriggerOccurrenceUsesItsReferenceRateAndSurvivalHorizon() {
+        final Card card = host();
+        final Map<String, String> parameters = Map.of("Mode", "Drawn", "ValidPlayer", "Player");
+        final CardAbilityTraversal.AbilityDescription description =
+                new CardAbilityTraversal.AbilityDescription("Original/trigger:draw",
+                CardAbilityTraversal.Origin.TRIGGER, CardAbilityTraversal.Provenance.PRINTED,
+                parameters, new AbilityOutcomeDescription("draw", "Draw",
+                        Map.of("Defined", "You", "NumCards", "1"), List.of(), null, ""));
+        final IntrinsicReferenceModel model = IntrinsicReferenceModel.defaults();
+        final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(model,
+                IntrinsicEvaluationSettings.defaults()).evaluate(List.of(description),
+                        new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+
+        Assert.assertTrue(result.expectedOccurrences() > 0, result.toString());
+        Assert.assertTrue(result.contribution().complete(), result.toString());
+        Assert.assertTrue(result.contribution().value() > 0, result.toString());
     }
 
     @Test

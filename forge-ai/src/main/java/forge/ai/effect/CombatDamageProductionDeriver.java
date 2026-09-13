@@ -44,7 +44,7 @@ final class CombatDamageProductionDeriver {
                     // Each combat-damage step is a separate batch, which matters for
                     // DamageDoneOnce and DamageDealtOnce triggers with double strike.
                     result.add(new EffectProduction(attacker, EffectType.DAMAGE_DEALT,
-                            List.of(damageEvent), production.expectedBatches()));
+                            List.of(damageEvent), production.expectedBatches(), production.ability()));
                 }
             }
             return result;

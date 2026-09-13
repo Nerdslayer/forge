@@ -1,5 +1,6 @@
 package forge.ai.effect;
 
+import java.util.Map;
 import java.util.Set;
 import forge.game.trigger.Trigger;
 import forge.game.trigger.TriggerType;
@@ -7,7 +8,8 @@ import forge.game.trigger.TriggerType;
 /** Shared event recognition; activity, outcome support and occurrence belong to consumers. */
 final class EventTriggerParser {
     private EventTriggerParser() { }
-    // TODO: Broader conditions/parameters and intrinsic event occurrence need separate adapters.
+    // TODO: Broader conditions/parameters still need separate adapters; intrinsic occurrence for
+    // the relationship-supported event families is supplied by IntrinsicEventTriggerAdapter.
     private static final Set<String> TOKEN_CREATED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidToken", "OnlyFirst", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -89,168 +91,204 @@ final class EventTriggerParser {
 
 
     static EffectType observedType(final Trigger trigger) {
-        if (trigger.getMode() == TriggerType.TokenCreated
-                || trigger.getMode() == TriggerType.TokenCreatedOnce) {
+        return isSecondMainTappedCheckpoint(trigger) ? EffectType.TAPPED_OR_UNTAPPED
+                : observedType(trigger.getMode());
+    }
+
+    static EffectType observedType(final Map<String, String> parameters) {
+        return isSecondMainTappedCheckpoint(parameters) ? EffectType.TAPPED_OR_UNTAPPED
+                : observedType(mode(parameters));
+    }
+
+    private static EffectType observedType(final TriggerType mode) {
+        if (mode == TriggerType.TokenCreated || mode == TriggerType.TokenCreatedOnce) {
             return EffectType.TOKEN_CREATED;
         }
-        if (trigger.getMode() == TriggerType.LifeGained) {
+        if (mode == TriggerType.LifeGained) {
             return EffectType.LIFE_GAINED;
         }
-        if (trigger.getMode() == TriggerType.LifeLost
-                || trigger.getMode() == TriggerType.LifeLostAll) {
+        if (mode == TriggerType.LifeLost || mode == TriggerType.LifeLostAll) {
             return EffectType.LIFE_LOST;
         }
-        if (trigger.getMode() == TriggerType.Drawn) {
+        if (mode == TriggerType.Drawn) {
             return EffectType.CARD_DRAWN;
         }
-        if (trigger.getMode() == TriggerType.Discarded
-                || trigger.getMode() == TriggerType.DiscardedAll) {
+        if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return EffectType.CARD_DISCARDED;
         }
-        if (trigger.getMode() == TriggerType.DamageDone
-                || trigger.getMode() == TriggerType.DamageDoneOnce
-                || trigger.getMode() == TriggerType.DamageDealtOnce) {
+        if (mode == TriggerType.DamageDone || mode == TriggerType.DamageDoneOnce
+                || mode == TriggerType.DamageDealtOnce) {
             return EffectType.DAMAGE_DEALT;
         }
-        if (trigger.getMode() == TriggerType.ChangesZone
-                || trigger.getMode() == TriggerType.ChangesZoneAll
-                || trigger.getMode() == TriggerType.Exiled) {
+        if (mode == TriggerType.ChangesZone || mode == TriggerType.ChangesZoneAll
+                || mode == TriggerType.Exiled) {
             return EffectType.ZONE_CHANGED;
         }
-        if (trigger.getMode() == TriggerType.Sacrificed
-                || trigger.getMode() == TriggerType.SacrificedOnce) {
+        if (mode == TriggerType.Sacrificed || mode == TriggerType.SacrificedOnce) {
             return EffectType.SACRIFICED;
         }
-        if (trigger.getMode() == TriggerType.Attacks
-                || trigger.getMode() == TriggerType.Blocks
-                || trigger.getMode() == TriggerType.AttackerBlocked
-                || trigger.getMode() == TriggerType.AttackerBlockedByCreature
-                || trigger.getMode() == TriggerType.AttackerUnblocked) {
+        if (mode == TriggerType.Attacks || mode == TriggerType.Blocks
+                || mode == TriggerType.AttackerBlocked
+                || mode == TriggerType.AttackerBlockedByCreature
+                || mode == TriggerType.AttackerUnblocked) {
             return EffectType.ATTACKED_OR_BLOCKED;
         }
-        if (trigger.getMode() == TriggerType.Taps || isSecondMainTappedCheckpoint(trigger)) {
+        if (mode == TriggerType.Taps) {
             return EffectType.TAPPED_OR_UNTAPPED;
         }
-        return trigger.getMode() == TriggerType.CounterAdded
-                || trigger.getMode() == TriggerType.CounterAddedOnce
-                ? EffectType.COUNTER_ADDED : null;
+        if (mode == TriggerType.CounterAdded || mode == TriggerType.CounterAddedOnce) {
+            return EffectType.COUNTER_ADDED;
+        }
+        return null;
     }
 
-    static boolean hasSupportedParameters(final Trigger trigger) {
-        if (trigger.getMode() == TriggerType.TokenCreated) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, TOKEN_CREATED_TRIGGER_PARAMS)
-                    && "You".equals(trigger.getParam("ValidPlayer"));
-        }
-        if (trigger.getMode() == TriggerType.TokenCreatedOnce) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, TOKEN_CREATED_ONCE_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.CounterAdded) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, COUNTER_ADDED_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.LifeGained) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, LIFE_GAINED_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.LifeLost) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, LIFE_LOST_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.LifeLostAll) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, LIFE_LOST_ALL_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.Drawn) {
-            return hasSupportedCardDrawParameters(trigger);
-        }
-        if (trigger.getMode() == TriggerType.Discarded
-                || trigger.getMode() == TriggerType.DiscardedAll) {
-            return hasSupportedCardDiscardParameters(trigger);
-        }
-        if (trigger.getMode() == TriggerType.DamageDone) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, DAMAGE_DONE_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.DamageDoneOnce) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, DAMAGE_DONE_ONCE_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.DamageDealtOnce) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, DAMAGE_DEALT_ONCE_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.ChangesZone) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, CHANGES_ZONE_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.ChangesZoneAll) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, CHANGES_ZONE_ALL_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.Exiled) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, EXILED_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.Sacrificed) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, SACRIFICED_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.SacrificedOnce) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, SACRIFICED_ONCE_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.Attacks) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, ATTACKS_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.Blocks) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, BLOCKS_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.AttackerBlocked) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, ATTACKER_BLOCKED_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.AttackerBlockedByCreature) {
-            return EffectAbilityUtils.hasOnlyParams(
-                    trigger, ATTACKER_BLOCKED_BY_CREATURE_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.AttackerUnblocked) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, ATTACKER_UNBLOCKED_TRIGGER_PARAMS);
-        }
-        if (trigger.getMode() == TriggerType.Taps) {
-            return EffectAbilityUtils.hasOnlyParams(trigger, TAPS_TRIGGER_PARAMS);
-        }
-        if (isSecondMainTappedCheckpoint(trigger)) {
-            return EffectAbilityUtils.hasOnlyParams(
-                    trigger, SECOND_MAIN_TAPPED_TRIGGER_PARAMS);
-        }
-        return trigger.getMode() == TriggerType.CounterAddedOnce
-                && EffectAbilityUtils.hasOnlyParams(trigger, COUNTER_ADDED_ONCE_TRIGGER_PARAMS);
-    }
-
-    private static boolean hasSupportedCardDrawParameters(final Trigger trigger) {
-        if (!EffectAbilityUtils.hasOnlyParams(trigger, CARD_DRAWN_TRIGGER_PARAMS)
-                || (trigger.hasParam("ValidCard")
-                        && !CARD_DRAWN_VALID_CARDS.contains(trigger.getParam("ValidCard")))
-                || (trigger.hasParam("ValidPlayer")
-                        && !CARD_DRAWN_VALID_PLAYERS.contains(trigger.getParam("ValidPlayer")))
-                || (trigger.hasParam("FirstCardInDrawStep")
-                        && !"True".equalsIgnoreCase(trigger.getParam("FirstCardInDrawStep"))
-                        && !"False".equalsIgnoreCase(trigger.getParam("FirstCardInDrawStep")))) {
+    static boolean hasSupportedParameters(final Map<String, String> parameters) {
+        final TriggerType mode = mode(parameters);
+        if (mode == null) {
             return false;
         }
-        if (!trigger.hasParam("Number")) {
+        return hasSupportedParameters(mode, parameters);
+    }
+
+    private static boolean hasSupportedParameters(final TriggerType mode,
+            final Map<String, String> parameters) {
+        if (mode == TriggerType.TokenCreated) {
+            return hasOnlyParams(parameters, TOKEN_CREATED_TRIGGER_PARAMS)
+                    && "You".equals(parameters.get("ValidPlayer"));
+        }
+        if (mode == TriggerType.TokenCreatedOnce) {
+            return hasOnlyParams(parameters, TOKEN_CREATED_ONCE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.CounterAdded) {
+            return hasOnlyParams(parameters, COUNTER_ADDED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.LifeGained) {
+            return hasOnlyParams(parameters, LIFE_GAINED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.LifeLost) {
+            return hasOnlyParams(parameters, LIFE_LOST_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.LifeLostAll) {
+            return hasOnlyParams(parameters, LIFE_LOST_ALL_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.Drawn) {
+            return hasSupportedCardDrawParameters(parameters);
+        }
+        if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
+            return hasSupportedCardDiscardParameters(parameters);
+        }
+        if (mode == TriggerType.DamageDone) {
+            return hasOnlyParams(parameters, DAMAGE_DONE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.DamageDoneOnce) {
+            return hasOnlyParams(parameters, DAMAGE_DONE_ONCE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.DamageDealtOnce) {
+            return hasOnlyParams(parameters, DAMAGE_DEALT_ONCE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.ChangesZone) {
+            return hasOnlyParams(parameters, CHANGES_ZONE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.ChangesZoneAll) {
+            return hasOnlyParams(parameters, CHANGES_ZONE_ALL_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.Exiled) {
+            return hasOnlyParams(parameters, EXILED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.Sacrificed) {
+            return hasOnlyParams(parameters, SACRIFICED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.SacrificedOnce) {
+            return hasOnlyParams(parameters, SACRIFICED_ONCE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.Attacks) {
+            return hasOnlyParams(parameters, ATTACKS_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.Blocks) {
+            return hasOnlyParams(parameters, BLOCKS_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.AttackerBlocked) {
+            return hasOnlyParams(parameters, ATTACKER_BLOCKED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.AttackerBlockedByCreature) {
+            return hasOnlyParams(parameters, ATTACKER_BLOCKED_BY_CREATURE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.AttackerUnblocked) {
+            return hasOnlyParams(parameters, ATTACKER_UNBLOCKED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.Taps) {
+            return hasOnlyParams(parameters, TAPS_TRIGGER_PARAMS);
+        }
+        if (isSecondMainTappedCheckpoint(parameters)) {
+            return hasOnlyParams(parameters, SECOND_MAIN_TAPPED_TRIGGER_PARAMS);
+        }
+        return mode == TriggerType.CounterAddedOnce
+                && hasOnlyParams(parameters, COUNTER_ADDED_ONCE_TRIGGER_PARAMS);
+    }
+
+    static TriggerType mode(final Map<String, String> parameters) {
+        final String value = parameters == null ? null : parameters.get("Mode");
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return TriggerType.smartValueOf(value);
+        } catch (final RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static boolean hasOnlyParams(final Map<String, String> parameters,
+            final Set<String> allowed) {
+        return allowed.containsAll(parameters.keySet());
+    }
+
+    private static boolean hasSupportedCardDrawParameters(final Map<String, String> parameters) {
+        if (!hasOnlyParams(parameters, CARD_DRAWN_TRIGGER_PARAMS)
+                || (parameters.containsKey("ValidCard")
+                        && !CARD_DRAWN_VALID_CARDS.contains(parameters.get("ValidCard")))
+                || (parameters.containsKey("ValidPlayer")
+                        && !CARD_DRAWN_VALID_PLAYERS.contains(parameters.get("ValidPlayer")))
+                || (parameters.containsKey("FirstCardInDrawStep")
+                        && !isBoolean(parameters.get("FirstCardInDrawStep")))) {
+            return false;
+        }
+        if (!parameters.containsKey("Number")) {
             return true;
         }
         try {
-            return Integer.parseInt(trigger.getParam("Number")) > 0;
+            return Integer.parseInt(parameters.get("Number")) > 0;
         } catch (final NumberFormatException ignored) {
             return false;
         }
     }
 
-    private static boolean hasSupportedCardDiscardParameters(final Trigger trigger) {
-        return EffectAbilityUtils.hasOnlyParams(trigger, CARD_DISCARDED_TRIGGER_PARAMS)
-                && (!trigger.hasParam("ValidCard")
-                        || CARD_DISCARDED_VALID_CARDS.contains(trigger.getParam("ValidCard")))
-                && (!trigger.hasParam("ValidPlayer")
-                        || CARD_DISCARDED_VALID_PLAYERS.contains(trigger.getParam("ValidPlayer")));
+    private static boolean hasSupportedCardDiscardParameters(final Map<String, String> parameters) {
+        return hasOnlyParams(parameters, CARD_DISCARDED_TRIGGER_PARAMS)
+                && (!parameters.containsKey("ValidCard")
+                        || CARD_DISCARDED_VALID_CARDS.contains(parameters.get("ValidCard")))
+                && (!parameters.containsKey("ValidPlayer")
+                        || CARD_DISCARDED_VALID_PLAYERS.contains(parameters.get("ValidPlayer")));
+    }
+
+    private static boolean isBoolean(final String value) {
+        return "True".equalsIgnoreCase(value) || "False".equalsIgnoreCase(value);
+    }
+
+    static boolean hasSupportedParameters(final Trigger trigger) {
+        return hasSupportedParameters(trigger.getMode(), trigger.getMapParams());
+    }
+
+    static boolean isSecondMainTappedCheckpoint(final Map<String, String> parameters) {
+        return mode(parameters) == TriggerType.Phase
+                && "Main".equals(parameters.get("Phase"))
+                && "2".equals(parameters.get("PhaseCount"))
+                && "You".equals(parameters.get("ValidPlayer"))
+                && "Self".equals(parameters.get("PresentDefined"))
+                && "Card.tapped".equals(parameters.get("IsPresent"));
     }
 
     static boolean isSecondMainTappedCheckpoint(final Trigger trigger) {
-        return trigger.getMode() == TriggerType.Phase
-                && "Main".equals(trigger.getParam("Phase"))
-                && "2".equals(trigger.getParam("PhaseCount"))
-                && "You".equals(trigger.getParam("ValidPlayer"))
-                && "Self".equals(trigger.getParam("PresentDefined"))
-                && "Card.tapped".equals(trigger.getParam("IsPresent"));
+        return isSecondMainTappedCheckpoint(trigger.getMapParams());
     }
-
-
 }

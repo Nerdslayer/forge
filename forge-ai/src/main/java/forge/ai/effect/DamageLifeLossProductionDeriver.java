@@ -68,7 +68,7 @@ final class DamageLifeLossProductionDeriver {
         }
         return events.isEmpty() ? List.of() : List.of(new EffectProduction(
                 production.source(), EffectType.LIFE_LOST, events,
-                production.expectedBatches()));
+                production.expectedBatches(), production.ability()));
     }
 
 }

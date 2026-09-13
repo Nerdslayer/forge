@@ -32,7 +32,7 @@ final class EffectProductionExtractorRegistry {
         for (final EffectProductionExtractor extractor : EXTRACTORS) {
             productions.addAll(extractor.extract(evaluatingAi, source));
         }
-        return withDerivedProductions(productions);
+        return withDerivedProductions(productions, AbilityIdentity.synthetic(source, "card"));
     }
 
     static List<EffectProduction> extract(final Player evaluatingAi, final Card source,
@@ -41,7 +41,7 @@ final class EffectProductionExtractorRegistry {
         for (final EffectProductionExtractor extractor : EXTRACTORS) {
             productions.addAll(extractor.extract(evaluatingAi, source, trigger));
         }
-        return withDerivedProductions(productions);
+        return withDerivedProductions(productions, AbilityIdentity.forTrigger(source, trigger));
     }
 
     static List<EffectProduction> extract(final Player evaluatingAi, final Card source,
@@ -50,13 +50,19 @@ final class EffectProductionExtractorRegistry {
         for (final EffectProductionExtractor extractor : EXTRACTORS) {
             productions.addAll(extractor.extract(evaluatingAi, source, ability));
         }
-        return withDerivedProductions(productions);
+        return withDerivedProductions(productions, AbilityIdentity.forSpellAbility(source, ability));
     }
 
     private static List<EffectProduction> withDerivedProductions(
-            final List<EffectProduction> productions) {
+            final List<EffectProduction> productions, final AbilityIdentity ability) {
         final List<EffectProduction> derived = new ArrayList<>();
-        for (final EffectProduction production : productions) {
+        for (int i = 0; i < productions.size(); i++) {
+            final EffectProduction raw = productions.get(i);
+            // The registry knows the extraction origin. Do not recover it from event Cause:
+            // copied trigger outcomes and derived events frequently carry no reliable cause.
+            final EffectProduction production = new EffectProduction(raw.source(), raw.type(),
+                    raw.events(), raw.expectedBatches(), ability);
+            productions.set(i, production);
             derived.addAll(DamageLifeLossProductionDeriver.derive(production));
             final List<EffectProduction> combatDamage =
                     CombatDamageProductionDeriver.derive(production);

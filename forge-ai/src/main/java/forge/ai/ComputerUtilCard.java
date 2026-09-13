@@ -25,7 +25,7 @@ import com.google.common.collect.Sets;
 
 import forge.StaticData;
 import forge.ai.effect.EffectAnalysisTrace;
-import forge.ai.effect.EffectRelationshipEvaluator;
+import forge.ai.effect.PermanentAbilityValueEvaluator;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.card.CardRules;
 import forge.card.CardStateName;
@@ -598,26 +598,33 @@ public class ComputerUtilCard {
         }
 
         final int synergyWeight = Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.EFFECT_SYNERGY_WEIGHT));
-        if (synergyWeight == 0) {
+        final int intrinsicWeight = AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_INTRINSIC_REMOVAL_ANALYSIS)
+                ? Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.INTRINSIC_REMOVAL_WEIGHT)) : 0;
+        if (synergyWeight == 0 && intrinsicWeight == 0) {
             return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
         }
 
         final List<Card> candidates = Lists.newArrayList(list);
         final EffectAnalysisTrace trace = EffectAnalysisTrace.create(ai, removalAbility);
         trace.context(candidates.size());
-        final Map<Card, Integer> relationshipValues =
-                EffectRelationshipEvaluator.evaluateRemovalRelationships(ai, candidates, trace);
+        final Map<Card, PermanentAbilityValueEvaluator.Breakdown> abilityValues =
+                PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, candidates, trace,
+                        intrinsicWeight > 0, synergyWeight > 0);
         if (trace.isEnabled()) {
             Card selected = null;
             int highestValue = Integer.MIN_VALUE;
             for (final Card candidate : candidates) {
                 final int baseValue = evaluateRemovalTargetPriority(ai, candidate);
-                final int relationshipValue = relationshipValues.getOrDefault(candidate, 0);
-                final int weightedAdjustment = applyEffectSynergyWeight(
-                        relationshipValue, synergyWeight);
+                final PermanentAbilityValueEvaluator.Breakdown breakdown = abilityValues.get(candidate);
+                final int relationshipValue = breakdown == null ? 0 : breakdown.relationshipValue();
+                final int intrinsicValue = breakdown == null ? 0 : breakdown.intrinsicValue();
+                final int weightedAdjustment = addSaturated(applyEffectSynergyWeight(
+                        relationshipValue, synergyWeight), applyEffectSynergyWeight(intrinsicValue, intrinsicWeight));
                 final int finalValue = addSaturated(baseValue, weightedAdjustment);
-                trace.candidate(candidate, baseValue, relationshipValue,
-                        synergyWeight, weightedAdjustment, finalValue);
+                trace.abilityPotential(candidate, intrinsicValue, intrinsicWeight,
+                        breakdown == null ? List.of() : breakdown.reasons());
+                trace.candidate(candidate, baseValue, relationshipValue, synergyWeight,
+                        weightedAdjustment, finalValue);
                 if (finalValue > highestValue) {
                     highestValue = finalValue;
                     selected = candidate;
@@ -626,9 +633,13 @@ public class ComputerUtilCard {
             trace.finish(selected);
             return selected;
         }
-        return Aggregates.itemWithMax(candidates, c -> addSaturated(
-                evaluateRemovalTargetPriority(ai, c),
-                applyEffectSynergyWeight(relationshipValues.getOrDefault(c, 0), synergyWeight)));
+        return Aggregates.itemWithMax(candidates, c -> {
+            final PermanentAbilityValueEvaluator.Breakdown breakdown = abilityValues.get(c);
+            final int adjustment = breakdown == null ? 0 : addSaturated(
+                    applyEffectSynergyWeight(breakdown.relationshipValue(), synergyWeight),
+                    applyEffectSynergyWeight(breakdown.intrinsicValue(), intrinsicWeight));
+            return addSaturated(evaluateRemovalTargetPriority(ai, c), adjustment);
+        });
     }
 
     private static int applyEffectSynergyWeight(final int value, final int percentage) {
