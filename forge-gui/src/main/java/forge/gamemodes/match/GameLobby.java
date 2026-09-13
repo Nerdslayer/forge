@@ -138,6 +138,7 @@ public abstract class GameLobby implements IHasGameType {
                     lastArchenemy = otherIndex;
                 }
                 otherSlot.setIsArchenemy(becomesArchenemy);
+                otherSlot.setTeam(becomesArchenemy ? 0 : 1);
             }
         }
 
@@ -165,6 +166,10 @@ public abstract class GameLobby implements IHasGameType {
     protected abstract IGuiGame getGui(int index);
     protected abstract void onGameStarted();
 
+    /** Largest number of slots this lobby may hold. Subclasses may narrow it. */
+    public int getSlotLimit() {
+        return MAX_PLAYERS;
+    }
     public void addSlot() {
         final int newIndex = getNumberOfSlots();
         final LobbySlotType type = isAllowNetworking() ? LobbySlotType.OPEN : LobbySlotType.AI;
@@ -174,7 +179,7 @@ public abstract class GameLobby implements IHasGameType {
         if (slot == null) {
             throw new NullPointerException();
         }
-        if (data.slots.size() >= MAX_PLAYERS) {
+        if (data.slots.size() >= getSlotLimit()) {
             return;
         }
 
@@ -448,7 +453,7 @@ public abstract class GameLobby implements IHasGameType {
             final int avatar = slot.getAvatarIndex();
             final int sleeve = slot.getSleeveIndex();
             final boolean isArchenemy = slot.isArchenemy();
-            final int team = GameType.Archenemy.equals(currentGameType) && !isArchenemy ? 1 : slot.getTeam();
+            final int team = slot.getTeam();
             final Set<AIOption> aiOptions = slot.getAiOptions(); // TODO: could AiOptions carry the choice of which AI is selected to play against?
 
             final boolean isAI = slot.getType() == LobbySlotType.AI;
