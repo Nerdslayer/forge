@@ -43,7 +43,8 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
             return null;
         }
         final Trigger normalizedTrigger = normalizedTrigger(source, trigger);
-        return new EffectConsequence(source, observedType, normalizedTrigger, outcome, outcomeEvaluator);
+        return new EffectConsequence(source, observedType, normalizedTrigger, outcome, outcomeEvaluator,
+                AbilityIdentity.forTrigger(source, trigger));
     }
 
     private static Trigger normalizedTrigger(final Card source, final Trigger trigger) {

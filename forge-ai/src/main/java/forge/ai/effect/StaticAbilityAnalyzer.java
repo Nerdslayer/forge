@@ -1,8 +1,10 @@
 package forge.ai.effect;
 
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,6 +30,12 @@ final class StaticAbilityAnalyzer {
 
     static Map<Card, Integer> evaluateRelationships(final Player evaluatingAi,
             final Iterable<Card> candidates, final EffectAnalysisTrace trace) {
+        return sumContributions(evaluateContributions(evaluatingAi, candidates, trace));
+    }
+
+    static Map<Card, List<AbilityValueContribution>> evaluateContributions(
+            final Player evaluatingAi, final Iterable<Card> candidates,
+            final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
@@ -42,15 +50,20 @@ final class StaticAbilityAnalyzer {
             return Collections.emptyMap();
         }
 
-        final Map<Card, Integer> values = new HashMap<>();
+        final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
         for (final Player controller : analyzedControllers) {
             for (final Card source : controller.getCardsIn(ZoneType.Battlefield)) {
                 for (final StaticAbility ability : Iterables.concat(
                         source.getStaticAbilities(), source.getHiddenStaticAbilities())) {
                     try {
-                        final int value = evaluateAbility(evaluatingAi, source, ability, trace);
+                        final List<AbilityValueContribution> contributions = evaluateAbility(
+                                evaluatingAi, source, ability, trace);
+                        int value = 0;
+                        for (final AbilityValueContribution contribution : contributions) {
+                            addContribution(values, contribution);
+                            value = EffectMath.add(value, contribution.value());
+                        }
                         if (value != 0) {
-                            addSaturated(values, source, value);
                             trace.staticRelationship(source, value);
                         }
                     } catch (final RuntimeException ignored) {
@@ -62,10 +75,11 @@ final class StaticAbilityAnalyzer {
         return values;
     }
 
-    private static int evaluateAbility(final Player evaluatingAi, final Card source,
+    private static List<AbilityValueContribution> evaluateAbility(final Player evaluatingAi,
+            final Card source,
             final StaticAbility ability, final EffectAnalysisTrace trace) {
         if (!ability.checkConditions(StaticAbilityMode.Continuous)) {
-            return 0;
+            return List.of();
         }
 
         final StaticEffect effect = source.getGame().getStaticEffects().getStaticEffect(ability);
@@ -73,7 +87,7 @@ final class StaticAbilityAnalyzer {
         // perspective: positive helps that card, negative harms it.
         final int hintedValue = ability.hasParam("AIEffectValue")
                 ? AbilityUtils.calculateAmount(source, ability.getParam("AIEffectValue"), ability) : 0;
-        int relationshipValue = 0;
+        final List<AbilityValueContribution> contributions = new ArrayList<>();
         for (final Card affected : effect.getAffectedCards()) {
             if (!affected.isInZone(ZoneType.Battlefield)) {
                 continue;
@@ -89,9 +103,13 @@ final class StaticAbilityAnalyzer {
             final int signedValue = affected.getController().isOpponentOf(evaluatingAi)
                     ? recipientValue : EffectMath.negate(recipientValue);
             trace.staticRecipient(source, affected, automaticValue, hintedValue, signedValue);
-            relationshipValue = EffectMath.add(relationshipValue, signedValue);
+            final AbilityIdentity identity = AbilityIdentity.forStaticAbility(source, ability);
+            contributions.add(AbilityValueContribution.counted(source, source, identity, affected,
+                    null, AbilityValueKind.CURRENT_STATIC, signedValue,
+                    identity.path() + ":recipient:" + System.identityHashCode(affected),
+                    "Current static effect on " + affected.getName()));
         }
-        return relationshipValue;
+        return contributions;
     }
 
     private static int evaluateAutomaticDelta(final Player evaluatingAi, final Card affected,
@@ -131,12 +149,25 @@ final class StaticAbilityAnalyzer {
         card.removeHiddenExtrinsicKeywords(timestamp, staticId);
     }
 
-    private static void addSaturated(final Map<Card, Integer> values, final Card card, final int amount) {
-        final int result = EffectMath.add(values.getOrDefault(card, 0), amount);
-        if (result == 0) {
-            values.remove(card);
-        } else {
-            values.put(card, result);
+    private static void addContribution(final Map<Card, List<AbilityValueContribution>> values,
+            final AbilityValueContribution contribution) {
+        values.computeIfAbsent(contribution.candidate(), key -> new ArrayList<>()).add(contribution);
+    }
+
+    private static Map<Card, Integer> sumContributions(
+            final Map<Card, List<AbilityValueContribution>> contributions) {
+        final Map<Card, Integer> values = new HashMap<>();
+        for (final Map.Entry<Card, List<AbilityValueContribution>> entry : contributions.entrySet()) {
+            int value = 0;
+            for (final AbilityValueContribution contribution : entry.getValue()) {
+                if (contribution.counted()) {
+                    value = EffectMath.add(value, contribution.value());
+                }
+            }
+            if (value != 0) {
+                values.put(entry.getKey(), value);
+            }
         }
+        return values;
     }
 }

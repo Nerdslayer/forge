@@ -330,3 +330,7 @@ SIDEBOARDING_PLANESWALKER_EQ_CREATURE=false
 ENABLE_EFFECT_ANALYSIS=true
 # Percentage applied to the raw effect synergy score
 EFFECT_SYNERGY_WEIGHT=100
+# Add supported future ability potential in removal decisions, with overlap suppression.
+ENABLE_INTRINSIC_REMOVAL_ANALYSIS=true
+# Percentage applied to admitted intrinsic future potential, separately from relationships.
+INTRINSIC_REMOVAL_WEIGHT=100

@@ -25,8 +25,9 @@ public final class IntrinsicReferenceModel {
     }
 
     public enum EventType {
-        ATTACK, COMBAT_DAMAGE, SPELL_CAST, CREATURE_DIED, PERMANENT_SACRIFICED,
-        TOKEN_CREATED, COUNTER_ADDED, TAPPED
+        ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST,
+        CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, TAPPED,
+        LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, DAMAGE_DEALT, ZONE_CHANGED
     }
 
     /**
@@ -167,6 +168,9 @@ public final class IntrinsicReferenceModel {
 
         final Map<EventType, WeightedDistribution<Double>> events = new EnumMap<>(EventType.class);
         events.put(EventType.ATTACK, rateDistribution(0, .20, .5, .50, 1, .30));
+        events.put(EventType.BLOCK, rateDistribution(0, .35, .5, .45, 1, .20));
+        events.put(EventType.ATTACKER_BLOCKED, rateDistribution(0, .30, .5, .50, 1, .20));
+        events.put(EventType.ATTACKER_UNBLOCKED, rateDistribution(0, .25, .5, .50, 1, .25));
         events.put(EventType.COMBAT_DAMAGE, rateDistribution(0, .30, .5, .50, 1, .20));
         events.put(EventType.SPELL_CAST, rateDistribution(0, .10, 1, .50, 2, .30, 3, .10));
         events.put(EventType.CREATURE_DIED, rateDistribution(0, .25, 1, .50, 2, .20, 3, .05));
@@ -174,6 +178,12 @@ public final class IntrinsicReferenceModel {
         events.put(EventType.TOKEN_CREATED, rateDistribution(0, .30, 1, .50, 2, .20));
         events.put(EventType.COUNTER_ADDED, rateDistribution(0, .40, 1, .45, 2, .15));
         events.put(EventType.TAPPED, rateDistribution(0, .20, 1, .55, 2, .25));
+        events.put(EventType.LIFE_GAINED, rateDistribution(0, .35, 1, .45, 2, .15, 3, .05));
+        events.put(EventType.LIFE_LOST, rateDistribution(0, .25, 1, .50, 2, .20, 3, .05));
+        events.put(EventType.CARD_DRAWN, rateDistribution(0, .15, 1, .50, 2, .25, 3, .10));
+        events.put(EventType.CARD_DISCARDED, rateDistribution(0, .35, 1, .45, 2, .15, 3, .05));
+        events.put(EventType.DAMAGE_DEALT, rateDistribution(0, .30, 1, .45, 2, .20, 3, .05));
+        events.put(EventType.ZONE_CHANGED, rateDistribution(0, .20, 1, .50, 2, .25, 3, .05));
 
         return new IntrinsicReferenceModel(
                 lifeDistribution(),

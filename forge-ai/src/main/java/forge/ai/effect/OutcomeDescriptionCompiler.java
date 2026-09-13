@@ -17,30 +17,34 @@ public final class OutcomeDescriptionCompiler<S> {
         default Outcome<S> bindTargets(final List<AbilityOutcomeDescription> chain, final Outcome<S> child) {
             return child;
         }
+        default Set<String> referenceDimensions(final AbilityOutcomeDescription description) {
+            return Set.of();
+        }
     }
 
     private final Backend<S> backend;
     public OutcomeDescriptionCompiler(final Backend<S> backend) { this.backend = backend; }
 
     public Outcome<S> compile(final AbilityOutcomeDescription description) {
-        return compile(description, 0);
+        return compile(description, 0, new int[] {1024});
     }
 
-    private Outcome<S> compile(final AbilityOutcomeDescription description, final int depth) {
+    private Outcome<S> compile(final AbilityOutcomeDescription description, final int depth, final int[] remaining) {
+        if (description == null) { return unresolved("Missing outcome"); }
         if (depth > 24 || !description.issue().isEmpty()) {
             return unresolved(description.path() + ": " + description.issue());
         }
         final List<Outcome<S>> steps = new ArrayList<>();
         final List<AbilityOutcomeDescription> chain = new ArrayList<>();
         for (AbilityOutcomeDescription node = description; node != null; node = node.next()) {
-            if (chain.size() >= 1024) { return unresolved(description.path()); }
+            if (--remaining[0] < 0) { return unresolved(description.path() + ": compilation limit"); }
             chain.add(node);
-            steps.add(node.issue().isEmpty() ? part(node, depth) : unresolved(node.path() + ": " + node.issue()));
+            steps.add(node.issue().isEmpty() ? part(node, depth, remaining) : unresolved(node.path() + ": " + node.issue()));
         }
         return backend.bindTargets(chain, new Outcome.Sequence<>(steps));
     }
 
-    private Outcome<S> part(final AbilityOutcomeDescription node, final int depth) {
+    private Outcome<S> part(final AbilityOutcomeDescription node, final int depth, final int[] remaining) {
         if (!backend.acceptsNode(node)) { return unresolved(node.path() + ": unsupported backend semantics"); }
         if (!Set.of("Charm", "GenericChoice").contains(node.api())) { return backend.atomic(node); }
         // TODO: Targets across modes and stochastic chains, dynamic counts, optional costs and
@@ -54,7 +58,11 @@ public final class OutcomeDescriptionCompiler<S> {
                 || node.parameters().containsKey("Chooser") && !"Opponent".equals(node.parameters().get("Chooser"))) {
             return unresolved(node.path());
         }
-        final List<Outcome<S>> options = node.choices().stream().map(c -> compile(c, depth + 1)).toList();
+        final List<Outcome<S>> options = new ArrayList<>();
+        for (final AbilityOutcomeDescription choice : node.choices()) {
+            if (remaining[0] <= 0) { return unresolved(node.path() + ": compilation limit"); }
+            options.add(compile(choice, depth + 1, remaining));
+        }
         try {
             final int maximum = backend.amount(node, node.parameters().getOrDefault(
                     "Charm".equals(node.api()) ? "CharmNum" : "ChoiceAmount", "1"));

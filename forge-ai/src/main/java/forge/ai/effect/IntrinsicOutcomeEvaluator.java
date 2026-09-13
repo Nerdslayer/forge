@@ -100,7 +100,7 @@ public final class IntrinsicOutcomeEvaluator {
      */
     public int evaluateLifeLoss(final int currentLife, final int amount,
             final boolean recipientIsController) {
-        if (amount <= 0) {
+        if (amount <= 0 || currentLife <= 0) {
             return 0;
         }
         final int before = Math.max(0, currentLife);
@@ -153,6 +153,23 @@ public final class IntrinsicOutcomeEvaluator {
         return creatureValue(creature);
     }
 
+    /** Values a permanent profile without consulting a live card or recursively scoring abilities. */
+    public int evaluatePermanent(final IntrinsicReferenceModel.PermanentProfile permanent) {
+        if (permanent == null || !permanent.present()) {
+            return 0;
+        }
+        return permanentValue(permanent);
+    }
+
+    /** Values a persistent change to a theoretical permanent. */
+    public int evaluatePermanentDelta(final IntrinsicReferenceModel.PermanentProfile before,
+            final IntrinsicReferenceModel.PermanentProfile after, final boolean recipientIsController) {
+        if (before == null || after == null) {
+            throw new IllegalArgumentException("Reference permanents are required");
+        }
+        return orient(permanentValue(after) - permanentValue(before), recipientIsController);
+    }
+
     private static int creatureValue(final IntrinsicReferenceModel.CreatureProfile creature) {
         if (!creature.present()) {
             return 0;
@@ -181,6 +198,23 @@ public final class IntrinsicOutcomeEvaluator {
         if (creature.indestructible()) {
             value = addSaturated(value, 70);
         }
+        if (hasKeyword(creature, "shield")) {
+            value = addSaturated(value, 45);
+        }
+        if (hasKeyword(creature, "stun")) {
+            value = addSaturated(value, -20);
+        }
+        if (hasKeyword(creature, "defender") || hasKeyword(creature, "can't attack")
+                || hasKeyword(creature, "cantattack")) {
+            value = addSaturated(value, -power * 10);
+        }
+        if (hasKeyword(creature, "can't block") || hasKeyword(creature, "cantblock")) {
+            value = addSaturated(value, -toughness * 5);
+        }
+        if (hasKeyword(creature, "detain") || hasKeyword(creature, "can't untap")
+                || hasKeyword(creature, "cantuntap")) {
+            value = addSaturated(value, -35);
+        }
         if (creature.hexproof() || hasKeyword(creature, "hexproof")) {
             value = addSaturated(value, 35);
         } else if (hasKeyword(creature, "shroud")) {
@@ -189,6 +223,25 @@ public final class IntrinsicOutcomeEvaluator {
             value = addSaturated(value, 10);
         }
         return value;
+    }
+
+    private static int permanentValue(final IntrinsicReferenceModel.PermanentProfile permanent) {
+        if (!permanent.present()) {
+            return 0;
+        }
+        return switch (permanent.kind()) {
+        case CREATURE, TOKEN -> creatureValue(new IntrinsicReferenceModel.CreatureProfile(true,
+                permanent.power(), permanent.toughness(), permanent.keywords(),
+                permanent.keywords().stream().anyMatch(keyword -> keyword.equalsIgnoreCase("hexproof")
+                        || keyword.equalsIgnoreCase("shroud")),
+                permanent.keywords().stream().anyMatch(keyword -> keyword.equalsIgnoreCase("indestructible"))));
+        case PLANESWALKER -> addSaturated(180, permanent.power() * 8 + permanent.toughness() * 8);
+        case AURA -> 80;
+        case ARTIFACT -> 100;
+        case ENCHANTMENT -> 105;
+        case LAND -> permanent.basicLand() ? 75 : 95;
+        case PLAYER, PERMANENT -> 100;
+        };
     }
 
     private static boolean hasKeyword(final IntrinsicReferenceModel.CreatureProfile creature,
