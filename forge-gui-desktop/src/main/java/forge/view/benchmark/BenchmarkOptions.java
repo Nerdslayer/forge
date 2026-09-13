@@ -27,7 +27,7 @@ import java.util.stream.Stream;
 
 final class BenchmarkOptions {
     private static final DateTimeFormatter OUTPUT_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
-    private static final String DEFAULT_DECK_POOL = "TwentyGeneticDecks";
+    private static final String DEFAULT_DECK_POOL = "EffectSynergyRemoval";
 
     String evaluatedProfile;
     String baselineProfile;
@@ -216,7 +216,7 @@ final class BenchmarkOptions {
 
                 Options:
                   --deck-dir <directory>     Deck pool directory
-                                             (default: res/benchmark/TwentyGeneticDecks)
+                                             (default: res/benchmark/EffectSynergyRemoval)
                   --deck <file>              Add an explicit deck file; may be repeated
                   --profile-dir <directory>  AI profile directory (default: Forge res/ai)
                   --output <directory>       Run artifact directory

@@ -173,7 +173,7 @@ public class AiBenchmarkCoreTest {
     }
 
     @Test
-    public void optionsUseTwentyGeneticDecksWhenNoDeckInputIsProvided() {
+    public void optionsUseEffectSynergyRemovalWhenNoDeckInputIsProvided() {
         GuiBase.setInterface(new BenchmarkGuiDesktop());
 
         final BenchmarkOptions defaultOptions = BenchmarkOptions.parse(new String[] {"benchmark"});
@@ -181,7 +181,7 @@ public class AiBenchmarkCoreTest {
                 "benchmark", "--deck", "custom.dck"
         });
 
-        Assert.assertEquals(defaultOptions.deckDirectory.getFileName().toString(), "TwentyGeneticDecks");
+        Assert.assertEquals(defaultOptions.deckDirectory.getFileName().toString(), "EffectSynergyRemoval");
         Assert.assertEquals(defaultOptions.deckDirectory.getParent().getFileName().toString(), "benchmark");
         Assert.assertNull(explicitOptions.deckDirectory);
     }
