@@ -132,6 +132,19 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void definitionValueReportsUnsupportedAbilities() {
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Ability Creature", "ManaCost:G", "Types:Creature Beast", "PT:3/3",
+                "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self",
+                "A:AB$ Mana | Cost$ T | Produced$ Any"));
+        final CardDefinitionValueEvaluator.Evaluation evaluation = new CardDefinitionValueEvaluator().evaluate(rules);
+
+        assertFalse(evaluation.isComplete());
+        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.contains("triggered")));
+        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.contains("activated or spell")));
+    }
+
+    @Test
     public void customRepositoryWritesOnlyUnderItsConfiguredRoot() throws Exception {
         final Path root = Files.createTempDirectory("card-creator-cards");
         final CustomCardRepository repository = new CustomCardRepository(root);

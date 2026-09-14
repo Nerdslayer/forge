@@ -47,6 +47,7 @@ public final class CardDefinitionValueEvaluator {
         final ICardFace face = rules.getMainPart();
         final List<Contribution> contributions = new ArrayList<>();
         final List<String> warnings = new ArrayList<>();
+        addUnsupportedAbilityWarnings(warnings, face);
 
         if (!face.getType().isCreature()) {
             warnings.add("The initial definition evaluator supports creatures only.");
@@ -86,6 +87,24 @@ public final class CardDefinitionValueEvaluator {
         }
 
         return finish(contributions, warnings, face.getManaCost().getCMC());
+    }
+
+    private static void addUnsupportedAbilityWarnings(final List<String> warnings, final ICardFace face) {
+        addUnsupportedAbilityWarning(warnings, face.getTriggers(), "triggered");
+        addUnsupportedAbilityWarning(warnings, face.getAbilities(), "activated or spell");
+        addUnsupportedAbilityWarning(warnings, face.getStaticAbilities(), "static");
+        addUnsupportedAbilityWarning(warnings, face.getReplacements(), "replacement");
+    }
+
+    private static void addUnsupportedAbilityWarning(final List<String> warnings,
+            final Iterable<String> abilities, final String kind) {
+        int count = 0;
+        for (final String ignored : abilities) {
+            count++;
+        }
+        if (count > 0) {
+            warnings.add("Unsupported " + kind + " abilities not evaluated yet (" + count + ").");
+        }
     }
 
     private void addKeywordContributions(final List<Contribution> contributions, final List<String> warnings,
