@@ -23,6 +23,7 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -84,7 +85,14 @@ public enum VCardDesigner implements IVDoc<forge.screens.workshop.controllers.CC
             @Override public void insertUpdate(final DocumentEvent e) { changed(); }
             @Override public void removeUpdate(final DocumentEvent e) { changed(); }
             @Override public void changedUpdate(final DocumentEvent e) { changed(); }
-            private void changed() { if (!refreshing) changeListener.run(); }
+            private void changed() {
+                if (refreshing) return;
+                // Do not refresh the form from inside AbstractDocument's notification. Swing
+                // forbids mutating another document until the current notification completes.
+                SwingUtilities.invokeLater(() -> {
+                    if (!refreshing) changeListener.run();
+                });
+            }
         };
         name.getDocument().addDocumentListener(documentListener);
         manaCost.getDocument().addDocumentListener(documentListener);

@@ -73,6 +73,19 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void compactSimpleManaCostsAreExpandedWithoutChangingComplexSyntax() {
+        final CardEditorDraft draft = CardEditorDraft.newCard();
+        draft.setManaCost("2B");
+        assertEquals(draft.getManaCost(), "2 B");
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Simple Cost", "ManaCost:" + draft.getManaCost(), "Types:Creature", "PT:2/2"));
+        assertEquals(rules.getManaCost().getCMC(), 3);
+
+        draft.setManaCost("2/B");
+        assertEquals(draft.getManaCost(), "2/B");
+    }
+
+    @Test
     public void definitionValueSeparatesBattlefieldValueFromCosts() {
         final CardRules rules = CardRules.fromScript(List.of(
                 "Name:Test Creature", "ManaCost:2 G", "Types:Creature Elf", "PT:3/3", "K:Flying"));

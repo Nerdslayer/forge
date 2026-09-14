@@ -8,10 +8,15 @@ import forge.item.PaperCard;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Mutable structured fields for one Card Creator draft. */
 public final class CardEditorDraft {
+    private static final Pattern SIMPLE_COMPACT_MANA_COST = Pattern.compile("^(\\d+)([WUBRGCS]+)$", Pattern.CASE_INSENSITIVE);
+
     private String name;
     private String manaCost;
     private String power;
@@ -81,7 +86,12 @@ public final class CardEditorDraft {
     public String getName() { return name; }
     public void setName(final String value) { name = value; }
     public String getManaCost() { return manaCost; }
-    public void setManaCost(final String value) { manaCost = value; }
+    /**
+     * Accepts Forge's space-separated mana syntax and the compact simple form used by the
+     * structured editor, such as {@code 2B} for two generic and one black mana. Complex hybrid,
+     * Phyrexian, split, and other costs remain available through the raw script editor.
+     */
+    public void setManaCost(final String value) { manaCost = normalizeManaCost(value); }
     /** Returns the canonical Forge type line assembled from all selected type components. */
     public String getTypes() { return getTypeLine(); }
 
@@ -208,5 +218,18 @@ public final class CardEditorDraft {
                 result.append(type.name());
             }
         }
+    }
+
+    private static String normalizeManaCost(final String value) {
+        if (value == null) return null;
+        final String trimmed = value.trim();
+        final Matcher matcher = SIMPLE_COMPACT_MANA_COST.matcher(trimmed);
+        if (!matcher.matches()) return value;
+
+        final StringBuilder result = new StringBuilder(matcher.group(1));
+        for (final char symbol : matcher.group(2).toUpperCase(Locale.ROOT).toCharArray()) {
+            result.append(' ').append(symbol);
+        }
+        return result.toString();
     }
 }
