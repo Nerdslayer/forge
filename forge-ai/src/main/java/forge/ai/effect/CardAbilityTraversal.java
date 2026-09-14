@@ -10,6 +10,8 @@ import forge.game.card.CardFactory;
 import forge.game.card.CardState;
 import forge.item.IPaperCard;
 import forge.game.spellability.SpellAbility;
+import forge.game.spellability.LandAbility;
+import forge.game.spellability.SpellPermanent;
 import forge.game.trigger.Trigger;
 
 /** Inventories a selected face without checking activity, affordability or conditions. */
@@ -50,6 +52,9 @@ public final class CardAbilityTraversal {
         final String face = state.getStateName().name();
         int index = 0;
         for (final SpellAbility ability : state.getSpellAbilities()) {
+            if (isImplicitCastAbility(ability)) {
+                continue;
+            }
             final String path = face + "/ability:" + index++;
             result.add(new AbilityDescription(path, ability.isActivatedAbility() ? Origin.ACTIVATION : Origin.SPELL,
                     provenance(ability), ability.getMapParams(), AbilityOutcomeParser.parse(ability, path)));
@@ -75,6 +80,13 @@ public final class CardAbilityTraversal {
             result.add(entry(face + "/replacement:" + index++, Origin.REPLACEMENT, ability));
         }
         return List.copyOf(result);
+    }
+
+    /** The normal cast/land-play actions are not printed abilities on the card. */
+    private static boolean isImplicitCastAbility(final SpellAbility ability) {
+        return ability instanceof LandAbility
+                || ability instanceof SpellPermanent
+                || ability.isSpell() && ability.isBasicSpell();
     }
 
     private static AbilityDescription entry(final String path, final Origin origin, final CardTraitBase ability) {
