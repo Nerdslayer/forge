@@ -7,9 +7,9 @@ import forge.gui.framework.EDocID;
 import forge.gui.framework.IVDoc;
 import forge.util.Localizer;
 import forge.screens.workshop.cardcreator.CardEditorSession;
+import forge.toolbox.FScrollPane;
+import forge.toolbox.FSkin;
 
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import java.awt.BorderLayout;
 
 /** Displays the game-free point breakdown for the current Card Creator draft. */
@@ -17,13 +17,19 @@ public enum VCardEvaluation implements IVDoc<forge.screens.workshop.controllers.
     SINGLETON_INSTANCE;
 
     private DragCell parentCell;
-    private final DragTab tab = new DragTab("Card Evaluation");
-    private final JTextArea text = new JTextArea();
+    private final DragTab tab = new DragTab(Localizer.getInstance().getMessageorUseDefault("lblCardEvaluation", "Card Evaluation"));
+    private final FSkin.SkinnedTextArea text = new FSkin.SkinnedTextArea();
+    private final FScrollPane scroll = new FScrollPane(text, true);
 
     VCardEvaluation() {
         text.setEditable(false);
         text.setLineWrap(true);
         text.setWrapStyleWord(true);
+        text.setForeground(FSkin.getColor(FSkin.Colors.CLR_TEXT));
+        text.setBackground(FSkin.getColor(FSkin.Colors.CLR_THEME2));
+        text.setCaretColor(FSkin.getColor(FSkin.Colors.CLR_TEXT));
+        text.setFont(FSkin.getFont());
+        text.setOpaque(true);
     }
 
     @Override public EDocID getDocumentID() { return EDocID.WORKSHOP_CARDEVALUATION; }
@@ -37,7 +43,8 @@ public enum VCardEvaluation implements IVDoc<forge.screens.workshop.controllers.
     @Override
     public void populate() {
         parentCell.getBody().setLayout(new BorderLayout());
-        parentCell.getBody().add(new JScrollPane(text), BorderLayout.CENTER);
+        parentCell.getBody().setOpaque(false);
+        parentCell.getBody().add(scroll, BorderLayout.CENTER);
     }
 
     public void loadSession(final CardEditorSession session) {

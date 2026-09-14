@@ -26,7 +26,7 @@ public final class CardScriptDocument {
         lines.add("Name:" + nullToEmpty(draft.getName()));
         lines.add("ManaCost:" + nullToEmpty(draft.getManaCost()));
         lines.add("Types:" + nullToEmpty(draft.getTypes()));
-        if (isInteger(draft.getPower()) && isInteger(draft.getToughness())) {
+        if (draft.isCreature() && isInteger(draft.getPower()) && isInteger(draft.getToughness())) {
             lines.add("PT:" + draft.getPower() + "/" + draft.getToughness());
         }
         for (final String keyword : draft.getKeywords()) lines.add("K:" + keyword);
@@ -40,7 +40,7 @@ public final class CardScriptDocument {
         replaceFirstOrAdd("ManaCost", "ManaCost:" + nullToEmpty(draft.getManaCost()), 1);
         replaceFirstOrAdd("Types", "Types:" + nullToEmpty(draft.getTypes()), 2);
         removeLine("PT");
-        if (isInteger(draft.getPower()) && isInteger(draft.getToughness())) {
+        if (draft.isCreature() && isInteger(draft.getPower()) && isInteger(draft.getToughness())) {
             int insertAt = indexOfPrefix("Types:");
             if (insertAt < 0) insertAt = Math.min(2, lines.size() - 1);
             lines.add(Math.min(lines.size(), insertAt + 1), "PT:" + draft.getPower() + "/" + draft.getToughness());

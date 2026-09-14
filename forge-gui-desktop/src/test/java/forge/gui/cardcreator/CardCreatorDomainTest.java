@@ -53,6 +53,26 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void typeComponentsSupportMultipleTypesAndConditionalPowerToughness() {
+        final CardEditorDraft draft = CardEditorDraft.newCard();
+        draft.setCardTypes(List.of("Artifact", "Creature"));
+        draft.setSupertypes(List.of("Legendary", "Snow"));
+        draft.setSubtypes("Construct");
+        assertEquals(draft.getTypeLine(), "Legendary Snow Artifact Creature - Construct");
+
+        draft.setTypes("Legendary Artifact Creature - Construct");
+        assertTrue(draft.getCardTypes().contains("Artifact"));
+        assertTrue(draft.getCardTypes().contains("Creature"));
+        assertTrue(draft.getSupertypes().contains("Legendary"));
+        assertEquals(draft.getSubtypeLine(), "Construct");
+
+        draft.setCardTypes(List.of("Artifact"));
+        draft.setPower("not applicable");
+        draft.setToughness("not applicable");
+        assertFalse(CardScriptDocument.fromDraft(draft).getText().contains("PT:"));
+    }
+
+    @Test
     public void definitionValueSeparatesBattlefieldValueFromCosts() {
         final CardRules rules = CardRules.fromScript(List.of(
                 "Name:Test Creature", "ManaCost:2 G", "Types:Creature Elf", "PT:3/3", "K:Flying"));
