@@ -15,6 +15,7 @@ import forge.gui.card.CardScriptInfo;
 import forge.gui.card.CardScriptParser;
 import forge.gui.framework.ICDoc;
 import forge.item.PaperCard;
+import forge.itemmanager.CardManager;
 import forge.screens.workshop.menus.WorkshopFileMenu;
 import forge.screens.workshop.views.VCardScript;
 import forge.screens.workshop.views.VWorkshopCatalog;
@@ -91,17 +92,28 @@ public enum CCardScript implements ICDoc {
     }
 
     public void showCard(final PaperCard card) {
+        showCard(card, null);
+    }
+
+    public void showCard(final PaperCard card, final CardManager source) {
         if ((currentCard == card && CCardCreator.SINGLETON_INSTANCE.getSession().getSelectedCard() == card)
                 || switchInProgress) { return; }
 
         if (!CCardCreator.SINGLETON_INSTANCE.showCard(card)) { //ensure current card saved before changing to a different card
-            VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().setSelectedItem(currentCard); //return selection to current card //TODO: fix so clicking away again doesn't cause weird selection problems
+            if (source != null) source.setSelectedItem(currentCard);
+            else VWorkshopCatalog.SINGLETON_INSTANCE.restoreSelection(currentCard);
             return;
         }
 
         currentCard = card;
         currentScriptInfo = card != null ? CardScriptInfo.getScriptFor(currentCard.getRules().getNormalizedName()) : null;
         CCardCreator.SINGLETON_INSTANCE.refreshViews();
+    }
+
+    /** Clears the catalog card identity when the creator switches to an unsaved draft. */
+    public void clearCurrentCard() {
+        currentCard = null;
+        currentScriptInfo = null;
     }
 
     public void refresh() {

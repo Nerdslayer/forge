@@ -535,6 +535,11 @@ public abstract class ItemManager<T extends InventoryItem> extends JPanel implem
         return this.currentView.getSelectedItems();
     }
 
+    /** Clears the current view's selection without selecting a replacement item. */
+    public void clearSelection() {
+        this.currentView.clearSelection();
+    }
+
     /**
      *
      * getSelectedItems.

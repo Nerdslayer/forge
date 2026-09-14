@@ -36,13 +36,14 @@ public enum VWorkshopUI implements IVTopLevelUI {
     @Override
     public void populate() {
         SwingUtilities.invokeLater(() -> {
+            VWorkshopCatalog.SINGLETON_INSTANCE.selectCustomCardsTab();
             if (CWorkshopUI.SINGLETON_INSTANCE.consumeInitialCardRequest()) {
                 // Layout loading has already populated the catalog. Avoid requesting focus here:
                 // its later focus event would re-fire the first-card selection after this new
                 // draft is created and could prompt to save the untouched draft.
                 CCardCreator.SINGLETON_INSTANCE.newCard();
             } else {
-                VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().focus();
+                VWorkshopCatalog.SINGLETON_INSTANCE.getCustomCardManager().focus();
             }
         });
     }

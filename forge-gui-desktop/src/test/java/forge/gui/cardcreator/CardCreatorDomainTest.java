@@ -149,6 +149,7 @@ public class CardCreatorDomainTest {
         final CustomSetInfo set = repository.create("TST", "Creator Test Set");
         repository.saveCardEntry(set, "Test Card", null, "1", "C");
         assertTrue(Files.readString(set.file()).contains("1 C Test Card"));
+        assertEquals(repository.nextCollectorNumber(set), "2");
         try {
             repository.saveCardEntry(set, "Another Card", null, "1", "C");
             throw new AssertionError("duplicate collector number should be rejected");

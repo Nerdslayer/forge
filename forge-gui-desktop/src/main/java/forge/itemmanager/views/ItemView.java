@@ -228,6 +228,10 @@ public abstract class ItemView<T extends InventoryItem> {
         return items;
     }
 
+    /** Clears the current selection without selecting the first visible item. */
+    public void clearSelection() {
+    }
+
     public final boolean setSelectedItem(final T item) {
         return setSelectedItem(item, true);
     }

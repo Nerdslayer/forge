@@ -61,6 +61,27 @@ public final class CustomEditionRepository {
         return new CustomSetInfo(normalizedCode, name.trim(), target);
     }
 
+    /** Returns the next numeric collector number after the highest entry in the set. */
+    public String nextCollectorNumber(final CustomSetInfo set) throws IOException {
+        if (set == null || set.file() == null || !set.file().toAbsolutePath().normalize().startsWith(root)) {
+            throw new IOException("Refusing to inspect an invalid custom set.");
+        }
+        final List<String> lines = Files.readAllLines(set.file(), StandardCharsets.UTF_8);
+        boolean cardsSection = false;
+        int highest = 0;
+        for (final String line : lines) {
+            if (line.trim().equalsIgnoreCase("[cards]")) cardsSection = true;
+            else if (line.trim().startsWith("[") && line.trim().endsWith("]")) cardsSection = false;
+            if (!cardsSection || line.isBlank() || line.trim().startsWith("[")) continue;
+            try {
+                highest = Math.max(highest, Integer.parseInt(entryCollectorNumber(line)));
+            } catch (final NumberFormatException ignored) {
+                // Non-numeric collector numbers do not affect the next numeric number.
+            }
+        }
+        return Integer.toString(highest + 1);
+    }
+
     public void saveCardEntry(final CustomSetInfo set, final String cardName, final String oldCardName,
             final String collectorNumber, final String rarity) throws IOException {
         if (set == null || set.file() == null || !set.file().toAbsolutePath().normalize().startsWith(root)

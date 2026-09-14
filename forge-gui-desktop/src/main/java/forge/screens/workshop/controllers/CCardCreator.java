@@ -1,5 +1,6 @@
 package forge.screens.workshop.controllers;
 
+import forge.gui.cardcreator.CustomSetInfo;
 import forge.item.PaperCard;
 import forge.screens.workshop.cardcreator.CardEditorSession;
 import forge.screens.workshop.views.VCardDesigner;
@@ -44,6 +45,10 @@ public enum CCardCreator {
         refreshViews();
     }
 
+    public void selectCustomSet(final CustomSetInfo set) {
+        session.selectCustomSet(set == null ? null : set.code());
+    }
+
     public boolean canSwitchAway() {
         return !session.isDirty() || confirmSave();
     }
@@ -52,7 +57,6 @@ public enum CCardCreator {
         try {
             final PaperCard saved = session.save();
             VWorkshopCatalog.SINGLETON_INSTANCE.refreshPool(saved);
-            VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().setSelectedItem(saved);
             refreshViews();
             return true;
         } catch (final IOException ex) {
@@ -91,6 +95,10 @@ public enum CCardCreator {
         if (updatingViews) return;
         updatingViews = true;
         try {
+            if (session.getSelectedCard() == null) {
+                CCardScript.SINGLETON_INSTANCE.clearCurrentCard();
+                VWorkshopCatalog.SINGLETON_INSTANCE.clearCardDisplay();
+            }
             VCardDesigner.SINGLETON_INSTANCE.loadSession(session);
             VCardEvaluation.SINGLETON_INSTANCE.loadSession(session);
             CCardScript.SINGLETON_INSTANCE.refresh();

@@ -876,7 +876,8 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
         updateSelection();
     }
 
-    private void clearSelection() {
+    @Override
+    public void clearSelection() {
         int count = getCount();
         for (Integer i : selectedIndices) {
             if (i < count) {

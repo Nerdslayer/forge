@@ -328,6 +328,11 @@ public final class ItemListView<T extends InventoryItem> extends ItemView<T> {
     }
 
     @Override
+    public void clearSelection() {
+        this.table.clearSelection();
+    }
+
+    @Override
     public int getIndexAtPoint(final Point p) {
         return this.table.rowAtPoint(p);
     }
