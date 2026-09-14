@@ -22,8 +22,10 @@ public final class IntrinsicAbilityEvaluator {
     private static final int MAX_REFERENCE_CASES = 4096;
     private final IntrinsicReferenceModel model;
     private final IntrinsicEvaluationSettings settings;
+    public enum SupportStatus { SUPPORTED, PARTIAL, UNSUPPORTED, NOT_EVALUATED }
     public record AbilityValue(String path, double expectedOccurrences,
-            IntrinsicReferenceAggregate contribution) { }
+            IntrinsicReferenceAggregate contribution, SupportStatus triggerStatus,
+            SupportStatus outcomeStatus) { }
     public record DefinitionEvaluation(List<AbilityDescription> descriptions,
             List<AbilityValue> values) {
         public DefinitionEvaluation {
@@ -87,15 +89,20 @@ public final class IntrinsicAbilityEvaluator {
         final ScheduledTriggerParser.Schedule schedule = ScheduledTriggerParser.parse(ability.parameters()).orElse(null);
         // TODO: Other origins, conditional and non-battlefield triggers, and granted abilities.
         if (ability.origin() != CardAbilityTraversal.Origin.TRIGGER
-                || ability.provenance() == CardAbilityTraversal.Provenance.GRANTED
-                || !"Battlefield".equalsIgnoreCase(
-                        ability.parameters().getOrDefault("TriggerZones", "Battlefield"))
+                || ability.provenance() == CardAbilityTraversal.Provenance.GRANTED) {
+            return unsupported(ability, "unsupported intrinsic origin", SupportStatus.UNSUPPORTED,
+                    SupportStatus.NOT_EVALUATED);
+        }
+        if (!"Battlefield".equalsIgnoreCase(
+                ability.parameters().getOrDefault("TriggerZones", "Battlefield"))
                 || !supportsTriggerParameters(ability.parameters(), schedule)) {
-            return unsupported(ability, "unsupported intrinsic origin, zone or trigger filters");
+            return unsupported(ability, "unsupported intrinsic trigger filters", SupportStatus.UNSUPPORTED,
+                    outcomeStatusBeforeEvaluation(ability));
         }
         if ("Attacks".equals(ability.parameters().get("Mode"))
                 && source.kind() != PermanentKind.CREATURE && source.kind() != PermanentKind.TOKEN) {
-            return unsupported(ability, "self attack requires a creature reference source");
+            return unsupported(ability, "self attack requires a creature reference source",
+                    SupportStatus.UNSUPPORTED, outcomeStatusBeforeEvaluation(ability));
         }
         final double occurrences;
         if (schedule != null) {
@@ -108,25 +115,28 @@ public final class IntrinsicAbilityEvaluator {
             final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter
                     .describe(ability.parameters()).orElse(null);
             if (trigger == null) {
-                return unsupported(ability, "unsupported intrinsic trigger");
+                return unsupported(ability, "unsupported intrinsic trigger", SupportStatus.UNSUPPORTED,
+                        outcomeStatusBeforeEvaluation(ability));
             }
             final IntrinsicEventTriggerEstimate estimate = IntrinsicEventTriggerEstimator
                     .estimate(trigger, source, model, settings, timing);
             if (!estimate.supported()) {
-                return unsupported(ability, estimate.reason());
+                return unsupported(ability, estimate.reason(), SupportStatus.UNSUPPORTED,
+                        outcomeStatusBeforeEvaluation(ability));
             }
             occurrences = estimate.expectedOccurrences();
         }
-        return evaluateOutcome(ability, source, occurrences, tokenProfileResolver);
+        return evaluateOutcome(ability, source, occurrences, tokenProfileResolver, SupportStatus.SUPPORTED);
     }
 
     private AbilityValue evaluateOutcome(final AbilityDescription ability,
             final PermanentProfile source, final double occurrences,
-            final Function<String, Optional<PermanentProfile>> tokenProfileResolver) {
+            final Function<String, Optional<PermanentProfile>> tokenProfileResolver,
+            final SupportStatus triggerStatus) {
         final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(settings,
                 source, tokenProfileResolver);
         if (ability.outcome() == null) {
-            return unsupported(ability, "missing intrinsic outcome");
+            return unsupported(ability, "missing intrinsic outcome", triggerStatus, SupportStatus.UNSUPPORTED);
         }
         final Outcome<State> outcome;
         final List<ReferenceDimension> dimensions;
@@ -135,14 +145,16 @@ public final class IntrinsicAbilityEvaluator {
             dimensions = referenceDimensions(backend, ability.outcome());
             outcome = new OutcomeDescriptionCompiler<>(backend).compile(ability.outcome());
             if (referenceCaseCount(dimensions) > MAX_REFERENCE_CASES) {
-                return unsupported(ability, "intrinsic reference case limit exceeded");
+                return unsupported(ability, "intrinsic reference case limit exceeded", triggerStatus,
+                        SupportStatus.UNSUPPORTED);
             }
             cases = ReferenceCaseCombiner.combine(dimensions);
         } catch (final RuntimeException unsupported) {
             // A malformed or too-rich description must not turn a card definition into a
             // fabricated intrinsic value. The backend and compiler already retain safe reasons
             // for ordinary unsupported leaves; this is only the setup boundary.
-            return unsupported(ability, "intrinsic reference setup failed");
+            return unsupported(ability, "intrinsic reference setup failed", triggerStatus,
+                    SupportStatus.UNSUPPORTED);
         }
         final IntrinsicReferenceAggregate aggregate = IntrinsicReferenceAggregator.aggregate(cases, reference -> {
             final State state = referenceState(reference, source);
@@ -153,7 +165,11 @@ public final class IntrinsicAbilityEvaluator {
                     plan.supported(), plan.reason(), plan.completeness(), plan.unresolvedProbability(),
                     plan.unresolvedAlternatives());
         });
-        return new AbilityValue(ability.path(), occurrences, aggregate);
+        final SupportStatus outcomeStatus = aggregate.complete()
+                && aggregate.unresolvedRandomProbability() == 0 ? SupportStatus.SUPPORTED
+                        : aggregate.unsupportedCaseProbability() > 0 && aggregate.partialCaseProbability() == 0
+                                ? SupportStatus.UNSUPPORTED : SupportStatus.PARTIAL;
+        return new AbilityValue(ability.path(), occurrences, aggregate, triggerStatus, outcomeStatus);
     }
 
     /**
@@ -258,7 +274,17 @@ public final class IntrinsicAbilityEvaluator {
     }
 
     private static AbilityValue unsupported(final AbilityDescription ability, final String reason) {
+        return unsupported(ability, reason, SupportStatus.NOT_EVALUATED, SupportStatus.NOT_EVALUATED);
+    }
+
+    private static AbilityValue unsupported(final AbilityDescription ability, final String reason,
+            final SupportStatus triggerStatus, final SupportStatus outcomeStatus) {
         return new AbilityValue(ability.path(), 0, new IntrinsicReferenceAggregate(0, 0, 0, 0, 1, 0,
-                List.of(ability.path() + ": " + reason)));
+                List.of(ability.path() + ": " + reason)), triggerStatus, outcomeStatus);
+    }
+
+    private static SupportStatus outcomeStatusBeforeEvaluation(final AbilityDescription ability) {
+        return ability.outcome() == null || !ability.outcome().issue().isEmpty()
+                ? SupportStatus.UNSUPPORTED : SupportStatus.NOT_EVALUATED;
     }
 }
