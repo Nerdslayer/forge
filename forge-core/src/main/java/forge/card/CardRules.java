@@ -573,6 +573,11 @@ public final class CardRules implements ICardCharacteristics {
     public static CardRules fromScript(Iterable<String> script) {
         Reader crr = new Reader();
         for (String line : script) {
+            // Structured editor documents end with a newline, so tolerate the resulting
+            // trailing empty record just as readCard does.
+            if (line.isEmpty() || line.charAt(0) == '#') {
+                continue;
+            }
             crr.parseLine(line);
         }
         return crr.getCard();

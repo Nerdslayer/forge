@@ -24,6 +24,7 @@ public final class CardEditorDraft {
     private final Set<String> cardTypes = new LinkedHashSet<>();
     private final Set<String> supertypes = new LinkedHashSet<>();
     private final Set<String> subtypes = new LinkedHashSet<>();
+    private String subtypeInput = "";
     private final Set<String> keywords = new LinkedHashSet<>();
     private String customSetCode;
     private String sourceSetCode;
@@ -121,11 +122,16 @@ public final class CardEditorDraft {
     }
 
     public String getSubtypeLine() { return String.join(" ", subtypes); }
+    /** Returns the editor text, including whitespace that may still be being entered. */
+    public String getSubtypeInput() { return subtypeInput; }
     public void setSubtypes(final String value) {
+        subtypeInput = value == null ? "" : value;
         subtypes.clear();
         if (value != null) {
             // TODO: Validate subtypes against the selected card types and support special multiword subtype forms.
-            for (final String subtype : value.trim().split("\\s+")) {
+            // Both spaces and commas are accepted in the structured editor; the generated type line
+            // remains Forge's canonical space-separated form.
+            for (final String subtype : value.trim().split("[,\\s]+")) {
                 if (!subtype.isBlank()) subtypes.add(subtype);
             }
         }
@@ -186,6 +192,7 @@ public final class CardEditorDraft {
         cardTypes.clear();
         supertypes.clear();
         subtypes.clear();
+        subtypeInput = "";
         final String typeLine = value == null ? "" : value.trim();
         if (typeLine.isEmpty()) return;
 
@@ -193,10 +200,11 @@ public final class CardEditorDraft {
         final String[] sections = normalized.split("\\s+-\\s+", 2);
         parseTypeTokens(sections[0], false);
         if (sections.length > 1) parseTypeTokens(sections[1], true);
+        subtypeInput = getSubtypeLine();
     }
 
     private void parseTypeTokens(final String text, final boolean subtypeSection) {
-        for (final String token : text.trim().split("\\s+")) {
+        for (final String token : text.trim().split(subtypeSection ? "[,\\s]+" : "\\s+")) {
             if (token.isBlank()) continue;
             final CardType.CoreType cardType = CardType.CoreType.getEnum(token);
             final CardType.Supertype supertype = CardType.Supertype.getEnum(token);

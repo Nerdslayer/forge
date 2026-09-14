@@ -194,7 +194,7 @@ public enum VCardDesigner implements IVDoc<forge.screens.workshop.controllers.CC
             for (final Map.Entry<String, FCheckBox> entry : supertypeChecks.entrySet()) {
                 entry.getValue().setSelected(hasDraft && draft.getSupertypes().contains(entry.getKey()));
             }
-            subtypes.setText(hasDraft ? draft.getSubtypeLine() : "");
+            subtypes.setText(hasDraft ? draft.getSubtypeInput() : "");
             power.setText(hasDraft ? draft.getPower() : "");
             toughness.setText(hasDraft ? draft.getToughness() : "");
             collectorNumber.setText(hasDraft ? draft.getCollectorNumber() : "1");
