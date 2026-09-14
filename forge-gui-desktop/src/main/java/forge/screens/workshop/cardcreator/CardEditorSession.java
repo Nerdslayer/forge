@@ -162,7 +162,7 @@ public final class CardEditorSession {
             rawScriptInvalid = false;
             previewRules = rules;
             validation = CardCreatorValidation.validate(draft, text);
-            evaluation = evaluator.evaluate(rules);
+            evaluation = evaluator.evaluate(rules, oldSet);
         } catch (final RuntimeException ex) {
             previewRules = null;
             evaluation = null;
@@ -263,7 +263,7 @@ public final class CardEditorSession {
         try {
             previewRules = CardRules.fromScript(List.of(script.split("\\R", -1)));
             validation = CardCreatorValidation.validate(draft, script);
-            evaluation = evaluator.evaluate(previewRules);
+            evaluation = evaluator.evaluate(previewRules, draft.getCustomSetCode());
             rawScriptInvalid = false;
         } catch (final RuntimeException ex) {
             previewRules = null;

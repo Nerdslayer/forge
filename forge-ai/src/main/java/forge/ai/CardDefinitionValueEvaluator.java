@@ -1,13 +1,24 @@
 package forge.ai;
 
+import forge.ai.effect.CardAbilityTraversal;
+import forge.ai.effect.IntrinsicAbilityEvaluator;
+import forge.ai.effect.IntrinsicEvaluationSettings;
+import forge.ai.effect.IntrinsicReferenceAggregate;
+import forge.ai.effect.IntrinsicReferenceModel;
+import forge.card.CardEdition;
+import forge.card.CardRarity;
 import forge.card.CardRules;
+import forge.card.CardStateName;
 import forge.card.ICardFace;
+import forge.item.PaperCard;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -22,6 +33,8 @@ public final class CardDefinitionValueEvaluator {
             "flying", "vigilance", "trample", "lifelink", "deathtouch", "reach", "first strike",
             "double strike", "defender", "menace", "fear", "intimidate", "hexproof", "shroud",
             "indestructible");
+    private static final IntrinsicAbilityEvaluator INTRINSIC_EVALUATOR = new IntrinsicAbilityEvaluator(
+            IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
 
     public record Contribution(String category, String label, int value) {
     }
@@ -40,6 +53,15 @@ public final class CardDefinitionValueEvaluator {
     }
 
     public Evaluation evaluate(final CardRules rules) {
+        return evaluate(rules, CardEdition.UNKNOWN_CODE);
+    }
+
+    /**
+     * Evaluates a definition and uses the selected edition when resolving definition-only card
+     * data such as token profiles. The edition is intentionally not part of the card's value;
+     * it only supplies context for the game-free intrinsic ability traversal.
+     */
+    public Evaluation evaluate(final CardRules rules, final String editionCode) {
         if (rules == null || rules.getMainPart() == null) {
             return unsupported("No card definition is available.");
         }
@@ -47,7 +69,7 @@ public final class CardDefinitionValueEvaluator {
         final ICardFace face = rules.getMainPart();
         final List<Contribution> contributions = new ArrayList<>();
         final List<String> warnings = new ArrayList<>();
-        addUnsupportedAbilityWarnings(warnings, face);
+        addIntrinsicAbilityContributions(rules, editionCode, face, contributions, warnings);
 
         if (!face.getType().isCreature()) {
             warnings.add("The initial definition evaluator supports creatures only.");
@@ -89,22 +111,95 @@ public final class CardDefinitionValueEvaluator {
         return finish(contributions, warnings, face.getManaCost().getCMC());
     }
 
-    private static void addUnsupportedAbilityWarnings(final List<String> warnings, final ICardFace face) {
-        addUnsupportedAbilityWarning(warnings, face.getTriggers(), "triggered");
-        addUnsupportedAbilityWarning(warnings, face.getAbilities(), "activated or spell");
-        addUnsupportedAbilityWarning(warnings, face.getStaticAbilities(), "static");
-        addUnsupportedAbilityWarning(warnings, face.getReplacements(), "replacement");
+    private static void addIntrinsicAbilityContributions(final CardRules rules, final String editionCode,
+            final ICardFace face, final List<Contribution> contributions, final List<String> warnings) {
+        if (!hasAbilityRecords(face)) {
+            return;
+        }
+
+        final String edition = editionCode == null || editionCode.isBlank()
+                ? CardEdition.UNKNOWN_CODE : editionCode;
+        final PaperCard definition = new PaperCard(rules, edition, CardRarity.Special);
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation intrinsic;
+        try {
+            intrinsic = INTRINSIC_EVALUATOR.evaluateDefinitionDetails(definition, CardStateName.Original);
+        } catch (final RuntimeException failure) {
+            // Keep the definition evaluator useful when Forge cannot materialize an unusual card
+            // definition. It is better to report an unsupported ability than to invent a value.
+            warnings.add("Intrinsic ability analysis unavailable: " + safeMessage(failure));
+            return;
+        }
+
+        final Map<String, CardAbilityTraversal.AbilityDescription> byPath = new HashMap<>();
+        for (final CardAbilityTraversal.AbilityDescription description : intrinsic.descriptions()) {
+            byPath.put(description.path(), description);
+        }
+        for (final IntrinsicAbilityEvaluator.AbilityValue value : intrinsic.values()) {
+            final CardAbilityTraversal.AbilityDescription description = byPath.get(value.path());
+            if (description == null || description.provenance() != CardAbilityTraversal.Provenance.PRINTED) {
+                // Keyword-generated abilities are represented by the existing keyword model, and
+                // granted abilities are not intrinsic to this definition. Avoid counting either.
+                continue;
+            }
+
+            final IntrinsicReferenceAggregate aggregate = value.contribution();
+            if (!aggregate.complete() || aggregate.unresolvedRandomProbability() != 0) {
+                warnings.add("Unsupported " + abilityKind(description) + " abilities not fully evaluated: "
+                        + value.path() + " (" + intrinsicReason(aggregate) + ").");
+                continue;
+            }
+
+            final int valuePoints = toInt(aggregate.value());
+            if (valuePoints != 0) {
+                add(contributions, "Intrinsic ability", intrinsicLabel(description, value), valuePoints);
+            }
+        }
     }
 
-    private static void addUnsupportedAbilityWarning(final List<String> warnings,
-            final Iterable<String> abilities, final String kind) {
-        int count = 0;
-        for (final String ignored : abilities) {
-            count++;
+    private static boolean hasAbilityRecords(final ICardFace face) {
+        return face.getTriggers().iterator().hasNext()
+                || face.getAbilities().iterator().hasNext()
+                || face.getStaticAbilities().iterator().hasNext()
+                || face.getReplacements().iterator().hasNext();
+    }
+
+    private static String intrinsicLabel(final CardAbilityTraversal.AbilityDescription description,
+            final IntrinsicAbilityEvaluator.AbilityValue value) {
+        final String triggerDescription = description.parameters().get("TriggerDescription");
+        final String detail = triggerDescription == null || triggerDescription.isBlank()
+                ? description.origin().name().toLowerCase(Locale.ROOT)
+                : triggerDescription;
+        return value.path() + " (" + detail + ", "
+                + String.format(Locale.ROOT, "%.2f", value.expectedOccurrences()) + " expected uses)";
+    }
+
+    private static String intrinsicReason(final IntrinsicReferenceAggregate aggregate) {
+        if (!aggregate.unresolvedReasons().isEmpty()) {
+            return String.join("; ", aggregate.unresolvedReasons());
         }
-        if (count > 0) {
-            warnings.add("Unsupported " + kind + " abilities not evaluated yet (" + count + ").");
+        return "some reference cases are not covered";
+    }
+
+    private static String abilityKind(final CardAbilityTraversal.AbilityDescription description) {
+        return switch (description.origin()) {
+        case TRIGGER -> "triggered";
+        case ACTIVATION, SPELL -> "activated or spell";
+        case STATIC -> "static";
+        case REPLACEMENT -> "replacement";
+        };
+    }
+
+    private static String safeMessage(final RuntimeException failure) {
+        return failure.getMessage() == null || failure.getMessage().isBlank()
+                ? failure.getClass().getSimpleName() : failure.getMessage();
+    }
+
+    private static int toInt(final double value) {
+        if (!Double.isFinite(value)) {
+            return 0;
         }
+        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE
+                : value <= Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) Math.round(value);
     }
 
     private void addKeywordContributions(final List<Contribution> contributions, final List<String> warnings,
