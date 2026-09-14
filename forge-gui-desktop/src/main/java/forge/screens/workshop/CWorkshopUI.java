@@ -42,6 +42,8 @@ public enum CWorkshopUI implements ICDoc, IMenuProvider {
     /** */
     SINGLETON_INSTANCE;
 
+    private boolean initialized;
+
     CWorkshopUI() {
     }
 
@@ -66,7 +68,12 @@ public enum CWorkshopUI implements ICDoc, IMenuProvider {
     @Override
     public void initialize() {
         Singletons.getControl().getForgeMenu().setProvider(this);
-        CCardCreator.SINGLETON_INSTANCE.refreshViews();
+        if (!initialized) {
+            initialized = true;
+            CCardCreator.SINGLETON_INSTANCE.newCard();
+        } else {
+            CCardCreator.SINGLETON_INSTANCE.refreshViews();
+        }
     }
 
     /* (non-Javadoc)

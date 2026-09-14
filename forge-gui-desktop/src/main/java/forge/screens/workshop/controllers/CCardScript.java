@@ -5,6 +5,7 @@ import java.awt.event.FocusListener;
 import java.util.Map.Entry;
 
 import javax.swing.JTextPane;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.Style;
@@ -72,7 +73,16 @@ public enum CCardScript implements ICDoc {
     private void importRawTextIfNeeded() {
         if (!refreshing && !VCardScript.SINGLETON_INSTANCE.isLoadingSession()
                 && CCardCreator.SINGLETON_INSTANCE.getSession().isEditable()) {
-            CCardCreator.SINGLETON_INSTANCE.getSession().setRawScript(VCardScript.SINGLETON_INSTANCE.getTxtScript().getText());
+            final String editedText = VCardScript.SINGLETON_INSTANCE.getTxtScript().getText();
+            // Defer the session update until the document notification completes. The session
+            // listener refreshes this same text component, which Swing forbids during a callback.
+            SwingUtilities.invokeLater(() -> {
+                if (!refreshing && !VCardScript.SINGLETON_INSTANCE.isLoadingSession()
+                        && CCardCreator.SINGLETON_INSTANCE.getSession().isEditable()
+                        && editedText.equals(VCardScript.SINGLETON_INSTANCE.getTxtScript().getText())) {
+                    CCardCreator.SINGLETON_INSTANCE.getSession().setRawScript(editedText);
+                }
+            });
         }
     }
 
