@@ -119,6 +119,23 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void bracedDisplayManaCostsAreNormalizedBeforeEvaluation() {
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Braced Cost", "ManaCost:3 W W W", "Types:Creature", "PT:5/4"));
+        final CardEditorDraft draft = CardEditorDraft.fromRules(rules);
+        assertEquals(rules.getManaCost().toString(), "{3}{W}{W}{W}");
+        assertEquals(draft.getManaCost(), "3 W W W");
+
+        final CardDefinitionValueEvaluator.Evaluation evaluation = new CardDefinitionValueEvaluator()
+                .evaluate(rules);
+        assertEquals(evaluation.manaInvestment(), 6 * 35);
+
+        final CardRules bracedRules = CardRules.fromScript(List.of(
+                "Name:Raw Braced Cost", "ManaCost:{3}{W}{W}{W}", "Types:Creature", "PT:5/4"));
+        assertEquals(bracedRules.getManaCost().getCMC(), 6);
+    }
+
+    @Test
     public void definitionValueSeparatesBattlefieldValueFromCosts() {
         final CardRules rules = CardRules.fromScript(List.of(
                 "Name:Test Creature", "ManaCost:2 G", "Types:Creature Elf", "PT:3/3", "K:Flying"));
@@ -140,8 +157,10 @@ public class CardCreatorDomainTest {
         final CardDefinitionValueEvaluator.Evaluation evaluation = new CardDefinitionValueEvaluator().evaluate(rules);
 
         assertFalse(evaluation.isComplete());
-        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.contains("triggered")));
-        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.contains("activated or spell")));
+        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.startsWith(
+                "Triggered ability 1 evaluation is not supported")));
+        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.startsWith(
+                "Activated or spell ability 1 evaluation is not supported")));
     }
 
     @Test

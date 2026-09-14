@@ -123,10 +123,10 @@ public final class CardDefinitionValueEvaluator {
         final IntrinsicAbilityEvaluator.DefinitionEvaluation intrinsic;
         try {
             intrinsic = INTRINSIC_EVALUATOR.evaluateDefinitionDetails(definition, CardStateName.Original);
-        } catch (final RuntimeException failure) {
+        } catch (final RuntimeException ignored) {
             // Keep the definition evaluator useful when Forge cannot materialize an unusual card
             // definition. It is better to report an unsupported ability than to invent a value.
-            warnings.add("Intrinsic ability analysis unavailable: " + safeMessage(failure));
+            addFallbackAbilityWarnings(warnings, face);
             return;
         }
 
@@ -143,9 +143,9 @@ public final class CardDefinitionValueEvaluator {
             }
 
             final IntrinsicReferenceAggregate aggregate = value.contribution();
-            if (!aggregate.complete() || aggregate.unresolvedRandomProbability() != 0) {
-                warnings.add("Unsupported " + abilityKind(description) + " abilities not fully evaluated: "
-                        + value.path() + " (" + intrinsicReason(aggregate) + ").");
+            if (value.triggerStatus() != IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                    || value.outcomeStatus() != IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED) {
+                warnings.add(unsupportedAbilityMessage(description, value));
                 continue;
             }
 
@@ -163,6 +163,22 @@ public final class CardDefinitionValueEvaluator {
                 || face.getReplacements().iterator().hasNext();
     }
 
+    private static void addFallbackAbilityWarnings(final List<String> warnings, final ICardFace face) {
+        addFallbackAbilityWarning(warnings, face.getTriggers(), "Triggered");
+        addFallbackAbilityWarning(warnings, face.getAbilities(), "Activated or spell");
+        addFallbackAbilityWarning(warnings, face.getStaticAbilities(), "Static");
+        addFallbackAbilityWarning(warnings, face.getReplacements(), "Replacement");
+    }
+
+    private static void addFallbackAbilityWarning(final List<String> warnings,
+            final Iterable<String> abilities, final String kind) {
+        int count = 0;
+        for (final String ignored : abilities) {
+            warnings.add(kind + " ability " + ++count
+                    + " evaluation is not supported because the ability could not be analyzed.");
+        }
+    }
+
     private static String intrinsicLabel(final CardAbilityTraversal.AbilityDescription description,
             final IntrinsicAbilityEvaluator.AbilityValue value) {
         final String triggerDescription = description.parameters().get("TriggerDescription");
@@ -173,25 +189,56 @@ public final class CardDefinitionValueEvaluator {
                 + String.format(Locale.ROOT, "%.2f", value.expectedOccurrences()) + " expected uses)";
     }
 
-    private static String intrinsicReason(final IntrinsicReferenceAggregate aggregate) {
-        if (!aggregate.unresolvedReasons().isEmpty()) {
-            return String.join("; ", aggregate.unresolvedReasons());
-        }
-        return "some reference cases are not covered";
-    }
-
     private static String abilityKind(final CardAbilityTraversal.AbilityDescription description) {
         return switch (description.origin()) {
-        case TRIGGER -> "triggered";
-        case ACTIVATION, SPELL -> "activated or spell";
-        case STATIC -> "static";
-        case REPLACEMENT -> "replacement";
+        case TRIGGER -> "Triggered";
+        case ACTIVATION, SPELL -> "Activated or spell";
+        case STATIC -> "Static";
+        case REPLACEMENT -> "Replacement";
         };
     }
 
-    private static String safeMessage(final RuntimeException failure) {
-        return failure.getMessage() == null || failure.getMessage().isBlank()
-                ? failure.getClass().getSimpleName() : failure.getMessage();
+    private static String unsupportedAbilityMessage(final CardAbilityTraversal.AbilityDescription description,
+            final IntrinsicAbilityEvaluator.AbilityValue value) {
+        final IntrinsicAbilityEvaluator.SupportStatus trigger = value.triggerStatus();
+        final IntrinsicAbilityEvaluator.SupportStatus outcome = value.outcomeStatus();
+        final String reason;
+        if (description.origin() == CardAbilityTraversal.Origin.TRIGGER) {
+            final boolean triggerUnsupported = trigger == IntrinsicAbilityEvaluator.SupportStatus.UNSUPPORTED;
+            final boolean outcomeUnsupported = outcome == IntrinsicAbilityEvaluator.SupportStatus.UNSUPPORTED;
+            if (triggerUnsupported && outcomeUnsupported) {
+                reason = "the trigger and outcome were not recognized";
+            } else if (triggerUnsupported) {
+                reason = "the trigger was not recognized";
+            } else if (outcomeUnsupported) {
+                reason = "the outcome was not recognized";
+            } else {
+                reason = "the outcome could only be partially evaluated";
+            }
+        } else if (outcome == IntrinsicAbilityEvaluator.SupportStatus.UNSUPPORTED) {
+            reason = "the ability type and outcome were not recognized";
+        } else {
+            reason = "this ability type is not supported yet";
+        }
+        return abilityKind(description) + " ability " + abilityNumber(description)
+                + " evaluation is not supported because " + reason + ".";
+    }
+
+    private static int abilityNumber(final CardAbilityTraversal.AbilityDescription description) {
+        final String path = description.path();
+        final String marker = switch (description.origin()) {
+        case TRIGGER -> "/trigger:";
+        case ACTIVATION, SPELL -> "/ability:";
+        case STATIC -> "/static:";
+        case REPLACEMENT -> "/replacement:";
+        };
+        final int markerIndex = path.lastIndexOf(marker);
+        if (markerIndex < 0) return 1;
+        try {
+            return Integer.parseInt(path.substring(markerIndex + marker.length())) + 1;
+        } catch (final NumberFormatException ignored) {
+            return 1;
+        }
     }
 
     private static int toInt(final double value) {

@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 /** Mutable structured fields for one Card Creator draft. */
 public final class CardEditorDraft {
     private static final Pattern SIMPLE_COMPACT_MANA_COST = Pattern.compile("^(\\d+)([WUBRGCS]+)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern BRACED_MANA_SYMBOL = Pattern.compile("\\{([^{}]+)\\}");
 
     private String name;
     private String manaCost;
@@ -50,7 +51,7 @@ public final class CardEditorDraft {
         final CardRules rules = card.getRules();
         final ICardFace face = rules.getMainPart();
         draft.name = face.getName();
-        draft.manaCost = face.getManaCost().toString();
+        draft.setManaCost(face.getManaCost().toString());
         draft.setTypes(face.getType().toString());
         draft.power = face.getPower();
         draft.toughness = face.getToughness();
@@ -74,7 +75,7 @@ public final class CardEditorDraft {
         final CardEditorDraft draft = new CardEditorDraft();
         final ICardFace face = rules.getMainPart();
         draft.name = face.getName();
-        draft.manaCost = face.getManaCost().toString();
+        draft.setManaCost(face.getManaCost().toString());
         draft.setTypes(face.getType().toString());
         draft.power = face.getPower();
         draft.toughness = face.getToughness();
@@ -231,6 +232,8 @@ public final class CardEditorDraft {
     private static String normalizeManaCost(final String value) {
         if (value == null) return null;
         final String trimmed = value.trim();
+        final String braced = normalizeBracedManaCost(trimmed);
+        if (braced != null) return braced;
         final Matcher matcher = SIMPLE_COMPACT_MANA_COST.matcher(trimmed);
         if (!matcher.matches()) return value;
 
@@ -238,6 +241,24 @@ public final class CardEditorDraft {
         for (final char symbol : matcher.group(2).toUpperCase(Locale.ROOT).toCharArray()) {
             result.append(' ').append(symbol);
         }
+        return result.toString();
+    }
+
+    /** Converts Forge's display form ({@code {3}{W}}) to its script form ({@code 3 W}). */
+    private static String normalizeBracedManaCost(final String value) {
+        if (!value.contains("{")) return null;
+
+        final Matcher matcher = BRACED_MANA_SYMBOL.matcher(value);
+        final StringBuilder result = new StringBuilder();
+        int end = 0;
+        int symbolCount = 0;
+        while (matcher.find()) {
+            if (!value.substring(end, matcher.start()).isBlank()) return null;
+            if (symbolCount++ > 0) result.append(' ');
+            result.append(matcher.group(1).trim());
+            end = matcher.end();
+        }
+        if (symbolCount == 0 || !value.substring(end).isBlank()) return null;
         return result.toString();
     }
 }
