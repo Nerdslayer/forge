@@ -24,6 +24,13 @@ public final class IntrinsicAbilityEvaluator {
     private final IntrinsicEvaluationSettings settings;
     public record AbilityValue(String path, double expectedOccurrences,
             IntrinsicReferenceAggregate contribution) { }
+    public record DefinitionEvaluation(List<AbilityDescription> descriptions,
+            List<AbilityValue> values) {
+        public DefinitionEvaluation {
+            descriptions = List.copyOf(descriptions);
+            values = List.copyOf(values);
+        }
+    }
 
     public IntrinsicAbilityEvaluator(final IntrinsicReferenceModel model, final IntrinsicEvaluationSettings settings) {
         this.model = model;
@@ -32,6 +39,16 @@ public final class IntrinsicAbilityEvaluator {
 
     /** Game-free public entry point for a selected definition face. Results are per ability. */
     public List<AbilityValue> evaluateDefinition(final IPaperCard definition, final CardStateName face) {
+        return evaluateDefinitionDetails(definition, face).values();
+    }
+
+    /**
+     * Evaluates a definition while retaining the traversed descriptions used to identify each
+     * result. Callers that need both should use this method so definition materialization and
+     * ability traversal happen only once.
+     */
+    public DefinitionEvaluation evaluateDefinitionDetails(final IPaperCard definition,
+            final CardStateName face) {
         final CardState state = CardAbilityTraversal.definitionState(definition, face);
         final forge.card.CardTypeView type = state.getType();
         final PermanentKind kind = type.isAura() ? PermanentKind.AURA : type.isCreature() ? PermanentKind.CREATURE
@@ -45,9 +62,11 @@ public final class IntrinsicAbilityEvaluator {
         }
         final PermanentProfile profile = new PermanentProfile(true, kind, true, Math.max(0, state.getBasePower()),
                 Math.max(0, state.getBaseToughness()), keywords, type.isBasicLand());
-        return evaluate(CardAbilityTraversal.inspect(state), profile,
+        final List<AbilityDescription> descriptions = CardAbilityTraversal.inspect(state);
+        final List<AbilityValue> values = evaluate(descriptions, profile,
                 keywords.stream().anyMatch("Flash"::equalsIgnoreCase) ? EntryTiming.FLASH_LATE_TURN : EntryTiming.NORMAL_SPEED,
                 IntrinsicTokenProfileResolver.forSource(definition));
+        return new DefinitionEvaluation(descriptions, values);
     }
 
     /** Unsupported origins remain in results; callers must check aggregate completeness. */

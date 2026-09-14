@@ -154,11 +154,13 @@ public final class PermanentAbilityValueEvaluator {
         final List<IntrinsicAbilityEvaluator.AbilityValue> values;
         try {
             final CardStateName face = candidate.getFaceupCardStateName();
-            descriptions = CardAbilityTraversal.inspectDefinition(candidate.getPaperCard(), face);
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation definition =
+                    new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                            IntrinsicEvaluationSettings.defaults()).evaluateDefinitionDetails(
+                                    candidate.getPaperCard(), face);
+            descriptions = definition.descriptions();
             liveDescriptions = CardAbilityTraversal.inspect(candidate.getCurrentState());
-            values = new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
-                    IntrinsicEvaluationSettings.defaults()).evaluateDefinition(
-                            candidate.getPaperCard(), face);
+            values = definition.values();
         } catch (final RuntimeException failure) {
             reasons.add(candidate.getName() + ": intrinsic value skipped (definition unavailable)");
             return;

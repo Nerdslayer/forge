@@ -68,7 +68,7 @@ public enum VCardEvaluation implements IVDoc<forge.screens.workshop.controllers.
         output.append("  Mana: -").append(evaluation.manaInvestment()).append('\n');
         output.append("\nNet rate: ").append(evaluation.netRate()).append("\n\n");
         if (evaluation.warnings().isEmpty()) {
-            output.append("Evaluation coverage: complete for the initial creature definition model.");
+            output.append("Evaluation coverage: complete for the currently supported definition and ability model.");
         } else {
             output.append("Evaluation coverage: partial\n");
             for (final String warning : evaluation.warnings()) output.append("  ").append(warning).append('\n');

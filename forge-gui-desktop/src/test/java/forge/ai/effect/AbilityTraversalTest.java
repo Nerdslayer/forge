@@ -6,6 +6,7 @@ import java.util.Set;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 import forge.ai.AITest;
+import forge.ai.CardDefinitionValueEvaluator;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.card.CardStateName;
 import forge.game.ability.AbilityFactory;
@@ -26,6 +27,17 @@ public class AbilityTraversalTest extends AITest {
                 results + " " + CardAbilityTraversal.inspectDefinition(
                         forge.StaticData.instance().getCommonCards().getCard("Staff of Nin"), CardStateName.Original));
         Assert.assertTrue(results.stream().anyMatch(r -> !r.contribution().complete()));
+    }
+
+    @Test
+    public void cardDefinitionEvaluationIncludesSupportedIntrinsicAbilityValue() {
+        host();
+        final forge.item.PaperCard staff = forge.StaticData.instance().getCommonCards().getCard("Staff of Nin");
+        final CardDefinitionValueEvaluator.Evaluation evaluation = new CardDefinitionValueEvaluator()
+                .evaluate(staff.getRules(), staff.getEdition());
+        Assert.assertTrue(evaluation.contributions().stream().anyMatch(contribution ->
+                "Intrinsic ability".equals(contribution.category()) && contribution.value() > 0),
+                evaluation.toString());
     }
 
     @Test
