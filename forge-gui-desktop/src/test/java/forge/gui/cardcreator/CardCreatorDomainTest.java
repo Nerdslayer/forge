@@ -73,6 +73,39 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void subtypesAcceptCommaOrSpaceSeparatorsWhileKeepingCanonicalOutput() {
+        final CardEditorDraft draft = CardEditorDraft.newCard();
+        draft.setSubtypes("Minotaur Warrior");
+        assertEquals(draft.getSubtypeLine(), "Minotaur Warrior");
+
+        draft.setSubtypes("Minotaur,Warrior");
+        assertEquals(draft.getSubtypeLine(), "Minotaur Warrior");
+        assertEquals(draft.getSubtypeInput(), "Minotaur,Warrior");
+
+        draft.setSubtypes("Minotaur ");
+        assertEquals(draft.getSubtypeInput(), "Minotaur ");
+        assertEquals(draft.getSubtypeLine(), "Minotaur");
+    }
+
+    @Test
+    public void generatedDraftWithTrailingNewlineParses() {
+        final CardEditorDraft draft = CardEditorDraft.newCard();
+        draft.setName("Minotaur Evil Guy");
+        draft.setManaCost("2B");
+        draft.setTypes("Legendary Creature - Minotaur,Warrior");
+        draft.setPower("2");
+        draft.setToughness("2");
+        draft.setKeywords(List.of("Trample", "Deathtouch", "Menace"));
+        draft.setCustomSetCode("ZAK");
+
+        final String script = CardScriptDocument.fromDraft(draft).getText();
+        final CardRules rules = CardRules.fromScript(List.of(script.split("\\R", -1)));
+        assertEquals(rules.getMainPart().getName(), "Minotaur Evil Guy");
+        assertTrue(rules.getMainPart().getType().isCreature());
+        assertTrue(CardCreatorValidation.validate(draft, script).isValid());
+    }
+
+    @Test
     public void compactSimpleManaCostsAreExpandedWithoutChangingComplexSyntax() {
         final CardEditorDraft draft = CardEditorDraft.newCard();
         draft.setManaCost("2B");

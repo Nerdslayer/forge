@@ -113,7 +113,9 @@ public final class CardEditorSession {
         if (draft == null || values == null || !editable) return;
         draft.setName(values.getName());
         draft.setManaCost(values.getManaCost());
-        draft.setTypes(values.getTypes());
+        draft.setCardTypes(values.getCardTypes());
+        draft.setSupertypes(values.getSupertypes());
+        draft.setSubtypes(values.getSubtypeInput());
         draft.setPower(values.getPower());
         draft.setToughness(values.getToughness());
         draft.setKeywords(values.getKeywords());

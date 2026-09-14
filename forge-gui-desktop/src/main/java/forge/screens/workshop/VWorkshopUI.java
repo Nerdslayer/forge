@@ -5,6 +5,7 @@ import javax.swing.SwingUtilities;
 import forge.Singletons;
 import forge.gui.framework.FScreen;
 import forge.gui.framework.IVTopLevelUI;
+import forge.screens.workshop.controllers.CCardCreator;
 import forge.screens.workshop.controllers.CCardScript;
 import forge.screens.workshop.views.VWorkshopCatalog;
 
@@ -34,7 +35,16 @@ public enum VWorkshopUI implements IVTopLevelUI {
      */
     @Override
     public void populate() {
-        SwingUtilities.invokeLater(() -> VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().focus());
+        SwingUtilities.invokeLater(() -> {
+            if (CWorkshopUI.SINGLETON_INSTANCE.consumeInitialCardRequest()) {
+                // Layout loading has already populated the catalog. Avoid requesting focus here:
+                // its later focus event would re-fire the first-card selection after this new
+                // draft is created and could prompt to save the untouched draft.
+                CCardCreator.SINGLETON_INSTANCE.newCard();
+            } else {
+                VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().focus();
+            }
+        });
     }
 
     /* (non-Javadoc)

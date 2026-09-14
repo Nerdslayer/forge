@@ -43,6 +43,7 @@ public enum CWorkshopUI implements ICDoc, IMenuProvider {
     SINGLETON_INSTANCE;
 
     private boolean initialized;
+    private boolean createInitialCard;
 
     CWorkshopUI() {
     }
@@ -70,10 +71,20 @@ public enum CWorkshopUI implements ICDoc, IMenuProvider {
         Singletons.getControl().getForgeMenu().setProvider(this);
         if (!initialized) {
             initialized = true;
-            CCardCreator.SINGLETON_INSTANCE.newCard();
+            // The catalog selects its first card when it is focused. Create the initial
+            // draft after that selection so the automatic selection cannot prompt to save it.
+            createInitialCard = true;
+            CCardCreator.SINGLETON_INSTANCE.refreshViews();
         } else {
             CCardCreator.SINGLETON_INSTANCE.refreshViews();
         }
+    }
+
+    /** Consumed by the top-level view after the catalog has completed its initial focus. */
+    public boolean consumeInitialCardRequest() {
+        if (!createInitialCard) return false;
+        createInitialCard = false;
+        return true;
     }
 
     /* (non-Javadoc)
