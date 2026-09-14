@@ -1,22 +1,24 @@
 package forge.gui.cardcreator;
 
 import forge.card.CardRules;
+import forge.card.CardType;
 import forge.card.ICardFace;
 import forge.gui.card.CardScriptInfo;
 import forge.item.PaperCard;
 
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /** Mutable structured fields for one Card Creator draft. */
 public final class CardEditorDraft {
     private String name;
     private String manaCost;
-    private String types;
     private String power;
     private String toughness;
+    private final Set<String> cardTypes = new LinkedHashSet<>();
+    private final Set<String> supertypes = new LinkedHashSet<>();
+    private final Set<String> subtypes = new LinkedHashSet<>();
     private final Set<String> keywords = new LinkedHashSet<>();
     private String customSetCode;
     private String sourceSetCode;
@@ -30,7 +32,7 @@ public final class CardEditorDraft {
         final CardEditorDraft draft = new CardEditorDraft();
         draft.name = "New Card";
         draft.manaCost = "2";
-        draft.types = "Creature";
+        draft.setCardTypes(Set.of(CardType.CoreType.Creature.name()));
         draft.power = "2";
         draft.toughness = "2";
         draft.newCard = true;
@@ -43,7 +45,7 @@ public final class CardEditorDraft {
         final ICardFace face = rules.getMainPart();
         draft.name = face.getName();
         draft.manaCost = face.getManaCost().toString();
-        draft.types = face.getType().toString();
+        draft.setTypes(face.getType().toString());
         draft.power = face.getPower();
         draft.toughness = face.getToughness();
         for (final String keyword : face.getKeywords()) {
@@ -67,7 +69,7 @@ public final class CardEditorDraft {
         final ICardFace face = rules.getMainPart();
         draft.name = face.getName();
         draft.manaCost = face.getManaCost().toString();
-        draft.types = face.getType().toString();
+        draft.setTypes(face.getType().toString());
         draft.power = face.getPower();
         draft.toughness = face.getToughness();
         for (final String keyword : face.getKeywords()) {
@@ -80,8 +82,46 @@ public final class CardEditorDraft {
     public void setName(final String value) { name = value; }
     public String getManaCost() { return manaCost; }
     public void setManaCost(final String value) { manaCost = value; }
-    public String getTypes() { return types; }
-    public void setTypes(final String value) { types = value; }
+    /** Returns the canonical Forge type line assembled from all selected type components. */
+    public String getTypes() { return getTypeLine(); }
+
+    /** Imports a complete Forge type line for parsed cards and raw-script synchronization. */
+    public void setTypes(final String value) { parseTypeLine(value); }
+
+    public Set<String> getCardTypes() { return Collections.unmodifiableSet(cardTypes); }
+    public void setCardTypes(final Iterable<String> values) {
+        cardTypes.clear();
+        if (values != null) {
+            for (final String value : values) {
+                final CardType.CoreType type = CardType.CoreType.getEnum(value);
+                if (type != null) cardTypes.add(type.name());
+            }
+        }
+    }
+
+    public Set<String> getSupertypes() { return Collections.unmodifiableSet(supertypes); }
+    public void setSupertypes(final Iterable<String> values) {
+        supertypes.clear();
+        if (values != null) {
+            for (final String value : values) {
+                final CardType.Supertype type = CardType.Supertype.getEnum(value);
+                if (type != null) supertypes.add(type.name());
+            }
+        }
+    }
+
+    public String getSubtypeLine() { return String.join(" ", subtypes); }
+    public void setSubtypes(final String value) {
+        subtypes.clear();
+        if (value != null) {
+            // TODO: Validate subtypes against the selected card types and support special multiword subtype forms.
+            for (final String subtype : value.trim().split("\\s+")) {
+                if (!subtype.isBlank()) subtypes.add(subtype);
+            }
+        }
+    }
+
+    public boolean isCreature() { return cardTypes.contains(CardType.CoreType.Creature.name()); }
     public String getPower() { return power; }
     public void setPower(final String value) { power = value; }
     public String getToughness() { return toughness; }
@@ -122,7 +162,51 @@ public final class CardEditorDraft {
     }
 
     public String getTypeLine() {
-        return Arrays.stream((types == null ? "" : types.trim()).split("\\s+"))
-                .filter(s -> !s.isBlank()).collect(Collectors.joining(" "));
+        final StringBuilder result = new StringBuilder();
+        appendSelectedTypes(result, CardType.Supertype.values(), supertypes);
+        appendSelectedTypes(result, CardType.CoreType.values(), cardTypes);
+        if (!subtypes.isEmpty()) {
+            if (result.length() > 0) result.append(" ");
+            result.append("- ").append(getSubtypeLine());
+        }
+        return result.toString();
+    }
+
+    private void parseTypeLine(final String value) {
+        cardTypes.clear();
+        supertypes.clear();
+        subtypes.clear();
+        final String typeLine = value == null ? "" : value.trim();
+        if (typeLine.isEmpty()) return;
+
+        final String normalized = typeLine.replace('—', '-');
+        final String[] sections = normalized.split("\\s+-\\s+", 2);
+        parseTypeTokens(sections[0], false);
+        if (sections.length > 1) parseTypeTokens(sections[1], true);
+    }
+
+    private void parseTypeTokens(final String text, final boolean subtypeSection) {
+        for (final String token : text.trim().split("\\s+")) {
+            if (token.isBlank()) continue;
+            final CardType.CoreType cardType = CardType.CoreType.getEnum(token);
+            final CardType.Supertype supertype = CardType.Supertype.getEnum(token);
+            if (!subtypeSection && cardType != null) {
+                cardTypes.add(cardType.name());
+            } else if (!subtypeSection && supertype != null) {
+                supertypes.add(supertype.name());
+            } else {
+                subtypes.add(token);
+            }
+        }
+    }
+
+    private static <E extends Enum<E>> void appendSelectedTypes(final StringBuilder result,
+            final E[] allTypes, final Set<String> selectedTypes) {
+        for (final E type : allTypes) {
+            if (selectedTypes.contains(type.name())) {
+                if (result.length() > 0) result.append(" ");
+                result.append(type.name());
+            }
+        }
     }
 }
