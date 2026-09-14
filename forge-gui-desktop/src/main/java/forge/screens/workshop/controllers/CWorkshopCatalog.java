@@ -35,7 +35,8 @@ public enum CWorkshopCatalog implements ICDoc {
      */
     @Override
     public void update() {
-        VWorkshopCatalog.SINGLETON_INSTANCE.getCardManager().setup(ItemManagerConfig.WORKSHOP_CATALOG);
+        VWorkshopCatalog.SINGLETON_INSTANCE.getCustomCardManager().setup(ItemManagerConfig.WORKSHOP_CATALOG);
+        VWorkshopCatalog.SINGLETON_INSTANCE.getAllCardManager().setup(ItemManagerConfig.WORKSHOP_CATALOG);
         //TODO: Restore previously selected card
     }
 }

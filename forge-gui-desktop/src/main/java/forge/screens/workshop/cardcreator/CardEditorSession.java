@@ -109,6 +109,22 @@ public final class CardEditorSession {
     public void setCollectorNumber(final String value) { draft.setCollectorNumber(value); refreshPreview(true); }
     public void setRarity(final String value) { draft.setRarity(value); refreshPreview(true); }
 
+    /** Selects a set for the current draft and assigns the next unused numeric collector number. */
+    public void selectCustomSet(final String code) {
+        if (draft == null || !editable || Objects.equals(draft.getCustomSetCode(), code)) return;
+        draft.setCustomSetCode(code);
+        if (code != null && !code.isBlank()) {
+            try {
+                final CustomSetInfo set = getCustomSets().stream()
+                        .filter(candidate -> candidate.code().equalsIgnoreCase(code)).findFirst().orElse(null);
+                if (set != null) draft.setCollectorNumber(editionRepository.nextCollectorNumber(set));
+            } catch (final IOException ignored) {
+                // Validation still reports an unavailable set; keep the user's existing number.
+            }
+        }
+        refreshPreview(true);
+    }
+
     public void updateFromDesigner(final CardEditorDraft values) {
         if (draft == null || values == null || !editable) return;
         draft.setName(values.getName());
@@ -171,7 +187,11 @@ public final class CardEditorSession {
 
     public CustomSetInfo createCustomSet(final String code, final String name) throws IOException {
         final CustomSetInfo result = editionRepository.create(code, name);
-        if (draft != null) setCustomSetCode(result.code());
+        if (draft != null && editable) {
+            draft.setCustomSetCode(result.code());
+            draft.setCollectorNumber(editionRepository.nextCollectorNumber(result));
+            refreshPreview(true);
+        }
         return result;
     }
 

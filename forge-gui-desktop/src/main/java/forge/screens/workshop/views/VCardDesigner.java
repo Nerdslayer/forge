@@ -100,7 +100,9 @@ public enum VCardDesigner implements IVDoc<forge.screens.workshop.controllers.CC
         power.getDocument().addDocumentListener(documentListener);
         toughness.getDocument().addDocumentListener(documentListener);
         collectorNumber.getDocument().addDocumentListener(documentListener);
-        customSet.addActionListener(e -> { if (!refreshing) changeListener.run(); });
+        customSet.addActionListener(e -> {
+            if (!refreshing) CCardCreator.SINGLETON_INSTANCE.selectCustomSet(customSet.getSelectedItem());
+        });
         rarity.addActionListener(e -> { if (!refreshing) changeListener.run(); });
         for (final CardType.CoreType type : CardType.CoreType.values()) {
             addCheck(cardTypeChecks, cardTypePanel, type.name());
