@@ -34,8 +34,13 @@ public final class IntrinsicEventTriggerEstimator {
                 continue;
             }
             final double survivalProbability = survival.probability(checkpoint);
+            final int opportunityTurn = opportunityTurnNumber(trigger.turnScope(), checkpoint,
+                    entryTiming);
+            if (opportunityTurn < 1) {
+                continue;
+            }
             final double horizonDiscount = AbilityOccurrenceEstimator.turnDiscount(
-                    checkpoint.turnNumber());
+                    opportunityTurn);
             final double contribution = Math.min(maximum - expected,
                     eventRate * survivalProbability * horizonDiscount);
             expected += contribution;
@@ -44,6 +49,17 @@ public final class IntrinsicEventTriggerEstimator {
         }
         return new IntrinsicEventTriggerEstimate(expected, true, "reference event rate",
                 opportunities);
+    }
+
+    private static int opportunityTurnNumber(final IntrinsicEventTrigger.TurnScope scope,
+            final SurvivalCheckpoint checkpoint, final EntryTiming entryTiming) {
+        return switch (scope) {
+        case CONTROLLER_TURN -> checkpoint.controllerTurnNumber(entryTiming);
+        case OPPONENT_TURN -> checkpoint.opponentTurnNumber(entryTiming);
+        // Treat an event on either player's turn as belonging to the active player's turn.
+        case ANY_TURN -> Math.max(checkpoint.controllerTurnNumber(entryTiming),
+                checkpoint.opponentTurnNumber(entryTiming));
+        };
     }
 
     private static double expectedRate(final WeightedDistribution<Double> distribution,
