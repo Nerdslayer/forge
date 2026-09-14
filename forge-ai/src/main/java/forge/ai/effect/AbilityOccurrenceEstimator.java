@@ -8,7 +8,7 @@ import forge.game.zone.ZoneType;
 /** Shared occurrence arithmetic for situational and future intrinsic ability analysis. */
 final class AbilityOccurrenceEstimator {
     static final int MAX_USES_PER_TURN = 4;
-    static final double NEXT_TURN_DISCOUNT = 0.75;
+    static final double NEXT_TURN_DISCOUNT = 0.85;
     private static final double LAND_PER_HAND_CARD = 0.40;
 
     private AbilityOccurrenceEstimator() {
