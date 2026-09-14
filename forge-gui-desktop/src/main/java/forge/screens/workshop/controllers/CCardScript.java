@@ -99,15 +99,20 @@ public enum CCardScript implements ICDoc {
         if ((currentCard == card && CCardCreator.SINGLETON_INSTANCE.getSession().getSelectedCard() == card)
                 || switchInProgress) { return; }
 
-        if (!CCardCreator.SINGLETON_INSTANCE.showCard(card)) { //ensure current card saved before changing to a different card
-            if (source != null) source.setSelectedItem(currentCard);
-            else VWorkshopCatalog.SINGLETON_INSTANCE.restoreSelection(currentCard);
-            return;
-        }
+        switchInProgress = true;
+        try {
+            if (!CCardCreator.SINGLETON_INSTANCE.showCard(card)) { //ensure current card saved before changing to a different card
+                if (source != null) source.setSelectedItem(currentCard);
+                else VWorkshopCatalog.SINGLETON_INSTANCE.restoreSelection(currentCard);
+                return;
+            }
 
-        currentCard = card;
-        currentScriptInfo = card != null ? CardScriptInfo.getScriptFor(currentCard.getRules().getNormalizedName()) : null;
-        CCardCreator.SINGLETON_INSTANCE.refreshViews();
+            currentCard = card;
+            currentScriptInfo = card != null ? CardScriptInfo.getScriptFor(currentCard.getRules().getNormalizedName()) : null;
+            CCardCreator.SINGLETON_INSTANCE.refreshViews();
+        } finally {
+            switchInProgress = false;
+        }
     }
 
     /** Clears the catalog card identity when the creator switches to an unsaved draft. */

@@ -11,6 +11,7 @@ import forge.toolbox.FScrollPane;
 import forge.toolbox.FSkin;
 
 import java.awt.BorderLayout;
+import javax.swing.border.EmptyBorder;
 
 /** Displays the game-free point breakdown for the current Card Creator draft. */
 public enum VCardEvaluation implements IVDoc<forge.screens.workshop.controllers.CCardDesigner> {
@@ -30,6 +31,7 @@ public enum VCardEvaluation implements IVDoc<forge.screens.workshop.controllers.
         text.setCaretColor(FSkin.getColor(FSkin.Colors.CLR_TEXT));
         text.setFont(FSkin.getFont());
         text.setOpaque(true);
+        text.setBorder(new EmptyBorder(3, 5, 3, 4));
     }
 
     @Override public EDocID getDocumentID() { return EDocID.WORKSHOP_CARDEVALUATION; }
