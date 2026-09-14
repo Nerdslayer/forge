@@ -57,6 +57,13 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void traversalDoesNotReportImplicitCastAsPrintedAbility() {
+        final Card card = host();
+        Assert.assertFalse(CardAbilityTraversal.inspect(card.getCurrentState()).stream()
+                .anyMatch(description -> description.origin() == CardAbilityTraversal.Origin.SPELL));
+    }
+
+    @Test
     public void traversalDistinguishesSharedBranchesFromCycles() {
         final Card card = host();
         final SpellAbility root = AbilityFactory.getAbility("DB$ Draw", card);

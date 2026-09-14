@@ -59,7 +59,9 @@ public final class CardEditorSession {
         }
         draft = CardEditorDraft.from(card);
         final CardScriptInfo script = CardScriptInfo.getScriptFor(card.getRules().getNormalizedName());
-        document = CardScriptDocument.fromText(script == null ? CardScriptDocument.fromDraft(draft).getText() : script.getText());
+        final String sourceText = script == null
+                ? CardScriptDocument.fromRules(card.getRules()).getText() : script.getText();
+        document = CardScriptDocument.fromText(sourceText);
         editable = script != null && script.getFile() != null && cardRepository.isOwnedPath(script.getFile().toPath());
         dirty = false;
         rawScriptInvalid = false;
@@ -82,7 +84,9 @@ public final class CardEditorSession {
         draft.setName(selectedCard.getName() + " Custom");
         draft.setCustomSetCode(null);
         draft.markAsNew();
-        document = CardScriptDocument.fromText(draft.getSourceScript());
+        final String sourceText = draft.getSourceScript() == null
+                ? CardScriptDocument.fromRules(selectedCard.getRules()).getText() : draft.getSourceScript();
+        document = CardScriptDocument.fromText(sourceText);
         editable = true;
         dirty = true;
         rawScriptInvalid = false;

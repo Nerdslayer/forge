@@ -39,6 +39,19 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void rulesFallbackPreservesRawAbilityRecords() {
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Ability Card", "ManaCost:1 R", "Types:Creature Goblin", "PT:2/2",
+                "SVar:DrawOne:DB$ Draw | NumCards$ 1",
+                "T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | Execute$ DrawOne",
+                "Oracle:At the beginning of your upkeep, draw a card."));
+
+        final String source = CardScriptDocument.fromRules(rules).getText();
+        assertTrue(source.contains("SVar:DrawOne:DB$ Draw | NumCards$ 1"));
+        assertTrue(source.contains("T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | Execute$ DrawOne"));
+    }
+
+    @Test
     public void newDraftUpdatesOnlyItsGeneratedOraclePreview() {
         final CardEditorDraft draft = CardEditorDraft.newCard();
         final CardScriptDocument document = CardScriptDocument.fromDraft(draft);
