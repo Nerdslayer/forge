@@ -11,9 +11,11 @@ public final class IntrinsicScheduledTriggerEstimator {
     }
 
     /**
-     * Estimates the first bounded scheduled opportunities. The schedule is matched against the
-     * relative player turn sequence implied by the entry timing, so “your upkeep” is not treated
-     * as every upkeep. Survival is applied at the exact checkpoint of each opportunity.
+     * Estimates scheduled opportunities during the first bounded controller turns. The schedule
+     * is matched against the relative player turn sequence implied by the entry timing, so “your
+     * upkeep” is not treated as every upkeep. Survival is applied at the exact checkpoint of each
+     * opportunity, while horizon discounts count the relevant player's turns rather than every
+     * alternating turn.
      */
     public static IntrinsicScheduledTriggerEstimate estimate(
             final IntrinsicScheduledTrigger trigger, final PermanentProfile source,
@@ -27,12 +29,15 @@ public final class IntrinsicScheduledTriggerEstimator {
         final List<IntrinsicScheduledTriggerEstimate.Opportunity> opportunities = new ArrayList<>();
         final int maximum = settings.recurringTriggerResolutions();
         for (final SurvivalCheckpoint checkpoint : SurvivalCheckpoint.values()) {
-            if (opportunities.size() >= maximum || !matches(trigger, checkpoint, entryTiming)) {
+            final int opportunityTurn = opportunityTurnNumber(trigger.playerScope(), checkpoint,
+                    entryTiming);
+            if (opportunities.size() >= maximum || opportunityTurn < 1
+                    || opportunityTurn > maximum || !matches(trigger, checkpoint, entryTiming)) {
                 continue;
             }
             final double survivalProbability = survival.probability(checkpoint);
             final double horizonDiscount = AbilityOccurrenceEstimator.turnDiscount(
-                    checkpoint.turnNumber());
+                    opportunityTurn);
             final double contribution = survivalProbability * horizonDiscount;
             opportunities.add(new IntrinsicScheduledTriggerEstimate.Opportunity(
                     checkpoint, survivalProbability, horizonDiscount, contribution));
@@ -42,6 +47,17 @@ public final class IntrinsicScheduledTriggerEstimator {
                 .sum();
         return new IntrinsicScheduledTriggerEstimate(expected, opportunities.size(), opportunities,
                 survival);
+    }
+
+    private static int opportunityTurnNumber(final IntrinsicScheduledTrigger.PlayerScope scope,
+            final SurvivalCheckpoint checkpoint, final EntryTiming entryTiming) {
+        return switch (scope) {
+        case CONTROLLER -> checkpoint.controllerTurnNumber(entryTiming);
+        case OPPONENT -> checkpoint.opponentTurnNumber(entryTiming);
+        // Use the active player's turn number when either player can produce the trigger.
+        case EACH_PLAYER -> Math.max(checkpoint.controllerTurnNumber(entryTiming),
+                checkpoint.opponentTurnNumber(entryTiming));
+        };
     }
 
     private static boolean matches(final IntrinsicScheduledTrigger trigger,

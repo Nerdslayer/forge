@@ -110,10 +110,37 @@ public class IntrinsicSurvivalEstimatorTest extends AITest {
                         IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
                         EntryTiming.NORMAL_SPEED);
 
-        Assert.assertEquals(endEstimate.opportunitiesEvaluated(), 2);
+        Assert.assertEquals(endEstimate.opportunitiesEvaluated(), 3);
         Assert.assertEquals(upkeepEstimate.opportunitiesEvaluated(), 3);
         Assert.assertTrue(endEstimate.expectedOccurrences() > 0);
         Assert.assertTrue(endEstimate.expectedOccurrences() < 2);
+    }
+
+    @Test
+    public void scheduledControllerUpkeepUsesControllerTurnDiscounts() {
+        final PermanentProfile artifact = new PermanentProfile(true, PermanentKind.ARTIFACT,
+                true, 0, 0, Set.of());
+        final IntrinsicScheduledTrigger yourUpkeep = new IntrinsicScheduledTrigger(
+                IntrinsicScheduledTrigger.Schedule.UPKEEP,
+                IntrinsicScheduledTrigger.PlayerScope.CONTROLLER);
+
+        final IntrinsicScheduledTriggerEstimate estimate =
+                IntrinsicScheduledTriggerEstimator.estimate(yourUpkeep, artifact,
+                        IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
+                        EntryTiming.NORMAL_SPEED);
+
+        Assert.assertEquals(estimate.opportunitiesEvaluated(), 2);
+        Assert.assertEquals(estimate.opportunities().get(0).checkpoint(),
+                SurvivalCheckpoint.START_OF_THIRD_TURN);
+        Assert.assertEquals(estimate.opportunities().get(1).checkpoint(),
+                SurvivalCheckpoint.START_OF_FIFTH_TURN);
+        Assert.assertEquals(estimate.opportunities().get(0).horizonDiscount(), .85, .0000001);
+        Assert.assertEquals(estimate.opportunities().get(1).horizonDiscount(), .85 * .85, .0000001);
+
+        final double expected = estimate.opportunities().stream()
+                .mapToDouble(IntrinsicScheduledTriggerEstimate.Opportunity::expectedContribution)
+                .sum();
+        Assert.assertEquals(estimate.expectedOccurrences(), expected, .0000001);
     }
 
     @Test
