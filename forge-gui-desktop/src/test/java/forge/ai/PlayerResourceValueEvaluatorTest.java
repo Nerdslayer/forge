@@ -11,44 +11,47 @@ import forge.game.player.Player;
 public class PlayerResourceValueEvaluatorTest extends AITest {
     @Test
     public void testMarginalCardValueDeclinesWithHandSize() {
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(0), 140);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(3), 104);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(7), 60);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(20), 60);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(0), 120);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(3), 90);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(7), 50);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateNextCard(20), 50);
     }
 
     @Test
     public void testMultipleDrawsUseSuccessiveMarginalValues() {
         Assert.assertEquals(PlayerResourceValueEvaluator.evaluateCardDraw(0, 3),
-                140 + 128 + 116);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateCardDraw(3, 2), 104 + 92);
+                120 + 110 + 100);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateCardDraw(3, 2), 90 + 80);
         Assert.assertEquals(PlayerResourceValueEvaluator.evaluateCardDraw(3, 0), 0);
     }
 
     @Test
     public void testRandomDiscardReversesCardDrawValue() {
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(7, 1), 68);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(5, 2), 196);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(3, 1), 116);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(3, 2), 244);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(1, 3), 140);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(7, 1), 60);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(5, 2), 170);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(3, 1), 100);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(3, 2), 210);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateRandomDiscard(1, 3), 120);
     }
 
     @Test
     public void testChosenDiscardDiscountShrinksAsHandIsEmptied() {
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(7, 1), 39);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(5, 2), 137);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(3, 1), 77);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(3, 2), 203);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(1, 3), 140);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(7, 1), 34);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(5, 2), 119);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(3, 1), 67);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(3, 2), 175);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(1, 3), 120);
         Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(0, 1), 0);
     }
 
     @Test
     public void testManaUsesSharedPermanentEvaluationScale() {
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateMana(1), 35);
-        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateMana(3), 105);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateMana(1), 25);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateMana(3), 75);
         Assert.assertEquals(PlayerResourceValueEvaluator.evaluateMana(0), 0);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateAverageCardPlay(2), 140);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateManaInvestment(4), 105);
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateManaInvestment(6), 195);
     }
 
     @Test
