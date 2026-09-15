@@ -161,13 +161,14 @@ public final class EffectAnalysisTrace {
 
     /** Records the final removal score, whose adjustment includes independently weighted future value. */
     public void candidate(final Card card, final int baseValue, final int relationshipValue,
-            final int synergyWeight, final int weightedAdjustment, final int finalValue) {
+            final int synergyWeight, final int weightedAdjustment, final int transitionValue,
+            final int finalValue) {
         if (!isEnabled()) {
             return;
         }
-        line("Candidate: %s, base=%d, relationship=%d, weight=%d%%, adjustment=%d, final=%d",
+        line("Candidate: %s, base=%d, relationship=%d, weight=%d%%, adjustment=%d, transition=%d, final=%d",
                 cardLabel(card), baseValue, relationshipValue, synergyWeight,
-                weightedAdjustment, finalValue);
+                weightedAdjustment, transitionValue, finalValue);
     }
 
     /** Records and emits the selected removal target. */

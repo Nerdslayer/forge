@@ -26,6 +26,7 @@ import com.google.common.collect.Sets;
 import forge.StaticData;
 import forge.ai.effect.EffectAnalysisTrace;
 import forge.ai.effect.CardValueBreakdown;
+import forge.ai.effect.RemovalActionKind;
 import forge.ai.effect.UnifiedCardValueEvaluator;
 import forge.ai.effect.ValuationContext;
 import forge.ai.simulation.GameStateEvaluator;
@@ -611,7 +612,8 @@ public class ComputerUtilCard {
         trace.context(candidates.size());
         final Map<Card, UnifiedCardValueEvaluator.RemovalCandidateEvaluation> evaluations =
                 UnifiedCardValueEvaluator.evaluateRemovalCandidates(ai, candidates,
-                        ValuationContext.forRemoval(ai, synergyWeight, intrinsicWeight), trace);
+                        ValuationContext.forRemoval(ai, synergyWeight, intrinsicWeight),
+                        RemovalActionKind.from(removalAbility), trace);
         if (trace.isEnabled()) {
             Card selected = null;
             int highestValue = Integer.MIN_VALUE;
@@ -627,7 +629,7 @@ public class ComputerUtilCard {
                 trace.abilityPotential(candidate, intrinsicValue, intrinsicWeight,
                         breakdown.reasons());
                 trace.candidate(candidate, baseValue, relationshipValue, synergyWeight,
-                        weightedAdjustment, finalValue);
+                        weightedAdjustment, breakdown.transitionValue(), finalValue);
                 if (finalValue > highestValue) {
                     highestValue = finalValue;
                     selected = candidate;

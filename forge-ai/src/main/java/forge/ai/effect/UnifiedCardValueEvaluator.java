@@ -43,6 +43,17 @@ public final class UnifiedCardValueEvaluator {
     public static Map<Card, RemovalCandidateEvaluation> evaluateRemovalCandidates(final Player ai,
             final Iterable<Card> candidates, final ValuationContext context,
             final EffectAnalysisTrace trace) {
+        return evaluateRemovalCandidates(ai, candidates, context, RemovalActionKind.PERMANENT_REMOVAL,
+                trace);
+    }
+
+    /**
+     * Evaluates removal candidates for the proposed action. The default overload preserves the
+     * existing permanent-removal behavior; bounce applies its retained-hand adjustment here.
+     */
+    public static Map<Card, RemovalCandidateEvaluation> evaluateRemovalCandidates(final Player ai,
+            final Iterable<Card> candidates, final ValuationContext context,
+            final RemovalActionKind actionKind, final EffectAnalysisTrace trace) {
         if (ai == null || candidates == null) {
             return Map.of();
         }
@@ -73,9 +84,11 @@ public final class UnifiedCardValueEvaluator {
                     ? List.of() : abilityValue.reasons();
             final ValuationCompleteness completeness = weightedFuture == 0 && reasons.isEmpty()
                     ? ValuationCompleteness.COMPLETE : ValuationCompleteness.PARTIAL;
-            final CardValueBreakdown breakdown = new CardValueBreakdown(
+            final CardValueBreakdown permanentRemovalValue = new CardValueBreakdown(
                     ComputerUtilCard.evaluatePermanent(ai, candidate), weightedFuture, 0, 0,
                     removalContextAdjustment(ai, candidate), completeness, reasons);
+            final CardValueBreakdown breakdown = RemovalActionEvaluator.evaluate(candidate,
+                    permanentRemovalValue, actionKind);
             result.put(candidate, new RemovalCandidateEvaluation(breakdown,
                     relationshipValue, intrinsicValue));
         }
