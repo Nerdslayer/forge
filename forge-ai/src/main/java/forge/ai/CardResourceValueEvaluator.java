@@ -55,6 +55,14 @@ public final class CardResourceValueEvaluator {
         final int safeManaValue = Math.max(0, manaValue);
         final long expensiveMana = Math.max(0, safeManaValue - EXPENSIVE_CARD_MANA_THRESHOLD);
         final long linearValue = (long) MANA_VALUE * safeManaValue;
+        if (linearValue >= Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        final long remainingValue = Integer.MAX_VALUE - linearValue;
+        if (expensiveMana > 0
+                && expensiveMana > remainingValue / EXPENSIVE_CARD_MANA_PREMIUM / expensiveMana) {
+            return Integer.MAX_VALUE;
+        }
         final long premium = EXPENSIVE_CARD_MANA_PREMIUM * expensiveMana * expensiveMana;
         return saturate(linearValue + premium);
     }

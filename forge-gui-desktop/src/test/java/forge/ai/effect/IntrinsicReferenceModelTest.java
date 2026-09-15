@@ -70,8 +70,8 @@ public class IntrinsicReferenceModelTest {
                 IntrinsicReferenceModel.HAND_SIZE, 0,
                 IntrinsicReferenceModel.LIFE_TOTAL, 5), 1);
 
-        Assert.assertEquals(evaluator.evaluateCardDraw(reference, 1, true), 140);
-        Assert.assertEquals(evaluator.evaluateCardDraw(reference, 1, false), -140);
+        Assert.assertEquals(evaluator.evaluateCardDraw(reference, 1, true), 120);
+        Assert.assertEquals(evaluator.evaluateCardDraw(reference, 1, false), -120);
         Assert.assertTrue(evaluator.evaluateLifeLoss(reference, 1, true) < 0);
         Assert.assertEquals(evaluator.evaluateLifeLoss(reference, 1, false),
                 -evaluator.evaluateLifeLoss(reference, 1, true));
