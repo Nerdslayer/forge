@@ -1,10 +1,12 @@
 package forge.ai;
 
 import forge.ai.effect.CardAbilityTraversal;
+import forge.ai.effect.CardValueBreakdown;
 import forge.ai.effect.IntrinsicAbilityEvaluator;
 import forge.ai.effect.IntrinsicEvaluationSettings;
 import forge.ai.effect.IntrinsicReferenceAggregate;
 import forge.ai.effect.IntrinsicReferenceModel;
+import forge.ai.effect.ValuationCompleteness;
 import forge.card.CardEdition;
 import forge.card.CardRarity;
 import forge.card.CardRules;
@@ -49,6 +51,24 @@ public final class CardDefinitionValueEvaluator {
 
         public boolean isComplete() {
             return warnings.isEmpty();
+        }
+
+        /** Adapts definition evaluation to the shared card-value breakdown. */
+        public CardValueBreakdown toCardValueBreakdown() {
+            int currentPresence = 0;
+            int futurePotential = 0;
+            for (final Contribution contribution : contributions) {
+                if ("Battlefield".equals(contribution.category())) {
+                    currentPresence += contribution.value();
+                } else {
+                    futurePotential += contribution.value();
+                }
+            }
+            return new CardValueBreakdown(currentPresence, futurePotential, 0,
+                    cardOpportunityCost + manaInvestment, 0,
+                    warnings.isEmpty() ? ValuationCompleteness.COMPLETE
+                            : ValuationCompleteness.PARTIAL,
+                    warnings);
         }
     }
 

@@ -25,7 +25,9 @@ import com.google.common.collect.Sets;
 
 import forge.StaticData;
 import forge.ai.effect.EffectAnalysisTrace;
-import forge.ai.effect.PermanentAbilityValueEvaluator;
+import forge.ai.effect.CardValueBreakdown;
+import forge.ai.effect.UnifiedCardValueEvaluator;
+import forge.ai.effect.ValuationContext;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.card.CardRules;
 import forge.card.CardStateName;
@@ -607,22 +609,23 @@ public class ComputerUtilCard {
         final List<Card> candidates = Lists.newArrayList(list);
         final EffectAnalysisTrace trace = EffectAnalysisTrace.create(ai, removalAbility);
         trace.context(candidates.size());
-        final Map<Card, PermanentAbilityValueEvaluator.Breakdown> abilityValues =
-                PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, candidates, trace,
-                        intrinsicWeight > 0, synergyWeight > 0);
+        final Map<Card, UnifiedCardValueEvaluator.RemovalCandidateEvaluation> evaluations =
+                UnifiedCardValueEvaluator.evaluateRemovalCandidates(ai, candidates,
+                        ValuationContext.forRemoval(ai, synergyWeight, intrinsicWeight), trace);
         if (trace.isEnabled()) {
             Card selected = null;
             int highestValue = Integer.MIN_VALUE;
             for (final Card candidate : candidates) {
-                final int baseValue = evaluateRemovalTargetPriority(ai, candidate);
-                final PermanentAbilityValueEvaluator.Breakdown breakdown = abilityValues.get(candidate);
-                final int relationshipValue = breakdown == null ? 0 : breakdown.relationshipValue();
-                final int intrinsicValue = breakdown == null ? 0 : breakdown.intrinsicValue();
-                final int weightedAdjustment = addSaturated(applyEffectSynergyWeight(
-                        relationshipValue, synergyWeight), applyEffectSynergyWeight(intrinsicValue, intrinsicWeight));
-                final int finalValue = addSaturated(baseValue, weightedAdjustment);
+                final UnifiedCardValueEvaluator.RemovalCandidateEvaluation evaluation = evaluations.get(candidate);
+                final CardValueBreakdown breakdown = evaluation.breakdown();
+                final int baseValue = addSaturated(breakdown.currentPresenceValue(),
+                        breakdown.contextAdjustment());
+                final int relationshipValue = evaluation.relationshipValue();
+                final int intrinsicValue = evaluation.intrinsicValue();
+                final int weightedAdjustment = breakdown.futurePotentialValue();
+                final int finalValue = breakdown.netValue();
                 trace.abilityPotential(candidate, intrinsicValue, intrinsicWeight,
-                        breakdown == null ? List.of() : breakdown.reasons());
+                        breakdown.reasons());
                 trace.candidate(candidate, baseValue, relationshipValue, synergyWeight,
                         weightedAdjustment, finalValue);
                 if (finalValue > highestValue) {
@@ -634,19 +637,8 @@ public class ComputerUtilCard {
             return selected;
         }
         return Aggregates.itemWithMax(candidates, c -> {
-            final PermanentAbilityValueEvaluator.Breakdown breakdown = abilityValues.get(c);
-            final int adjustment = breakdown == null ? 0 : addSaturated(
-                    applyEffectSynergyWeight(breakdown.relationshipValue(), synergyWeight),
-                    applyEffectSynergyWeight(breakdown.intrinsicValue(), intrinsicWeight));
-            return addSaturated(evaluateRemovalTargetPriority(ai, c), adjustment);
+            return evaluations.get(c).breakdown().netValue();
         });
-    }
-
-    private static int applyEffectSynergyWeight(final int value, final int percentage) {
-        final long product = (long) value * percentage;
-        final long weighted = (product + (product >= 0 ? 50 : -50)) / 100;
-        return weighted > Integer.MAX_VALUE ? Integer.MAX_VALUE
-                : weighted < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) weighted;
     }
 
     private static int addSaturated(final int left, final int right) {
@@ -656,17 +648,7 @@ public class ComputerUtilCard {
     }
 
     private static int evaluateRemovalTargetPriority(final Player ai, final Card c) {
-        int value = evaluatePermanent(ai, c);
-
-        // tokens are slightly better since they'll be gone forever
-        if (c.isToken()) {
-            value += 30;
-        }
-
-        if (c.getController().isOpponentOf(ai)) {
-            value += ComputerUtil.evaluateBoardPosition(ai, c.getController()) / 4;
-        }
-        return value;
+        return UnifiedCardValueEvaluator.evaluateRemovalTargetPriority(ai, c);
     }
 
     /**
