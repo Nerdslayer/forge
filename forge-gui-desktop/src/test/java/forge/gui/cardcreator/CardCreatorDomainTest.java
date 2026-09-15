@@ -141,7 +141,7 @@ public class CardCreatorDomainTest {
 
         final CardDefinitionValueEvaluator.Evaluation evaluation = new CardDefinitionValueEvaluator()
                 .evaluate(rules);
-        assertEquals(evaluation.manaInvestment(), 6 * 35);
+        assertEquals(evaluation.manaInvestment(), 195);
 
         final CardRules bracedRules = CardRules.fromScript(List.of(
                 "Name:Raw Braced Cost", "ManaCost:{3}{W}{W}{W}", "Types:Creature", "PT:5/4"));
@@ -156,7 +156,7 @@ public class CardCreatorDomainTest {
 
         assertEquals(evaluation.battlefieldValue(), 80 + 45 + 30 + 30);
         assertEquals(evaluation.grossPointValue(), evaluation.battlefieldValue());
-        assertEquals(evaluation.manaInvestment(), 3 * 35);
+        assertEquals(evaluation.manaInvestment(), 75);
         assertEquals(evaluation.netRate(), evaluation.battlefieldValue()
                 - evaluation.cardOpportunityCost() - evaluation.manaInvestment());
     }
