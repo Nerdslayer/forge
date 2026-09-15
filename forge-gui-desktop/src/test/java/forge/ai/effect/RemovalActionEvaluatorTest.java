@@ -30,10 +30,27 @@ public class RemovalActionEvaluatorTest extends AITest {
     }
 
     @Test
-    public void bounceRetainsGenericCardValueBasedOnOwnersHandSize() {
+    public void bounceUsesKnownCardValueWhenDefinitionIsSupported() {
         final Game game = initAndCreateGame();
         final Player opponent = game.getPlayers().get(0);
         final Card target = addCard("Grizzly Bears", opponent);
+
+        final CardValueBreakdown emptyHand = RemovalActionEvaluator.evaluate(target, baseValue(),
+                RemovalActionKind.BOUNCE);
+        Assert.assertEquals(emptyHand.transitionValue(), -80);
+
+        addCardToZone("Forest", opponent, forge.game.zone.ZoneType.Hand);
+        addCardToZone("Forest", opponent, forge.game.zone.ZoneType.Hand);
+        final CardValueBreakdown largerHand = RemovalActionEvaluator.evaluate(target, baseValue(),
+                RemovalActionKind.BOUNCE);
+        Assert.assertEquals(largerHand.transitionValue(), emptyHand.transitionValue());
+    }
+
+    @Test
+    public void bounceUsesPublicHandSizeForUnsupportedKnownCard() {
+        final Game game = initAndCreateGame();
+        final Player opponent = game.getPlayers().get(0);
+        final Card target = addCard("Sol Ring", opponent);
 
         final CardValueBreakdown emptyHand = RemovalActionEvaluator.evaluate(target, baseValue(),
                 RemovalActionKind.BOUNCE);
@@ -45,6 +62,7 @@ public class RemovalActionEvaluatorTest extends AITest {
                 RemovalActionKind.BOUNCE);
         Assert.assertEquals(largerHand.transitionValue(), -PlayerResourceValueEvaluator.evaluateNextCard(2));
         Assert.assertTrue(largerHand.transitionValue() > emptyHand.transitionValue());
+        Assert.assertEquals(emptyHand.completeness(), ValuationCompleteness.PARTIAL);
     }
 
     @Test

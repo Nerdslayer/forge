@@ -1,6 +1,5 @@
 package forge.ai.effect;
 
-import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.card.Card;
 import forge.game.player.Player;
 import forge.game.zone.ZoneType;
@@ -16,6 +15,12 @@ public final class RemovalActionEvaluator {
      */
     public static CardValueBreakdown evaluate(final Card candidate,
             final CardValueBreakdown permanentRemovalValue, final RemovalActionKind actionKind) {
+        return evaluate(null, candidate, permanentRemovalValue, actionKind);
+    }
+
+    /** Applies action-specific value with the deciding AI available for hand-knowledge context. */
+    public static CardValueBreakdown evaluate(final Player evaluatingAi, final Card candidate,
+            final CardValueBreakdown permanentRemovalValue, final RemovalActionKind actionKind) {
         if (candidate == null || permanentRemovalValue == null || actionKind == null
                 || actionKind != RemovalActionKind.BOUNCE || candidate.isToken()) {
             return permanentRemovalValue;
@@ -27,18 +32,39 @@ public final class RemovalActionEvaluator {
         }
 
         final int handSize = owner.getCardsIn(ZoneType.Hand).size();
-        final int returnedCardValue = PlayerResourceValueEvaluator.evaluateNextCard(handSize);
+        final HandValuationContext handContext = HandValuationContext.knownCardOnly(evaluatingAi,
+                owner, candidate, handSize + 1);
+        final CardValueBreakdown knownCardValue = HandCardValueEvaluator.evaluateKnownCard(candidate,
+                handContext);
+        final int returnedCardValue = knownCardValue.netValue();
 
-        // A bounced card is temporarily absent but its owner retains a generic card-sized resource.
-        // TODO(effect analysis): Replace this generic hand-card approximation with the specific
-        // bounced card's hand/replay value, including castability and renewed entry effects.
+        // A bounced card is temporarily absent but its owner retains a resource in hand. The
+        // known-card evaluator uses the printed definition when supported and deliberately falls
+        // back to a generic value when it is not. TODO(effect analysis): Account for the owner's
+        // hidden alternatives, cast timing, replay likelihood, and renewed entry effects.
         return new CardValueBreakdown(
                 permanentRemovalValue.currentPresenceValue(),
                 permanentRemovalValue.futurePotentialValue(),
                 EffectMath.negate(returnedCardValue),
                 permanentRemovalValue.accessCost(),
                 permanentRemovalValue.contextAdjustment(),
-                permanentRemovalValue.completeness(),
+                combineCompleteness(permanentRemovalValue, knownCardValue),
                 permanentRemovalValue.reasons());
     }
+
+    private static ValuationCompleteness combineCompleteness(final CardValueBreakdown permanent,
+            final CardValueBreakdown handValue) {
+        if (permanent.completeness() == ValuationCompleteness.UNAVAILABLE
+                || handValue.completeness() == ValuationCompleteness.UNAVAILABLE) {
+            return ValuationCompleteness.UNAVAILABLE;
+        }
+        if (permanent.completeness() == ValuationCompleteness.UNSUPPORTED
+                || handValue.completeness() == ValuationCompleteness.UNSUPPORTED) {
+            return ValuationCompleteness.UNSUPPORTED;
+        }
+        return permanent.completeness() == ValuationCompleteness.PARTIAL
+                || handValue.completeness() == ValuationCompleteness.PARTIAL
+                ? ValuationCompleteness.PARTIAL : ValuationCompleteness.COMPLETE;
+    }
+
 }

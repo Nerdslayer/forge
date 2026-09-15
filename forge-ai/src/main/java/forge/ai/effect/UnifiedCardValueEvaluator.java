@@ -87,7 +87,7 @@ public final class UnifiedCardValueEvaluator {
             final CardValueBreakdown permanentRemovalValue = new CardValueBreakdown(
                     ComputerUtilCard.evaluatePermanent(ai, candidate), weightedFuture, 0, 0,
                     removalContextAdjustment(ai, candidate), completeness, reasons);
-            final CardValueBreakdown breakdown = RemovalActionEvaluator.evaluate(candidate,
+            final CardValueBreakdown breakdown = RemovalActionEvaluator.evaluate(ai, candidate,
                     permanentRemovalValue, actionKind);
             result.put(candidate, new RemovalCandidateEvaluation(breakdown,
                     relationshipValue, intrinsicValue));
