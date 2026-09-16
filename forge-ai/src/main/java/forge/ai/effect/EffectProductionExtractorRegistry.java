@@ -15,6 +15,7 @@ final class EffectProductionExtractorRegistry {
             CopiedTokenProductionExtractor.INSTANCE,
             CounterProductionExtractor.INSTANCE,
             CounterRemovalProductionExtractor.INSTANCE,
+            CounterMoveProductionExtractor.INSTANCE,
             LifeGainProductionExtractor.INSTANCE,
             LifeLossProductionExtractor.INSTANCE,
             CardDrawProductionExtractor.INSTANCE,
