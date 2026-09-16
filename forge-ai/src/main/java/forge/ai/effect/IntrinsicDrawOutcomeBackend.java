@@ -67,8 +67,8 @@ public final class IntrinsicDrawOutcomeBackend
             "ReflectProperty", "Amount");
     private static final Set<String> DAMAGE_PARAMETERS = parameters("Defined", "NumDmg", "DamageSource",
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax");
-    private static final Set<String> DAMAGE_ALL_PARAMETERS = parameters("ValidPlayers", "NumDmg",
-            "DamageSource");
+    private static final Set<String> DAMAGE_ALL_PARAMETERS = parameters("ValidPlayers", "ValidCards",
+            "NumDmg", "DamageSource");
     private static final Set<String> FIGHT_PARAMETERS = parameters("Defined", "ValidTgts",
             "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
     private static final Set<String> REMOVAL_PARAMETERS = parameters("Defined", "ValidTgts",
@@ -532,8 +532,62 @@ public final class IntrinsicDrawOutcomeBackend
                 value = EffectMath.add(value, (int) Math.round(transition.value()));
                 projected = transition.state();
             }
+            final CreatureGroupTarget creatureTarget = creatureGroupTarget(node);
+            if (creatureTarget != null) {
+                if (creatureTarget.controller()) {
+                    final GroupApplication application = applyDamageGroup(projected, node, true,
+                            creatureTarget.other());
+                    if (!application.supported()) {
+                        return null;
+                    }
+                    projected = application.state();
+                    value = EffectMath.add(value, application.value());
+                }
+                if (creatureTarget.opponent()) {
+                    final GroupApplication application = applyDamageGroup(projected, node, false,
+                            creatureTarget.other());
+                    if (!application.supported()) {
+                        return null;
+                    }
+                    projected = application.state();
+                    value = EffectMath.add(value, application.value());
+                }
+            }
             return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
         });
+    }
+
+    private GroupApplication applyDamageGroup(final State state,
+            final AbilityOutcomeDescription node, final boolean controller, final boolean other) {
+        final CreatureProfile representative = controller
+                ? state.controllerCreature() : state.opponentCreature();
+        if (!simpleKeywords(representative.keywords())) {
+            return GroupApplication.unsupported(state);
+        }
+
+        State projected = state;
+        int value = 0;
+        final int amount = integer(node, "NumDmg", 0);
+        final int count = state.creatureCount(controller);
+        final boolean lethal = representative.present() && (amount >= representative.toughness()
+                || hasKeyword(state.sourcePermanent(), "deathtouch"));
+        if (count > 0 && lethal && !representative.indestructible()
+                && !hasKeyword(representative, "indestructible")) {
+            value = EffectMath.multiply(count, evaluator.evaluateCreatureDelta(
+                    representative, CreatureProfile.absent(), controller));
+            projected = projected.withCreatures(controller, CreatureProfile.absent())
+                    .withCreatureCount(controller, 0);
+        }
+
+        final PermanentProfile source = projected.sourcePermanent();
+        final boolean sourceLethal = isCreature(source)
+                && amount >= source.toughness();
+        if (!other && sourceLethal && source.controlledByAi() == controller) {
+            value = EffectMath.add(value, evaluator.evaluatePermanentDelta(source,
+                    PermanentProfile.absent(), controller));
+            projected = projected.withSourcePermanent(PermanentProfile.absent());
+        }
+        return new GroupApplication(projected, value, true);
     }
 
     private Outcome<State> damageAtomic(final AbilityOutcomeDescription node,
@@ -1135,7 +1189,7 @@ public final class IntrinsicDrawOutcomeBackend
         }
         if ("DamageAll".equals(node.api())) {
             return DAMAGE_ALL_PARAMETERS.containsAll(node.parameters().keySet())
-                    && !damageAllTargets(node).isEmpty();
+                    && (!damageAllTargets(node).isEmpty() || creatureGroupTarget(node) != null);
         }
         return DAMAGE_PARAMETERS.containsAll(node.parameters().keySet())
                 && damageTarget(node) != null;
@@ -2105,6 +2159,10 @@ public final class IntrinsicDrawOutcomeBackend
             }
             if (targets.contains(TargetRef.OPPONENT_PLAYER)) {
                 dimensions.add(OPPONENT_LIFE);
+            }
+            final CreatureGroupTarget creatureTarget = creatureGroupTarget(node);
+            if (creatureTarget != null) {
+                addCreatureGroupDimensions(creatureTarget, dimensions);
             }
             return;
         }
