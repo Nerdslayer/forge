@@ -15,8 +15,42 @@ import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 
 /** Shared stable exact-tie handling for action-specific valuation adapters. */
-final class ActionValueTieBreaker {
+public final class ActionValueTieBreaker {
     private ActionValueTieBreaker() {
+    }
+
+    /**
+     * Ranks a pre-grouped tie using a supported action adapter. The original list is returned when
+     * a candidate is unavailable, unsupported, incomplete, or has the same value as every other
+     * candidate; callers therefore retain their legacy fallback in all of those cases.
+     */
+    public static <T> List<T> rankSupportedTie(final List<T> candidates,
+            final ValuationContext context, final Predicate<T> supportedCandidate,
+            final Function<T, ValuationAction> actionFactory) {
+        if (candidates == null || candidates.size() < 2 || context == null
+                || supportedCandidate == null || actionFactory == null
+                || !candidates.stream().allMatch(supportedCandidate)) {
+            return candidates;
+        }
+
+        final Map<T, CardValueBreakdown> values = new IdentityHashMap<>();
+        for (final T candidate : candidates) {
+            final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(
+                    actionFactory.apply(candidate), context);
+            if (!value.isComplete()) {
+                return candidates;
+            }
+            values.put(candidate, value);
+        }
+
+        final int firstValue = values.get(candidates.get(0)).netValue();
+        if (candidates.stream().allMatch(candidate -> values.get(candidate).netValue() == firstValue)) {
+            return candidates;
+        }
+        final List<T> ranked = new ArrayList<>(candidates);
+        ranked.sort(Comparator.comparingInt(
+                (T candidate) -> values.get(candidate).netValue()).reversed());
+        return ranked;
     }
 
     static void apply(final Player ai, final List<SpellAbility> abilities,
