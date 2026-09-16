@@ -615,6 +615,26 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void counterRemovedTriggersUseBoundedSelfBattlefieldRates() {
+        final IntrinsicEventTrigger regular = IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "CounterRemoved", "ValidCard", "Card.Self", "CounterType", "P1P1",
+                "TriggerZones", "Battlefield")).orElseThrow();
+        Assert.assertEquals(regular.eventType(), IntrinsicReferenceModel.EventType.COUNTER_REMOVED);
+        Assert.assertFalse(regular.atMostOncePerTurn());
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "CounterRemoved", "ValidCard", "Card.Self", "CounterType", "P1P1",
+                "TriggerZones", "Battlefield")));
+
+        final IntrinsicEventTrigger once = IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "CounterRemovedOnce", "ValidCard", "Creature.Self", "CounterType", "LOYALTY",
+                "TriggerZones", "Battlefield")).orElseThrow();
+        Assert.assertTrue(once.atMostOncePerTurn());
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "CounterRemoved", "ValidCard", "Card.Self", "CounterType", "TIME",
+                "TriggerZones", "Exile")).isEmpty());
+    }
+
+    @Test
     public void controllerAndOpponentLifeTriggersReachIntrinsicEvaluation() {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(

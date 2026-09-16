@@ -35,6 +35,12 @@ public final class IntrinsicEventTriggerAdapter {
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
                     manaTurnScope(parameters), false, manaOccurrenceMultiplier(parameters)));
         }
+        if (isSupportedCounterRemovedTrigger(parameters)) {
+            return Optional.of(new IntrinsicEventTrigger(
+                    IntrinsicReferenceModel.EventType.COUNTER_REMOVED,
+                    IntrinsicEventTrigger.TurnScope.ANY_TURN,
+                    counterRemovedAtMostOnce(parameters), 1));
+        }
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
             return Optional.empty();
         }
@@ -73,6 +79,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {
+            return true;
+        }
+        if (isSupportedCounterRemovedTrigger(parameters)) {
             return true;
         }
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
@@ -405,6 +414,36 @@ public final class IntrinsicEventTriggerAdapter {
         }
         return !parameters.containsKey("Valid")
                 || simpleCounterBatchFilter(parameters.get("Valid"));
+    }
+
+    // TODO: Support counter-removal triggers for groups, remaining-counter thresholds,
+    // non-battlefield sources, player counters, and replacement/proliferate-style events.
+    private static boolean isSupportedCounterRemovedTrigger(
+            final Map<String, String> parameters) {
+        if (parameters == null) {
+            return false;
+        }
+        final TriggerType mode = EventTriggerParser.mode(parameters);
+        if (mode != TriggerType.CounterRemoved && mode != TriggerType.CounterRemovedOnce) {
+            return false;
+        }
+        final Set<String> supportedParameters = Set.of("Mode", "ValidCard", "ValidPlayer",
+                "CounterType", "TriggerZones", "Execute", "TriggerDescription", "Static",
+                "Secondary");
+        if (!supportedParameters.containsAll(parameters.keySet())
+                || !Set.of("Card.Self", "Creature.Self").contains(parameters.get("ValidCard"))
+                || !parameters.containsKey("CounterType")
+                || parameters.get("CounterType").isBlank()
+                || (parameters.containsKey("ValidPlayer")
+                    && !Set.of("You", "Opponent").contains(parameters.get("ValidPlayer")))) {
+            return false;
+        }
+        return !parameters.containsKey("TriggerZones")
+                || "Battlefield".equalsIgnoreCase(parameters.get("TriggerZones"));
+    }
+
+    private static boolean counterRemovedAtMostOnce(final Map<String, String> parameters) {
+        return EventTriggerParser.mode(parameters) == TriggerType.CounterRemovedOnce;
     }
 
     /**

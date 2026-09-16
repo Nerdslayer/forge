@@ -27,8 +27,8 @@ public final class IntrinsicReferenceModel {
     public enum EventType {
         ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
         LAND_PLAYED,
-        CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, TAPPED, UNTAPPED,
-        MANA_ADDED_OR_SPENT,
+        CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
+        TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, DAMAGE_DEALT, ZONE_CHANGED
     }
 
@@ -193,6 +193,9 @@ public final class IntrinsicReferenceModel {
         events.put(EventType.PERMANENT_SACRIFICED, rateDistribution(0, .50, 1, .40, 2, .10));
         events.put(EventType.TOKEN_CREATED, rateDistribution(0, .30, 1, .50, 2, .20));
         events.put(EventType.COUNTER_ADDED, rateDistribution(0, .40, 1, .45, 2, .15));
+        // Counter removal is less common than counter placement, but the same bounded event
+        // shape is a useful conservative prior for self-counter and loyalty triggers.
+        events.put(EventType.COUNTER_REMOVED, rateDistribution(0, .40, 1, .45, 2, .15));
         events.put(EventType.TAPPED, rateDistribution(0, .20, 1, .55, 2, .25));
         // A self-untap trigger usually gets one opportunity per controller turn. Extra untaps
         // are possible, but remain a small tail because no live untap engine is modeled here.
