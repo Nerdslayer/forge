@@ -101,7 +101,7 @@ public class IntrinsicOutcomeBackendTest {
                 "Produced", "G", "Amount", "2")), initial);
         Assert.assertEquals(mana.completeness(), Completeness.COMPLETE);
         Assert.assertEquals(mana.state().controllerMana(), 4);
-        Assert.assertEquals(mana.value(), 70.0);
+        Assert.assertEquals(mana.value(), (double) PlayerResourceValueEvaluator.evaluateMana(2));
     }
 
     @Test
