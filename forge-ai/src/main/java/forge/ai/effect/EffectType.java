@@ -5,6 +5,7 @@ enum EffectType {
     // effect-analysis backlog; only a small subset is modeled today.
     TOKEN_CREATED,
     COUNTER_ADDED,
+    COUNTER_REMOVED,
     LIFE_GAINED,
     LIFE_LOST,
     CARD_DRAWN,

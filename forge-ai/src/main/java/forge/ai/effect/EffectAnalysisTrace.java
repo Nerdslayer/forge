@@ -234,7 +234,8 @@ public final class EffectAnalysisTrace {
     }
 
     private static String productionDetails(final EffectProduction production) {
-        if (production.type() == EffectType.COUNTER_ADDED) {
+        if (production.type() == EffectType.COUNTER_ADDED
+                || production.type() == EffectType.COUNTER_REMOVED) {
             final Object counterType = production.events().get(0).triggerParameters().get(
                     AbilityKey.CounterType);
             return ", counterType=" + counterType;
@@ -286,7 +287,8 @@ public final class EffectAnalysisTrace {
             return consequence.observedType() + "(mode="
                     + consequence.trigger().getMode() + ")";
         }
-        if (consequence.observedType() != EffectType.COUNTER_ADDED) {
+        if (consequence.observedType() != EffectType.COUNTER_ADDED
+                && consequence.observedType() != EffectType.COUNTER_REMOVED) {
             return consequence.observedType().toString();
         }
         return consequence.observedType() + "(counterType="

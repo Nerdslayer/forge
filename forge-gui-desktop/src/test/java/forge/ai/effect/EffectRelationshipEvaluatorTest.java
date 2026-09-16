@@ -2005,6 +2005,42 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testCounterRemovalProductionMatchesIndividualAndOnceTriggers() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Clockwork Hydra", opponent);
+        producer.setCounters(CounterEnumType.CHARGE, 2);
+        producer.setSVar("EffectTestCounterRemoval",
+                "DB$ RemoveCounter | Defined$ Self | CounterType$ CHARGE | CounterNum$ 2");
+        addTrigger(producer, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestCounterRemoval | TriggerZones$ Battlefield");
+
+        final Card individual = addCard("Grizzly Bears", opponent);
+        individual.setSVar("EffectTestCounterRemovalOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(individual, "Mode$ CounterRemoved | ValidCard$ Card.YouCtrl"
+                + " | ValidPlayer$ You | CounterType$ CHARGE"
+                + " | Execute$ EffectTestCounterRemovalOutcome | TriggerZones$ Battlefield");
+
+        final Card once = addCard("Runeclaw Bear", opponent);
+        once.setSVar("EffectTestCounterRemovalOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(once, "Mode$ CounterRemovedOnce | ValidCard$ Card.YouCtrl"
+                + " | CounterType$ CHARGE | Remaining$ 0"
+                + " | Execute$ EffectTestCounterRemovalOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, individual, once));
+
+        Assert.assertTrue(values.getOrDefault(individual, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(once, 0) > 0, values.toString());
+        Assert.assertTrue(values.get(individual) > values.get(once), values.toString());
+    }
+
+    @Test
     public void testSupportedCounterOutcomesUsePermanentEvaluation() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
