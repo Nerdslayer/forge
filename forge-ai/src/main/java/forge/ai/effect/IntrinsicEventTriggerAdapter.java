@@ -235,17 +235,26 @@ public final class IntrinsicEventTriggerAdapter {
     }
 
     /**
-     * Supports the first intrinsic slice of {@code TapsForMana}. The live relationship analyzer
-     * does not yet normalize mana events, so this adapter intentionally remains intrinsic-only.
-     * We model broad land and self mana-source filters, while subtype, attachment, produced-mana,
-     * and condition-dependent filters need a richer reference resource model.
+     * Supports the first intrinsic slice of {@code TapsForMana} and {@code ManaAdded}. The live
+     * relationship analyzer does not yet normalize mana events, so this adapter intentionally
+     * remains intrinsic-only. We model broad land/self source filters and player/activator scope,
+     * while subtype, attachment, produced-mana colors, and condition-dependent filters need a
+     * richer reference resource model.
      */
     private static boolean isSupportedManaTrigger(final Map<String, String> parameters) {
-        if (parameters == null || EventTriggerParser.mode(parameters) != TriggerType.TapsForMana) {
+        if (parameters == null) {
             return false;
         }
-        final Set<String> supportedParameters = Set.of("Mode", "ValidCard", "Activator",
-                "TriggerZones", "Execute", "TriggerDescription", "Static");
+        final TriggerType mode = EventTriggerParser.mode(parameters);
+        if (mode != TriggerType.TapsForMana && mode != TriggerType.ManaAdded) {
+            return false;
+        }
+        final boolean manaAdded = mode == TriggerType.ManaAdded;
+        final Set<String> supportedParameters = manaAdded
+                ? Set.of("Mode", "ValidSource", "ValidSA", "Produced", "Player", "TriggerZones",
+                        "Execute", "TriggerDescription", "Static", "Secondary")
+                : Set.of("Mode", "ValidCard", "Activator", "TriggerZones", "Execute",
+                        "TriggerDescription", "Static");
         if (!supportedParameters.containsAll(parameters.keySet())
                 || !validBooleanParameter(parameters, "Static")) {
             return false;
@@ -253,6 +262,18 @@ public final class IntrinsicEventTriggerAdapter {
         if (parameters.containsKey("TriggerZones")
                 && !"Battlefield".equalsIgnoreCase(parameters.get("TriggerZones"))) {
             return false;
+        }
+        if (manaAdded) {
+            final String validSource = parameters.get("ValidSource");
+            final String validAbility = parameters.get("ValidSA");
+            return Set.of("Land", "Card.Self", "Creature.Self", "Creature").contains(validSource)
+                    && (!parameters.containsKey("ValidSA")
+                        || Set.of("SpellAbility.ManaAbility", "SpellAbility.!ManaAbility")
+                                .contains(validAbility))
+                    && (!parameters.containsKey("Player")
+                        || Set.of("You", "Opponent", "Player").contains(parameters.get("Player")))
+                    && (!parameters.containsKey("Produced")
+                        || !parameters.get("Produced").isBlank());
         }
         final String validCard = parameters.get("ValidCard");
         return Set.of("Land", "Land.Basic", "Land.nonBasic", "Card.Self", "Creature.Self",
@@ -262,7 +283,10 @@ public final class IntrinsicEventTriggerAdapter {
     }
 
     private static IntrinsicEventTrigger.TurnScope manaTurnScope(final Map<String, String> parameters) {
-        return switch (parameters.getOrDefault("Activator", "Any")) {
+        final String scope = EventTriggerParser.mode(parameters) == TriggerType.ManaAdded
+                ? parameters.getOrDefault("Player", "Any")
+                : parameters.getOrDefault("Activator", "Any");
+        return switch (scope) {
         case "You" -> IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN;
         case "Opponent" -> IntrinsicEventTrigger.TurnScope.OPPONENT_TURN;
         default -> IntrinsicEventTrigger.TurnScope.ANY_TURN;
@@ -270,6 +294,18 @@ public final class IntrinsicEventTriggerAdapter {
     }
 
     private static double manaOccurrenceMultiplier(final Map<String, String> parameters) {
+        if (EventTriggerParser.mode(parameters) == TriggerType.ManaAdded) {
+            final double sourceMultiplier = switch (parameters.getOrDefault("ValidSource", "Land")) {
+            case "Land" -> 1;
+            case "Card.Self", "Creature.Self" -> .40;
+            case "Creature" -> .45;
+            default -> 0;
+            };
+            final double abilityMultiplier = "SpellAbility.!ManaAbility".equals(
+                    parameters.get("ValidSA")) ? .50 : 1;
+            final double colorMultiplier = parameters.containsKey("Produced") ? .75 : 1;
+            return sourceMultiplier * abilityMultiplier * colorMultiplier;
+        }
         return switch (parameters.getOrDefault("ValidCard", "Land")) {
         case "Land" -> 1;
         case "Land.Basic" -> .65;

@@ -566,6 +566,35 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void manaAddedTriggersUsePlayerScopeAndBoundedReferenceRates() {
+        host();
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation =
+                new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                        IntrinsicEvaluationSettings.defaults()).evaluateDefinitionDetails(
+                        forge.StaticData.instance().getCommonCards().getCard("Caged Sun"),
+                        CardStateName.Original);
+        Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                        && "ManaAdded".equals(description.parameters().get("Mode"))),
+                evaluation.toString());
+        Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.expectedOccurrences() > 0
+                        && value.contribution().value() > 0), evaluation.toString());
+
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "ManaAdded", "ValidSource", "Land", "Player", "You",
+                "ValidSA", "SpellAbility.ManaAbility", "Produced", "ChosenColor")).orElseThrow();
+        Assert.assertEquals(trigger.eventType(), IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT);
+        Assert.assertEquals(trigger.turnScope(), IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN);
+        Assert.assertTrue(trigger.occurrenceMultiplier() > 0);
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "ManaAdded", "ValidSource", "Land", "Player", "You",
+                "ValidSA", "SpellAbility.ManaAbility", "TriggerZones", "Graveyard")).isEmpty());
+    }
+
+    @Test
     public void selfCounterTriggersReachIntrinsicEvaluation() {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
