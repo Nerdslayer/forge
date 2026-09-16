@@ -246,7 +246,7 @@ public final class IntrinsicDrawOutcomeBackend
         if (!node.choices().isEmpty()) { return false; }
         return switch (node.api()) {
         case "Draw" -> acceptsDraw(node);
-        case "PutCounter" -> acceptsCounter(node);
+        case "PutCounter" -> acceptsCounter(node) || acceptsCounterChoice(node);
         case "Token" -> acceptsToken(node);
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
@@ -849,6 +849,12 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private Outcome<State> counter(final AbilityOutcomeDescription node) {
+        if (counterChoice(node)) {
+            final List<Outcome<State>> options = counterTypes(node).stream()
+                    .map(type -> counter(withCounterType(node, type))).toList();
+            return new Outcome.Choice<>(node.path() + ":counter", options, 1, 1, false,
+                    maximize(node, false));
+        }
         final CounterTarget target = counterTarget(node);
         if (target == null) {
             return unresolved(node, "Unsupported intrinsic counter target");
@@ -925,6 +931,28 @@ public final class IntrinsicDrawOutcomeBackend
                 && "Battlefield".equals(node.parameters().getOrDefault("TgtZone", "Battlefield"));
     }
 
+    private static boolean acceptsCounterChoice(final AbilityOutcomeDescription node) {
+        return counterChoice(node) && counterTypes(node).stream()
+                .map(type -> withCounterType(node, type)).allMatch(IntrinsicDrawOutcomeBackend::acceptsCounter);
+    }
+
+    private static boolean counterChoice(final AbilityOutcomeDescription node) {
+        return node.parameters().getOrDefault("CounterType", "").contains(",");
+    }
+
+    private static List<String> counterTypes(final AbilityOutcomeDescription node) {
+        return List.of(node.parameters().getOrDefault("CounterType", "").split(",")).stream()
+                .map(String::trim).filter(type -> !type.isEmpty()).toList();
+    }
+
+    private static AbilityOutcomeDescription withCounterType(final AbilityOutcomeDescription node,
+            final String type) {
+        final java.util.Map<String, String> parameters = new java.util.LinkedHashMap<>(node.parameters());
+        parameters.put("CounterType", type);
+        return new AbilityOutcomeDescription(node.path(), node.api(), parameters, node.choices(), null,
+                node.issue());
+    }
+
     private static void collectDimensions(final AbilityOutcomeDescription node,
             final Set<String> dimensions, final Set<AbilityOutcomeDescription> visited,
             final int depth) {
@@ -940,15 +968,20 @@ public final class IntrinsicDrawOutcomeBackend
             } else if ("Opponent".equalsIgnoreCase(defined)) {
                 dimensions.add(OPPONENT_HAND);
             }
-        } else if ("PutCounter".equals(node.api()) && acceptsCounter(node)) {
-            final CounterTarget target = counterTarget(node);
-            if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
-                    || target.scope() == CounterTargetScope.CONTROLLER_CREATURE)) {
-                dimensions.add(CONTROLLER_CREATURE);
-            }
-            if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
-                    || target.scope() == CounterTargetScope.OPPONENT_CREATURE)) {
-                dimensions.add(OPPONENT_CREATURE);
+        } else if ("PutCounter".equals(node.api())) {
+            final List<AbilityOutcomeDescription> counterNodes = acceptsCounter(node)
+                    ? List.of(node) : acceptsCounterChoice(node) ? counterTypes(node).stream()
+                            .map(type -> withCounterType(node, type)).toList() : List.of();
+            for (final AbilityOutcomeDescription counterNode : counterNodes) {
+                final CounterTarget target = counterTarget(counterNode);
+                if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
+                        || target.scope() == CounterTargetScope.CONTROLLER_CREATURE)) {
+                    dimensions.add(CONTROLLER_CREATURE);
+                }
+                if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
+                        || target.scope() == CounterTargetScope.OPPONENT_CREATURE)) {
+                    dimensions.add(OPPONENT_CREATURE);
+                }
             }
         } else if (("GainLife".equals(node.api()) || "LoseLife".equals(node.api()))
                 && acceptsLife(node)) {
