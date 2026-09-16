@@ -429,6 +429,39 @@ public class AbilityTraversalTest extends AITest {
         Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
                 value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
                         && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                && value.contribution().value() > 0), evaluation.values().toString());
+    }
+
+    @Test
+    public void intrinsicExiledTriggerUsesConservativeZoneChangeRate() {
+        final Map<String, String> parameters = Map.of(
+                "Mode", "Exiled", "Origin", "Battlefield", "ValidCard", "Creature",
+                "TriggerZones", "Battlefield");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                .orElseThrow();
+        Assert.assertEquals(trigger.eventType(), IntrinsicReferenceModel.EventType.ZONE_CHANGED);
+        Assert.assertEquals(trigger.occurrenceMultiplier(), .25);
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "Exiled", "Origin", "Battlefield", "ValidCard", "Card.Self",
+                "TriggerZones", "Battlefield")));
+    }
+
+    @Test
+    public void intrinsicExiledCardTriggerReachesOutcomeEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation =
+                new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                        IntrinsicEvaluationSettings.defaults()).evaluateDefinitionDetails(
+                        forge.StaticData.instance().getCommonCards().getCard("Soulherder"),
+                        CardStateName.Original);
+        Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                        && "Exiled".equals(description.parameters().get("Mode"))),
+                evaluation.descriptions().toString());
+        Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                value.path().contains("/trigger:")
+                        && value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
                         && value.contribution().value() > 0), evaluation.values().toString());
     }
 
