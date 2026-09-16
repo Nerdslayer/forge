@@ -550,6 +550,37 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void changeZoneAllProjectsCreatureGroupExileAndBounceIncludingTokenRules() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> bounce = evaluate(leaf("ChangeZoneAll", Map.of(
+                "ChangeType", "Creature.OppCtrl", "Origin", "Battlefield",
+                "Destination", "Hand")), initial);
+        Assert.assertEquals(bounce.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(bounce.state().opponentCreature().present());
+        Assert.assertEquals(bounce.state().opponentCreatureCount(), 0);
+        Assert.assertEquals(bounce.state().opponentHand(), 8);
+        Assert.assertTrue(bounce.value() > 0);
+
+        final OutcomePlan<State> exile = evaluate(leaf("ChangeZoneAll", Map.of(
+                "ChangeType", "Creature.OppCtrl", "Origin", "Battlefield",
+                "Destination", "Exile")), initial);
+        Assert.assertEquals(exile.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(exile.state().opponentCreature().present());
+        Assert.assertEquals(exile.state().opponentHand(), 7);
+
+        final PermanentProfile token = new PermanentProfile(true, PermanentKind.TOKEN,
+                true, 2, 2, Set.of());
+        final OutcomePlan<State> tokenBounce = evaluate(leaf("ChangeZoneAll", Map.of(
+                "ChangeType", "Creature.YouCtrl", "Origin", "Battlefield",
+                "Destination", "Hand")), state(CreatureProfile.absent(),
+                        CreatureProfile.absent(), token));
+        Assert.assertEquals(tokenBounce.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(tokenBounce.state().sourcePermanent().present());
+        Assert.assertEquals(tokenBounce.state().controllerHand(), 0);
+    }
+
+    @Test
     public void fightProjectsSimultaneousDeathsAndCombatKeywords() {
         final PermanentProfile fighter = new PermanentProfile(true, PermanentKind.CREATURE,
                 true, 3, 3, Set.of("indestructible"));
