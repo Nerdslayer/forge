@@ -9,15 +9,16 @@ import java.util.Map;
 import forge.game.GameEntity;
 import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
+import forge.game.card.CardDamageTable;
 import forge.game.trigger.TriggerType;
 
 /** Matches damage instances using Forge's individual and simultaneous-batch semantics. */
 final class DamageDealtEventMatcher implements EffectEventMatcher {
     static final DamageDealtEventMatcher INSTANCE = new DamageDealtEventMatcher();
 
-    // TODO(effect analysis): Support DamageAll/ExcessDamage trigger families, FirstTime,
-    // cause-relative and source-relative restrictions, optional/limited triggers, blocked/trample
-    // and other complex combat, replacement-modified batches, and mixed combat/noncombat tables.
+    // TODO(effect analysis): Support ExcessDamage/FirstTime, cause-relative and source-relative
+    // restrictions, optional/limited triggers, blocked/trample and other complex combat,
+    // replacement-modified batches, and mixed combat/noncombat tables.
 
     private DamageDealtEventMatcher() {
     }
@@ -28,6 +29,9 @@ final class DamageDealtEventMatcher implements EffectEventMatcher {
         if (production.type() != EffectType.DAMAGE_DEALT
                 || consequence.observedType() != EffectType.DAMAGE_DEALT) {
             return List.of();
+        }
+        if (consequence.trigger().getMode() == TriggerType.DamageAll) {
+            return matchDamageAll(production, consequence);
         }
         if (consequence.trigger().getMode() == TriggerType.DamageDoneOnce) {
             return matchOncePerTarget(production, consequence);
@@ -45,6 +49,45 @@ final class DamageDealtEventMatcher implements EffectEventMatcher {
             }
         }
         return matches;
+    }
+
+    /**
+     * Matches the one resolution-wide batch emitted by {@code CardDamageTable}. A production
+     * represents one resolving ability, so its normalized recipient events can be reconstructed
+     * into the same source-to-target table that Forge supplies to TriggerDamageAll.
+     */
+    private static List<EffectMatch> matchDamageAll(final EffectProduction production,
+            final EffectConsequence consequence) {
+        final CardDamageTable damageMap = new CardDamageTable();
+        Card source = null;
+        for (final EffectEvent event : production.events()) {
+            final Object eventSource = event.triggerParameters().get(AbilityKey.DamageSource);
+            final Object target = event.triggerParameters().get(AbilityKey.DamageTarget);
+            final Object amount = event.triggerParameters().get(AbilityKey.DamageAmount);
+            if (!(eventSource instanceof Card card) || !(target instanceof GameEntity entity)
+                    || !(amount instanceof Integer value) || value <= 0) {
+                return List.of();
+            }
+            if (source == null) {
+                source = card;
+            } else if (source != card) {
+                // A single production currently models one source. Mixed-source batches need a
+                // richer production identity before they can be matched without overcounting.
+                return List.of();
+            }
+            damageMap.put(card, entity, value);
+        }
+        if (source == null) {
+            return List.of();
+        }
+        final Map<AbilityKey, Object> runParams = commonBatchParameters(production);
+        runParams.put(AbilityKey.DamageMap, damageMap);
+        if (!EffectEventMatchUtils.passes(consequence, runParams)) {
+            return List.of();
+        }
+        return List.of(new EffectMatch(new EffectEvent(EffectType.DAMAGE_DEALT,
+                production.events().get(0).player(),
+                List.of(new EffectEvent.Subject(source, 1)), runParams), 1));
     }
 
     private static List<EffectMatch> matchOncePerTarget(final EffectProduction production,

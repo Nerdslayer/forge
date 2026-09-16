@@ -683,6 +683,34 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testDamageAllTriggerMatchesResolutionWideDamageTable() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseDamageProducer(
+                "Grizzly Bears", opponent, "DamageAll", "ValidPlayers$ Opponent", 1);
+        final Card consequence = addCard("Runeclaw Bear", opponent);
+        consequence.setSVar("EffectTestDamageAllOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ DamageAll | ValidSource$ Creature.YouCtrl"
+                + " | ValidTarget$ Opponent | Execute$ EffectTestDamageAllOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, List<AbilityValueContribution>> contributions =
+                EffectRelationshipEvaluator.evaluateRemovalContributions(
+                        ai, List.of(producer, consequence), EffectAnalysisTrace.disabled());
+
+        Assert.assertTrue(contributions.getOrDefault(producer, List.of()).stream().anyMatch(
+                value -> value.relatedSource() == consequence && value.value() > 0),
+                contributions.toString());
+        Assert.assertTrue(contributions.getOrDefault(consequence, List.of()).stream().anyMatch(
+                value -> value.source() == producer && value.relatedSource() == consequence
+                        && value.value() > 0), contributions.toString());
+    }
+
+    @Test
     public void testInfectDamageDoesNotProduceLifeLoss() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
