@@ -266,6 +266,27 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void selfDamageTriggersReachIntrinsicEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        for (final String cardName : List.of("Jin Sakai, Ghost of Tsushima", "Zuko, Seeking Honor")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                    .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                            .getCard(cardName), CardStateName.Original);
+            Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                    value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED),
+                    cardName + ": " + evaluation);
+            if ("Jin Sakai, Ghost of Tsushima".equals(cardName)) {
+                Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                        value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                                && value.contribution().value() > 0),
+                        cardName + ": " + evaluation);
+            }
+        }
+    }
+
+    @Test
     public void intrinsicBackendRejectsUnsupportedOutcomeFamilies() {
         final IntrinsicReferenceModel.PermanentProfile friendly = new IntrinsicReferenceModel.PermanentProfile(
                 true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());

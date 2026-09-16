@@ -108,6 +108,27 @@ public final class IntrinsicEventTriggerAdapter {
                             || ("Opponent".equals(player) && opponentCard))
                         || !playerScope && (controllerCard || opponentCard));
         }
+        if (mode == TriggerType.DamageDone || mode == TriggerType.DamageDoneOnce) {
+            final String source = parameters.get("ValidSource");
+            final String target = parameters.get("ValidTarget");
+            final boolean selfSource = source != null
+                    && Set.of("Card.Self", "Creature.Self").contains(source);
+            final boolean playerTarget = target != null
+                    && Set.of("Player", "Opponent").contains(target);
+            final boolean selfTarget = target != null
+                    && Set.of("Card.Self", "Creature.Self").contains(target);
+            final boolean combatFilter = !parameters.containsKey("CombatDamage")
+                    || "True".equalsIgnoreCase(parameters.get("CombatDamage"))
+                    || "False".equalsIgnoreCase(parameters.get("CombatDamage"));
+            return combatFilter && !parameters.containsKey("DamageAmount")
+                    && ((selfSource && playerTarget)
+                        || (mode == TriggerType.DamageDoneOnce && selfTarget && source == null));
+        }
+        if (mode == TriggerType.DamageDealtOnce) {
+            return parameters.get("ValidSource") != null
+                    && Set.of("Card.Self", "Creature.Self").contains(parameters.get("ValidSource"))
+                    && !parameters.containsKey("AtLeastOneInstance");
+        }
         return false;
     }
 
