@@ -91,6 +91,24 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void activationActionValuesAFixedLifePayment() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card source = addCard("Grizzly Bears", ai);
+        final SpellAbility gainLife = AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ PayLife<3> | Defined$ You | LifeAmount$ 20", source);
+        gainLife.setActivatingPlayer(ai);
+
+        final CardValueBreakdown result = UnifiedActionValueEvaluator.evaluate(
+                new ActivateValuationAction(source, gainLife),
+                ValuationContext.forActivation(ai, true));
+
+        Assert.assertTrue(result.isComplete(), result.toString());
+        Assert.assertTrue(result.transitionValue() > 0, result.toString());
+        Assert.assertTrue(result.accessCost() > 0, result.toString());
+    }
+
+    @Test
     public void activationTieBreakerUsesSharedValueOnlyForAnExactLegacyTie() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
