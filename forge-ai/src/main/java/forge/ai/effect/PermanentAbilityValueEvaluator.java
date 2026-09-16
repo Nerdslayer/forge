@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import forge.card.CardStateName;
 import forge.game.card.Card;
@@ -18,13 +17,6 @@ import forge.game.zone.ZoneType;
  */
 public final class PermanentAbilityValueEvaluator {
     private static final double FUTURE_EVENT_ALLOWANCE = .50;
-    private static final Set<String> SUPPORTED_FUTURE_EVENT_MODES = Set.of(
-            "TokenCreated", "TokenCreatedOnce", "CounterAdded", "CounterAddedOnce",
-            "LifeGained", "LifeLost", "LifeLostAll", "Drawn", "Discarded", "DiscardedAll",
-            "DamageDone", "DamageDoneOnce", "DamageDealtOnce", "ChangesZone", "ChangesZoneAll",
-            "Sacrificed", "SacrificedOnce", "Attacks", "Blocks", "AttackerBlocked",
-            "AttackerBlockedByCreature", "AttackerUnblocked", "Taps", "TapsForMana", "SpellCast",
-            "LandPlayed", "Phase");
 
     private PermanentAbilityValueEvaluator() {
     }
@@ -257,13 +249,12 @@ public final class PermanentAbilityValueEvaluator {
                             value.path() + ":self-attack", "Reference self-attack estimate (no known outcome credit)"));
                 }
             } else {
-                // Supported event triggers have an independent, fixed future-support allowance.
-                // It is NOT the full intrinsic baseline and does not increase with the number of
-                // current producers. The intrinsic evaluator has already rejected unsupported
-                // filters before this bridge is reached.
+                // The event adapter is the single conservative policy gate shared with intrinsic
+                // evaluation. Keep the allowance independent of the full intrinsic baseline and
+                // do not increase it with the number of current producers.
                 // TODO: Refine event likelihood with current board populations and contextual
                 // self-opportunity without double counting known relationships.
-                if (!SUPPORTED_FUTURE_EVENT_MODES.contains(description.parameters().get("Mode"))
+                if (!IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(description.parameters())
                         || value.expectedOccurrences() <= 0) {
                     addSkipped(destination, candidate, value.path(), "no future-support policy for this event");
                     continue;
