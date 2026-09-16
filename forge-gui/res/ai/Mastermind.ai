@@ -338,3 +338,5 @@ INTRINSIC_REMOVAL_WEIGHT=100
 ENABLE_TARGETED_DISCARD_ANALYSIS=true
 # Use definition/card value only to break exact legacy ties when choosing a spell to cast.
 ENABLE_CAST_VALUE_TIEBREAK=true
+# Use complete immediate activation value only to break exact legacy ties when choosing an ability.
+ENABLE_ACTIVATION_VALUE_TIEBREAK=true
