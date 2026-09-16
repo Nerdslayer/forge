@@ -205,6 +205,22 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void m1m1CountersUseTheSameSignedCreatureDelta() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> opposing = evaluate(leaf("PutCounter", Map.of(
+                "ValidTgts", "Creature.OppCtrl", "CounterType", "M1M1")), initial);
+        Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(opposing.state().opponentCreature().power(), 2);
+        Assert.assertEquals(opposing.state().opponentCreature().toughness(), 2);
+        Assert.assertTrue(opposing.value() > 0);
+
+        final OutcomePlan<State> friendly = evaluate(leaf("PutCounter", Map.of(
+                "ValidTgts", "Creature.YouCtrl", "CounterType", "M1M1")), initial);
+        Assert.assertEquals(friendly.value(), -25.0);
+    }
+
+    @Test
     public void targetProtectionAndProfileFlagsSurviveProjection() {
         final CreatureProfile protectedCreature = new CreatureProfile(true, 2, 2, Set.of(), true, true);
         final State initial = state(protectedCreature, protectedCreature, PermanentProfile.absent());

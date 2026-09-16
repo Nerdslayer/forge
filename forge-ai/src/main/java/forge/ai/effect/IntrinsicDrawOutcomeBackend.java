@@ -876,7 +876,7 @@ public final class IntrinsicDrawOutcomeBackend
             // remain conservative because their unmodeled keywords may affect target selection or
             // the meaning of the counter outcome.
             if (target != TargetRef.SOURCE && !simpleKeywords(before.keywords())) { return null; }
-            final PermanentProfile after = addP1P1(before, integer(node, "CounterNum", 1));
+            final PermanentProfile after = addP1P1(before, counterDelta(node));
             final int value = evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
                     controls(target, current));
             return new Outcome.Transition<>((double) value,
@@ -898,7 +898,8 @@ public final class IntrinsicDrawOutcomeBackend
         // TODO: Other counters, group recipients, divided/optional targets, counter replacement
         // effects and shared Targeted references need dedicated descriptors and projected state.
         if (!COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
-                || !"P1P1".equalsIgnoreCase(node.parameters().get("CounterType"))) {
+                || !"P1P1".equalsIgnoreCase(node.parameters().get("CounterType"))
+                        && !"M1M1".equalsIgnoreCase(node.parameters().get("CounterType"))) {
             return false;
         }
         return counterTarget(node) != null && literalPositive(node, "CounterNum", 1)
@@ -1273,6 +1274,11 @@ public final class IntrinsicDrawOutcomeBackend
         final int toughness = boundedAdd(profile.toughness(), amount);
         return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
                 power, toughness, profile.keywords(), profile.basicLand());
+    }
+
+    private static int counterDelta(final AbilityOutcomeDescription node) {
+        final int amount = integer(node, "CounterNum", 1);
+        return "M1M1".equalsIgnoreCase(node.parameters().get("CounterType")) ? -amount : amount;
     }
 
     private static int boundedAdd(final int left, final int right) {
