@@ -499,6 +499,23 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void creatureSacrificeChoosesAReferenceCreatureAndProjectsItsRemoval() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> result = evaluate(leaf("Sacrifice", Map.of(
+                "SacValid", "Creature.YouCtrl")), initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(result.state().controllerCreatureCount(), 0);
+        Assert.assertTrue(result.value() < 0);
+
+        final OutcomePlan<State> forcedOpponent = evaluate(leaf("Sacrifice", Map.of(
+                "SacValid", "Creature.OppCtrl", "Amount", "1")), initial);
+        Assert.assertEquals(forcedOpponent.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(forcedOpponent.state().opponentCreatureCount(), 0);
+        Assert.assertTrue(forcedOpponent.value() > 0);
+    }
+
+    @Test
     public void referenceDepthLimitFailsClosedInsteadOfUsingFallbackDimensions() {
         AbilityOutcomeDescription tree = leaf("Draw", Map.of("Defined", "Opponent"));
         for (int i = 0; i < 30; i++) {

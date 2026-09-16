@@ -610,17 +610,34 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private Outcome<State> sacrifice(final AbilityOutcomeDescription node) {
+        final SacrificeTarget target = sacrificeTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic sacrifice target");
+        }
+        if (target.scope() == SacrificeTargetScope.SELF) {
+            return sacrificeAtomic(node, TargetRef.SOURCE);
+        }
+        return new Outcome.Deferred<>(state -> new Outcome.Target<>(node.path() + ":target",
+                current -> sacrificeCandidates(current, target), State::withTarget,
+                sacrificeAtomic(node, null), true));
+    }
+
+    private Outcome<State> sacrificeAtomic(final AbilityOutcomeDescription node,
+            final TargetRef fixedTarget) {
         return new Outcome.Atomic<>(node.path(), current -> {
-            final PermanentProfile source = current.sourcePermanent();
-            // Sacrifice is not destruction: indestructible does not prevent it.
-            // TODO: Support sacrificed targets and sacrifice groups beyond the fixed self-cost form.
-            if (!source.present()
-                    || !"Self".equalsIgnoreCase(node.parameters().getOrDefault("SacValid", "Self"))) {
+            final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
+            if (target == null) {
                 return null;
             }
-            final int value = evaluator.evaluatePermanentDelta(source, PermanentProfile.absent(), true);
+            final PermanentProfile before = permanent(current, target);
+            if (!before.present()) {
+                return null;
+            }
+            // Sacrifice is not destruction: indestructible does not prevent it.
+            final int value = evaluator.evaluatePermanentDelta(before, PermanentProfile.absent(),
+                    controls(target, current));
             return new Outcome.Transition<>((double) value,
-                    current.withSourcePermanent(PermanentProfile.absent()).clearTarget(), node.api());
+                    removePermanent(current, target).clearTarget(), node.api());
         });
     }
 
@@ -896,14 +913,12 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private static boolean acceptsSacrifice(final AbilityOutcomeDescription node) {
-        // Only fixed self-sacrifice is independent of an unknown board's choice and destination.
+        // One creature choice is represented by the generic creature slots. Multi-sacrifice,
+        // replacement-sensitive and noncreature choices need a richer reference state.
         if (!SACRIFICE_PARAMETERS.containsAll(node.parameters().keySet())) {
             return false;
         }
-        return (!node.parameters().containsKey("Defined")
-                        || "Self".equalsIgnoreCase(node.parameters().get("Defined")))
-                && (!node.parameters().containsKey("SacValid")
-                        || "Self".equalsIgnoreCase(node.parameters().get("SacValid")))
+        return sacrificeTarget(node) != null
                 && (!node.parameters().containsKey("Amount")
                         || "1".equals(node.parameters().get("Amount")));
     }
@@ -1564,6 +1579,16 @@ public final class IntrinsicDrawOutcomeBackend
         } else if (("Destroy".equals(node.api()) || "ChangeZone".equals(node.api()))
                 && acceptsRemoval(node)) {
             addRemovalDimensions(node, dimensions);
+        } else if ("Sacrifice".equals(node.api()) && acceptsSacrifice(node)) {
+            final SacrificeTarget target = sacrificeTarget(node);
+            if (target.scope() == SacrificeTargetScope.ANY_CREATURE
+                    || target.scope() == SacrificeTargetScope.CONTROLLER_CREATURE) {
+                dimensions.add(CONTROLLER_CREATURE);
+            }
+            if (target.scope() == SacrificeTargetScope.ANY_CREATURE
+                    || target.scope() == SacrificeTargetScope.OPPONENT_CREATURE) {
+                dimensions.add(OPPONENT_CREATURE);
+            }
         }
         for (final AbilityOutcomeDescription choice : node.choices()) {
             collectDimensions(choice, dimensions, visited, depth + 1);
@@ -1705,6 +1730,12 @@ public final class IntrinsicDrawOutcomeBackend
 
     private record PermanentTarget(PermanentTargetScope scope, TargetRef fixed) { }
 
+    private enum SacrificeTargetScope {
+        SELF, ANY_CREATURE, CONTROLLER_CREATURE, OPPONENT_CREATURE
+    }
+
+    private record SacrificeTarget(SacrificeTargetScope scope, boolean other) { }
+
     private static PermanentTarget permanentTarget(final AbilityOutcomeDescription node) {
         final String defined = node.parameters().get("Defined");
         final String validTargets = node.parameters().get("ValidTgts");
@@ -1759,6 +1790,49 @@ public final class IntrinsicDrawOutcomeBackend
             if (opposing && canTarget(state.opponentPermanent(), false)) {
                 result.add(TargetRef.OPPONENT_PERMANENT);
             }
+        }
+        return result;
+    }
+
+    private static SacrificeTarget sacrificeTarget(final AbilityOutcomeDescription node) {
+        final String defined = node.parameters().get("Defined");
+        final String valid = node.parameters().get("SacValid");
+        if (defined != null) {
+            return "Self".equalsIgnoreCase(defined)
+                    && (valid == null || "Self".equalsIgnoreCase(valid))
+                    ? new SacrificeTarget(SacrificeTargetScope.SELF, false) : null;
+        }
+        if (valid == null || valid.isBlank() || "self".equalsIgnoreCase(valid)) {
+            return new SacrificeTarget(SacrificeTargetScope.SELF, false);
+        }
+        final String normalized = valid.toLowerCase(Locale.ROOT);
+        final boolean other = normalized.contains("other");
+        return switch (normalized) {
+        case "creature", "creature.other" ->
+                new SacrificeTarget(SacrificeTargetScope.ANY_CREATURE, other);
+        case "creature.youctrl", "creature.youctrl+other", "creature.other+youctrl" ->
+                new SacrificeTarget(SacrificeTargetScope.CONTROLLER_CREATURE, other);
+        case "creature.oppctrl", "creature.oppctrl+other", "creature.other+oppctrl" ->
+                new SacrificeTarget(SacrificeTargetScope.OPPONENT_CREATURE, other);
+        default -> null;
+        };
+    }
+
+    private static List<TargetRef> sacrificeCandidates(final State state,
+            final SacrificeTarget target) {
+        final List<TargetRef> result = new java.util.ArrayList<>(3);
+        final boolean friendly = target.scope() != SacrificeTargetScope.OPPONENT_CREATURE;
+        final boolean opposing = target.scope() != SacrificeTargetScope.CONTROLLER_CREATURE;
+        if (friendly && state.controllerCreature().present()) {
+            result.add(TargetRef.CONTROLLER_CREATURE);
+        }
+        if (opposing && state.opponentCreature().present()) {
+            result.add(TargetRef.OPPONENT_CREATURE);
+        }
+        final PermanentProfile source = state.sourcePermanent();
+        if (!target.other() && isCreature(source)
+                && (source.controlledByAi() ? friendly : opposing)) {
+            result.add(TargetRef.SOURCE);
         }
         return result;
     }
