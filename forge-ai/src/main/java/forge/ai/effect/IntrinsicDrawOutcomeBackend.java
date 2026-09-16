@@ -44,6 +44,9 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> DRAW_PARAMETERS = parameters("NumCards", "Defined");
     private static final Set<String> COUNTER_PARAMETERS = parameters("CounterType", "CounterNum",
             "Defined", "ValidCards", "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
+    private static final Set<String> PUMP_PARAMETERS = parameters("Defined", "ValidCards",
+            "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Duration",
+            "NumAtt", "NumDef");
     private static final Set<String> TOKEN_PARAMETERS = parameters("TokenScript", "TokenOwner",
             "TokenAmount", "TokenPower", "TokenToughness", "TokenTypes", "TokenColors",
             "TokenTapped", "TokenAttacking", "TokenBlocking");
@@ -250,6 +253,8 @@ public final class IntrinsicDrawOutcomeBackend
         case "Draw" -> acceptsDraw(node);
         case "PutCounter" -> acceptsCounter(node) || acceptsCounterChoice(node);
         case "PutCounterAll" -> acceptsCounterAll(node);
+        case "Pump" -> acceptsPump(node);
+        case "PumpAll" -> acceptsPumpAll(node);
         case "Token" -> acceptsToken(node);
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
@@ -311,6 +316,7 @@ public final class IntrinsicDrawOutcomeBackend
         return switch (node.api()) {
         case "Draw" -> draw(node);
         case "PutCounter", "PutCounterAll" -> counter(node);
+        case "Pump", "PumpAll" -> pump(node);
         case "Token" -> token(node);
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
@@ -916,7 +922,7 @@ public final class IntrinsicDrawOutcomeBackend
         // independent recipient count. Subtypes, noncreature recipients, correlated populations,
         // and effects that distribute different counters or amounts still need richer reference
         // modeling.
-        final CounterGroupTarget target = counterGroupTarget(node);
+        final CreatureGroupTarget target = creatureGroupTarget(node);
         if (target == null) {
             return unresolved(node, "Unsupported intrinsic counter group");
         }
@@ -974,6 +980,121 @@ public final class IntrinsicDrawOutcomeBackend
             projected = projected.withSourcePermanent(after);
         }
         return new GroupApplication(projected, value, true);
+    }
+
+    private Outcome<State> pump(final AbilityOutcomeDescription node) {
+        if ("PumpAll".equals(node.api())) {
+            return pumpAll(node);
+        }
+        final CounterTarget target = counterTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic pump target");
+        }
+        if (target.scope() == CounterTargetScope.SELF) {
+            return new Outcome.Deferred<>(state -> hasCreatureTarget(state, TargetRef.SOURCE)
+                    ? pumpAtomic(node, TargetRef.SOURCE)
+                    : unresolved(node, "Self pump recipient is not a modeled creature"));
+        }
+        return new Outcome.Deferred<>(state -> {
+            if (hasUnmodeledCandidate(state, target)) {
+                return unresolved(node, "Unmodeled reference target characteristics");
+            }
+            return new Outcome.Target<>(node.path() + ":target", current -> candidates(current, target),
+                    State::withTarget, pumpAtomic(node, null), true);
+        });
+    }
+
+    private Outcome<State> pumpAll(final AbilityOutcomeDescription node) {
+        // TODO: Intrinsic group valuation currently uses one representative creature and an
+        // independent recipient count. Subtypes, noncreature recipients, correlated populations,
+        // temporary durations, lethal changes, and distributed amounts still need richer
+        // reference modeling.
+        final CreatureGroupTarget target = creatureGroupTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic pump group");
+        }
+        return new Outcome.Atomic<>(node.path(), current -> {
+            State projected = current;
+            int value = 0;
+            if (target.controller()) {
+                final GroupApplication application = applyPumpGroup(projected, node, true,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            if (target.opponent()) {
+                final GroupApplication application = applyPumpGroup(projected, node, false,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private GroupApplication applyPumpGroup(final State state,
+            final AbilityOutcomeDescription node, final boolean controller, final boolean other) {
+        final CreatureProfile representative = controller
+                ? state.controllerCreature() : state.opponentCreature();
+        if (!simpleKeywords(representative.keywords())) {
+            return GroupApplication.unsupported(state);
+        }
+
+        final int count = state.creatureCount(controller);
+        State projected = state;
+        int value = 0;
+        if (count > 0 && representative.present()) {
+            final PermanentProfile before = new PermanentProfile(true, PermanentKind.CREATURE,
+                    controller, representative.power(), representative.toughness(),
+                    representative.keywords());
+            final PermanentProfile after = pumpPermanent(before, node);
+            if (after.toughness() <= 0) {
+                return GroupApplication.unsupported(state);
+            }
+            value = EffectMath.add(value, EffectMath.multiply(count,
+                    evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after), controller)));
+            projected = projected.withCreatures(controller, toCreature(after));
+        }
+
+        final PermanentProfile source = projected.sourcePermanent();
+        if (!other && isCreature(source) && source.controlledByAi() == controller) {
+            final PermanentProfile after = pumpPermanent(source, node);
+            if (after.toughness() <= 0) {
+                return GroupApplication.unsupported(state);
+            }
+            value = EffectMath.add(value, evaluator.evaluateCreatureDelta(
+                    toCreature(source), toCreature(after), controller));
+            projected = projected.withSourcePermanent(after);
+        }
+        return new GroupApplication(projected, value, true);
+    }
+
+    private Outcome<State> pumpAtomic(final AbilityOutcomeDescription node,
+            final TargetRef fixedTarget) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
+            if (target == null || !hasCreatureTarget(current, target)) {
+                return null;
+            }
+            final PermanentProfile before = permanent(current, target);
+            if (target != TargetRef.SOURCE && !simpleKeywords(before.keywords())) {
+                return null;
+            }
+            final PermanentProfile after = pumpPermanent(before, node);
+            if (after.toughness() <= 0) {
+                return null;
+            }
+            final int value = evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
+                    controls(target, current));
+            return new Outcome.Transition<>((double) value,
+                    replacePermanent(current, target, after).clearTarget(), node.api());
+        });
     }
 
     private Outcome<State> counterAtomic(final AbilityOutcomeDescription node,
@@ -1039,10 +1160,34 @@ public final class IntrinsicDrawOutcomeBackend
                 && !node.parameters().containsKey("ValidTgts")
                 && supportedCounterType(counterType(node))
                 && literalPositive(node, "CounterNum", 1)
-                && counterGroupTarget(node) != null;
+                && creatureGroupTarget(node) != null;
     }
 
-    private static CounterGroupTarget counterGroupTarget(final AbilityOutcomeDescription node) {
+    private static boolean acceptsPump(final AbilityOutcomeDescription node) {
+        return acceptsPumpParameters(node)
+                && !node.parameters().containsKey("ValidCards")
+                && counterTarget(node) != null;
+    }
+
+    private static boolean acceptsPumpAll(final AbilityOutcomeDescription node) {
+        return acceptsPumpParameters(node)
+                && !node.parameters().containsKey("Defined")
+                && !node.parameters().containsKey("ValidTgts")
+                && creatureGroupTarget(node) != null;
+    }
+
+    private static boolean acceptsPumpParameters(final AbilityOutcomeDescription node) {
+        if (!PUMP_PARAMETERS.containsAll(node.parameters().keySet())
+                || !Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))) {
+            return false;
+        }
+        final boolean hasPowerChange = node.parameters().containsKey("NumAtt");
+        final boolean hasToughnessChange = node.parameters().containsKey("NumDef");
+        return (hasPowerChange || hasToughnessChange)
+                && literalSigned(node, "NumAtt") && literalSigned(node, "NumDef");
+    }
+
+    private static CreatureGroupTarget creatureGroupTarget(final AbilityOutcomeDescription node) {
         final String definition = node.parameters().get("ValidCards");
         if (definition == null || definition.isBlank() || definition.contains(",")) {
             return null;
@@ -1066,7 +1211,7 @@ public final class IntrinsicDrawOutcomeBackend
         if (!creature || youControl && opponentControl) {
             return null;
         }
-        return new CounterGroupTarget(!opponentControl, !youControl, other);
+        return new CreatureGroupTarget(!opponentControl, !youControl, other);
     }
 
     private static boolean acceptsCounterChoice(final AbilityOutcomeDescription node) {
@@ -1121,14 +1266,25 @@ public final class IntrinsicDrawOutcomeBackend
                     dimensions.add(OPPONENT_CREATURE);
                 }
             }
-        } else if ("PutCounterAll".equals(node.api()) && acceptsCounterAll(node)) {
-            final CounterGroupTarget target = counterGroupTarget(node);
+        } else if (("PutCounterAll".equals(node.api()) && acceptsCounterAll(node))
+                || ("PumpAll".equals(node.api()) && acceptsPumpAll(node))) {
+            final CreatureGroupTarget target = creatureGroupTarget(node);
             if (target.controller()) {
                 dimensions.add(CONTROLLER_CREATURE_COUNT);
                 dimensions.add(CONTROLLER_CREATURE);
             }
             if (target.opponent()) {
                 dimensions.add(OPPONENT_CREATURE_COUNT);
+                dimensions.add(OPPONENT_CREATURE);
+            }
+        } else if ("Pump".equals(node.api()) && acceptsPump(node)) {
+            final CounterTarget target = counterTarget(node);
+            if (target.scope() == CounterTargetScope.ANY_CREATURE
+                    || target.scope() == CounterTargetScope.CONTROLLER_CREATURE) {
+                dimensions.add(CONTROLLER_CREATURE);
+            }
+            if (target.scope() == CounterTargetScope.ANY_CREATURE
+                    || target.scope() == CounterTargetScope.OPPONENT_CREATURE) {
                 dimensions.add(OPPONENT_CREATURE);
             }
         } else if (("GainLife".equals(node.api()) || "LoseLife".equals(node.api()))
@@ -1257,7 +1413,7 @@ public final class IntrinsicDrawOutcomeBackend
 
     private record CounterTarget(CounterTargetScope scope, boolean other) { }
 
-    private record CounterGroupTarget(boolean controller, boolean opponent, boolean other) { }
+    private record CreatureGroupTarget(boolean controller, boolean opponent, boolean other) { }
 
     private record GroupApplication(State state, int value, boolean supported) {
         private static GroupApplication unsupported(final State state) {
@@ -1511,6 +1667,14 @@ public final class IntrinsicDrawOutcomeBackend
                 power, toughness, profile.keywords(), profile.basicLand(), profile.loyalty());
     }
 
+    private static PermanentProfile pumpPermanent(final PermanentProfile profile,
+            final AbilityOutcomeDescription node) {
+        final int power = boundedAdd(profile.power(), integer(node, "NumAtt", 0));
+        final int toughness = boundedAdd(profile.toughness(), integer(node, "NumDef", 0));
+        return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
+                power, toughness, profile.keywords(), profile.basicLand(), profile.loyalty());
+    }
+
     private static int counterDelta(final AbilityOutcomeDescription node) {
         final int amount = integer(node, "CounterNum", 1);
         return "M1M1".equalsIgnoreCase(node.parameters().get("CounterType")) ? -amount : amount;
@@ -1582,6 +1746,19 @@ public final class IntrinsicDrawOutcomeBackend
         }
         try {
             return Integer.parseInt(raw) > 0;
+        } catch (final NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean literalSigned(final AbilityOutcomeDescription node, final String name) {
+        final String raw = node.parameters().get(name);
+        if (raw == null || raw.isBlank()) {
+            return true;
+        }
+        try {
+            final int value = Integer.parseInt(raw.trim());
+            return value >= -20 && value <= 20;
         } catch (final NumberFormatException ignored) {
             return false;
         }
