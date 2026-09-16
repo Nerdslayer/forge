@@ -2500,6 +2500,43 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testFixedCounterMoveFeedsRemovalAndAdditionTriggers() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card destination = addCard("Runeclaw Bear", opponent);
+        final Card movedFrom = addCard("Grizzly Bears", opponent);
+        movedFrom.setCounters(CounterEnumType.P1P1, 1);
+        destination.setSVar("EffectTestCounterMove",
+                "DB$ MoveCounter | ValidSource$ Creature | Defined$ Self"
+                        + " | CounterType$ P1P1 | CounterNum$ All");
+        addTrigger(destination, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You"
+                + " | Execute$ EffectTestCounterMove | TriggerZones$ Battlefield");
+
+        final Card removalConsequence = addCard("Bear Cub", opponent);
+        removalConsequence.setSVar("EffectTestCounterMoveOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(removalConsequence, "Mode$ CounterRemovedOnce"
+                + " | ValidCard$ Card.YouCtrl | CounterType$ P1P1 | Remaining$ 0"
+                + " | Execute$ EffectTestCounterMoveOutcome | TriggerZones$ Battlefield");
+
+        final Card additionConsequence = addCard("Centaur Courser", opponent);
+        additionConsequence.setSVar("EffectTestCounterMoveOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(additionConsequence, "Mode$ CounterAddedOnce"
+                + " | ValidCard$ Creature.YouCtrl | CounterType$ P1P1"
+                + " | Execute$ EffectTestCounterMoveOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(destination, movedFrom, removalConsequence, additionConsequence));
+
+        Assert.assertTrue(values.getOrDefault(removalConsequence, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(additionConsequence, 0) > 0, values.toString());
+    }
+
+    @Test
     public void testDrawProductionCreatesOneEventPerDrawnCard() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
