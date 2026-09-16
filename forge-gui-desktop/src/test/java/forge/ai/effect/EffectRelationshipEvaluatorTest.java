@@ -15,12 +15,14 @@ import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
 import forge.game.ability.AbilityKey;
+import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CounterEnumType;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.TriggerHandler;
+import forge.game.trigger.Trigger;
 import forge.game.zone.ZoneType;
 
 public class EffectRelationshipEvaluatorTest extends AITest {
@@ -643,6 +645,53 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         addTrigger(consequence, "Mode$ ChangesController | ValidCard$ Card.OppCtrl"
                 + " | ValidOriginalController$ You | Execute$ EffectTestControlOutcome"
                 + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
+    public void testFightProductionMatchesFightOnceConsequence() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 1);
+
+        final Card producer = addCard("Runeclaw Bear", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Fight | Cost$ 0 | Defined$ Self | ValidTgts$ Creature.OppCtrl",
+                producer));
+        addCard("Grizzly Bears", ai);
+        final Card consequence = addCard("Memnite", opponent);
+        consequence.setSVar("EffectTestFightOutcome", "DB$ Draw | Defined$ You | NumCards$ 1");
+        addTrigger(consequence, "Mode$ FightOnce | ValidCard$ Creature.YouCtrl"
+                + " | Execute$ EffectTestFightOutcome | TriggerZones$ Battlefield");
+
+        final SpellAbility fightAbility = producer.getSpellAbilities().stream()
+                .filter(ability -> ability.getApi() == ApiType.Fight)
+                .findFirst().orElseThrow();
+        final List<EffectProduction> productions = EffectProductionExtractorRegistry.extract(
+                ai, producer, fightAbility);
+        Assert.assertTrue(productions.stream()
+                .anyMatch(production -> production.type() == EffectType.FOUGHT),
+                "api=" + fightAbility.getApi() + ", params=" + fightAbility.getMapParams()
+                        + ", original=" + fightAbility.getOriginalMapParams()
+                        + " -> " + productions);
+        final Trigger fightTrigger = consequence.getTriggers().stream()
+                .filter(trigger -> trigger.getMode().name().equals("FightOnce"))
+                .findFirst().orElseThrow();
+        final EffectConsequence parsedConsequence = EffectConsequenceExtractorRegistry.extract(
+                consequence, fightTrigger);
+        Assert.assertNotNull(parsedConsequence, fightTrigger.getMapParams().toString());
+        final EffectProduction fought = productions.stream()
+                .filter(production -> production.type() == EffectType.FOUGHT)
+                .findFirst().orElseThrow();
+        Assert.assertFalse(FoughtEventMatcher.INSTANCE.match(fought, parsedConsequence).isEmpty(),
+                fought.events().toString());
 
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
