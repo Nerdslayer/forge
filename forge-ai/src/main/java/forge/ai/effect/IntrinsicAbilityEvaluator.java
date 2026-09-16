@@ -118,9 +118,10 @@ public final class IntrinsicAbilityEvaluator {
             return unsupported(ability, "unsupported intrinsic trigger filters", SupportStatus.UNSUPPORTED,
                     outcomeStatusBeforeEvaluation(ability));
         }
-        if ("Attacks".equals(ability.parameters().get("Mode"))
+        if (("Attacks".equals(ability.parameters().get("Mode"))
+                || "True".equalsIgnoreCase(ability.parameters().get("Attacker")))
                 && source.kind() != PermanentKind.CREATURE && source.kind() != PermanentKind.TOKEN) {
-            return unsupported(ability, "self attack requires a creature reference source",
+            return unsupported(ability, "self attack/tap-as-attacker requires a creature reference source",
                     SupportStatus.UNSUPPORTED, outcomeStatusBeforeEvaluation(ability));
         }
         final double occurrences;
