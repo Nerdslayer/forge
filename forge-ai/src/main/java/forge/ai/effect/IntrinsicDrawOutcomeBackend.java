@@ -77,6 +77,7 @@ public final class IntrinsicDrawOutcomeBackend
             "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "NewController",
             "Duration");
     private static final Set<String> SACRIFICE_PARAMETERS = parameters("Defined", "SacValid", "Amount");
+    private static final Set<String> SACRIFICE_ALL_PARAMETERS = parameters("ValidCards");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
             "haste", "reach", "menace", "fear", "intimidate", "vigilance", "trample", "deathtouch", "lifelink", "defender",
             "hexproof", "shroud", "indestructible", "shield", "stun", "ward", "detain",
@@ -278,6 +279,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Destroy", "ChangeZone" -> acceptsRemoval(node);
         case "GainControl" -> acceptsGainControl(node);
         case "Sacrifice" -> acceptsSacrifice(node);
+        case "SacrificeAll" -> acceptsSacrificeAll(node);
         default -> false;
         };
     }
@@ -344,6 +346,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Destroy", "ChangeZone" -> removal(node);
         case "GainControl" -> gainControl(node);
         case "Sacrifice" -> sacrifice(node);
+        case "SacrificeAll" -> sacrificeAll(node);
         default -> unresolved(node, "Unsupported intrinsic outcome API " + node.api());
         };
     }
@@ -641,6 +644,63 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> sacrificeAll(final AbilityOutcomeDescription node) {
+        // The reference state has one representative creature and a count per side. Keep this
+        // group adapter separate from single-target sacrifice so both sides are applied to the
+        // same pre-event state and source self-sacrifice is not accidentally counted twice.
+        final CreatureGroupTarget target = creatureGroupTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic sacrifice group");
+        }
+        return new Outcome.Atomic<>(node.path(), current -> {
+            State projected = current;
+            int value = 0;
+            if (target.controller()) {
+                final GroupApplication application = applySacrificeGroup(projected, true,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            if (target.opponent()) {
+                final GroupApplication application = applySacrificeGroup(projected, false,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private GroupApplication applySacrificeGroup(final State state, final boolean controller,
+            final boolean other) {
+        final CreatureProfile representative = controller
+                ? state.controllerCreature() : state.opponentCreature();
+        if (!simpleKeywords(representative.keywords())) {
+            return GroupApplication.unsupported(state);
+        }
+
+        final int count = state.creatureCount(controller);
+        State projected = state.withCreatures(controller, CreatureProfile.absent())
+                .withCreatureCount(controller, 0);
+        int value = count > 0 && representative.present()
+                ? EffectMath.multiply(evaluator.evaluateCreatureDelta(
+                        representative, CreatureProfile.absent(), controller), count) : 0;
+
+        final PermanentProfile source = projected.sourcePermanent();
+        if (!other && isCreature(source) && source.controlledByAi() == controller) {
+            value = EffectMath.add(value, evaluator.evaluatePermanentDelta(source,
+                    PermanentProfile.absent(), controller));
+            projected = projected.withSourcePermanent(PermanentProfile.absent());
+        }
+        return new GroupApplication(projected, value, true);
+    }
+
     private Outcome<State> gainControl(final AbilityOutcomeDescription node) {
         final PermanentTarget target = permanentTarget(node);
         if (target == null || newControllerIsAi(node) == null) {
@@ -921,6 +981,13 @@ public final class IntrinsicDrawOutcomeBackend
         return sacrificeTarget(node) != null
                 && (!node.parameters().containsKey("Amount")
                         || "1".equals(node.parameters().get("Amount")));
+    }
+
+    private static boolean acceptsSacrificeAll(final AbilityOutcomeDescription node) {
+        // Only explicitly filtered creature groups are represented. An unfiltered SacrificeAll
+        // may include noncreature permanents that the intrinsic reference state does not count.
+        return SACRIFICE_ALL_PARAMETERS.containsAll(node.parameters().keySet())
+                && creatureGroupTarget(node) != null;
     }
 
     private static boolean oneTarget(final AbilityOutcomeDescription node) {
@@ -1534,15 +1601,7 @@ public final class IntrinsicDrawOutcomeBackend
             }
         } else if (("PutCounterAll".equals(node.api()) && acceptsCounterAll(node))
                 || ("PumpAll".equals(node.api()) && acceptsPumpAll(node))) {
-            final CreatureGroupTarget target = creatureGroupTarget(node);
-            if (target.controller()) {
-                dimensions.add(CONTROLLER_CREATURE_COUNT);
-                dimensions.add(CONTROLLER_CREATURE);
-            }
-            if (target.opponent()) {
-                dimensions.add(OPPONENT_CREATURE_COUNT);
-                dimensions.add(OPPONENT_CREATURE);
-            }
+            addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
         } else if (("Pump".equals(node.api()) && acceptsPump(node))
                 || ("Debuff".equals(node.api()) && acceptsDebuff(node))) {
             final CounterTarget target = counterTarget(node);
@@ -1557,15 +1616,7 @@ public final class IntrinsicDrawOutcomeBackend
         } else if ("Animate".equals(node.api()) && acceptsAnimate(node)) {
             addRemovalDimensions(node, dimensions);
         } else if ("AnimateAll".equals(node.api()) && acceptsAnimateAll(node)) {
-            final CreatureGroupTarget target = creatureGroupTarget(node);
-            if (target.controller()) {
-                dimensions.add(CONTROLLER_CREATURE_COUNT);
-                dimensions.add(CONTROLLER_CREATURE);
-            }
-            if (target.opponent()) {
-                dimensions.add(OPPONENT_CREATURE_COUNT);
-                dimensions.add(OPPONENT_CREATURE);
-            }
+            addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
         } else if ("GainControl".equals(node.api()) && acceptsGainControl(node)) {
             addRemovalDimensions(node, dimensions);
         } else if (("GainLife".equals(node.api()) || "LoseLife".equals(node.api()))
@@ -1589,11 +1640,25 @@ public final class IntrinsicDrawOutcomeBackend
                     || target.scope() == SacrificeTargetScope.OPPONENT_CREATURE) {
                 dimensions.add(OPPONENT_CREATURE);
             }
+        } else if ("SacrificeAll".equals(node.api()) && acceptsSacrificeAll(node)) {
+            addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
         }
         for (final AbilityOutcomeDescription choice : node.choices()) {
             collectDimensions(choice, dimensions, visited, depth + 1);
         }
         collectDimensions(node.next(), dimensions, visited, depth + 1);
+    }
+
+    private static void addCreatureGroupDimensions(final CreatureGroupTarget target,
+            final Set<String> dimensions) {
+        if (target.controller()) {
+            dimensions.add(CONTROLLER_CREATURE_COUNT);
+            dimensions.add(CONTROLLER_CREATURE);
+        }
+        if (target.opponent()) {
+            dimensions.add(OPPONENT_CREATURE_COUNT);
+            dimensions.add(OPPONENT_CREATURE);
+        }
     }
 
     private static void addPlayerDimensions(final AbilityOutcomeDescription node,

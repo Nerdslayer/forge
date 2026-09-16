@@ -516,6 +516,18 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void sacrificeAllProjectsCreatureGroupsAndSourceWithoutDoubleCounting() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> result = evaluate(leaf("SacrificeAll", Map.of(
+                "ValidCards", "Creature")), initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(result.state().controllerCreatureCount(), 0);
+        Assert.assertEquals(result.state().opponentCreatureCount(), 0);
+        Assert.assertFalse(result.state().sourcePermanent().present());
+    }
+
+    @Test
     public void referenceDepthLimitFailsClosedInsteadOfUsingFallbackDimensions() {
         AbilityOutcomeDescription tree = leaf("Draw", Map.of("Defined", "Opponent"));
         for (int i = 0; i < 30; i++) {
