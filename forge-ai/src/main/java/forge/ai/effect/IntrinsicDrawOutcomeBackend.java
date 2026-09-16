@@ -63,7 +63,13 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> SACRIFICE_PARAMETERS = parameters("Defined", "SacValid", "Amount");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
             "haste", "reach", "menace", "vigilance", "trample", "deathtouch", "lifelink", "defender",
-            "hexproof", "shroud", "indestructible");
+            "hexproof", "shroud", "indestructible", "shield", "stun", "ward", "detain",
+            "can't attack", "cantattack", "can't block", "cantblock", "can't untap", "cantuntap");
+    private static final Set<String> VALUED_KEYWORD_COUNTERS = Set.of("FLYING", "DEATHTOUCH", "LIFELINK",
+            "TRAMPLE", "VIGILANCE", "DEFENDER", "CANTATTACK", "CANTBLOCK", "DETAIN", "CANTUNTAP",
+            "HEXPROOF", "SHROUD", "INDESTRUCTIBLE", "WARD");
+    private static final Set<String> INTRINSIC_COUNTER_TYPES = Set.of("P1P1", "M1M1", "SHIELD", "STUN",
+            "LOYALTY");
 
     public enum TargetRef {
         CONTROLLER_PLAYER, OPPONENT_PLAYER,
@@ -876,9 +882,8 @@ public final class IntrinsicDrawOutcomeBackend
             // remain conservative because their unmodeled keywords may affect target selection or
             // the meaning of the counter outcome.
             if (target != TargetRef.SOURCE && !simpleKeywords(before.keywords())) { return null; }
-            if (("SHIELD".equalsIgnoreCase(counterType(node))
-                    || "STUN".equalsIgnoreCase(counterType(node)))
-                    && hasKeyword(before, counterType(node))) {
+            final String counterKeyword = counterKeyword(counterType(node));
+            if (counterKeyword != null && hasKeyword(before, counterKeyword)) {
                 return null;
             }
             final PermanentProfile after = addCounter(before, node);
@@ -903,11 +908,12 @@ public final class IntrinsicDrawOutcomeBackend
 
     private static boolean acceptsCounter(final AbilityOutcomeDescription node) {
         // TODO: Other counters, group recipients, divided/optional targets, repeated shield/stun
-        // counter scaling, counter replacement effects and shared Targeted references need
-        // dedicated descriptors and projected state.
+        // or keyword-counter scaling, counter replacement effects and shared Targeted references
+        // need dedicated descriptors and projected state. Comma-separated counter choices also
+        // need to be represented as explicit outcome choices before intrinsic evaluation can use
+        // them.
         if (!COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
-                || !Set.of("P1P1", "M1M1", "SHIELD", "STUN", "LOYALTY")
-                        .contains(counterType(node))) {
+                || !supportedCounterType(counterType(node))) {
             return false;
         }
         final CounterTarget target = counterTarget(node);
@@ -1297,9 +1303,10 @@ public final class IntrinsicDrawOutcomeBackend
                     profile.power(), profile.toughness(), profile.keywords(), profile.basicLand(),
                     boundedAdd(profile.loyalty(), integer(node, "CounterNum", 1)));
         }
-        if ("SHIELD".equals(type) || "STUN".equals(type)) {
+        final String keyword = counterKeyword(type);
+        if (keyword != null) {
             final Set<String> keywords = new LinkedHashSet<>(profile.keywords());
-            keywords.add(type);
+            keywords.add(keyword);
             return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
                     profile.power(), profile.toughness(), keywords, profile.basicLand(), profile.loyalty());
         }
@@ -1320,6 +1327,32 @@ public final class IntrinsicDrawOutcomeBackend
 
     private static String counterType(final AbilityOutcomeDescription node) {
         return node.parameters().getOrDefault("CounterType", "").trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static boolean supportedCounterType(final String type) {
+        return INTRINSIC_COUNTER_TYPES.contains(type) || VALUED_KEYWORD_COUNTERS.contains(type);
+    }
+
+    private static String counterKeyword(final String type) {
+        return switch (type) {
+        case "SHIELD" -> "Shield";
+        case "STUN" -> "Stun";
+        case "FLYING" -> "Flying";
+        case "DEATHTOUCH" -> "Deathtouch";
+        case "LIFELINK" -> "Lifelink";
+        case "TRAMPLE" -> "Trample";
+        case "VIGILANCE" -> "Vigilance";
+        case "DEFENDER" -> "Defender";
+        case "CANTATTACK" -> "can't attack";
+        case "CANTBLOCK" -> "can't block";
+        case "DETAIN" -> "detain";
+        case "CANTUNTAP" -> "can't untap";
+        case "HEXPROOF" -> "Hexproof";
+        case "SHROUD" -> "Shroud";
+        case "INDESTRUCTIBLE" -> "Indestructible";
+        case "WARD" -> "Ward";
+        default -> null;
+        };
     }
 
     private static int boundedAdd(final int left, final int right) {

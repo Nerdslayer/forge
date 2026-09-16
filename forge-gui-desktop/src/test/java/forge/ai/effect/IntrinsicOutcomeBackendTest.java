@@ -238,14 +238,32 @@ public class IntrinsicOutcomeBackendTest {
         final OutcomePlan<State> shield = evaluate(leaf("PutCounter", Map.of(
                 "ValidTgts", "Creature.YouCtrl", "CounterType", "SHIELD")), initial);
         Assert.assertEquals(shield.completeness(), Completeness.COMPLETE);
-        Assert.assertTrue(shield.state().controllerCreature().keywords().contains("SHIELD"));
+        Assert.assertTrue(shield.state().controllerCreature().keywords().stream()
+                .anyMatch(keyword -> keyword.equalsIgnoreCase("SHIELD")));
         Assert.assertEquals(shield.value(), 45.0);
 
         final OutcomePlan<State> stun = evaluate(leaf("PutCounter", Map.of(
                 "ValidTgts", "Creature.OppCtrl", "CounterType", "STUN")), initial);
         Assert.assertEquals(stun.completeness(), Completeness.COMPLETE);
-        Assert.assertTrue(stun.state().opponentCreature().keywords().contains("STUN"));
+        Assert.assertTrue(stun.state().opponentCreature().keywords().stream()
+                .anyMatch(keyword -> keyword.equalsIgnoreCase("STUN")));
         Assert.assertEquals(stun.value(), 20.0);
+    }
+
+    @Test
+    public void keywordCountersReuseCreatureAbilityValue() {
+        final State initial = state(CREATURE, CREATURE, SOURCE);
+        final OutcomePlan<State> lifelink = evaluate(leaf("PutCounter", Map.of(
+                "ValidTgts", "Creature.YouCtrl", "CounterType", "Lifelink")), initial);
+        Assert.assertEquals(lifelink.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(lifelink.state().controllerCreature().keywords().contains("Lifelink"));
+        Assert.assertEquals(lifelink.value(), 20.0);
+
+        final OutcomePlan<State> indestructible = evaluate(leaf("PutCounter", Map.of(
+                "ValidTgts", "Creature.YouCtrl", "CounterType", "Indestructible")), initial);
+        Assert.assertEquals(indestructible.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(indestructible.state().controllerCreature().keywords().contains("Indestructible"));
+        Assert.assertEquals(indestructible.value(), 70.0);
     }
 
     @Test
