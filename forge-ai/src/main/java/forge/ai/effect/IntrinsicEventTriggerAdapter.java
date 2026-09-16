@@ -36,6 +36,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (target.isPresent()) {
             return target;
         }
+        final Optional<IntrinsicEventTrigger> manaExpend =
+                IntrinsicManaExpendTriggerAdapter.describe(parameters);
+        if (manaExpend.isPresent()) {
+            return manaExpend;
+        }
         if (isSupportedManaTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
@@ -97,6 +102,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicTargetTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicManaExpendTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {

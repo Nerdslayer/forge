@@ -21,7 +21,8 @@ public final class IntrinsicEventTriggerEstimator {
             return IntrinsicEventTriggerEstimate.unsupported(
                     "No reference event rate for " + trigger.eventType());
         }
-        final double eventRate = expectedRate(distribution, trigger.atMostOncePerTurn())
+        final double eventRate = expectedRate(distribution, trigger.atMostOncePerTurn(),
+                trigger.minimumEventAmount())
                 * trigger.occurrenceMultiplier();
         final PermanentSurvivalEstimate survival = new PermanentSurvivalEstimator(model)
                 .estimate(source, entryTiming);
@@ -63,8 +64,11 @@ public final class IntrinsicEventTriggerEstimator {
     }
 
     private static double expectedRate(final WeightedDistribution<Double> distribution,
-            final boolean atMostOncePerTurn) {
+            final boolean atMostOncePerTurn, final Integer minimumEventAmount) {
         return distribution.entries().stream().mapToDouble(entry -> {
+            if (minimumEventAmount != null && entry.value() < minimumEventAmount) {
+                return 0;
+            }
             final double rate = atMostOncePerTurn ? Math.min(1, entry.value()) : entry.value();
             return rate * entry.weight();
         }).sum();

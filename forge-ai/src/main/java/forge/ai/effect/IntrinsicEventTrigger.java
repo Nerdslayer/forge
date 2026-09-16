@@ -2,7 +2,8 @@ package forge.ai.effect;
 
 /** Normalized event trigger used by intrinsic occurrence estimation. */
 public record IntrinsicEventTrigger(IntrinsicReferenceModel.EventType eventType,
-        TurnScope turnScope, boolean atMostOncePerTurn, double occurrenceMultiplier) {
+        TurnScope turnScope, boolean atMostOncePerTurn, double occurrenceMultiplier,
+        Integer minimumEventAmount) {
     public enum TurnScope {
         ANY_TURN,
         CONTROLLER_TURN,
@@ -11,13 +12,20 @@ public record IntrinsicEventTrigger(IntrinsicReferenceModel.EventType eventType,
 
     public IntrinsicEventTrigger {
         if (eventType == null || turnScope == null || !Double.isFinite(occurrenceMultiplier)
-                || occurrenceMultiplier < 0) {
+                || occurrenceMultiplier < 0 || minimumEventAmount != null
+                && minimumEventAmount <= 0) {
             throw new IllegalArgumentException("Invalid intrinsic event trigger");
         }
     }
 
     public IntrinsicEventTrigger(final IntrinsicReferenceModel.EventType eventType,
             final TurnScope turnScope, final boolean atMostOncePerTurn) {
-        this(eventType, turnScope, atMostOncePerTurn, 1);
+        this(eventType, turnScope, atMostOncePerTurn, 1, null);
+    }
+
+    public IntrinsicEventTrigger(final IntrinsicReferenceModel.EventType eventType,
+            final TurnScope turnScope, final boolean atMostOncePerTurn,
+            final double occurrenceMultiplier) {
+        this(eventType, turnScope, atMostOncePerTurn, occurrenceMultiplier, null);
     }
 }
