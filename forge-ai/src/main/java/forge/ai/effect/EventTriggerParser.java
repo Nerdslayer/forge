@@ -24,6 +24,9 @@ final class EventTriggerParser {
     private static final Set<String> COUNTER_ADDED_ONCE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidEntity", "ValidCard", "ValidPlayer", "ValidSource", "CounterType",
             "FirstTime", "ActivationLimit", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> COUNTER_ADDED_ALL_TRIGGER_PARAMS = Set.of(
+            "Mode", "Valid", "ValidSource", "CounterType", "ActivationLimit", "Execute",
+            "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> LIFE_GAINED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidSource", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -141,7 +144,8 @@ final class EventTriggerParser {
         if (mode == TriggerType.Taps) {
             return EffectType.TAPPED_OR_UNTAPPED;
         }
-        if (mode == TriggerType.CounterAdded || mode == TriggerType.CounterAddedOnce) {
+        if (mode == TriggerType.CounterAdded || mode == TriggerType.CounterAddedOnce
+                || mode == TriggerType.CounterAddedAll) {
             return EffectType.COUNTER_ADDED;
         }
         return null;
@@ -166,6 +170,11 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.CounterAdded) {
             return hasOnlyParams(parameters, COUNTER_ADDED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.CounterAddedAll) {
+            return hasOnlyParams(parameters, COUNTER_ADDED_ALL_TRIGGER_PARAMS)
+                    && (!parameters.containsKey("ActivationLimit")
+                            || "1".equals(parameters.get("ActivationLimit")));
         }
         if (mode == TriggerType.LifeGained) {
             return hasOnlyParams(parameters, LIFE_GAINED_TRIGGER_PARAMS);

@@ -10,7 +10,7 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     static final TriggeredConsequenceExtractor INSTANCE = new TriggeredConsequenceExtractor();
 
     // TODO(effect analysis): Support the remaining trigger families and richer token/counter
-    // forms, including optional/limited triggers, CounterAddedAll, broader player constraints,
+    // forms, including optional/limited triggers, broader player constraints,
     // conditions, intervening-if clauses, and triggers active outside the battlefield. Combat
     // support excludes group declaration/once triggers, attacked-alone, first-attack,
     // poisoned-player, complex blocker-count, and multi-defender conditions.
@@ -49,7 +49,8 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
 
     private static Trigger normalizedTrigger(final Card source, final Trigger trigger) {
         if ((trigger.getMode() == TriggerType.CounterAdded
-                || trigger.getMode() == TriggerType.CounterAddedOnce)
+                || trigger.getMode() == TriggerType.CounterAddedOnce
+                || trigger.getMode() == TriggerType.CounterAddedAll)
                 && "Any".equalsIgnoreCase(trigger.getParam("CounterType"))) {
             final Trigger normalized = trigger.copy(source, true);
             normalized.removeParam("CounterType");

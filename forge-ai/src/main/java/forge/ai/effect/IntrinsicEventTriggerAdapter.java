@@ -3,6 +3,7 @@ package forge.ai.effect;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import forge.card.CardType;
 import forge.game.trigger.TriggerType;
 
 /** Converts relationship-supported event triggers into bounded intrinsic inputs. */
@@ -130,6 +131,9 @@ public final class IntrinsicEventTriggerAdapter {
                     && !parameters.containsKey("FirstTime")
                     && (!parameters.containsKey("ActivationLimit")
                             || "1".equals(parameters.get("ActivationLimit")));
+        }
+        if (mode == TriggerType.CounterAddedAll) {
+            return supportsCounterAddedAll(parameters);
         }
         if (mode == TriggerType.LifeGained) {
             // The reference life-gain rate represents the source controller's life events. A
@@ -350,6 +354,57 @@ public final class IntrinsicEventTriggerAdapter {
         return true;
     }
 
+    private static boolean supportsCounterAddedAll(final Map<String, String> parameters) {
+        if (parameters.containsKey("TriggerZones")
+                && !"Battlefield".equalsIgnoreCase(parameters.get("TriggerZones"))) {
+            return false;
+        }
+        if (parameters.containsKey("ValidSource")
+                && !Set.of("You", "Opponent").contains(parameters.get("ValidSource"))) {
+            return false;
+        }
+        if (parameters.containsKey("ActivationLimit")
+                && !"1".equals(parameters.get("ActivationLimit"))) {
+            return false;
+        }
+        return !parameters.containsKey("Valid")
+                || simpleCounterBatchFilter(parameters.get("Valid"));
+    }
+
+    /**
+     * Accepts object filters whose type and controller qualifiers are meaningful without a live
+     * board. The reference occurrence rate remains deliberately coarse for named subtypes and
+     * non-creature permanent types. TODO: Use reference recipient populations to distinguish the
+     * number and probability of matching objects in a CounterAddedAll batch.
+     */
+    private static boolean simpleCounterBatchFilter(final String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        for (final String alternative : value.split(",")) {
+            boolean hasObjectType = false;
+            // Forge valid filters use both dot and plus separators (for example,
+            // Human.YouCtrl and Creature+Other). They have the same meaning for this
+            // coarse reference gate, so normalize both forms here.
+            for (final String part : alternative.trim().split("[.+]")) {
+                if (part.isBlank() || Set.of("Other", "YouCtrl", "OppCtrl", "YouOwn", "OppOwn",
+                        "inZoneBattlefield", "inRealZoneBattlefield").contains(part)) {
+                    continue;
+                }
+                if ("Permanent".equals(part) || "Card".equals(part)
+                        || CardType.isACardType(part) || CardType.isACreatureType(part)) {
+                    hasObjectType = true;
+                    continue;
+                }
+                return false;
+            }
+            if (!hasObjectType) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static IntrinsicReferenceModel.EventType eventType(final TriggerType mode,
             final EffectType observed, final Map<String, String> parameters) {
         if (mode == TriggerType.Taps && "True".equalsIgnoreCase(parameters.get("Attacker"))) {
@@ -410,6 +465,8 @@ public final class IntrinsicEventTriggerAdapter {
     private static boolean atMostOncePerTurn(final TriggerType mode,
             final Map<String, String> parameters) {
         return mode == TriggerType.TokenCreatedOnce || mode == TriggerType.CounterAddedOnce
+                || mode == TriggerType.CounterAddedAll
+                        && "1".equals(parameters.get("ActivationLimit"))
                 || mode == TriggerType.DamageDoneOnce || mode == TriggerType.DamageDealtOnce
                 || mode == TriggerType.SacrificedOnce || mode == TriggerType.DiscardedAll
                 || mode == TriggerType.LifeLostAll

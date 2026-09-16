@@ -6,17 +6,17 @@ import java.util.List;
 import java.util.Map;
 
 import forge.game.GameEntity;
+import forge.game.GameEntityCounterTable;
 import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
 import forge.game.card.CounterType;
-import forge.game.trigger.TriggerType;
 
 /** Matches concrete counter additions against exact-type or any-type counter triggers. */
 final class CounterAddedEventMatcher implements EffectEventMatcher {
     static final CounterAddedEventMatcher INSTANCE = new CounterAddedEventMatcher();
 
-    // TODO(effect analysis): Add CounterAddedAll and semantics for optional, limited,
-    // replacement-modified, distributed, and other currently rejected counter trigger forms.
+    // TODO(effect analysis): Add semantics for optional, limited, replacement-modified,
+    // distributed, and other currently rejected counter trigger forms.
 
     private CounterAddedEventMatcher() {
     }
@@ -28,8 +28,43 @@ final class CounterAddedEventMatcher implements EffectEventMatcher {
                 || consequence.observedType() != EffectType.COUNTER_ADDED) {
             return List.of();
         }
-        return consequence.trigger().getMode() == TriggerType.CounterAddedOnce
-                ? matchOnce(production, consequence) : matchIndividual(production, consequence);
+        return switch (consequence.trigger().getMode()) {
+        case CounterAddedOnce -> matchOnce(production, consequence);
+        case CounterAddedAll -> matchAll(production, consequence);
+        default -> matchIndividual(production, consequence);
+        };
+    }
+
+    private static List<EffectMatch> matchAll(final EffectProduction production,
+            final EffectConsequence consequence) {
+        if (production.events().isEmpty()) {
+            return List.of();
+        }
+        final GameEntityCounterTable table = new GameEntityCounterTable();
+        for (final EffectEvent event : production.events()) {
+            final CounterType counterType = (CounterType) event.triggerParameters().get(
+                    AbilityKey.CounterType);
+            if (counterType == null) {
+                continue;
+            }
+            for (final EffectEvent.Subject subject : event.subjects()) {
+                if (subject.value() instanceof GameEntity entity) {
+                    table.put(event.player(), entity, counterType, subject.occurrences());
+                }
+            }
+        }
+        if (table.isEmpty()) {
+            return List.of();
+        }
+        final EffectEvent first = production.events().get(0);
+        final Map<AbilityKey, Object> parameters = new EnumMap<>(AbilityKey.class);
+        parameters.putAll(first.triggerParameters());
+        parameters.put(AbilityKey.Objects, table);
+        if (!EffectEventMatchUtils.passes(consequence, parameters)) {
+            return List.of();
+        }
+        return List.of(new EffectMatch(new EffectEvent(first.type(), first.player(), first.subjects(),
+                parameters), 1));
     }
 
     private static List<EffectMatch> matchIndividual(final EffectProduction production,

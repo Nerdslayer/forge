@@ -2311,6 +2311,30 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testCounterAddedAllTriggersOnceForAProductionBatch() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 2);
+
+        final Card producer = addPhaseCounterProducer(
+                "Grizzly Bears", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCard("Runeclaw Bear", opponent);
+        consequence.setSVar("EffectTestCounterBatchDraw",
+                "DB$ Draw | Defined$ You | NumCards$ 1");
+        addTrigger(consequence, "Mode$ CounterAddedAll | Valid$ Creature.YouCtrl"
+                + " | CounterType$ CHARGE | Execute$ EffectTestCounterBatchDraw"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testCounterProductionSupportsPlayerRecipients() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
