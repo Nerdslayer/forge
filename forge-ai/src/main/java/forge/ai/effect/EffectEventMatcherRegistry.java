@@ -29,6 +29,8 @@ final class EffectEventMatcherRegistry {
                 ScrySurveilEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.BECAME_TARGET,
                 BecameTargetEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.SPELL_OR_ABILITY_CAST,
+                SpellOrAbilityCastEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.SACRIFICED, SacrificeEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.ZONE_CHANGED, ZoneChangedEventMatcher.INSTANCE);
     }

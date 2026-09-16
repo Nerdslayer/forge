@@ -49,10 +49,11 @@ final class TriggeredEffectAnalyzer {
 
         final List<EffectProduction> productions = new ArrayList<>();
         final Map<EffectType, List<EffectConsequence>> consequences = new EnumMap<>(EffectType.class);
-        // A removal target can profit when the evaluating AI performs a known library or
-        // filtering action (for example, an opposing Archivist of Oghma). Model only these
-        // normalized productions from the AI's known battlefield abilities; do not broaden this
-        // pass to all allied relationships.
+        // A removal target can profit when the evaluating AI performs a known action (for
+        // example, an opposing Archivist of Oghma or a cast-matters permanent). Model only
+        // normalized productions from the evaluating AI's known cards/abilities; do not broaden
+        // this pass to hidden opponent-hand actions.
+        addKnownCastProductions(evaluatingAi, evaluatingAi, true, productions, trace);
         extractPlayerProductions(evaluatingAi, evaluatingAi,
                 Set.of(EffectType.CARD_SEARCHED_OR_SELECTED, EffectType.SCRIED_OR_SURVEILLED),
                 productions, trace);
@@ -112,8 +113,9 @@ final class TriggeredEffectAnalyzer {
             final Iterable<Player> controllers,
             final List<EffectProduction> productions,
             final Map<EffectType, List<EffectConsequence>> consequences,
-            final EffectAnalysisTrace trace) {
+        final EffectAnalysisTrace trace) {
         for (final Player controller : controllers) {
+            addKnownCastProductions(evaluatingAi, controller, false, productions, trace);
             addNormalDrawStep(controller, productions, trace);
             // Land plays are player-wide opportunities, not one independent production per
             // battlefield land. The synthetic source is intentionally outside candidate cards;
@@ -173,6 +175,15 @@ final class TriggeredEffectAnalyzer {
                 CardDrawProductionExtractor.extractNormalDrawStep(player);
         productions.addAll(drawSteps);
         drawSteps.forEach(trace::production);
+    }
+
+    private static void addKnownCastProductions(final Player evaluatingAi,
+            final Player controller, final boolean includeHand,
+            final List<EffectProduction> productions, final EffectAnalysisTrace trace) {
+        final List<EffectProduction> casts = KnownCastProductionExtractor.extract(
+                evaluatingAi, controller, includeHand);
+        productions.addAll(casts);
+        casts.forEach(trace::production);
     }
 
     private static void extractPlayerProductions(final Player evaluatingAi,
