@@ -10,6 +10,10 @@ public final class IntrinsicEventTriggerAdapter {
     }
 
     public static Optional<IntrinsicEventTrigger> describe(final Map<String, String> parameters) {
+        final Optional<IntrinsicEventTrigger> spellCast = IntrinsicSpellCastTriggerAdapter.describe(parameters);
+        if (spellCast.isPresent()) {
+            return spellCast;
+        }
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
             return Optional.empty();
         }

@@ -265,6 +265,9 @@ public final class IntrinsicAbilityEvaluator {
         if (schedule != null) {
             return true;
         }
+        if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
+            return true;
+        }
         if (!SAFE_EVENT_TRIGGER_PARAMETERS.containsAll(parameters.keySet())
                 || parameters.get("Mode") == null) {
             return false;
