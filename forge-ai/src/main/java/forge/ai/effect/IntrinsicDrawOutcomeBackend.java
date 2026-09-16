@@ -607,7 +607,9 @@ public final class IntrinsicDrawOutcomeBackend
     private Outcome<State> sacrifice(final AbilityOutcomeDescription node) {
         return new Outcome.Atomic<>(node.path(), current -> {
             final PermanentProfile source = current.sourcePermanent();
-            if (!source.present() || hasKeyword(source, "indestructible")
+            // Sacrifice is not destruction: indestructible does not prevent it.
+            // TODO: Support sacrificed targets and sacrifice groups beyond the fixed self-cost form.
+            if (!source.present()
                     || !"Self".equalsIgnoreCase(node.parameters().getOrDefault("SacValid", "Self"))) {
                 return null;
             }
