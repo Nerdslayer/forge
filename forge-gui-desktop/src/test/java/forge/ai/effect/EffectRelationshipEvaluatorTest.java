@@ -27,6 +27,26 @@ import forge.game.zone.ZoneType;
 
 public class EffectRelationshipEvaluatorTest extends AITest {
     @Test
+    public void testExpectedLandPlayEvaluatesLandfallOutcome() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card landfall = addCard("Memnite", opponent);
+        landfall.setSVar("EffectTestLandfallOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(landfall, "Mode$ LandPlayed | Origin$ Hand | ValidCard$ Land.YouCtrl"
+                + " | Execute$ EffectTestLandfallOutcome | TriggerZones$ Battlefield");
+        addCard("Forest", opponent);
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(landfall));
+
+        Assert.assertTrue(values.getOrDefault(landfall, 0) > 0, values.toString());
+    }
+
+    @Test
     public void testExpectedBlockEvaluatesSupportedBlocksOutcome() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
