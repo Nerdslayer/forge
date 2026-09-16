@@ -12,6 +12,7 @@ import forge.card.CardEdition;
 import forge.card.CardRules;
 import forge.game.card.Card;
 import forge.game.player.Player;
+import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
 import forge.item.IPaperCard;
 
@@ -185,6 +186,14 @@ public final class UnifiedCardValueEvaluator {
     public static Map<Card, RemovalCandidateEvaluation> evaluateRemovalCandidates(final Player ai,
             final Iterable<Card> candidates, final ValuationContext context,
             final RemovalActionKind actionKind, final EffectAnalysisTrace trace) {
+        return evaluateRemovalCandidates(ai, candidates, context, null, actionKind, trace);
+    }
+
+    /** Evaluates removal candidates with the proposed target-selection action available. */
+    public static Map<Card, RemovalCandidateEvaluation> evaluateRemovalCandidates(final Player ai,
+            final Iterable<Card> candidates, final ValuationContext context,
+            final SpellAbility removalAbility, final RemovalActionKind actionKind,
+            final EffectAnalysisTrace trace) {
         if (ai == null || candidates == null) {
             return Map.of();
         }
@@ -201,7 +210,7 @@ public final class UnifiedCardValueEvaluator {
         });
         final Map<Card, PermanentAbilityValueEvaluator.Breakdown> abilityValues =
                 PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, candidateList, trace,
-                        context.intrinsicWeightPercent() > 0,
+                        removalAbility, context.intrinsicWeightPercent() > 0,
                         context.relationshipWeightPercent() > 0);
         final Map<Card, RemovalCandidateEvaluation> result = new HashMap<>();
         for (final Card candidate : candidateList) {

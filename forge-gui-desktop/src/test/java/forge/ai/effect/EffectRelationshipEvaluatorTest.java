@@ -129,6 +129,45 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testRemovalTargetingEvaluatesBecomesTargetTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card target = addCard("Grizzly Bears", opponent);
+        target.setSVar("EffectTestTargetOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(target, "Mode$ BecomesTarget | ValidSource$ SpellAbility.OppCtrl"
+                + " | ValidTarget$ Card.Self | Execute$ EffectTestTargetOutcome"
+                + " | TriggerZones$ Battlefield");
+        Assert.assertEquals(target.getTriggers().size(), 1);
+        Assert.assertEquals(EventTriggerParser.observedType(target.getTriggers().get(0)),
+                EffectType.BECAME_TARGET);
+        final EffectConsequence consequence = EffectConsequenceExtractorRegistry.extract(
+                target, target.getTriggers().get(0));
+        Assert.assertNotNull(consequence);
+
+        final Card removalSource = addCard("Sol Ring", ai);
+        final SpellAbility removal = AbilityFactory.getAbility(
+                "AB$ Destroy | Cost$ 0 | ValidTgts$ Creature.OppCtrl", removalSource);
+        removal.setActivatingPlayer(ai);
+
+        final Map<AbilityKey, Object> runParams = AbilityKey.newMap();
+        runParams.put(AbilityKey.SourceSA, removal);
+        runParams.put(AbilityKey.Target, target);
+        runParams.put(AbilityKey.Targets, java.util.Set.of(target));
+        runParams.put(AbilityKey.Cause, removalSource);
+        Assert.assertTrue(consequence.trigger().performTest(runParams));
+        Assert.assertTrue(EffectEventMatchUtils.passes(consequence, runParams));
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(target), removal);
+
+        Assert.assertTrue(values.getOrDefault(target, 0) > 0, values.toString());
+    }
+
+    @Test
     public void testExpectedBlockEvaluatesSupportedBlocksOutcome() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

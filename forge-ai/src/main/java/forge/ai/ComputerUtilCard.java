@@ -613,7 +613,7 @@ public class ComputerUtilCard {
         final Map<Card, UnifiedCardValueEvaluator.RemovalCandidateEvaluation> evaluations =
                 UnifiedCardValueEvaluator.evaluateRemovalCandidates(ai, candidates,
                         ValuationContext.forRemoval(ai, synergyWeight, intrinsicWeight),
-                        RemovalActionKind.from(removalAbility), trace);
+                        removalAbility, RemovalActionKind.from(removalAbility), trace);
         if (trace.isEnabled()) {
             Card selected = null;
             int highestValue = Integer.MIN_VALUE;

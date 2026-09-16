@@ -8,6 +8,7 @@ import java.util.Map;
 
 import forge.game.card.Card;
 import forge.game.player.Player;
+import forge.game.spellability.SpellAbility;
 
 /**
  * Combines supported relationship values contributed by triggered and static effects.
@@ -25,14 +26,29 @@ public final class EffectRelationshipEvaluator {
      */
     public static Map<Card, Integer> evaluateRemovalRelationships(final Player evaluatingAi,
             final Iterable<Card> candidates) {
-        return evaluateRemovalRelationships(evaluatingAi, candidates, EffectAnalysisTrace.disabled());
+        return evaluateRemovalRelationships(evaluatingAi, candidates, null,
+                EffectAnalysisTrace.disabled());
+    }
+
+    /** Evaluates removal relationships including the target event from the proposed action. */
+    public static Map<Card, Integer> evaluateRemovalRelationships(final Player evaluatingAi,
+            final Iterable<Card> candidates, final SpellAbility removalAbility) {
+        return evaluateRemovalRelationships(evaluatingAi, candidates, removalAbility,
+                EffectAnalysisTrace.disabled());
     }
 
     /** Evaluates relationships while optionally collecting a grouped diagnostic trace. */
     public static Map<Card, Integer> evaluateRemovalRelationships(final Player evaluatingAi,
             final Iterable<Card> candidates, final EffectAnalysisTrace trace) {
+        return evaluateRemovalRelationships(evaluatingAi, candidates, null, trace);
+    }
+
+    /** Evaluates removal relationships while optionally modeling target selection. */
+    public static Map<Card, Integer> evaluateRemovalRelationships(final Player evaluatingAi,
+            final Iterable<Card> candidates, final SpellAbility removalAbility,
+            final EffectAnalysisTrace trace) {
         final Map<Card, List<AbilityValueContribution>> contributions =
-                evaluateRemovalContributions(evaluatingAi, candidates, trace);
+                evaluateRemovalContributions(evaluatingAi, candidates, removalAbility, trace);
         final Map<Card, Integer> values = new HashMap<>();
         for (final Map.Entry<Card, List<AbilityValueContribution>> entry : contributions.entrySet()) {
             int value = 0;
@@ -52,6 +68,12 @@ public final class EffectRelationshipEvaluator {
     static Map<Card, List<AbilityValueContribution>> evaluateRemovalContributions(
             final Player evaluatingAi, final Iterable<Card> candidates,
             final EffectAnalysisTrace trace) {
+        return evaluateRemovalContributions(evaluatingAi, candidates, null, trace);
+    }
+
+    static Map<Card, List<AbilityValueContribution>> evaluateRemovalContributions(
+            final Player evaluatingAi, final Iterable<Card> candidates,
+            final SpellAbility removalAbility, final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
@@ -60,7 +82,7 @@ public final class EffectRelationshipEvaluator {
 
         final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
         mergeContributions(values, TriggeredEffectAnalyzer.evaluateContributions(
-                evaluatingAi, candidateList, trace));
+                evaluatingAi, candidateList, removalAbility, trace));
         mergeContributions(values, StaticAbilityAnalyzer.evaluateContributions(
                 evaluatingAi, candidateList, trace));
         return values;

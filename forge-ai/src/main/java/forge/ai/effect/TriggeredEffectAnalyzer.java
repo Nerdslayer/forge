@@ -31,11 +31,18 @@ final class TriggeredEffectAnalyzer {
     static Map<Card, List<AbilityValueContribution>> evaluateContributions(
             final Player evaluatingAi, final Iterable<Card> candidates,
             final EffectAnalysisTrace trace) {
+        return evaluateContributions(evaluatingAi, candidates, null, trace);
+    }
+
+    static Map<Card, List<AbilityValueContribution>> evaluateContributions(
+            final Player evaluatingAi, final Iterable<Card> candidates,
+            final SpellAbility removalAbility, final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
 
-        final Set<Player> analyzedControllers = findAnalyzedControllers(evaluatingAi, candidates);
+        final List<Card> candidateList = copyCandidates(candidates);
+        final Set<Player> analyzedControllers = findAnalyzedControllers(evaluatingAi, candidateList);
         if (analyzedControllers.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -51,6 +58,10 @@ final class TriggeredEffectAnalyzer {
                 productions, trace);
         addNormalDrawStep(evaluatingAi, productions, trace);
         extractEffects(evaluatingAi, analyzedControllers, productions, consequences, trace);
+        final List<EffectProduction> targetEvents = BecameTargetProductionExtractor.extract(
+                evaluatingAi, removalAbility, candidateList);
+        productions.addAll(targetEvents);
+        targetEvents.forEach(trace::production);
 
         final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
         for (final EffectProduction production : productions) {
@@ -271,5 +282,15 @@ final class TriggeredEffectAnalyzer {
             }
         }
         return values;
+    }
+
+    private static List<Card> copyCandidates(final Iterable<Card> candidates) {
+        final List<Card> result = new ArrayList<>();
+        candidates.forEach(candidate -> {
+            if (candidate != null) {
+                result.add(candidate);
+            }
+        });
+        return result;
     }
 }

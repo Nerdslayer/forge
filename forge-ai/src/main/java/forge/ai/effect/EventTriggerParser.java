@@ -127,6 +127,12 @@ final class EventTriggerParser {
     private static final Set<String> SURVEIL_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "FirstTime", "ActivationLimit", "Execute",
             "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> BECAME_TARGET_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidSource", "ValidTarget", "FirstTime", "Valiant", "ActivationLimit",
+            "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> BECAME_TARGET_ONCE_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidSource", "ValidTarget", "ValidCause", "Random", "ActivationLimit",
+            "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> COUNTERED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidCause", "ValidSA", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -164,6 +170,9 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.Scry || mode == TriggerType.Surveil) {
             return EffectType.SCRIED_OR_SURVEILLED;
+        }
+        if (mode == TriggerType.BecomesTarget || mode == TriggerType.BecomesTargetOnce) {
+            return EffectType.BECAME_TARGET;
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return EffectType.CARD_DISCARDED;
@@ -269,6 +278,16 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.Surveil) {
             return hasSupportedSurveilParameters(parameters);
+        }
+        if (mode == TriggerType.BecomesTarget) {
+            return hasOnlyParams(parameters, BECAME_TARGET_TRIGGER_PARAMS)
+                    && hasSupportedActivationLimit(parameters);
+        }
+        if (mode == TriggerType.BecomesTargetOnce) {
+            return hasOnlyParams(parameters, BECAME_TARGET_ONCE_TRIGGER_PARAMS)
+                    && hasSupportedActivationLimit(parameters)
+                    && (!parameters.containsKey("Random")
+                            || isBoolean(parameters.get("Random")));
         }
         if (mode == TriggerType.Countered) {
             return hasSupportedCounteredParameters(parameters);
