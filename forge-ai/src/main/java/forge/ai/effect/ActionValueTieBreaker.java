@@ -32,25 +32,9 @@ public final class ActionValueTieBreaker {
                 || !candidates.stream().allMatch(supportedCandidate)) {
             return candidates;
         }
-
-        final Map<T, CardValueBreakdown> values = new IdentityHashMap<>();
-        for (final T candidate : candidates) {
-            final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(
-                    actionFactory.apply(candidate), context);
-            if (!value.isComplete()) {
-                return candidates;
-            }
-            values.put(candidate, value);
-        }
-
-        final int firstValue = values.get(candidates.get(0)).netValue();
-        if (candidates.stream().allMatch(candidate -> values.get(candidate).netValue() == firstValue)) {
-            return candidates;
-        }
-        final List<T> ranked = new ArrayList<>(candidates);
-        ranked.sort(Comparator.comparingInt(
-                (T candidate) -> values.get(candidate).netValue()).reversed());
-        return ranked;
+        final ActionValueSelector.Selection<T> selection = ActionValueSelector.selectBest(candidates,
+                context, supportedCandidate, actionFactory);
+        return selection.valuationUsed() ? selection.orderedCandidates() : candidates;
     }
 
     static void apply(final Player ai, final List<SpellAbility> abilities,
@@ -109,7 +93,8 @@ public final class ActionValueTieBreaker {
     }
 
     private static void logReordering(final ValuationContext context,
-            final List<SpellAbility> ordered, final Map<SpellAbility, CardValueBreakdown> values) {
+            final List<SpellAbility> ordered,
+            final Map<SpellAbility, CardValueBreakdown> values) {
         if (!Boolean.parseBoolean(System.getProperty(EffectAnalysisTrace.ENABLE_PROPERTY, "true"))) {
             return;
         }

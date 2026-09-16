@@ -146,6 +146,41 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void genericActionSelectorChoosesTheBestCompleteAction() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        final Card weak = addCardToZone("Craw Wurm", opponent, ZoneType.Hand);
+        final Card strong = addCardToZone("Colossal Dreadmaw", opponent, ZoneType.Hand);
+        final List<Card> candidates = new ArrayList<>(List.of(weak, strong));
+
+        final ActionValueSelector.Selection<Card> selection = ActionValueSelector.selectBest(
+                candidates, ValuationContext.forDiscard(ai, true), card -> true,
+                card -> new DiscardValuationAction(card, opponent));
+
+        Assert.assertTrue(selection.valuationUsed(), selection.reason());
+        Assert.assertSame(selection.selected(), strong);
+        Assert.assertEquals(selection.orderedCandidates(), List.of(strong, weak));
+    }
+
+    @Test
+    public void genericActionSelectorPreservesFallbackForUnsupportedActions() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card target = addCard("Grizzly Bears", game.getPlayers().get(0));
+        final ValuationAction action = new RemovalValuationAction(target, RemovalActionKind.EXILE);
+        final List<ValuationAction> candidates = new ArrayList<>(List.of(action, action));
+
+        final ActionValueSelector.Selection<ValuationAction> selection =
+                ActionValueSelector.selectBest(candidates, ValuationContext.forDiscard(ai, true),
+                        candidate -> true, candidate -> candidate);
+
+        Assert.assertFalse(selection.valuationUsed(), selection.reason());
+        Assert.assertSame(selection.selected(), action);
+        Assert.assertEquals(selection.orderedCandidates(), candidates);
+    }
+
+    @Test
     public void removalActionRejectsAContextForAnotherDecision() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
