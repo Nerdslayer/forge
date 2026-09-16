@@ -69,6 +69,8 @@ public final class IntrinsicDrawOutcomeBackend
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax");
     private static final Set<String> DAMAGE_ALL_PARAMETERS = parameters("ValidPlayers", "NumDmg",
             "DamageSource");
+    private static final Set<String> FIGHT_PARAMETERS = parameters("Defined", "ValidTgts",
+            "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
     private static final Set<String> REMOVAL_PARAMETERS = parameters("Defined", "ValidTgts",
             "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Origin",
             "Destination", "NoRegen", "Radiance", "Duration", "ChangeNum", "ChangeType",
@@ -276,6 +278,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Mana" -> acceptsMana(node);
         case "ManaReflected" -> acceptsManaReflected(node);
         case "DealDamage", "DamageAll" -> acceptsDamage(node);
+        case "Fight" -> acceptsFight(node);
         case "Destroy", "ChangeZone" -> acceptsRemoval(node);
         case "GainControl" -> acceptsGainControl(node);
         case "Sacrifice" -> acceptsSacrifice(node);
@@ -343,6 +346,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Mana" -> mana(node);
         case "ManaReflected" -> manaReflected(node);
         case "DealDamage", "DamageAll" -> damage(node);
+        case "Fight" -> fight(node);
         case "Destroy", "ChangeZone" -> removal(node);
         case "GainControl" -> gainControl(node);
         case "Sacrifice" -> sacrifice(node);
@@ -564,6 +568,58 @@ public final class IntrinsicDrawOutcomeBackend
         final int value = evaluator.evaluatePlayerDamage(before, amount, controller);
         return new Outcome.Transition<>((double) value,
                 current.withLife(controller, Math.max(0, before - amount)), node.api());
+    }
+
+    private Outcome<State> fight(final AbilityOutcomeDescription node) {
+        final PermanentTarget target = fightTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic fight target");
+        }
+        return new Outcome.Deferred<>(state -> new Outcome.Target<>(node.path() + ":target",
+                current -> permanentCandidates(current, target), State::withTarget,
+                fightAtomic(node), true));
+    }
+
+    private Outcome<State> fightAtomic(final AbilityOutcomeDescription node) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final TargetRef target = current.target();
+            final PermanentProfile source = current.sourcePermanent();
+            final PermanentProfile opposing = target == null ? PermanentProfile.absent()
+                    : permanent(current, target);
+            if (!isCreature(source) || !isCreature(opposing)) {
+                return null;
+            }
+
+            // Fight damage is simultaneous. Marked damage on survivors is intentionally omitted
+            // from this bounded reference state, so only deaths affect the projected profiles.
+            final PermanentProfile sourceAfter = survivesFight(source, opposing)
+                    ? source : PermanentProfile.absent();
+            final PermanentProfile targetAfter = survivesFight(opposing, source)
+                    ? opposing : PermanentProfile.absent();
+            int value = evaluator.evaluatePermanentDelta(source, sourceAfter,
+                    source.controlledByAi());
+            value = EffectMath.add(value, evaluator.evaluatePermanentDelta(opposing, targetAfter,
+                    controls(target, current)));
+
+            State projected = sourceAfter.present()
+                    ? current : current.withSourcePermanent(PermanentProfile.absent());
+            projected = targetAfter.present()
+                    ? replacePermanent(projected, target, targetAfter)
+                    : removePermanent(projected, target);
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private static boolean survivesFight(final PermanentProfile fighter,
+            final PermanentProfile opponent) {
+        final CreatureProfile creature = toCreature(fighter);
+        final CreatureProfile enemy = toCreature(opponent);
+        if (creature.toughness() <= 0) {
+            return false;
+        }
+        return creature.indestructible()
+                || enemy.power() < creature.toughness()
+                        && !(enemy.power() > 0 && hasKeyword(enemy, "deathtouch"));
     }
 
     private Outcome<State> removal(final AbilityOutcomeDescription node) {
@@ -936,6 +992,15 @@ public final class IntrinsicDrawOutcomeBackend
         }
         return DAMAGE_PARAMETERS.containsAll(node.parameters().keySet())
                 && damageTarget(node) != null;
+    }
+
+    private static boolean acceptsFight(final AbilityOutcomeDescription node) {
+        // The source is the first fighter and one mandatory creature target is the second. Fight
+        // does not use first/double strike, but deathtouch and indestructible affect its deaths.
+        return FIGHT_PARAMETERS.containsAll(node.parameters().keySet())
+                && "Self".equalsIgnoreCase(node.parameters().get("Defined"))
+                && oneTarget(node)
+                && fightTarget(node) != null;
     }
 
     private static boolean acceptsRemoval(final AbilityOutcomeDescription node) {
@@ -1627,6 +1692,8 @@ public final class IntrinsicDrawOutcomeBackend
         } else if (("DealDamage".equals(node.api()) || "DamageAll".equals(node.api()))
                 && acceptsDamage(node)) {
             addDamageDimensions(node, dimensions);
+        } else if ("Fight".equals(node.api()) && acceptsFight(node)) {
+            addFightDimensions(node, dimensions);
         } else if (("Destroy".equals(node.api()) || "ChangeZone".equals(node.api()))
                 && acceptsRemoval(node)) {
             addRemovalDimensions(node, dimensions);
@@ -1728,6 +1795,23 @@ public final class IntrinsicDrawOutcomeBackend
         }
     }
 
+    private static void addFightDimensions(final AbilityOutcomeDescription node,
+            final Set<String> dimensions) {
+        final PermanentTarget target = fightTarget(node);
+        if (target == null) {
+            return;
+        }
+        switch (target.scope()) {
+        case CONTROLLER_CREATURE -> dimensions.add(CONTROLLER_CREATURE);
+        case OPPONENT_CREATURE -> dimensions.add(OPPONENT_CREATURE);
+        case ANY_CREATURE -> {
+            dimensions.add(CONTROLLER_CREATURE);
+            dimensions.add(OPPONENT_CREATURE);
+        }
+        default -> { }
+        }
+    }
+
     private static void addRemovalDimensions(final AbilityOutcomeDescription node,
             final Set<String> dimensions) {
         final PermanentTarget target = permanentTarget(node);
@@ -1823,6 +1907,26 @@ public final class IntrinsicDrawOutcomeBackend
                 new PermanentTarget(PermanentTargetScope.CONTROLLER_PERMANENT, null);
         case "permanent.oppctrl", "permanent.nonland+oppctrl" ->
                 new PermanentTarget(PermanentTargetScope.OPPONENT_PERMANENT, null);
+        default -> null;
+        };
+    }
+
+    private static PermanentTarget fightTarget(final AbilityOutcomeDescription node) {
+        final String defined = node.parameters().get("Defined");
+        final String validTargets = node.parameters().get("ValidTgts");
+        if (!"Self".equalsIgnoreCase(defined) || validTargets == null
+                || !oneTarget(node)
+                || node.parameters().containsKey("TgtZone")
+                        && !"Battlefield".equalsIgnoreCase(node.parameters().get("TgtZone"))) {
+            return null;
+        }
+        return switch (validTargets.toLowerCase(Locale.ROOT)) {
+        case "creature", "creature.other" -> new PermanentTarget(PermanentTargetScope.ANY_CREATURE, null);
+        case "creature.youctrl", "creature.youctrl+other", "creature.other+youctrl" ->
+                new PermanentTarget(PermanentTargetScope.CONTROLLER_CREATURE, null);
+        case "creature.oppctrl", "creature.youdontctrl",
+                "creature.oppctrl+other", "creature.other+oppctrl" ->
+                new PermanentTarget(PermanentTargetScope.OPPONENT_CREATURE, null);
         default -> null;
         };
     }
@@ -2227,6 +2331,10 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private static boolean hasKeyword(final PermanentProfile profile, final String keyword) {
+        return profile.keywords().stream().anyMatch(value -> value.equalsIgnoreCase(keyword));
+    }
+
+    private static boolean hasKeyword(final CreatureProfile profile, final String keyword) {
         return profile.keywords().stream().anyMatch(value -> value.equalsIgnoreCase(keyword));
     }
 
