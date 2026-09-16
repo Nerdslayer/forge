@@ -528,6 +528,31 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void fightProjectsSimultaneousDeathsAndCombatKeywords() {
+        final PermanentProfile fighter = new PermanentProfile(true, PermanentKind.CREATURE,
+                true, 3, 3, Set.of("indestructible"));
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 2, 2, Set.of(), false, false), fighter);
+        final OutcomePlan<State> result = evaluate(leaf("Fight", Map.of(
+                "Defined", "Self", "ValidTgts", "Creature.OppCtrl")), initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(result.state().opponentCreature().present());
+        Assert.assertEquals(result.state().opponentCreatureCount(), 0);
+        Assert.assertTrue(result.state().sourcePermanent().present());
+        Assert.assertTrue(result.value() > 0);
+
+        final PermanentProfile fragileFighter = new PermanentProfile(true, PermanentKind.CREATURE,
+                true, 1, 1, Set.of());
+        final OutcomePlan<State> unfavorable = evaluate(leaf("Fight", Map.of(
+                "Defined", "Self", "ValidTgts", "Creature.OppCtrl")), state(CREATURE,
+                        new CreatureProfile(true, 3, 3, Set.of(), false, false), fragileFighter));
+        Assert.assertEquals(unfavorable.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(unfavorable.state().sourcePermanent().present());
+        Assert.assertTrue(unfavorable.state().opponentCreature().present());
+        Assert.assertTrue(unfavorable.value() < 0);
+    }
+
+    @Test
     public void referenceDepthLimitFailsClosedInsteadOfUsingFallbackDimensions() {
         AbilityOutcomeDescription tree = leaf("Draw", Map.of("Defined", "Opponent"));
         for (int i = 0; i < 30; i++) {
