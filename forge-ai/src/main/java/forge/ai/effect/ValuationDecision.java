@@ -4,6 +4,7 @@ package forge.ai.effect;
 public enum ValuationDecision {
     GENERAL_CARD,
     HAND_SELECTION,
+    DISCARD,
     CAST,
     ACTIVATE,
     ATTACK,

@@ -112,6 +112,40 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void discardActionUsesKnownHandValueWithOpponentPolarity() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        final Card weak = addCardToZone("Craw Wurm", opponent, ZoneType.Hand);
+        final Card strong = addCardToZone("Colossal Dreadmaw", opponent, ZoneType.Hand);
+        final ValuationContext context = ValuationContext.forDiscard(ai, true);
+
+        final CardValueBreakdown weakValue = UnifiedActionValueEvaluator.evaluate(
+                new DiscardValuationAction(weak, opponent), context);
+        final CardValueBreakdown strongValue = UnifiedActionValueEvaluator.evaluate(
+                new DiscardValuationAction(strong, opponent), context);
+
+        Assert.assertTrue(weakValue.isComplete(), weakValue.toString());
+        Assert.assertTrue(strongValue.isComplete(), strongValue.toString());
+        Assert.assertTrue(weakValue.transitionValue() > 0, weakValue.toString());
+        Assert.assertTrue(strongValue.transitionValue() > weakValue.transitionValue(),
+                strongValue + " <= " + weakValue);
+    }
+
+    @Test
+    public void discardingOwnCardHasTheOppositePolarity() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card card = addCardToZone("Grizzly Bears", ai, ZoneType.Hand);
+
+        final CardValueBreakdown result = UnifiedActionValueEvaluator.evaluate(
+                new DiscardValuationAction(card, ai), ValuationContext.forDiscard(ai, true));
+
+        Assert.assertTrue(result.isComplete(), result.toString());
+        Assert.assertTrue(result.transitionValue() < 0, result.toString());
+    }
+
+    @Test
     public void removalActionRejectsAContextForAnotherDecision() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

@@ -45,6 +45,13 @@ public record ValuationContext(Player evaluatingAi, ValuationMode mode,
                 ValuationDecision.HAND_SELECTION, 3, completeInformation, 0, 0);
     }
 
+    /** Creates a live context for evaluating one known card as a discard action. */
+    public static ValuationContext forDiscard(final Player evaluatingAi,
+            final boolean completeInformation) {
+        return new ValuationContext(evaluatingAi, ValuationMode.SITUATIONAL,
+                ValuationDecision.DISCARD, 3, completeInformation, 0, 0);
+    }
+
     /** Creates a live context for evaluating a card as a candidate to cast from hand. */
     public static ValuationContext forCast(final Player evaluatingAi,
             final boolean completeInformation) {
