@@ -297,6 +297,33 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicSpellCastTriggerSupportsPlayerScopes() {
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final List<Map<String, String>> parameters = List.of(
+                Map.of("Mode", "SpellCast", "ValidCard", "Card",
+                        "ValidActivatingPlayer", "Opponent"),
+                Map.of("Mode", "SpellCast", "ValidCard", "Card",
+                        "ValidActivatingPlayer", "Player"),
+                Map.of("Mode", "SpellCast", "ValidCard", "Card"));
+        for (final Map<String, String> parameter : parameters) {
+            final CardAbilityTraversal.AbilityDescription description =
+                    new CardAbilityTraversal.AbilityDescription("scoped/spell-cast",
+                            CardAbilityTraversal.Origin.TRIGGER,
+                            CardAbilityTraversal.Provenance.PRINTED, parameter,
+                            new AbilityOutcomeDescription("draw", "Draw",
+                                    Map.of("Defined", "You", "NumCards", "1"), List.of(), null, ""));
+            final IntrinsicAbilityEvaluator.AbilityValue value = evaluator.evaluate(
+                    List.of(description), new IntrinsicReferenceModel.PermanentProfile(true,
+                            IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                    EntryTiming.NORMAL_SPEED).get(0);
+            Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                    parameter.toString() + ": " + value);
+            Assert.assertTrue(value.contribution().value() > 0, parameter.toString() + ": " + value);
+        }
+    }
+
+    @Test
     public void printedSpellCastCardsReachIntrinsicTriggerEvaluation() {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
@@ -593,6 +620,7 @@ public class AbilityTraversalTest extends AITest {
                 IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
         final List<Map<String, String>> parameters = List.of(
                 Map.of("Mode", "TokenCreatedOnce", "ValidToken", "Card.token"),
+                Map.of("Mode", "TokenCreatedOnce", "ValidToken", "Creature.YouOwn"),
                 Map.of("Mode", "Drawn", "ValidPlayer", "You"),
                 Map.of("Mode", "Drawn", "ValidPlayer", "Opponent"),
                 Map.of("Mode", "LifeGained", "ValidPlayer", "Opponent"),
@@ -611,6 +639,29 @@ public class AbilityTraversalTest extends AITest {
             Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
                     parameter.toString() + ": " + value);
             Assert.assertTrue(value.contribution().value() > 0, parameter.toString() + ": " + value);
+        }
+    }
+
+    @Test
+    public void printedTokenCreatedOnceTriggersReachIntrinsicEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        for (final String cardName : List.of("Staff of the Storyteller", "Akim, the Soaring Wind")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                    .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                            .getCard(cardName), CardStateName.Original);
+            boolean found = false;
+            for (int i = 0; i < evaluation.descriptions().size(); i++) {
+                if ("TokenCreatedOnce".equals(evaluation.descriptions().get(i)
+                        .parameters().get("Mode"))) {
+                    found = true;
+                    Assert.assertEquals(evaluation.values().get(i).triggerStatus(),
+                            IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                            cardName + ": " + evaluation.values().get(i));
+                }
+            }
+            Assert.assertTrue(found, cardName + ": " + evaluation.descriptions());
         }
     }
 
