@@ -1737,6 +1737,9 @@ public final class IntrinsicDrawOutcomeBackend
             value = EffectMath.multiply(count, evaluator.evaluateCreatureDelta(
                     representative, toCreature(after), controller));
             projected = projected.withCreatures(controller, toCreature(after));
+            if (!after.present()) {
+                projected = projected.withCreatureCount(controller, 0);
+            }
         }
 
         final PermanentProfile source = projected.sourcePermanent();
@@ -2526,12 +2529,22 @@ public final class IntrinsicDrawOutcomeBackend
             final PermanentProfile replacement) {
         return switch (target) {
         case SOURCE -> state.withSourcePermanent(replacement);
-        case CONTROLLER_CREATURE -> state.withCreatures(true, toCreature(replacement));
-        case OPPONENT_CREATURE -> state.withCreatures(false, toCreature(replacement));
+        case CONTROLLER_CREATURE -> replaceCreature(state, true, replacement);
+        case OPPONENT_CREATURE -> replaceCreature(state, false, replacement);
         case CONTROLLER_PERMANENT -> state.withPermanent(true, replacement);
         case OPPONENT_PERMANENT -> state.withPermanent(false, replacement);
         case CONTROLLER_PLAYER, OPPONENT_PLAYER -> state;
         };
+    }
+
+    private static State replaceCreature(final State state, final boolean controller,
+            final PermanentProfile replacement) {
+        State projected = state.withCreatures(controller, toCreature(replacement));
+        if (!replacement.present()) {
+            projected = projected.withCreatureCount(controller,
+                    state.creatureCount(controller) - 1);
+        }
+        return projected;
     }
 
     private static boolean isCreature(final PermanentProfile profile) {
