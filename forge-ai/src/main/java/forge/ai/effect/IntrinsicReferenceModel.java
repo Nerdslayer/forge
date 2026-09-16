@@ -30,7 +30,7 @@ public final class IntrinsicReferenceModel {
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
-        ZONE_CHANGED
+        ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED
     }
 
     /**
@@ -214,6 +214,10 @@ public final class IntrinsicReferenceModel {
         // assume anything about the milled cards' characteristics; those filters remain gated by
         // the intrinsic trigger adapter.
         events.put(EventType.CARD_MILLED, rateDistribution(0, .40, 1, .45, 2, .12, 3, .03));
+        // Only a small fraction of generic stack interactions are countered. This is an event
+        // opportunity prior, not a claim that every deck contains a counterspell.
+        events.put(EventType.SPELL_OR_ABILITY_COUNTERED,
+                rateDistribution(0, .65, 1, .30, 2, .05));
         events.put(EventType.DAMAGE_DEALT, rateDistribution(0, .30, 1, .45, 2, .20, 3, .05));
         events.put(EventType.ZONE_CHANGED, rateDistribution(0, .20, 1, .50, 2, .25, 3, .05));
 

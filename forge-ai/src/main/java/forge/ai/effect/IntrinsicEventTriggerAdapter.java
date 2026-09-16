@@ -210,6 +210,9 @@ public final class IntrinsicEventTriggerAdapter {
                     && (!parameters.containsKey("ValidCard")
                         || "Card".equals(parameters.get("ValidCard")));
         }
+        if (mode == TriggerType.Countered) {
+            return supportsCountered(parameters);
+        }
         if (mode == TriggerType.DamageDone || mode == TriggerType.DamageDoneOnce) {
             final String source = parameters.get("ValidSource");
             final String target = parameters.get("ValidTarget");
@@ -358,6 +361,20 @@ public final class IntrinsicEventTriggerAdapter {
     private static boolean validBooleanParameter(final Map<String, String> parameters,
             final String name) {
         return !parameters.containsKey(name) || isBoolean(parameters.get(name));
+    }
+
+    private static boolean supportsCountered(final Map<String, String> parameters) {
+        // The reference event rate describes a generic spell being countered. It cannot safely
+        // infer hidden card characteristics or distinguish a spell from a specific stack ability.
+        return (!parameters.containsKey("TriggerZones")
+                    || "Battlefield".equalsIgnoreCase(parameters.get("TriggerZones")))
+                && (!parameters.containsKey("ValidCard")
+                    || "Card".equals(parameters.get("ValidCard")))
+                && (!parameters.containsKey("ValidSA")
+                    || "Spell".equals(parameters.get("ValidSA")))
+                && (!parameters.containsKey("ValidCause")
+                    || Set.of("SpellAbility", "SpellAbility.YouCtrl")
+                            .contains(parameters.get("ValidCause")));
     }
 
     private static boolean supportsCreatureDeath(final Map<String, String> parameters) {
@@ -607,6 +624,8 @@ public final class IntrinsicEventTriggerAdapter {
         case CARD_DRAWN -> IntrinsicReferenceModel.EventType.CARD_DRAWN;
         case CARD_DISCARDED -> IntrinsicReferenceModel.EventType.CARD_DISCARDED;
         case CARD_MILLED -> IntrinsicReferenceModel.EventType.CARD_MILLED;
+        case SPELL_OR_ABILITY_COUNTERED ->
+                IntrinsicReferenceModel.EventType.SPELL_OR_ABILITY_COUNTERED;
         case DAMAGE_DEALT -> IntrinsicReferenceModel.EventType.DAMAGE_DEALT;
         case SACRIFICED -> IntrinsicReferenceModel.EventType.PERMANENT_SACRIFICED;
         case ZONE_CHANGED -> zoneEventType(parameters);
