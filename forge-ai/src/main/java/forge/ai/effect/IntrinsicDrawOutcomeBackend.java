@@ -83,6 +83,8 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> DESTROY_ALL_PARAMETERS = parameters("ValidCards", "NoRegen");
     private static final Set<String> CHANGE_ZONE_ALL_PARAMETERS = parameters("ChangeType", "Origin",
             "Destination", "RememberChanged");
+    private static final Set<String> COPY_PARAMETERS = parameters("Defined", "Controller",
+            "NumCopies");
     private static final Set<String> REMOVE_COUNTER_ALL_PARAMETERS = parameters("CounterType",
             "CounterNum", "ValidCards", "ValidZone");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
@@ -290,6 +292,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "DestroyAll" -> acceptsDestroyAll(node);
         case "ChangeZoneAll" -> acceptsChangeZoneAll(node);
         case "GainControl" -> acceptsGainControl(node);
+        case "CopyPermanent" -> acceptsCopyPermanent(node);
         case "Sacrifice" -> acceptsSacrifice(node);
         case "SacrificeAll" -> acceptsSacrificeAll(node);
         default -> false;
@@ -362,6 +365,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "DestroyAll" -> destroyAll(node);
         case "ChangeZoneAll" -> changeZoneAll(node);
         case "GainControl" -> gainControl(node);
+        case "CopyPermanent" -> copyPermanent(node);
         case "Sacrifice" -> sacrifice(node);
         case "SacrificeAll" -> sacrificeAll(node);
         default -> unresolved(node, "Unsupported intrinsic outcome API " + node.api());
@@ -996,6 +1000,58 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> copyPermanent(final AbilityOutcomeDescription node) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final PermanentProfile source = current.sourcePermanent();
+            if (!source.present()) {
+                return null;
+            }
+            final int amount = integer(node, "NumCopies", 1);
+            final boolean copyControllerIsAi = copyControllerIsAi(node, source);
+            final PermanentProfile copy = copiedPermanent(source, copyControllerIsAi);
+            final int value = EffectMath.multiply(amount,
+                    evaluator.evaluatePermanentDelta(PermanentProfile.absent(), copy,
+                            copyControllerIsAi));
+            State projected = current;
+            if (isCreature(copy)) {
+                final CreatureProfile representative = copyCreature(copy);
+                if (!(copyControllerIsAi ? current.controllerCreature() : current.opponentCreature())
+                        .present()) {
+                    projected = projected.withCreatures(copyControllerIsAi, representative);
+                }
+                projected = projected.withCreatureCount(copyControllerIsAi,
+                        current.creatureCount(copyControllerIsAi) + amount);
+            } else if (!(copyControllerIsAi ? current.controllerPermanent()
+                    : current.opponentPermanent()).present()) {
+                // The reference state has one generic noncreature slot per side. It can record
+                // that a copy exists, but not the exact multiplicity of noncreature copies.
+                projected = projected.withPermanent(copyControllerIsAi, copy);
+            }
+            // TODO: Account for copy modifiers, copied abilities, ETB effects, and the tactical
+            // value of TokenTapped/TokenAttacking/TokenBlocking once those states are modeled.
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private static boolean copyControllerIsAi(final AbilityOutcomeDescription node,
+            final PermanentProfile source) {
+        final boolean sourceControllerIsAi = source.controlledByAi();
+        final boolean followsSource = "You".equalsIgnoreCase(
+                node.parameters().getOrDefault("Controller", "You"));
+        return followsSource ? sourceControllerIsAi : !sourceControllerIsAi;
+    }
+
+    private static PermanentProfile copiedPermanent(final PermanentProfile source,
+            final boolean controllerIsAi) {
+        final PermanentKind kind = isCreature(source) ? PermanentKind.TOKEN : source.kind();
+        return new PermanentProfile(true, kind, controllerIsAi, source.power(), source.toughness(),
+                source.keywords(), source.basicLand(), source.loyalty());
+    }
+
+    private static CreatureProfile copyCreature(final PermanentProfile permanent) {
+        return toCreature(permanent);
+    }
+
     private static TokenSpec tokenSpec(final AbilityOutcomeDescription node) {
         final String rawScripts = node.parameters().get("TokenScript");
         if (rawScripts == null || rawScripts.isBlank()) {
@@ -1236,6 +1292,19 @@ public final class IntrinsicDrawOutcomeBackend
                 && (duration == null || Set.of("Permanent", "Perpetual").contains(duration))
                 && newControllerIsAi(node) != null
                 && permanentTarget(node) != null;
+    }
+
+    private static boolean acceptsCopyPermanent(final AbilityOutcomeDescription node) {
+        // Only copies of the known intrinsic source are reference-safe. Targeted copies, copied
+        // cards with characteristic modifiers, temporary copies and downstream copy abilities
+        // need a richer public target/profile model. Noncreature copy multiplicity is represented
+        // by one generic permanent slot, so later sequence steps must not infer exact counts.
+        return COPY_PARAMETERS.containsAll(node.parameters().keySet())
+                && "Self".equalsIgnoreCase(node.parameters().get("Defined"))
+                && (!node.parameters().containsKey("Controller")
+                        || Set.of("You", "Opponent").contains(node.parameters().get("Controller")))
+                && literalPositive(node, "NumCopies", 1)
+                && integer(node, "NumCopies", 1) <= 16;
     }
 
     private static boolean acceptsSacrifice(final AbilityOutcomeDescription node) {
