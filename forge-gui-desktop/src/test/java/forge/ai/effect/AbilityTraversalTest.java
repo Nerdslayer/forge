@@ -235,6 +235,27 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicActivationRestrictionsRemainUnsupported() {
+        final CardAbilityTraversal.AbilityDescription activation =
+                new CardAbilityTraversal.AbilityDescription("Original/ability:0",
+                        CardAbilityTraversal.Origin.ACTIVATION,
+                        CardAbilityTraversal.Provenance.PRINTED,
+                        Map.of("AB", "Draw", "Cost", "T", "ActivationZone", "Graveyard"),
+                        new AbilityOutcomeDescription("activation", "Draw",
+                                Map.of("Defined", "You", "NumCards", "1"),
+                                List.of(), null, ""));
+
+        final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(activation), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 1, 1, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+
+        Assert.assertEquals(result.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.UNSUPPORTED);
+        Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.NOT_EVALUATED);
+    }
+
+    @Test
     public void intrinsicSimpleSpellsUseTheSharedProbabilisticOutcomeBackend() {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
