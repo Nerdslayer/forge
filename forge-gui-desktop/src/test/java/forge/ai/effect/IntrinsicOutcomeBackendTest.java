@@ -486,6 +486,19 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void gainControlTransfersOpponentPermanentValueAndReferenceState() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of("flying"), false, false), SOURCE);
+        final OutcomePlan<State> result = evaluate(leaf("GainControl", Map.of(
+                "ValidTgts", "Creature.OppCtrl", "NewController", "You")), initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(result.state().opponentCreature().present());
+        Assert.assertEquals(result.state().opponentCreatureCount(), 0);
+        Assert.assertEquals(result.state().controllerCreatureCount(), 2);
+        Assert.assertTrue(result.value() > 0);
+    }
+
+    @Test
     public void referenceDepthLimitFailsClosedInsteadOfUsingFallbackDimensions() {
         AbilityOutcomeDescription tree = leaf("Draw", Map.of("Defined", "Opponent"));
         for (int i = 0; i < 30; i++) {
