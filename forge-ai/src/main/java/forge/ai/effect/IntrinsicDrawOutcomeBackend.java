@@ -1836,7 +1836,7 @@ public final class IntrinsicDrawOutcomeBackend
         // dynamic, hidden, and conditional keyword loss needs a richer projected-characteristic model.
         final Set<String> keywords = supportedKeywords(node.parameters().get("Keywords"));
         return DEBUFF_PARAMETERS.containsAll(node.parameters().keySet())
-                && Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))
+                && persistentDuration(node.parameters().get("Duration"))
                 && !node.parameters().containsKey("AllSuffixKeywords")
                 && keywords != null && !keywords.isEmpty() && counterTarget(node) != null;
     }
@@ -1847,7 +1847,7 @@ public final class IntrinsicDrawOutcomeBackend
         final Set<String> keywords = supportedKeywords(node.parameters().get("Keywords"));
         final String types = node.parameters().get("Types");
         return ANIMATE_PARAMETERS.containsAll(node.parameters().keySet())
-                && Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))
+                && persistentDuration(node.parameters().get("Duration"))
                 && node.parameters().containsKey("Power") && node.parameters().containsKey("Toughness")
                 && literalNonnegativeOrAbsent(node, "Power")
                 && literalNonnegativeOrAbsent(node, "Toughness")
@@ -1859,7 +1859,7 @@ public final class IntrinsicDrawOutcomeBackend
         final Set<String> keywords = supportedKeywords(node.parameters().get("Keywords"));
         final String types = node.parameters().get("Types");
         return ANIMATE_ALL_PARAMETERS.containsAll(node.parameters().keySet())
-                && Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))
+                && persistentDuration(node.parameters().get("Duration"))
                 && node.parameters().containsKey("Power") && node.parameters().containsKey("Toughness")
                 && literalNonnegativeOrAbsent(node, "Power")
                 && literalNonnegativeOrAbsent(node, "Toughness")
@@ -1876,7 +1876,7 @@ public final class IntrinsicDrawOutcomeBackend
 
     private static boolean acceptsPumpParameters(final AbilityOutcomeDescription node) {
         if (!PUMP_PARAMETERS.containsAll(node.parameters().keySet())
-                || !Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))) {
+                || !persistentDuration(node.parameters().get("Duration"))) {
             return false;
         }
         final boolean hasPowerChange = node.parameters().containsKey("NumAtt");
@@ -1888,6 +1888,10 @@ public final class IntrinsicDrawOutcomeBackend
 
     private static Set<String> supportedKeywords(final String value) {
         return IntrinsicStaticAbilityEvaluator.parseSupportedKeywords(value);
+    }
+
+    private static boolean persistentDuration(final String value) {
+        return "Permanent".equals(value) || "Perpetual".equals(value);
     }
 
     private static boolean hasCreatureType(final String types) {
