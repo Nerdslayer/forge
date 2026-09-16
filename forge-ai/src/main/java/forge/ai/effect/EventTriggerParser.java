@@ -56,6 +56,9 @@ final class EventTriggerParser {
             "Card", "Card.YouCtrl", "Card.YouOwn", "Card.OppCtrl", "Card.OppOwn");
     private static final Set<String> CARD_DISCARDED_VALID_PLAYERS = Set.of(
             "Player", "You", "Opponent", "Player.Opponent");
+    private static final Set<String> MILLED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidPlayer", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
     private static final Set<String> DAMAGE_DONE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidSource", "ValidTarget", "CombatDamage", "DamageAmount",
             "Execute", "TriggerZones", "TriggerDescription", "Secondary");
@@ -137,6 +140,10 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return EffectType.CARD_DISCARDED;
+        }
+        if (mode == TriggerType.Milled || mode == TriggerType.MilledOnce
+                || mode == TriggerType.MilledAll) {
+            return EffectType.CARD_MILLED;
         }
         if (mode == TriggerType.DamageDone || mode == TriggerType.DamageDoneOnce
                 || mode == TriggerType.DamageAll
@@ -223,6 +230,10 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return hasSupportedCardDiscardParameters(parameters);
+        }
+        if (mode == TriggerType.Milled || mode == TriggerType.MilledOnce
+                || mode == TriggerType.MilledAll) {
+            return hasOnlyParams(parameters, MILLED_TRIGGER_PARAMS);
         }
         if (mode == TriggerType.DamageDone) {
             return hasOnlyParams(parameters, DAMAGE_DONE_TRIGGER_PARAMS);

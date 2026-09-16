@@ -15,6 +15,7 @@ final class EffectEventMatcherRegistry {
         MATCHERS.put(EffectType.LIFE_LOST, LifeLostEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.CARD_DRAWN, CardDrawnEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.CARD_DISCARDED, CardDiscardedEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.CARD_MILLED, MilledEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.DAMAGE_DEALT, DamageDealtEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.FOUGHT, FoughtEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.CONTROL_CHANGED, ControlChangedEventMatcher.INSTANCE);

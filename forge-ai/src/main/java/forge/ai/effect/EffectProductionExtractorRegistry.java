@@ -20,6 +20,7 @@ final class EffectProductionExtractorRegistry {
             LifeLossProductionExtractor.INSTANCE,
             CardDrawProductionExtractor.INSTANCE,
             CardDiscardProductionExtractor.INSTANCE,
+            MilledProductionExtractor.INSTANCE,
             DamageProductionExtractor.INSTANCE,
             FightProductionExtractor.INSTANCE,
             ControlChangeProductionExtractor.INSTANCE,
