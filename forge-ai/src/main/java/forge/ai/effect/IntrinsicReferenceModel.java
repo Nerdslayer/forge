@@ -26,7 +26,7 @@ public final class IntrinsicReferenceModel {
 
     public enum EventType {
         ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
-        ABILITY_RESOLVED,
+        ABILITY_RESOLVED, ABILITY_TRIGGERED,
         LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
@@ -193,6 +193,10 @@ public final class IntrinsicReferenceModel {
         // few abilities worth observing. The adapter narrows this rate for common source filters.
         events.put(EventType.ABILITY_RESOLVED,
                 rateDistribution(0, .20, 1, .48, 2, .22, 3, .08, 4, .02));
+        // Triggered abilities are more common than ability-specific resolution triggers, but the
+        // generic prior remains conservative because exact causes and source populations are hidden.
+        events.put(EventType.ABILITY_TRIGGERED,
+                rateDistribution(0, .20, 1, .50, 2, .22, 3, .06, 4, .02));
         // A normal player gets about one land-play opportunity per turn. Extra-land effects are
         // represented by the small two- and three-land tail; card-specific filters remain
         // outside this first reference model.

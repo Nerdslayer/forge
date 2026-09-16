@@ -37,6 +37,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (abilityResolved.isPresent()) {
             return abilityResolved;
         }
+        final Optional<IntrinsicEventTrigger> abilityTriggered =
+                IntrinsicAbilityTriggeredTriggerAdapter.describe(parameters);
+        if (abilityTriggered.isPresent()) {
+            return abilityTriggered;
+        }
         final Optional<IntrinsicEventTrigger> target = IntrinsicTargetTriggerAdapter.describe(parameters);
         if (target.isPresent()) {
             return target;
@@ -122,6 +127,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicAbilityResolutionTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicAbilityTriggeredTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (IntrinsicTargetTriggerAdapter.supports(parameters)) {
