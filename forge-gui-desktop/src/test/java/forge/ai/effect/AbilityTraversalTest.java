@@ -199,6 +199,26 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void selfCounterTriggersReachIntrinsicEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                        .getCard("Dusk Legion Duelist"), CardStateName.Original);
+
+        Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                        && "CounterAddedOnce".equals(description.parameters().get("Mode"))),
+                evaluation.toString());
+        Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.contribution().value() > 0),
+                evaluation.toString());
+    }
+
+    @Test
     public void intrinsicBackendRejectsUnsupportedOutcomeFamilies() {
         final IntrinsicReferenceModel.PermanentProfile friendly = new IntrinsicReferenceModel.PermanentProfile(
                 true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());

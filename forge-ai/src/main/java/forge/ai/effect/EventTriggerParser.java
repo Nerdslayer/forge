@@ -23,7 +23,7 @@ final class EventTriggerParser {
             "CounterAmount", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> COUNTER_ADDED_ONCE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidEntity", "ValidCard", "ValidPlayer", "ValidSource", "CounterType",
-            "FirstTime", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+            "FirstTime", "ActivationLimit", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> LIFE_GAINED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidSource", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
