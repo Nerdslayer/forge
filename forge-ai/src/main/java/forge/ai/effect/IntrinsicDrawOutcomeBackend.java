@@ -46,7 +46,10 @@ public final class IntrinsicDrawOutcomeBackend
             "Defined", "ValidCards", "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
     private static final Set<String> PUMP_PARAMETERS = parameters("Defined", "ValidCards",
             "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Duration",
-            "NumAtt", "NumDef");
+            "NumAtt", "NumDef", "KW");
+    private static final Set<String> DEBUFF_PARAMETERS = parameters("Defined", "Keywords",
+            "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone",
+            "Duration");
     private static final Set<String> TOKEN_PARAMETERS = parameters("TokenScript", "TokenOwner",
             "TokenAmount", "TokenPower", "TokenToughness", "TokenTypes", "TokenColors",
             "TokenTapped", "TokenAttacking", "TokenBlocking");
@@ -67,7 +70,7 @@ public final class IntrinsicDrawOutcomeBackend
             "Chooser", "DefinedPlayer", "GainControl", "Tapped", "RememberChanged");
     private static final Set<String> SACRIFICE_PARAMETERS = parameters("Defined", "SacValid", "Amount");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
-            "haste", "reach", "menace", "vigilance", "trample", "deathtouch", "lifelink", "defender",
+            "haste", "reach", "menace", "fear", "intimidate", "vigilance", "trample", "deathtouch", "lifelink", "defender",
             "hexproof", "shroud", "indestructible", "shield", "stun", "ward", "detain",
             "can't attack", "cantattack", "can't block", "cantblock", "can't untap", "cantuntap");
     private static final Set<String> VALUED_KEYWORD_COUNTERS = Set.of("FLYING", "DEATHTOUCH", "LIFELINK",
@@ -255,6 +258,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "PutCounterAll" -> acceptsCounterAll(node);
         case "Pump" -> acceptsPump(node);
         case "PumpAll" -> acceptsPumpAll(node);
+        case "Debuff" -> acceptsDebuff(node);
         case "Token" -> acceptsToken(node);
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
@@ -317,6 +321,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Draw" -> draw(node);
         case "PutCounter", "PutCounterAll" -> counter(node);
         case "Pump", "PumpAll" -> pump(node);
+        case "Debuff" -> debuff(node);
         case "Token" -> token(node);
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
@@ -1004,6 +1009,25 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> debuff(final AbilityOutcomeDescription node) {
+        final CounterTarget target = counterTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic keyword-loss target");
+        }
+        if (target.scope() == CounterTargetScope.SELF) {
+            return new Outcome.Deferred<>(state -> hasCreatureTarget(state, TargetRef.SOURCE)
+                    ? keywordAtomic(node, TargetRef.SOURCE, false)
+                    : unresolved(node, "Self keyword-loss recipient is not a modeled creature"));
+        }
+        return new Outcome.Deferred<>(state -> {
+            if (hasUnmodeledCandidate(state, target)) {
+                return unresolved(node, "Unmodeled reference target characteristics");
+            }
+            return new Outcome.Target<>(node.path() + ":target", current -> candidates(current, target),
+                    State::withTarget, keywordAtomic(node, null, false), true);
+        });
+    }
+
     private Outcome<State> pumpAll(final AbilityOutcomeDescription node) {
         // TODO: Intrinsic group valuation currently uses one representative creature and an
         // independent recipient count. Subtypes, noncreature recipients, correlated populations,
@@ -1097,6 +1121,25 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> keywordAtomic(final AbilityOutcomeDescription node,
+            final TargetRef fixedTarget, final boolean add) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
+            if (target == null || !hasCreatureTarget(current, target)) {
+                return null;
+            }
+            final PermanentProfile before = permanent(current, target);
+            if (target != TargetRef.SOURCE && !simpleKeywords(before.keywords())) {
+                return null;
+            }
+            final PermanentProfile after = keywordPermanent(before, node, add);
+            final int value = evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
+                    controls(target, current));
+            return new Outcome.Transition<>((double) value,
+                    replacePermanent(current, target, after).clearTarget(), node.api());
+        });
+    }
+
     private Outcome<State> counterAtomic(final AbilityOutcomeDescription node,
             final TargetRef fixedTarget) {
         return new Outcome.Atomic<>(node.path(), current -> {
@@ -1169,6 +1212,16 @@ public final class IntrinsicDrawOutcomeBackend
                 && counterTarget(node) != null;
     }
 
+    private static boolean acceptsDebuff(final AbilityOutcomeDescription node) {
+        // Only explicit persistent removal of a supported keyword is reference-safe. Temporary,
+        // dynamic, hidden, and conditional keyword loss needs a richer projected-characteristic model.
+        final Set<String> keywords = supportedKeywords(node.parameters().get("Keywords"));
+        return DEBUFF_PARAMETERS.containsAll(node.parameters().keySet())
+                && Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))
+                && !node.parameters().containsKey("AllSuffixKeywords")
+                && keywords != null && !keywords.isEmpty() && counterTarget(node) != null;
+    }
+
     private static boolean acceptsPumpAll(final AbilityOutcomeDescription node) {
         return acceptsPumpParameters(node)
                 && !node.parameters().containsKey("Defined")
@@ -1183,8 +1236,13 @@ public final class IntrinsicDrawOutcomeBackend
         }
         final boolean hasPowerChange = node.parameters().containsKey("NumAtt");
         final boolean hasToughnessChange = node.parameters().containsKey("NumDef");
-        return (hasPowerChange || hasToughnessChange)
+        final Set<String> keywords = supportedKeywords(node.parameters().get("KW"));
+        return keywords != null && (hasPowerChange || hasToughnessChange || !keywords.isEmpty())
                 && literalSigned(node, "NumAtt") && literalSigned(node, "NumDef");
+    }
+
+    private static Set<String> supportedKeywords(final String value) {
+        return IntrinsicStaticAbilityEvaluator.parseSupportedKeywords(value);
     }
 
     private static CreatureGroupTarget creatureGroupTarget(final AbilityOutcomeDescription node) {
@@ -1277,7 +1335,8 @@ public final class IntrinsicDrawOutcomeBackend
                 dimensions.add(OPPONENT_CREATURE_COUNT);
                 dimensions.add(OPPONENT_CREATURE);
             }
-        } else if ("Pump".equals(node.api()) && acceptsPump(node)) {
+        } else if (("Pump".equals(node.api()) && acceptsPump(node))
+                || ("Debuff".equals(node.api()) && acceptsDebuff(node))) {
             final CounterTarget target = counterTarget(node);
             if (target.scope() == CounterTargetScope.ANY_CREATURE
                     || target.scope() == CounterTargetScope.CONTROLLER_CREATURE) {
@@ -1671,8 +1730,35 @@ public final class IntrinsicDrawOutcomeBackend
             final AbilityOutcomeDescription node) {
         final int power = boundedAdd(profile.power(), integer(node, "NumAtt", 0));
         final int toughness = boundedAdd(profile.toughness(), integer(node, "NumDef", 0));
+        final Set<String> keywords = plusKeywords(profile.keywords(),
+                supportedKeywords(node.parameters().get("KW")));
         return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
-                power, toughness, profile.keywords(), profile.basicLand(), profile.loyalty());
+                power, toughness, keywords, profile.basicLand(), profile.loyalty());
+    }
+
+    private static PermanentProfile keywordPermanent(final PermanentProfile profile,
+            final AbilityOutcomeDescription node, final boolean add) {
+        final String parameter = add ? "KW" : "Keywords";
+        final Set<String> changed = supportedKeywords(node.parameters().get(parameter));
+        final Set<String> keywords;
+        if (add) {
+            keywords = plusKeywords(profile.keywords(), changed);
+        } else {
+            keywords = profile.keywords().stream()
+                    .filter(keyword -> changed.stream().noneMatch(keyword::equalsIgnoreCase))
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+        return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
+                profile.power(), profile.toughness(), keywords, profile.basicLand(), profile.loyalty());
+    }
+
+    private static Set<String> plusKeywords(final Set<String> original,
+            final Set<String> additions) {
+        final Set<String> result = new java.util.LinkedHashSet<>(original);
+        if (additions != null) {
+            result.addAll(additions);
+        }
+        return Set.copyOf(result);
     }
 
     private static int counterDelta(final AbilityOutcomeDescription node) {
