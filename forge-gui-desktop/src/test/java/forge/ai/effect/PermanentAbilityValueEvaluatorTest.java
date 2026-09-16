@@ -87,6 +87,23 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void intrinsicActivatedAbilityContributesFutureRemovalValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card pinger = addCard("Prodigal Sorcerer", opponent);
+        final PermanentAbilityValueEvaluator.Breakdown value = evaluate(ai, List.of(pinger))
+                .get(pinger);
+
+        Assert.assertTrue(value.intrinsicValue() > 0, value.toString());
+        Assert.assertTrue(value.reasons().stream()
+                .anyMatch(reason -> reason.contains("activated DealDamage ability")),
+                value.toString());
+    }
+
+    @Test
     public void relationshipOnlyBreakdownPreservesLegacyRelationshipMap() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -221,15 +238,19 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     }
 
     @Test
-    public void intrinsicValueRejectsRemovedChangedAndFaceDownTriggers() {
+    public void intrinsicValueRejectsInactiveChangedAndFaceDownTriggers() {
         final Game suppressedGame = initAndCreateGame();
         final Player suppressedAi = suppressedGame.getPlayers().get(1);
         final Player suppressedOpponent = suppressedGame.getPlayers().get(0);
         setOpposingTeams(suppressedAi, suppressedOpponent);
         final Card suppressed = addCard("Staff of Nin", suppressedOpponent);
         drawTrigger(suppressed).setSuppressed(true);
-        Assert.assertEquals(evaluate(suppressedAi, List.of(suppressed)).get(suppressed)
-                .intrinsicValue(), 0);
+        final PermanentAbilityValueEvaluator.Breakdown suppressedValue = evaluate(
+                suppressedAi, List.of(suppressed)).get(suppressed);
+        Assert.assertTrue(suppressedValue.intrinsicValue() > 0, suppressedValue.toString());
+        Assert.assertFalse(suppressedValue.reasons().stream()
+                .anyMatch(reason -> reason.contains("INTRINSIC_SCHEDULED")),
+                suppressedValue.toString());
 
         final Game changedGame = initAndCreateGame();
         final Player changedAi = changedGame.getPlayers().get(1);
@@ -237,8 +258,12 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
         setOpposingTeams(changedAi, changedOpponent);
         final Card changed = addCard("Staff of Nin", changedOpponent);
         drawTrigger(changed).putParam("ValidPlayer", "Opponent");
-        Assert.assertEquals(evaluate(changedAi, List.of(changed)).get(changed)
-                .intrinsicValue(), 0);
+        final PermanentAbilityValueEvaluator.Breakdown changedValue = evaluate(
+                changedAi, List.of(changed)).get(changed);
+        Assert.assertTrue(changedValue.intrinsicValue() > 0, changedValue.toString());
+        Assert.assertFalse(changedValue.reasons().stream()
+                .anyMatch(reason -> reason.contains("INTRINSIC_SCHEDULED")),
+                changedValue.toString());
 
         final Game faceDownGame = initAndCreateGame();
         final Player faceDownAi = faceDownGame.getPlayers().get(1);

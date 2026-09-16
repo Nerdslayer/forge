@@ -182,9 +182,9 @@ public final class PermanentAbilityValueEvaluator {
             }
             final CardAbilityTraversal.AbilityDescription liveDescription = liveByPath.get(value.path());
             if (!matchesLiveDefinition(description, liveDescription)
-                    || !isActiveLiveTrigger(candidate, value.path())) {
+                    || !isActiveLiveAbility(candidate, description, value.path())) {
                 addSkipped(destination, candidate, value.path(),
-                        "printed ability does not match an active live trigger");
+                        "printed ability does not match an active live ability");
                 continue;
             }
             if (description.parameters().getOrDefault("TriggerDescription", "").startsWith("Landfall")) {
@@ -206,7 +206,29 @@ public final class PermanentAbilityValueEvaluator {
             final AbilityIdentity identity = new AbilityIdentity(value.path(), true);
             final String api = description.outcome().api();
             final boolean scheduled = ScheduledTriggerParser.parse(description.parameters()).isPresent();
-            if (scheduled) {
+            if (description.origin() == CardAbilityTraversal.Origin.ACTIVATION
+                    && "Mana".equals(api)) {
+                // ComputerUtilCard already owns the base value of mana abilities. Do not add the
+                // same resource production again through the intrinsic activation allowance.
+                addSkipped(destination, candidate, value.path(),
+                        "mana activation value is already represented by base permanent evaluation");
+                continue;
+            }
+            if (description.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
+                // Intrinsic activation occurrence already accounts for reference mana, repeated
+                // uses and bounded source survival. Keep only a discounted future allowance here
+                // until live mana competition and activation selection are modeled.
+                // TODO: Refine this with current/future mana, hand opportunity, tap state and
+                // willingness without charging the same activation value twice.
+                final int allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE, aggregateValue);
+                if (allowance != 0) {
+                    destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
+                            null, null, AbilityValueKind.INTRINSIC_FUTURE_ALLOWANCE, allowance,
+                            value.path() + ":activation-future-opportunity",
+                            "Independent future-support allowance for activated " + api
+                                    + " ability (reference uses are discounted)"));
+                }
+            } else if (scheduled) {
                 // A production edge scores its consumer's reaction, not this producer's own
                 // draw/counter outcome. Even a self-reaction is a different trigger/outcome.
                 if (aggregateValue != 0) {
@@ -258,7 +280,8 @@ public final class PermanentAbilityValueEvaluator {
     private static boolean isSafeIntrinsicDescription(
             final CardAbilityTraversal.AbilityDescription description) {
         return description != null
-                && description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                && (description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                        || description.origin() == CardAbilityTraversal.Origin.ACTIVATION)
                 && description.provenance() == CardAbilityTraversal.Provenance.PRINTED;
     }
 
@@ -293,6 +316,14 @@ public final class PermanentAbilityValueEvaluator {
         } catch (final RuntimeException ignored) {
             return false;
         }
+    }
+
+    private static boolean isActiveLiveAbility(final Card candidate,
+            final CardAbilityTraversal.AbilityDescription description, final String path) {
+        if (description.origin() == CardAbilityTraversal.Origin.TRIGGER) {
+            return isActiveLiveTrigger(candidate, path);
+        }
+        return candidate.isInPlay() && !candidate.isPhasedOut();
     }
 
     private static boolean overlapsKnownConsequence(final Card candidate, final String path,
