@@ -80,6 +80,7 @@ public final class IntrinsicDrawOutcomeBackend
             "Duration");
     private static final Set<String> SACRIFICE_PARAMETERS = parameters("Defined", "SacValid", "Amount");
     private static final Set<String> SACRIFICE_ALL_PARAMETERS = parameters("ValidCards");
+    private static final Set<String> DESTROY_ALL_PARAMETERS = parameters("ValidCards", "NoRegen");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
             "haste", "reach", "menace", "fear", "intimidate", "vigilance", "trample", "deathtouch", "lifelink", "defender",
             "hexproof", "shroud", "indestructible", "shield", "stun", "ward", "detain",
@@ -280,6 +281,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "DealDamage", "DamageAll" -> acceptsDamage(node);
         case "Fight" -> acceptsFight(node);
         case "Destroy", "ChangeZone" -> acceptsRemoval(node);
+        case "DestroyAll" -> acceptsDestroyAll(node);
         case "GainControl" -> acceptsGainControl(node);
         case "Sacrifice" -> acceptsSacrifice(node);
         case "SacrificeAll" -> acceptsSacrificeAll(node);
@@ -348,6 +350,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "DealDamage", "DamageAll" -> damage(node);
         case "Fight" -> fight(node);
         case "Destroy", "ChangeZone" -> removal(node);
+        case "DestroyAll" -> destroyAll(node);
         case "GainControl" -> gainControl(node);
         case "Sacrifice" -> sacrifice(node);
         case "SacrificeAll" -> sacrificeAll(node);
@@ -733,6 +736,69 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> destroyAll(final AbilityOutcomeDescription node) {
+        // Only explicit creature groups are represented. The reference state tracks one
+        // representative non-source creature per side, so mass removal of other permanent types
+        // or effects with unknown recipient sets must remain unresolved.
+        final CreatureGroupTarget target = creatureGroupTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic destruction group");
+        }
+        return new Outcome.Atomic<>(node.path(), current -> {
+            State projected = current;
+            int value = 0;
+            if (target.controller()) {
+                final GroupApplication application = applyDestroyGroup(projected, true,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            if (target.opponent()) {
+                final GroupApplication application = applyDestroyGroup(projected, false,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private GroupApplication applyDestroyGroup(final State state, final boolean controller,
+            final boolean other) {
+        final CreatureProfile representative = controller
+                ? state.controllerCreature() : state.opponentCreature();
+        if (!simpleKeywords(representative.keywords())) {
+            return GroupApplication.unsupported(state);
+        }
+
+        State projected = state;
+        int value = 0;
+        final boolean representativeCanBeDestroyed = !representative.keywords().stream()
+                .anyMatch(keyword -> keyword.equalsIgnoreCase("indestructible"));
+        final int count = state.creatureCount(controller);
+        if (representativeCanBeDestroyed && count > 0 && representative.present()) {
+            value = EffectMath.multiply(evaluator.evaluateCreatureDelta(
+                    representative, CreatureProfile.absent(), controller), count);
+            projected = projected.withCreatures(controller, CreatureProfile.absent())
+                    .withCreatureCount(controller, 0);
+        }
+
+        final PermanentProfile source = projected.sourcePermanent();
+        if (!other && isCreature(source) && source.controlledByAi() == controller
+                && !hasKeyword(source, "indestructible")) {
+            value = EffectMath.add(value, evaluator.evaluatePermanentDelta(source,
+                    PermanentProfile.absent(), controller));
+            projected = projected.withSourcePermanent(PermanentProfile.absent());
+        }
+        return new GroupApplication(projected, value, true);
+    }
+
     private GroupApplication applySacrificeGroup(final State state, final boolean controller,
             final boolean other) {
         final CreatureProfile representative = controller
@@ -1052,6 +1118,13 @@ public final class IntrinsicDrawOutcomeBackend
         // Only explicitly filtered creature groups are represented. An unfiltered SacrificeAll
         // may include noncreature permanents that the intrinsic reference state does not count.
         return SACRIFICE_ALL_PARAMETERS.containsAll(node.parameters().keySet())
+                && creatureGroupTarget(node) != null;
+    }
+
+    private static boolean acceptsDestroyAll(final AbilityOutcomeDescription node) {
+        // NoRegen is accepted as metadata, but regeneration and shield replacement are not
+        // modeled in the reference state; those refinements remain conservative TODOs.
+        return DESTROY_ALL_PARAMETERS.containsAll(node.parameters().keySet())
                 && creatureGroupTarget(node) != null;
     }
 
@@ -1708,6 +1781,8 @@ public final class IntrinsicDrawOutcomeBackend
                 dimensions.add(OPPONENT_CREATURE);
             }
         } else if ("SacrificeAll".equals(node.api()) && acceptsSacrificeAll(node)) {
+            addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
+        } else if ("DestroyAll".equals(node.api()) && acceptsDestroyAll(node)) {
             addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
         }
         for (final AbilityOutcomeDescription choice : node.choices()) {
