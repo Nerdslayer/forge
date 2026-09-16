@@ -683,6 +683,27 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void copyPermanentProjectsKnownSelfCopiesWithoutReplacingTheSource() {
+        final PermanentProfile source = new PermanentProfile(true, PermanentKind.CREATURE,
+                true, 3, 3, Set.of("flying"));
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 2, 2, Set.of(), false, false), source);
+        final OutcomePlan<State> result = evaluate(leaf("CopyPermanent", Map.of(
+                "Defined", "Self", "NumCopies", "2")), initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(result.state().sourcePermanent().present());
+        Assert.assertEquals(result.state().controllerCreatureCount(), 3);
+        Assert.assertTrue(result.state().controllerCreature().present());
+        Assert.assertTrue(result.value() > 0);
+
+        final OutcomePlan<State> opposing = evaluate(leaf("CopyPermanent", Map.of(
+                "Defined", "Self", "Controller", "Opponent")), initial);
+        Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(opposing.state().opponentCreatureCount(), 2);
+        Assert.assertTrue(opposing.value() < 0);
+    }
+
+    @Test
     public void referenceDepthLimitFailsClosedInsteadOfUsingFallbackDimensions() {
         AbilityOutcomeDescription tree = leaf("Draw", Map.of("Defined", "Opponent"));
         for (int i = 0; i < 30; i++) {
