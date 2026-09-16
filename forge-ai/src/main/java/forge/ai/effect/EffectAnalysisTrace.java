@@ -258,6 +258,9 @@ public final class EffectAnalysisTrace {
             }
             return ", totalDamage=" + amount;
         }
+        if (production.type() == EffectType.CONTROL_CHANGED) {
+            return ", changes=" + production.events().size();
+        }
         if (production.type() == EffectType.ZONE_CHANGED) {
             final EffectEvent event = production.events().get(0);
             return ", origin=" + event.triggerParameters().get(AbilityKey.Origin)

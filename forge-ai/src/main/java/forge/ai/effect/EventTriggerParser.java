@@ -68,6 +68,9 @@ final class EventTriggerParser {
     private static final Set<String> DAMAGE_ALL_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidSource", "ValidTarget", "CombatDamage", "Execute",
             "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> CHANGES_CONTROLLER_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidOriginalController", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
     private static final Set<String> ATTACKS_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> BLOCKS_TRIGGER_PARAMS = Set.of(
@@ -141,6 +144,9 @@ final class EventTriggerParser {
         if (mode == TriggerType.ChangesZone || mode == TriggerType.ChangesZoneAll
                 || mode == TriggerType.Exiled) {
             return EffectType.ZONE_CHANGED;
+        }
+        if (mode == TriggerType.ChangesController) {
+            return EffectType.CONTROL_CHANGED;
         }
         if (mode == TriggerType.Sacrificed || mode == TriggerType.SacrificedOnce) {
             return EffectType.SACRIFICED;
@@ -235,6 +241,9 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.Exiled) {
             return hasOnlyParams(parameters, EXILED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.ChangesController) {
+            return hasOnlyParams(parameters, CHANGES_CONTROLLER_TRIGGER_PARAMS);
         }
         if (mode == TriggerType.Sacrificed) {
             return hasOnlyParams(parameters, SACRIFICED_TRIGGER_PARAMS);

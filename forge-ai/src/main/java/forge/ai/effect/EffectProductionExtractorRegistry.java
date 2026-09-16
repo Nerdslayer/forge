@@ -21,6 +21,7 @@ final class EffectProductionExtractorRegistry {
             CardDrawProductionExtractor.INSTANCE,
             CardDiscardProductionExtractor.INSTANCE,
             DamageProductionExtractor.INSTANCE,
+            ControlChangeProductionExtractor.INSTANCE,
             AttackProductionExtractor.INSTANCE,
             DestroyProductionExtractor.INSTANCE,
             ZoneChangeProductionExtractor.INSTANCE,
