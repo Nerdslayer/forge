@@ -12,8 +12,8 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     // TODO(effect analysis): Support the remaining trigger families and richer token/counter
     // forms, including optional/limited triggers, broader player constraints,
     // conditions, intervening-if clauses, and triggers active outside the battlefield. Combat
-    // support excludes group declaration/once triggers, attacked-alone, first-attack,
-    // poisoned-player, complex blocker-count, and multi-defender conditions.
+    // support still excludes once-per-combat, attacked-alone, first-attack, poisoned-player,
+    // complex blocker-count, and multi-defender conditions.
     // Tap support currently covers straightforward became-tapped triggers and the specific
     // second-main self-tapped checkpoint used by survival abilities; other phase/state conditions,
     // untap triggers, TapAll, TapsForMana, and timing windows remain unsupported.

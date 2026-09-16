@@ -22,9 +22,9 @@ import forge.game.trigger.Trigger;
 final class AttackProductionExtractor implements EffectProductionExtractor {
     static final AttackProductionExtractor INSTANCE = new AttackProductionExtractor();
 
-    // TODO(effect analysis): Add declaration/once-per-combat groups, attacking alone, complete
-    // public attack-group prediction, combat changes after declaration, attack costs, and
-    // likelihood weighting between the current expected/unexpected categories. Combat-tap
+    // TODO(effect analysis): Add once-per-combat modifiers, attacking-alone, complete public
+    // attack-group prediction, combat changes after declaration, attack costs, and likelihood
+    // weighting between the current expected/unexpected categories. Combat-tap
     // prediction does not yet model replacement effects, extra combats, postcombat untaps,
     // collective blocker damage, or delayed self-sacrifice and other leave-combat effects.
 
@@ -41,10 +41,14 @@ final class AttackProductionExtractor implements EffectProductionExtractor {
         final boolean expectedAttack = AttackLikelihoodEvaluator
                 .estimateNextTurn(evaluatingAi, source).isExpected();
         if (expectedAttack) {
+            final Combat predictedCombat = findPredictedCombat(evaluatingAi, source);
             events.add(createAttackEvent(evaluatingAi, source));
             addAttackerDispositionEvents(events, evaluatingAi, source);
+            addAttackDeclarationEvents(events, source, predictedCombat);
         }
+        final Combat predictedBlockCombat = findPredictedCombat(evaluatingAi, source);
         addBlockEvent(events, evaluatingAi, source);
+        addBlockerDeclarationEvent(events, source, predictedBlockCombat);
         if (events.isEmpty()) {
             return List.of();
         }
@@ -179,6 +183,33 @@ final class AttackProductionExtractor implements EffectProductionExtractor {
         return true;
     }
 
+    /** Adds declaration-wide events once, using the first predicted participant as the owner. */
+    private static void addAttackDeclarationEvents(final List<EffectEvent> events,
+            final Card source, final Combat combat) {
+        if (combat == null || combat.getAttackers().isEmpty()
+                || combat.getAttackers().get(0) != source) {
+            return;
+        }
+        final CardCollection attackers = combat.getAttackers();
+        final List<GameEntity> defenders = new ArrayList<>(combat.getDefenders());
+        final Map<AbilityKey, Object> allParams = new EnumMap<>(AbilityKey.class);
+        allParams.put(AbilityKey.Attackers, attackers);
+        allParams.put(AbilityKey.AttackingPlayer, combat.getAttackingPlayer());
+        allParams.put(AbilityKey.AttackedTarget, defenders);
+        events.add(createEvent(source, allParams));
+        for (final GameEntity defender : defenders) {
+            final CardCollection targetedAttackers = combat.getAttackersOf(defender);
+            if (targetedAttackers.isEmpty()) {
+                continue;
+            }
+            final Map<AbilityKey, Object> targetParams = new EnumMap<>(AbilityKey.class);
+            targetParams.put(AbilityKey.Attackers, targetedAttackers);
+            targetParams.put(AbilityKey.AttackingPlayer, combat.getAttackingPlayer());
+            targetParams.put(AbilityKey.AttackedTarget, List.of(defender));
+            events.add(createEvent(source, targetParams));
+        }
+    }
+
     private static void addBlockEvent(final List<EffectEvent> events,
             final Player evaluatingAi, final Card blocker) {
         if (blocker.getController() == evaluatingAi) {
@@ -208,6 +239,27 @@ final class AttackProductionExtractor implements EffectProductionExtractor {
         runParams.put(AbilityKey.Attackers, attackers);
         events.add(createEvent(blocker, runParams));
         return true;
+    }
+
+    private static void addBlockerDeclarationEvent(final List<EffectEvent> events,
+            final Card source, final Combat combat) {
+        if (combat == null || combat.getAllBlockers().isEmpty()
+                || combat.getAllBlockers().get(0) != source) {
+            return;
+        }
+        final List<Card> blockers = combat.getAllBlockers();
+        final CardCollection blockedAttackers = new CardCollection();
+        for (final Card blocker : blockers) {
+            for (final Card attacker : combat.getAttackersBlockedBy(blocker)) {
+                if (!blockedAttackers.contains(attacker)) {
+                    blockedAttackers.add(attacker);
+                }
+            }
+        }
+        final Map<AbilityKey, Object> params = new EnumMap<>(AbilityKey.class);
+        params.put(AbilityKey.Blockers, blockers);
+        params.put(AbilityKey.Attackers, blockedAttackers);
+        events.add(createEvent(source, params));
     }
 
     private static EffectEvent createEvent(final Card subject,

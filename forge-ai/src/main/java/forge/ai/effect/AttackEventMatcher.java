@@ -45,6 +45,16 @@ final class AttackEventMatcher implements EffectEventMatcher {
         if (mode == TriggerType.Attacks) {
             return params.containsKey(AbilityKey.Attacked);
         }
+        if (mode == TriggerType.AttackersDeclared
+                || mode == TriggerType.AttackersDeclaredOneTarget) {
+            return params.containsKey(AbilityKey.Attackers)
+                    && params.containsKey(AbilityKey.AttackingPlayer)
+                    && params.containsKey(AbilityKey.AttackedTarget);
+        }
+        if (mode == TriggerType.BlockersDeclared) {
+            return params.containsKey(AbilityKey.Blockers)
+                    && params.containsKey(AbilityKey.Attackers);
+        }
         if (mode == TriggerType.Blocks) {
             return params.containsKey(AbilityKey.Blocker)
                     && params.containsKey(AbilityKey.Attackers);
