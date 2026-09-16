@@ -33,15 +33,19 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
 
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "CounterType", "CounterNum",
-            "Defined", "EachFromSource", "SpellDescription", "StackDescription");
+            "Defined", "ValidCards", "EachFromSource", "SpellDescription", "StackDescription");
 
     private CounterOutcomeEvaluator() {
     }
 
     @Override
     public boolean supports(final SpellAbility outcome) {
-        if (outcome == null || outcome.getApi() != ApiType.PutCounter
+        if (outcome == null || (outcome.getApi() != ApiType.PutCounter
+                && outcome.getApi() != ApiType.PutCounterAll)
                 || outcome.getSubAbility() != null || !outcome.hasParam("CounterType")) {
+            return false;
+        }
+        if (outcome.getApi() == ApiType.PutCounterAll && !outcome.hasParam("ValidCards")) {
             return false;
         }
         final boolean transfer = "EachFromSource".equals(outcome.getParam("CounterType"))
@@ -70,11 +74,19 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
             return PlannedOutcomeEvaluator.INSTANCE.evaluateOutcome(outcome, context);
         }
         final CounterType counterType = types.get(0);
-        final AffectedCardResolver.Resolution resolution = outcome.usesTargeting()
-                ? AffectedCardResolver.targeted(outcome, context,
-                        card -> supportsRecipient(card, counterType) && card.canReceiveCounters(counterType))
-                : AffectedCardResolver.defined(outcome, context,
-                        card -> supportsRecipient(card, counterType) && card.canReceiveCounters(counterType));
+        final AffectedCardResolver.Resolution resolution;
+        if (outcome.getApi() == ApiType.PutCounterAll) {
+            resolution = AffectedCardResolver.group(outcome, context,
+                    card -> supportsRecipient(card, counterType) && card.canReceiveCounters(counterType));
+        } else {
+            resolution = outcome.usesTargeting()
+                    ? AffectedCardResolver.targeted(outcome, context,
+                            card -> supportsRecipient(card, counterType)
+                                    && card.canReceiveCounters(counterType))
+                    : AffectedCardResolver.defined(outcome, context,
+                            card -> supportsRecipient(card, counterType)
+                                    && card.canReceiveCounters(counterType));
+        }
         return CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
                 target -> evaluateTarget(context, target, counterType, counterAmount));
     }
