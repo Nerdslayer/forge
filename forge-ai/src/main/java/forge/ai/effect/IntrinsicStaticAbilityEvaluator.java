@@ -51,7 +51,7 @@ final class IntrinsicStaticAbilityEvaluator {
         if (scope == null) {
             return unsupported("unsupported intrinsic static recipient scope");
         }
-        final Set<String> addedKeywords = parseKeywords(ability.parameters().get("AddKeyword"));
+        final Set<String> addedKeywords = parseSupportedKeywords(ability.parameters().get("AddKeyword"));
         if (addedKeywords == null) {
             return unsupported("static keyword is not observed by the intrinsic permanent scorer");
         }
@@ -98,7 +98,7 @@ final class IntrinsicStaticAbilityEvaluator {
         case OPPONENT -> -perRecipient * recipientCount;
         case BOTH -> 0;
         };
-        return supported(signedValue, scope.description() + " static P/T potential");
+        return supported(signedValue, scope.description() + " static characteristic potential");
     }
 
     private static PermanentProfile withPowerAndToughness(final PermanentProfile source,
@@ -109,7 +109,12 @@ final class IntrinsicStaticAbilityEvaluator {
                 source.basicLand(), source.loyalty());
     }
 
-    private static Set<String> parseKeywords(final String value) {
+    /**
+     * Parses the bounded keyword vocabulary that the nonrecursive creature scorer understands.
+     * Package-private callers use this to keep intrinsic and live future-recipient adapters in
+     * lockstep. A null result means that the text contains an unsupported or parameterized form.
+     */
+    static Set<String> parseSupportedKeywords(final String value) {
         if (value == null) {
             return Set.of();
         }
@@ -122,6 +127,17 @@ final class IntrinsicStaticAbilityEvaluator {
             result.add(keyword);
         }
         return Set.copyOf(result);
+    }
+
+    /** Values a fixed change on the generic creature used by future-recipient estimates. */
+    static int evaluateGenericCreatureDelta(final int powerChange, final int toughnessChange,
+            final Set<String> addedKeywords) {
+        final CreatureProfile before = DEFAULT_RECIPIENT;
+        final CreatureProfile after = new CreatureProfile(true,
+                before.power() + powerChange, before.toughness() + toughnessChange,
+                plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
+                before.indestructible());
+        return new IntrinsicOutcomeEvaluator().evaluateCreatureDelta(before, after, true);
     }
 
     private static Set<String> plusKeywords(final Set<String> original,

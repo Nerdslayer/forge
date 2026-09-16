@@ -3,7 +3,6 @@ package forge.ai.effect;
 import java.util.Optional;
 import java.util.Set;
 
-import forge.ai.effect.IntrinsicReferenceModel.CreatureProfile;
 import forge.game.card.Card;
 import forge.game.player.Player;
 import forge.game.staticability.StaticAbility;
@@ -18,7 +17,7 @@ final class StaticAbilityFutureAllowanceEvaluator {
     private static final double TRIBAL_FUTURE_RECIPIENTS_PER_SIDE = 1.5;
     private static final double FUTURE_RECIPIENT_SURVIVAL = .70;
     private static final Set<String> ALLOWED_PARAMS = Set.of(
-            "Mode", "Affected", "AddPower", "AddToughness", "Description");
+            "Mode", "Affected", "AddPower", "AddToughness", "AddKeyword", "Description");
 
     private StaticAbilityFutureAllowanceEvaluator() {
     }
@@ -34,8 +33,8 @@ final class StaticAbilityFutureAllowanceEvaluator {
 
         // Future value is intentionally stricter than live static relationship analysis. A
         // condition, dynamic amount, grant, cost, or second effect must not silently become a
-        // generic anthem. TODO: Add validated adapters for keywords, restrictions, dynamic
-        // predicates, characteristic-defining abilities, and other static forms.
+        // generic anthem. TODO: Add validated adapters for restrictions, dynamic predicates,
+        // characteristic-defining abilities, permissions, and other static forms.
         if (!ALLOWED_PARAMS.containsAll(ability.getMapParams().keySet())
                 || !"Continuous".equals(ability.getParam("Mode"))) {
             return Optional.empty();
@@ -50,7 +49,8 @@ final class StaticAbilityFutureAllowanceEvaluator {
 
         final boolean hasPower = ability.hasParam("AddPower");
         final boolean hasToughness = ability.hasParam("AddToughness");
-        if (!hasPower && !hasToughness) {
+        final boolean hasKeyword = ability.hasParam("AddKeyword");
+        if (!hasPower && !hasToughness && !hasKeyword) {
             return Optional.empty();
         }
         final Integer powerChange = hasPower ? literalInteger(ability.getParam("AddPower")) : 0;
@@ -65,7 +65,12 @@ final class StaticAbilityFutureAllowanceEvaluator {
         if (powerChange < -2 || toughnessChange <= -2 || powerChange > 20 || toughnessChange > 20) {
             return Optional.empty();
         }
-        final int automaticPerRecipient = creatureDelta(powerChange, toughnessChange);
+        final Set<String> addedKeywords = IntrinsicStaticAbilityEvaluator.parseSupportedKeywords(
+                ability.getParam("AddKeyword"));
+        if (addedKeywords == null) {
+            return Optional.empty();
+        }
+        final int automaticPerRecipient = creatureDelta(powerChange, toughnessChange, addedKeywords);
         // AIEffectValue is deliberately not in ALLOWED_PARAMS. Hints supplement current live
         // recipient evaluation, but are not enough evidence for a future generic recipient.
         final int perRecipient = automaticPerRecipient;
@@ -102,11 +107,10 @@ final class StaticAbilityFutureAllowanceEvaluator {
                         + " future recipients x " + FUTURE_RECIPIENT_SURVIVAL + " allowance discount)"));
     }
 
-    private static int creatureDelta(final int powerChange, final int toughnessChange) {
-        final CreatureProfile before = new CreatureProfile(true, 2, 2, java.util.Set.of(), false, false);
-        final CreatureProfile after = new CreatureProfile(true, Math.max(0, 2 + powerChange),
-                Math.max(0, 2 + toughnessChange), java.util.Set.of(), false, false);
-        return new IntrinsicOutcomeEvaluator().evaluateCreatureDelta(before, after, true);
+    private static int creatureDelta(final int powerChange, final int toughnessChange,
+            final Set<String> addedKeywords) {
+        return IntrinsicStaticAbilityEvaluator.evaluateGenericCreatureDelta(powerChange,
+                toughnessChange, addedKeywords);
     }
 
     private static int signedForRecipient(final Player evaluatingAi, final Player recipient,
