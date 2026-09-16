@@ -42,6 +42,20 @@ public record HandValuationContext(Player evaluatingAi, Player handOwner, int to
     }
 
     /**
+     * Creates the appropriate known-card context for a live hand decision. Complete-information
+     * decisions may inspect the whole hand; otherwise only the candidate card and public hand size
+     * are exposed.
+     */
+    public static HandValuationContext forKnownCard(final Player evaluatingAi,
+            final Player handOwner, final Card knownCard, final boolean completeInformation) {
+        if (completeInformation) {
+            return fullHand(evaluatingAi, handOwner);
+        }
+        return knownCardOnly(evaluatingAi, handOwner, knownCard,
+                handOwner.getCardsIn(ZoneType.Hand).size());
+    }
+
+    /**
      * Creates a context for a public card that would be added to a hand whose remaining cards are
      * hidden. This is the context used when estimating the cost of bouncing an opponent's card.
      */

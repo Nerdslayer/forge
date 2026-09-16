@@ -148,10 +148,8 @@ public final class UnifiedCardValueEvaluator {
         if (handOwner == null) {
             return CardValueBreakdown.unavailable("The hand owner is unavailable.");
         }
-        final HandValuationContext handContext = context.completeInformation()
-                ? HandValuationContext.fullHand(context.evaluatingAi(), handOwner)
-                : HandValuationContext.knownCardOnly(context.evaluatingAi(), handOwner, card,
-                        handOwner.getCardsIn(ZoneType.Hand).size());
+        final HandValuationContext handContext = HandValuationContext.forKnownCard(
+                context.evaluatingAi(), handOwner, card, context.completeInformation());
         return evaluateCard(card, handContext);
     }
 
