@@ -8,6 +8,7 @@ import java.util.Map;
 import forge.card.CardStateName;
 import forge.game.card.Card;
 import forge.game.player.Player;
+import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
 import forge.game.zone.ZoneType;
 
@@ -45,6 +46,15 @@ public final class PermanentAbilityValueEvaluator {
     public static Map<Card, Breakdown> evaluateRemovalAbilities(final Player ai,
             final Iterable<Card> candidates, final EffectAnalysisTrace trace,
             final boolean includeIntrinsic, final boolean applyRelationshipCredit) {
+        return evaluateRemovalAbilities(ai, candidates, trace, null, includeIntrinsic,
+                applyRelationshipCredit);
+    }
+
+    /** Evaluates removal abilities while modeling the proposed targeting action when supplied. */
+    static Map<Card, Breakdown> evaluateRemovalAbilities(final Player ai,
+            final Iterable<Card> candidates, final EffectAnalysisTrace trace,
+            final SpellAbility removalAbility, final boolean includeIntrinsic,
+            final boolean applyRelationshipCredit) {
         if (ai == null || candidates == null) {
             return Map.of();
         }
@@ -59,7 +69,7 @@ public final class PermanentAbilityValueEvaluator {
                 ? EffectAnalysisTrace.disabled() : trace;
         final Map<Card, List<AbilityValueContribution>> relationships =
                 EffectRelationshipEvaluator.evaluateRemovalContributions(ai, candidateList,
-                        effectiveTrace);
+                        removalAbility, effectiveTrace);
         final Map<Card, Breakdown> result = new HashMap<>();
         final Map<Card, IntrinsicEvaluation> intrinsicCache = new HashMap<>();
         for (final Card candidate : candidateList) {

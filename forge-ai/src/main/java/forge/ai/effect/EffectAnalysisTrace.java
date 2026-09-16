@@ -254,6 +254,9 @@ public final class EffectAnalysisTrace {
         if (production.type() == EffectType.SCRIED_OR_SURVEILLED) {
             return ", filteringEvents=" + production.events().size();
         }
+        if (production.type() == EffectType.BECAME_TARGET) {
+            return ", targetEvents=" + production.events().size();
+        }
         if (production.type() == EffectType.CARD_MILLED) {
             int amount = 0;
             for (final EffectEvent event : production.events()) {

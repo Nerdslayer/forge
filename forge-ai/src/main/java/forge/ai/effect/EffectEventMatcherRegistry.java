@@ -27,6 +27,8 @@ final class EffectEventMatcherRegistry {
                 LibrarySearchEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.SCRIED_OR_SURVEILLED,
                 ScrySurveilEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.BECAME_TARGET,
+                BecameTargetEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.SACRIFICED, SacrificeEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.ZONE_CHANGED, ZoneChangedEventMatcher.INSTANCE);
     }
