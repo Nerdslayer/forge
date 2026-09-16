@@ -65,7 +65,8 @@ public final class IntrinsicEventTriggerAdapter {
             // Counter type is deliberately not used to change the generic counter rate yet. The
             // reference model assumes a supported counter event; thresholds, FirstTime, and
             // board-wide/other-object predicates need richer counter populations.
-            return Set.of("Card.Self", "Creature.Self").contains(parameters.get("ValidCard"))
+            return parameters.get("ValidCard") != null
+                    && Set.of("Card.Self", "Creature.Self").contains(parameters.get("ValidCard"))
                     && (!parameters.containsKey("ValidSource")
                             || "You".equals(parameters.get("ValidSource")))
                     && !parameters.containsKey("CounterAmount")
@@ -82,9 +83,30 @@ public final class IntrinsicEventTriggerAdapter {
         if (mode == TriggerType.LifeLost || mode == TriggerType.LifeLostAll) {
             // Opponent and controller life loss use the same conservative event rate for now.
             // Amount thresholds and per-turn clauses need a distribution of event sizes.
-            return Set.of("You", "Opponent").contains(parameters.get("ValidPlayer"))
+            return parameters.get("ValidPlayer") != null
+                    && Set.of("You", "Opponent").contains(parameters.get("ValidPlayer"))
                     && !parameters.containsKey("LifeAmount")
                     && !parameters.containsKey("ValidAmountEach");
+        }
+        if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
+            // Discard event rates do not know card identity, but explicit controller/opponent
+            // scopes are represented well enough by the reference hand-size distribution.
+            final String player = parameters.get("ValidPlayer");
+            final String card = parameters.get("ValidCard");
+            final boolean playerScope = player != null
+                    && Set.of("You", "Opponent", "Player", "Player.Opponent").contains(player);
+            final boolean controllerCard = card != null
+                    && Set.of("Card.YouCtrl", "Card.YouOwn").contains(card);
+            final boolean opponentCard = card != null
+                    && Set.of("Card.OppCtrl", "Card.OppOwn").contains(card);
+            final boolean allCards = "Card".equals(card);
+            return !parameters.containsKey("ValidCause")
+                    && (!parameters.containsKey("ActivationLimit")
+                            || "1".equals(parameters.get("ActivationLimit")))
+                    && (playerScope && (card == null || allCards
+                            || ("You".equals(player) && controllerCard)
+                            || ("Opponent".equals(player) && opponentCard))
+                        || !playerScope && (controllerCard || opponentCard));
         }
         return false;
     }

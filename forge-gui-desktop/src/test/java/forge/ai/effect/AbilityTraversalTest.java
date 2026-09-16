@@ -250,6 +250,22 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void explicitDiscardScopesReachIntrinsicEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        for (final String cardName : List.of("Ivora, Insatiable Heir", "Liliana's Caress",
+                "Dying to Serve")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                    .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                            .getCard(cardName), CardStateName.Original);
+            Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                    value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED),
+                    cardName + ": " + evaluation);
+        }
+    }
+
+    @Test
     public void intrinsicBackendRejectsUnsupportedOutcomeFamilies() {
         final IntrinsicReferenceModel.PermanentProfile friendly = new IntrinsicReferenceModel.PermanentProfile(
                 true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());
