@@ -3,6 +3,7 @@ package forge.ai.effect;
 import java.util.function.Predicate;
 
 import forge.ai.ComputerUtilCard;
+import forge.ai.ability.FightAi;
 import forge.game.card.Card;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
@@ -75,6 +76,46 @@ final class EffectCardTargetSelector {
             if (best == null || changeValue > bestValue) {
                 best = candidate;
                 bestValue = changeValue;
+            }
+        }
+        return best;
+    }
+
+    static Card chooseBestFightTarget(final SpellAbility ability, final Card fighter) {
+        if (!AffectedCardResolver.supportsSingleBattlefieldTarget(ability)
+                || fighter == null || !fighter.isCreature()) {
+            return null;
+        }
+        final Player activator = ability.getActivatingPlayer();
+        if (activator == null) {
+            return null;
+        }
+
+        Card best = null;
+        int bestValue = Integer.MIN_VALUE;
+        for (final Card candidate : ability.getHostCard().getGame()
+                .getCardsIn(ZoneType.Battlefield)) {
+            if (!candidate.isCreature()) {
+                continue;
+            }
+            final SpellAbility targetCheck = ability.copy(ability.getHostCard(), false);
+            targetCheck.setActivatingPlayer(activator);
+            targetCheck.resetTargets();
+            if (!targetCheck.canTarget(candidate)) {
+                continue;
+            }
+            final int candidateValue = ComputerUtilCard.evaluatePermanent(activator, candidate);
+            int fightValue = candidate.getController().isOpponentOf(activator)
+                    ? candidateValue : EffectMath.negate(candidateValue);
+            if (FightAi.canKill(fighter, candidate, 0)) {
+                fightValue = EffectMath.add(fightValue, 1000);
+                if (!FightAi.canKill(candidate, fighter, 0)) {
+                    fightValue = EffectMath.add(fightValue, 1000);
+                }
+            }
+            if (best == null || fightValue > bestValue) {
+                best = candidate;
+                bestValue = fightValue;
             }
         }
         return best;

@@ -23,7 +23,7 @@ final class ControlChangeProductionExtractor implements EffectProductionExtracto
     static final ControlChangeProductionExtractor INSTANCE =
             new ControlChangeProductionExtractor();
 
-    // TODO(effect analysis): Support group/all-valid and choice-based control changes, exchanges,
+    // TODO(effect analysis): Support dynamic/conditional group filters and choices, exchanges,
     // player control, selected/dynamic recipients, control-change costs, temporary duration
     // likelihood, and control changes embedded in richer chains or replacement effects.
 

@@ -68,6 +68,8 @@ final class EventTriggerParser {
     private static final Set<String> DAMAGE_ALL_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidSource", "ValidTarget", "CombatDamage", "Execute",
             "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> FIGHT_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> CHANGES_CONTROLLER_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidOriginalController", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -140,6 +142,9 @@ final class EventTriggerParser {
                 || mode == TriggerType.DamageAll
                 || mode == TriggerType.DamageDealtOnce) {
             return EffectType.DAMAGE_DEALT;
+        }
+        if (mode == TriggerType.Fight || mode == TriggerType.FightOnce) {
+            return EffectType.FOUGHT;
         }
         if (mode == TriggerType.ChangesZone || mode == TriggerType.ChangesZoneAll
                 || mode == TriggerType.Exiled) {
@@ -232,6 +237,9 @@ final class EventTriggerParser {
             return hasOnlyParams(parameters, DAMAGE_ALL_TRIGGER_PARAMS)
                     && (!parameters.containsKey("CombatDamage")
                         || isBoolean(parameters.get("CombatDamage")));
+        }
+        if (mode == TriggerType.Fight || mode == TriggerType.FightOnce) {
+            return hasOnlyParams(parameters, FIGHT_TRIGGER_PARAMS);
         }
         if (mode == TriggerType.ChangesZone) {
             return hasOnlyParams(parameters, CHANGES_ZONE_TRIGGER_PARAMS);

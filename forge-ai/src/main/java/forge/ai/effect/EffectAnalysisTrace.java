@@ -258,6 +258,9 @@ public final class EffectAnalysisTrace {
             }
             return ", totalDamage=" + amount;
         }
+        if (production.type() == EffectType.FOUGHT) {
+            return ", fighters=" + production.events().get(0).subjects().size();
+        }
         if (production.type() == EffectType.CONTROL_CHANGED) {
             return ", changes=" + production.events().size();
         }
