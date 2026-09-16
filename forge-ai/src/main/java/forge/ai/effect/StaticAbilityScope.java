@@ -1,5 +1,7 @@
 package forge.ai.effect;
 
+import java.util.Set;
+
 import forge.card.CardType;
 
 /**
@@ -24,7 +26,10 @@ enum StaticAbilityScope {
         case "Creature.YouCtrl", "Creature.YouCtrl+Other" -> CONTROLLER;
         case "Creature.OppCtrl", "Creature.OppCtrl+Other" -> OPPONENT;
         case "Creature", "Creature.Other" -> BOTH;
-        default -> simpleTribalScope(affected);
+        default -> {
+            final StaticAbilityScope tribalScope = simpleTribalScope(affected);
+            yield tribalScope == null ? simpleObjectScope(affected) : tribalScope;
+        }
         };
     }
 
@@ -59,6 +64,58 @@ enum StaticAbilityScope {
             }
         }
         return scope;
+    }
+
+    private static StaticAbilityScope simpleObjectScope(final String affected) {
+        final String trimmed = affected.trim();
+        final int dot = trimmed.indexOf('.');
+        final int plus = trimmed.indexOf('+');
+        final int separator = dot < 0 ? plus : plus < 0 ? dot : Math.min(dot, plus);
+        final String objectType = separator < 0 ? trimmed : trimmed.substring(0, separator);
+        if (!isSupportedObjectType(objectType)) {
+            return null;
+        }
+
+        final String qualifiers = separator < 0 ? ""
+                : trimmed.substring(separator + 1).replace('.', '+');
+        StaticAbilityScope scope = BOTH;
+        boolean controller = false;
+        boolean other = false;
+        for (final String qualifier : qualifiers.split("\\+", -1)) {
+            if (qualifier.isEmpty() || "Basic".equals(qualifier)
+                    || "nonBasic".equals(qualifier) || "NonBasic".equals(qualifier)
+                    || "nonLand".equals(qualifier) || "NonLand".equals(qualifier)) {
+                continue;
+            }
+            if ("YouCtrl".equals(qualifier) || "OppCtrl".equals(qualifier)) {
+                if (controller) {
+                    return null;
+                }
+                controller = true;
+                scope = "YouCtrl".equals(qualifier) ? CONTROLLER : OPPONENT;
+            } else if ("Other".equals(qualifier)) {
+                if (other) {
+                    return null;
+                }
+                other = true;
+            } else {
+                return null;
+            }
+        }
+        return scope;
+    }
+
+    private static boolean isSupportedObjectType(final String value) {
+        return Set.of("Card", "Permanent", "NonLand", "nonLand", "Token").contains(value)
+                || CardType.isACardType(value);
+    }
+
+    boolean isCreatureScope(final String affected) {
+        if (affected == null) {
+            return false;
+        }
+        final String trimmed = affected.trim();
+        return "Creature".equals(trimmed) || trimmed.startsWith("Creature.");
     }
 
     boolean includesController() {

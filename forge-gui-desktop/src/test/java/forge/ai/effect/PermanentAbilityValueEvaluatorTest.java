@@ -213,7 +213,9 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
         final Map<Card, PermanentAbilityValueEvaluator.Breakdown> values = evaluate(ai,
                 List.of(dynamic, hinted, conditional));
         Assert.assertEquals(values.get(dynamic).intrinsicValue(), 0, values.get(dynamic).toString());
-        Assert.assertEquals(values.get(hinted).intrinsicValue(), 0, values.get(hinted).toString());
+        Assert.assertTrue(values.get(hinted).intrinsicValue() > 0,
+                "Literal AIEffectValue supplements the automatic static delta: "
+                        + values.get(hinted));
         Assert.assertEquals(values.get(conditional).intrinsicValue(), 0,
                 values.get(conditional).toString());
     }

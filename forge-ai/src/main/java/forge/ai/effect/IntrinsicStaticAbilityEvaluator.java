@@ -20,7 +20,7 @@ final class IntrinsicStaticAbilityEvaluator {
     // dynamic predicates, characteristic-defining abilities, permissions, and multi-effect text.
     private static final Set<String> ALLOWED_PARAMS = Set.of(
             "Mode", "Affected", "AddPower", "AddToughness", "SetPower", "SetToughness",
-            "AddKeyword", "Description");
+            "AddKeyword", "AIEffectValue", "Description");
     private static final Set<String> SUPPORTED_KEYWORDS = Set.of(
             "flying", "reach", "first strike", "double strike", "menace", "fear", "intimidate",
             "deathtouch", "lifelink", "trample", "vigilance", "defender", "indestructible",
@@ -60,13 +60,21 @@ final class IntrinsicStaticAbilityEvaluator {
         final int toughnessChange = literalInteger(ability.parameters().get("AddToughness"), 0);
         final int setPower = literalInteger(ability.parameters().get("SetPower"), Integer.MIN_VALUE);
         final int setToughness = literalInteger(ability.parameters().get("SetToughness"), Integer.MIN_VALUE);
+        final int hintedValue = literalInteger(ability.parameters().get("AIEffectValue"), 0);
+        final boolean hasAutomaticChange = ability.parameters().containsKey("AddPower")
+                || ability.parameters().containsKey("AddToughness")
+                || ability.parameters().containsKey("SetPower")
+                || ability.parameters().containsKey("SetToughness") || !addedKeywords.isEmpty();
         if (!ability.parameters().containsKey("AddPower")
                 && !ability.parameters().containsKey("AddToughness")
                 && !ability.parameters().containsKey("SetPower")
                 && !ability.parameters().containsKey("SetToughness") && addedKeywords.isEmpty()) {
-            return unsupported("static effect has no intrinsically valued change");
+            if (hintedValue == 0) {
+                return unsupported("static effect has no intrinsically valued change");
+            }
         }
         if (powerChange == Integer.MIN_VALUE || toughnessChange == Integer.MIN_VALUE
+                || hintedValue == Integer.MIN_VALUE
                 || (ability.parameters().containsKey("SetPower") && setPower < 0)
                 || (ability.parameters().containsKey("SetToughness") && setToughness <= 0)
                 || powerChange < -2 || toughnessChange <= -2
@@ -75,39 +83,54 @@ final class IntrinsicStaticAbilityEvaluator {
             // toughness to zero. Conditional, dynamic and lethal changes need richer state.
             return unsupported("static P/T change is outside the safe intrinsic range");
         }
+        if (hasAutomaticChange && scope != StaticAbilityScope.SELF
+                && scope != StaticAbilityScope.ATTACHED && !scope.isCreatureScope(affected)) {
+            return unsupported("automatic static characteristic changes require creature recipients");
+        }
 
         final IntrinsicOutcomeEvaluator evaluator = new IntrinsicOutcomeEvaluator();
-        final int perRecipient;
+        final int automaticPerRecipient;
         final double recipientCount;
         if (scope == StaticAbilityScope.SELF) {
-            if (source.kind() != PermanentKind.CREATURE && source.kind() != PermanentKind.TOKEN) {
+            if (hasAutomaticChange && source.kind() != PermanentKind.CREATURE
+                    && source.kind() != PermanentKind.TOKEN) {
                 return unsupported("self P/T static change requires a creature reference source");
             }
-            final PermanentProfile after = withPowerAndToughness(source,
-                    applySetAndAdd(source.power(), setPower, powerChange),
-                    applySetAndAdd(source.toughness(), setToughness, toughnessChange),
-                    addedKeywords);
-            perRecipient = evaluator.evaluatePermanentDelta(source, after, true);
+            if (hasAutomaticChange) {
+                final PermanentProfile after = withPowerAndToughness(source,
+                        applySetAndAdd(source.power(), setPower, powerChange),
+                        applySetAndAdd(source.toughness(), setToughness, toughnessChange),
+                        addedKeywords);
+                automaticPerRecipient = evaluator.evaluatePermanentDelta(source, after, true);
+            } else {
+                automaticPerRecipient = 0;
+            }
             recipientCount = 1;
         } else {
-            final CreatureProfile before = scope == StaticAbilityScope.ATTACHED
-                    ? DEFAULT_ATTACHED_CREATURE : DEFAULT_RECIPIENT;
-            final CreatureProfile after = new CreatureProfile(true,
-                    applySetAndAdd(before.power(), setPower, powerChange),
-                    applySetAndAdd(before.toughness(), setToughness, toughnessChange),
-                    plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
-                    before.indestructible());
-            perRecipient = evaluator.evaluateCreatureDelta(before, after, true);
+            if (hasAutomaticChange) {
+                final CreatureProfile before = scope == StaticAbilityScope.ATTACHED
+                        ? DEFAULT_ATTACHED_CREATURE : DEFAULT_RECIPIENT;
+                final CreatureProfile after = new CreatureProfile(true,
+                        applySetAndAdd(before.power(), setPower, powerChange),
+                        applySetAndAdd(before.toughness(), setToughness, toughnessChange),
+                        plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
+                        before.indestructible());
+                automaticPerRecipient = evaluator.evaluateCreatureDelta(before, after, true);
+            } else {
+                automaticPerRecipient = 0;
+            }
             recipientCount = scope.isTribal(affected) ? TRIBAL_FUTURE_RECIPIENTS
                     : scope == StaticAbilityScope.ATTACHED ? 1 : FUTURE_RECIPIENTS;
         }
+        final int perRecipient = EffectMath.add(automaticPerRecipient, hintedValue);
 
         final double signedValue = switch (scope) {
         case SELF, ATTACHED, CONTROLLER -> perRecipient * recipientCount;
         case OPPONENT -> -perRecipient * recipientCount;
         case BOTH -> 0;
         };
-        return supported(signedValue, scope.description() + " static characteristic potential");
+        return supported(signedValue, scope.description() + " static characteristic potential"
+                + (hintedValue == 0 ? "" : " with AIEffectValue supplement"));
     }
 
     private static PermanentProfile withPowerAndToughness(final PermanentProfile source,

@@ -81,4 +81,25 @@ public class PermanentAbilityRemovalTest extends AITest {
         Assert.assertTrue(result.reasons().stream().anyMatch(reason ->
                 reason.contains("Fixed future static allowance")), result.reasons().toString());
     }
+
+    @Test
+    public void futureStaticHintSupportsNonCreatureRecipients() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        ai.setTeam(0);
+        opponent.setTeam(1);
+        final Card source = addCard("Sol Ring", opponent);
+        source.addStaticAbility("Mode$ Continuous | Affected$ Artifact.YouCtrl"
+                + " | AIEffectValue$ -10");
+        game.getAction().checkStaticAbilities();
+
+        final PermanentAbilityValueEvaluator.Breakdown result = PermanentAbilityValueEvaluator
+                .evaluateRemovalAbilities(ai, List.of(source), EffectAnalysisTrace.disabled()).get(source);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.intrinsicValue() < 0, result.toString());
+        Assert.assertTrue(result.reasons().stream().anyMatch(reason ->
+                reason.contains("AIEffectValue supplement")), result.reasons().toString());
+    }
 }

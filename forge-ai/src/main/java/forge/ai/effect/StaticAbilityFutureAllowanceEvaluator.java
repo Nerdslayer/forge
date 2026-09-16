@@ -18,7 +18,7 @@ final class StaticAbilityFutureAllowanceEvaluator {
     private static final double FUTURE_RECIPIENT_SURVIVAL = .70;
     private static final Set<String> ALLOWED_PARAMS = Set.of(
             "Mode", "Affected", "AddPower", "AddToughness", "SetPower", "SetToughness",
-            "AddKeyword", "Description");
+            "AddKeyword", "AIEffectValue", "Description");
 
     private StaticAbilityFutureAllowanceEvaluator() {
     }
@@ -53,7 +53,10 @@ final class StaticAbilityFutureAllowanceEvaluator {
         final boolean hasSetPower = ability.hasParam("SetPower");
         final boolean hasSetToughness = ability.hasParam("SetToughness");
         final boolean hasKeyword = ability.hasParam("AddKeyword");
-        if (!hasPower && !hasToughness && !hasSetPower && !hasSetToughness && !hasKeyword) {
+        final boolean hasAutomaticChange = hasPower || hasToughness || hasSetPower
+                || hasSetToughness || hasKeyword;
+        final boolean hasHint = ability.hasParam("AIEffectValue");
+        if (!hasAutomaticChange && !hasHint) {
             return Optional.empty();
         }
         final Integer powerChange = hasPower ? literalInteger(ability.getParam("AddPower")) : 0;
@@ -62,7 +65,10 @@ final class StaticAbilityFutureAllowanceEvaluator {
         final Integer setPower = hasSetPower ? literalInteger(ability.getParam("SetPower")) : Integer.MIN_VALUE;
         final Integer setToughness = hasSetToughness
                 ? literalInteger(ability.getParam("SetToughness")) : Integer.MIN_VALUE;
-        if (powerChange == null || toughnessChange == null || setPower == null || setToughness == null) {
+        final Integer hintedValue = hasHint
+                ? literalInteger(ability.getParam("AIEffectValue")) : 0;
+        if (powerChange == null || toughnessChange == null || setPower == null || setToughness == null
+                || hintedValue == null) {
             return Optional.empty();
         }
 
@@ -78,11 +84,14 @@ final class StaticAbilityFutureAllowanceEvaluator {
         if (addedKeywords == null) {
             return Optional.empty();
         }
-        final int automaticPerRecipient = creatureDelta(powerChange, toughnessChange, setPower,
-                setToughness, addedKeywords);
-        // AIEffectValue is deliberately not in ALLOWED_PARAMS. Hints supplement current live
-        // recipient evaluation, but are not enough evidence for a future generic recipient.
-        final int perRecipient = automaticPerRecipient;
+        if (hasAutomaticChange && !scope.isCreatureScope(affected)) {
+            return Optional.empty();
+        }
+        final int automaticPerRecipient = hasAutomaticChange
+                ? creatureDelta(powerChange, toughnessChange, setPower, setToughness, addedKeywords) : 0;
+        // A literal AIEffectValue supplements the automatic generic-recipient delta. It is also
+        // sufficient for non-creature future recipients, such as a hinted artifact tax.
+        final int perRecipient = EffectMath.add(automaticPerRecipient, hintedValue);
         if (perRecipient == 0) {
             return Optional.empty();
         }
@@ -112,7 +121,8 @@ final class StaticAbilityFutureAllowanceEvaluator {
                 AbilityValueKind.INTRINSIC_FUTURE_ALLOWANCE, signedValue,
                 identity.path() + ":future-recipients",
                 "Fixed future static allowance for " + scope.description()
-                        + " (" + perRecipient + " points x " + futureRecipients
+                        + " (" + automaticPerRecipient + " automatic + " + hintedValue
+                        + " AIEffectValue supplement = " + perRecipient + " points x " + futureRecipients
                         + " future recipients x " + FUTURE_RECIPIENT_SURVIVAL + " allowance discount)"));
     }
 
