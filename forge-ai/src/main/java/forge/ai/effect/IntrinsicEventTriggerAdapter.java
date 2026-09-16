@@ -41,6 +41,10 @@ public final class IntrinsicEventTriggerAdapter {
                     IntrinsicEventTrigger.TurnScope.ANY_TURN,
                     counterRemovedAtMostOnce(parameters), 1));
         }
+        if (EventTriggerParser.mode(parameters) == TriggerType.CounterRemoved
+                || EventTriggerParser.mode(parameters) == TriggerType.CounterRemovedOnce) {
+            return Optional.empty();
+        }
         if (isSupportedDamageAllTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     damageAllEventType(parameters), damageAllTurnScope(parameters), false,
@@ -91,6 +95,10 @@ public final class IntrinsicEventTriggerAdapter {
         }
         if (isSupportedCounterRemovedTrigger(parameters)) {
             return true;
+        }
+        if (EventTriggerParser.mode(parameters) == TriggerType.CounterRemoved
+                || EventTriggerParser.mode(parameters) == TriggerType.CounterRemovedOnce) {
+            return false;
         }
         if (isSupportedDamageAllTrigger(parameters)) {
             return true;
@@ -582,6 +590,7 @@ public final class IntrinsicEventTriggerAdapter {
         return switch (observed) {
         case TOKEN_CREATED -> IntrinsicReferenceModel.EventType.TOKEN_CREATED;
         case COUNTER_ADDED -> IntrinsicReferenceModel.EventType.COUNTER_ADDED;
+        case COUNTER_REMOVED -> IntrinsicReferenceModel.EventType.COUNTER_REMOVED;
         case LIFE_GAINED -> IntrinsicReferenceModel.EventType.LIFE_GAINED;
         case LIFE_LOST -> IntrinsicReferenceModel.EventType.LIFE_LOST;
         case CARD_DRAWN -> IntrinsicReferenceModel.EventType.CARD_DRAWN;

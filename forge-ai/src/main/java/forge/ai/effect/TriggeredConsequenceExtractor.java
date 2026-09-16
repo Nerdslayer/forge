@@ -56,6 +56,13 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
             normalized.removeParam("CounterType");
             return normalized;
         }
+        if ((trigger.getMode() == TriggerType.CounterRemoved
+                || trigger.getMode() == TriggerType.CounterRemovedOnce)
+                && "Any".equalsIgnoreCase(trigger.getParam("CounterType"))) {
+            final Trigger normalized = trigger.copy(source, true);
+            normalized.removeParam("CounterType");
+            return normalized;
+        }
         return trigger;
     }
 }

@@ -27,6 +27,12 @@ final class EventTriggerParser {
     private static final Set<String> COUNTER_ADDED_ALL_TRIGGER_PARAMS = Set.of(
             "Mode", "Valid", "ValidSource", "CounterType", "ActivationLimit", "Execute",
             "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> COUNTER_REMOVED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidPlayer", "CounterType", "NewCounterAmount",
+            "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> COUNTER_REMOVED_ONCE_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "CounterType", "Remaining", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
     private static final Set<String> LIFE_GAINED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidSource", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -152,6 +158,9 @@ final class EventTriggerParser {
                 || mode == TriggerType.CounterAddedAll) {
             return EffectType.COUNTER_ADDED;
         }
+        if (mode == TriggerType.CounterRemoved || mode == TriggerType.CounterRemovedOnce) {
+            return EffectType.COUNTER_REMOVED;
+        }
         return null;
     }
 
@@ -179,6 +188,12 @@ final class EventTriggerParser {
             return hasOnlyParams(parameters, COUNTER_ADDED_ALL_TRIGGER_PARAMS)
                     && (!parameters.containsKey("ActivationLimit")
                             || "1".equals(parameters.get("ActivationLimit")));
+        }
+        if (mode == TriggerType.CounterRemoved) {
+            return hasOnlyParams(parameters, COUNTER_REMOVED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.CounterRemovedOnce) {
+            return hasOnlyParams(parameters, COUNTER_REMOVED_ONCE_TRIGGER_PARAMS);
         }
         if (mode == TriggerType.LifeGained) {
             return hasOnlyParams(parameters, LIFE_GAINED_TRIGGER_PARAMS);

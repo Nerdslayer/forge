@@ -10,6 +10,7 @@ final class EffectEventMatcherRegistry {
     static {
         MATCHERS.put(EffectType.TOKEN_CREATED, TokenCreatedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.COUNTER_ADDED, CounterAddedEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.COUNTER_REMOVED, CounterRemovedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.LIFE_GAINED, LifeGainedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.LIFE_LOST, LifeLostEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.CARD_DRAWN, CardDrawnEventMatcher.INSTANCE);
