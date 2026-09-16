@@ -22,8 +22,9 @@ import com.google.common.collect.*;
 import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ProtectAi;
 import forge.ai.ability.TokenAi;
-import forge.ai.effect.CardValueCache;
 import forge.ai.effect.CardValueBreakdown;
+import forge.ai.effect.DiscardValuationAction;
+import forge.ai.effect.UnifiedActionValueEvaluator;
 import forge.ai.effect.ValuationContext;
 import forge.card.CardStateName;
 import forge.card.CardType;
@@ -2464,7 +2465,7 @@ public class ComputerUtil {
             return;
         }
 
-        final ValuationContext context = ValuationContext.forHandSelection(chooser, true);
+        final ValuationContext context = ValuationContext.forDiscard(chooser, true);
         int start = 0;
         while (start < choices.size()) {
             final int cmc = choices.get(start).getCMC();
@@ -2475,7 +2476,7 @@ public class ComputerUtil {
 
             if (end - start > 1) {
                 final List<Card> tiedCards = new ArrayList<>(choices.subList(start, end));
-                final List<Card> rankedCards = rankKnownHandTie(tiedCards, context);
+                final List<Card> rankedCards = rankKnownHandTie(tiedCards, discarder, context);
                 for (int i = 0; i < rankedCards.size(); i++) {
                     choices.set(start + i, rankedCards.get(i));
                 }
@@ -2504,16 +2505,16 @@ public class ComputerUtil {
             return legacyChoice;
         }
 
-        final ValuationContext context = ValuationContext.forHandSelection(chooser, true);
-        return rankKnownHandTie(tiedCards, context).get(0);
+        final ValuationContext context = ValuationContext.forDiscard(chooser, true);
+        return rankKnownHandTie(tiedCards, discarder, context).get(0);
     }
 
     private static List<Card> rankKnownHandTie(final List<Card> tiedCards,
-            final ValuationContext context) {
-        final CardValueCache cache = new CardValueCache(context);
+            final Player discarder, final ValuationContext context) {
         final Map<Card, CardValueBreakdown> evaluations = new IdentityHashMap<>();
         for (final Card card : tiedCards) {
-            final CardValueBreakdown evaluation = cache.evaluate(card);
+            final CardValueBreakdown evaluation = UnifiedActionValueEvaluator.evaluate(
+                    new DiscardValuationAction(card, discarder), context);
             if (!evaluation.isComplete()) {
                 return tiedCards;
             }

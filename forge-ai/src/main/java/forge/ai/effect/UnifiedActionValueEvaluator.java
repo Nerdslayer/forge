@@ -24,11 +24,11 @@ public final class UnifiedActionValueEvaluator {
     /**
      * Evaluates one supported action from the supplied context.
      *
-     * <p>Removal and bounded cast/activation adapters compose dedicated action semantics here
+     * <p>Removal and bounded cast/activation/discard adapters compose dedicated action semantics here
      * rather than teaching the shared card evaluator about every decision type.</p>
      *
-     * TODO(unified valuation): Add attack, block, discard, and other action records as their cost
-     * and outcome semantics become explicit.
+     * TODO(unified valuation): Add attack, block, random-discard, multi-card discard, and other
+     * action records as their cost and outcome semantics become explicit.
      */
     public static CardValueBreakdown evaluate(final ValuationAction action,
             final ValuationContext context, final EffectAnalysisTrace trace) {
@@ -44,6 +44,14 @@ public final class UnifiedActionValueEvaluator {
                     removal.target(), context, trace);
             return RemovalActionEvaluator.evaluate(context.evaluatingAi(), removal.target(),
                     permanentValue, removal.actionKind());
+        }
+        if (action instanceof DiscardValuationAction discard) {
+            if (context.decision() != ValuationDecision.DISCARD
+                    || context.evaluatingAi() == null) {
+                return CardValueBreakdown.unsupported(
+                        "Discard actions require a situational discard valuation context.");
+            }
+            return evaluateDiscard(discard, context);
         }
         if (action instanceof CastValuationAction cast) {
             if (context.decision() != ValuationDecision.CAST || context.evaluatingAi() == null) {
@@ -61,6 +69,32 @@ public final class UnifiedActionValueEvaluator {
             return evaluateActivation(activation, context);
         }
         return CardValueBreakdown.unsupported("This action type is not supported yet.");
+    }
+
+    private static CardValueBreakdown evaluateDiscard(final DiscardValuationAction action,
+            final ValuationContext context) {
+        // TODO: Model random discard, multiple-card selection, and restricted discard modes. A
+        // known targeted discard can use the same hand-card value as any other hand decision.
+        final Card card = action.card();
+        final Player discarder = action.discarder();
+        if (!card.isInZone(ZoneType.Hand)
+                || !discarder.getCardsIn(ZoneType.Hand).contains(card)) {
+            return CardValueBreakdown.unavailable(
+                    "Discard valuation requires the proposed card to be in the discarder hand.");
+        }
+        final HandValuationContext handContext = context.completeInformation()
+                ? HandValuationContext.fullHand(context.evaluatingAi(), discarder)
+                : HandValuationContext.knownCardOnly(context.evaluatingAi(), discarder, card,
+                        discarder.getCardsIn(ZoneType.Hand).size());
+        final CardValueBreakdown handValue = UnifiedCardValueEvaluator.evaluateCard(card,
+                handContext);
+        final int valueToOwner = handValue.netValue();
+        final int valueToAi = discarder.isOpponentOf(context.evaluatingAi())
+                ? valueToOwner : EffectMath.negate(valueToOwner);
+        final List<String> reasons = new ArrayList<>(handValue.reasons());
+        reasons.add("Discarded card value from AI perspective: " + valueToAi);
+        return new CardValueBreakdown(0, 0, valueToAi, 0, 0,
+                handValue.completeness(), reasons);
     }
 
     private static CardValueBreakdown evaluateActivation(final ActivateValuationAction action,

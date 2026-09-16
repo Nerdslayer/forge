@@ -44,6 +44,7 @@ public final class UnifiedCardValueEvaluator {
         }
         if (context.mode() == ValuationMode.SITUATIONAL
                 && (context.decision() == ValuationDecision.HAND_SELECTION
+                        || context.decision() == ValuationDecision.DISCARD
                         || context.decision() == ValuationDecision.CAST)) {
             return evaluateHandCard(card, context);
         }
