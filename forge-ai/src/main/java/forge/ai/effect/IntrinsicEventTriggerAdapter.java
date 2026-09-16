@@ -10,6 +10,8 @@ public final class IntrinsicEventTriggerAdapter {
     private static final Set<String> SUPPORTED_TOKEN_FILTERS = Set.of(
             "Card", "Card.token", "Card.token+YouCtrl", "Creature", "Creature.YouCtrl",
             "Creature.YouOwn");
+    private static final Set<String> SUPPORTED_LAND_FILTERS = Set.of(
+            "Land", "Land.YouCtrl", "Land.OppCtrl");
 
     private IntrinsicEventTriggerAdapter() {
     }
@@ -28,6 +30,9 @@ public final class IntrinsicEventTriggerAdapter {
             return Optional.empty();
         }
         final TriggerType mode = EventTriggerParser.mode(parameters);
+        if (mode == TriggerType.LandPlayed) {
+            return describeLandPlayed(parameters);
+        }
         final EffectType observed = EventTriggerParser.observedType(parameters);
         if (mode == null || observed == null) {
             return Optional.empty();
@@ -58,10 +63,13 @@ public final class IntrinsicEventTriggerAdapter {
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
             return false;
         }
+        final TriggerType mode = EventTriggerParser.mode(parameters);
+        if (mode == TriggerType.LandPlayed) {
+            return supportsLandPlayed(parameters);
+        }
         if (EventTriggerParser.isSecondMainTappedCheckpoint(parameters)) {
             return true;
         }
-        final TriggerType mode = EventTriggerParser.mode(parameters);
         if (mode == TriggerType.TokenCreated || mode == TriggerType.TokenCreatedOnce) {
             // TokenCreatedOnce commonly omits ValidPlayer because it is already scoped to the
             // active token-creation batch. Keep both forms limited to the same known token
@@ -170,6 +178,39 @@ public final class IntrinsicEventTriggerAdapter {
             return supportsSacrifice(parameters);
         }
         return false;
+    }
+
+    private static Optional<IntrinsicEventTrigger> describeLandPlayed(
+            final Map<String, String> parameters) {
+        return supportsLandPlayed(parameters)
+                ? Optional.of(new IntrinsicEventTrigger(
+                        IntrinsicReferenceModel.EventType.LAND_PLAYED,
+                        landPlayedTurnScope(parameters), false,
+                        landPlayedOccurrenceMultiplier(parameters)))
+                : Optional.empty();
+    }
+
+    private static boolean supportsLandPlayed(final Map<String, String> parameters) {
+        if (parameters.containsKey("ValidSA") || parameters.containsKey("Origin")
+                && !Set.of("Any", "Hand").contains(parameters.get("Origin"))) {
+            return false;
+        }
+        return SUPPORTED_LAND_FILTERS.contains(parameters.getOrDefault("ValidCard", "Land"))
+                && (!parameters.containsKey("NotFirstLand")
+                        || isBoolean(parameters.get("NotFirstLand")));
+    }
+
+    private static IntrinsicEventTrigger.TurnScope landPlayedTurnScope(
+            final Map<String, String> parameters) {
+        return switch (parameters.getOrDefault("ValidCard", "Land")) {
+        case "Land.YouCtrl" -> IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN;
+        case "Land.OppCtrl" -> IntrinsicEventTrigger.TurnScope.OPPONENT_TURN;
+        default -> IntrinsicEventTrigger.TurnScope.ANY_TURN;
+        };
+    }
+
+    private static double landPlayedOccurrenceMultiplier(final Map<String, String> parameters) {
+        return "True".equalsIgnoreCase(parameters.get("NotFirstLand")) ? .25 : 1;
     }
 
     /**

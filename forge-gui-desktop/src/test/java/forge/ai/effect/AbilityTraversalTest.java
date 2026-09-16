@@ -344,6 +344,39 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicLandPlayedTriggerUsesConservativeTurnScopeAndRate() {
+        final IntrinsicEventTrigger controllerTrigger = IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "LandPlayed", "ValidCard", "Land.YouCtrl",
+                "TriggerZones", "Battlefield")).orElseThrow();
+        Assert.assertEquals(controllerTrigger.eventType(),
+                IntrinsicReferenceModel.EventType.LAND_PLAYED);
+        Assert.assertEquals(controllerTrigger.turnScope(), IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN);
+        Assert.assertTrue(IntrinsicEventTriggerEstimator.estimate(controllerTrigger,
+                new IntrinsicReferenceModel.PermanentProfile(true,
+                        IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
+                EntryTiming.NORMAL_SPEED).expectedOccurrences() > 0);
+
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "LandPlayed", "ValidCard", "Land.OppCtrl",
+                "Origin", "Exile")).isEmpty());
+    }
+
+    @Test
+    public void intrinsicLandPlayedCardTriggerReachesOutcomeEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation =
+                new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                        IntrinsicEvaluationSettings.defaults()).evaluateDefinitionDetails(
+                        forge.StaticData.instance().getCommonCards().getCard("Dirtcowl Wurm"),
+                        CardStateName.Original);
+        Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.contribution().value() > 0), evaluation.values().toString());
+    }
+
+    @Test
     public void manaTapTriggersReachIntrinsicEvaluationWithBoundedReferenceRates() {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(

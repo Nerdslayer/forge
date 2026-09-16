@@ -90,6 +90,9 @@ final class EventTriggerParser {
     private static final Set<String> SACRIFICED_ONCE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidPlayer", "ValidCause", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
+    private static final Set<String> LAND_PLAYED_TRIGGER_PARAMS = Set.of(
+            "Mode", "Origin", "ValidCard", "ValidSA", "NotFirstLand", "Execute",
+            "TriggerZones", "TriggerDescription", "Secondary");
 
 
     static EffectType observedType(final Trigger trigger) {
@@ -175,6 +178,9 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.Drawn) {
             return hasSupportedCardDrawParameters(parameters);
+        }
+        if (mode == TriggerType.LandPlayed) {
+            return hasSupportedLandPlayedParameters(parameters);
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return hasSupportedCardDiscardParameters(parameters);
@@ -271,6 +277,12 @@ final class EventTriggerParser {
                         || CARD_DISCARDED_VALID_CARDS.contains(parameters.get("ValidCard")))
                 && (!parameters.containsKey("ValidPlayer")
                         || CARD_DISCARDED_VALID_PLAYERS.contains(parameters.get("ValidPlayer")));
+    }
+
+    private static boolean hasSupportedLandPlayedParameters(final Map<String, String> parameters) {
+        return hasOnlyParams(parameters, LAND_PLAYED_TRIGGER_PARAMS)
+                && (!parameters.containsKey("NotFirstLand")
+                        || isBoolean(parameters.get("NotFirstLand")));
     }
 
     private static boolean isBoolean(final String value) {
