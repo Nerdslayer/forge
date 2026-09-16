@@ -159,6 +159,24 @@ public final class EffectAnalysisTrace {
         }
     }
 
+    /** Records the reference evaluation behind one intrinsic ability contribution. */
+    void intrinsicAbility(final Card card, final String path, final String origin,
+            final double expectedOccurrences, final IntrinsicAbilityEvaluator.SupportStatus trigger,
+            final IntrinsicAbilityEvaluator.SupportStatus outcome,
+            final IntrinsicReferenceAggregate aggregate) {
+        if (!isEnabled()) {
+            return;
+        }
+        line("  Intrinsic ability: %s, path=%s, origin=%s, expectedOccurrences=%.2f, "
+                        + "trigger=%s, outcome=%s, value=%.2f, complete=%.3f, unavailable=%.3f, "
+                        + "partial=%.3f, unsupported=%.3f, unresolvedRandom=%.3f, reasons=%s",
+                cardLabel(card), path, origin, expectedOccurrences, trigger, outcome,
+                aggregate.value(), aggregate.completeCaseProbability(),
+                aggregate.unavailableCaseProbability(), aggregate.partialCaseProbability(),
+                aggregate.unsupportedCaseProbability(), aggregate.unresolvedRandomProbability(),
+                aggregate.unresolvedReasons());
+    }
+
     /** Records the final removal score, whose adjustment includes independently weighted future value. */
     public void candidate(final Card card, final int baseValue, final int relationshipValue,
             final int synergyWeight, final int weightedAdjustment, final int transitionValue,
