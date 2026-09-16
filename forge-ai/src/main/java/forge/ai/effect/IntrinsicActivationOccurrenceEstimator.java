@@ -26,7 +26,8 @@ public final class IntrinsicActivationOccurrenceEstimator {
 
         final double usesPerTurn = model.availableMana().entries().stream()
                 .mapToDouble(entry -> entry.weight()
-                        * usesForTurn(entry.value(), manaCost, hasTapCost, settings))
+                        * AbilityOccurrenceEstimator.activationUsesForTurn(entry.value(), manaCost,
+                                hasTapCost, false, true, settings.maximumActivationUsesPerTurn()))
                 .sum();
         final double currentUses = usesPerTurn;
         double expected = currentUses;
@@ -54,18 +55,5 @@ public final class IntrinsicActivationOccurrenceEstimator {
 
         return new IntrinsicActivationOccurrenceEstimate(expected, currentUses, usesPerTurn,
                 futureTurns, true, "reference mana and permanent survival");
-    }
-
-    private static int usesForTurn(final int availableMana, final int manaCost,
-            final boolean hasTapCost, final IntrinsicEvaluationSettings settings) {
-        if (hasTapCost) {
-            return availableMana >= manaCost ? 1 : 0;
-        }
-        if (manaCost <= 0) {
-            // Avoid assigning infinite intrinsic value to a free, repeatable ability until a
-            // repeatability model exists. One use per opportunity is intentionally conservative.
-            return 1;
-        }
-        return Math.min(settings.maximumActivationUsesPerTurn(), availableMana / manaCost);
     }
 }
