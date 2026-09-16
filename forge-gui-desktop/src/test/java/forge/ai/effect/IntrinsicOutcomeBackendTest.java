@@ -251,6 +251,37 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void persistentAnimationUsesPermanentProfileDeltaAndGenericTargets() {
+        final State initial = state(CREATURE, CREATURE, SOURCE);
+        final OutcomePlan<State> self = evaluate(leaf("Animate", Map.of(
+                "Defined", "Self", "Power", "4", "Toughness", "4", "Types", "Creature",
+                "Keywords", "Flying", "Duration", "Permanent")), initial);
+        Assert.assertEquals(self.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(self.value() > 0);
+        Assert.assertEquals(self.state().sourcePermanent().power(), 4);
+        Assert.assertEquals(self.state().sourcePermanent().toughness(), 4);
+        Assert.assertTrue(self.state().sourcePermanent().keywords().contains("flying"));
+
+        final PermanentProfile artifact = new PermanentProfile(true, PermanentKind.ARTIFACT,
+                true, 0, 0, Set.of());
+        final State targetState = new State(0, 7, 20, 20, 3, 3, 1, 1, CREATURE, CREATURE,
+                artifact, PermanentProfile.absent(), SOURCE, null);
+        final OutcomePlan<State> target = evaluate(leaf("Animate", Map.of(
+                "ValidTgts", "Permanent.YouCtrl", "Power", "3", "Toughness", "3",
+                "Types", "Artifact,Creature", "Keywords", "Trample", "Duration", "Perpetual")),
+                targetState);
+        Assert.assertEquals(target.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(target.value() > 0);
+        Assert.assertEquals(target.state().controllerPermanent().kind(), PermanentKind.CREATURE);
+        Assert.assertTrue(target.state().controllerPermanent().keywords().contains("trample"));
+
+        final OutcomePlan<State> temporary = evaluate(leaf("Animate", Map.of(
+                "Defined", "Self", "Power", "4", "Toughness", "4", "Types", "Creature",
+                "Duration", "UntilEndOfTurn")), initial);
+        Assert.assertEquals(temporary.completeness(), Completeness.UNSUPPORTED);
+    }
+
+    @Test
     public void realTargetScopesRespectSideOtherAndSourceAvailability() {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> friendly = evaluate(counter("Creature.YouCtrl+Other"), initial);
