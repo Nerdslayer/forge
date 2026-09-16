@@ -51,6 +51,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (stateChange.isPresent()) {
             return stateChange;
         }
+        final Optional<IntrinsicEventTrigger> attachment =
+                IntrinsicAttachmentTriggerAdapter.describe(parameters);
+        if (attachment.isPresent()) {
+            return attachment;
+        }
         if (isSupportedManaTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
@@ -121,6 +126,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicStateChangeTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicAttachmentTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {
