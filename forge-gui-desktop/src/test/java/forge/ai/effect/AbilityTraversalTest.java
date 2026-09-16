@@ -729,6 +729,42 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void damageAllTriggersUseBatchCombatRates() {
+        final IntrinsicEventTrigger combat = IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "DamageAll", "ValidSource", "Creature.Warrior+YouCtrl",
+                "ValidTarget", "Player", "CombatDamage", "True",
+                "TriggerZones", "Battlefield")).orElseThrow();
+        Assert.assertEquals(combat.eventType(), IntrinsicReferenceModel.EventType.COMBAT_DAMAGE);
+        Assert.assertEquals(combat.turnScope(), IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN);
+        Assert.assertEquals(combat.occurrenceMultiplier(), .55, 0.0000001);
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "DamageAll", "ValidSource", "Creature.Warrior+YouCtrl",
+                "ValidTarget", "Player", "CombatDamage", "True",
+                "TriggerZones", "Battlefield")));
+
+        final IntrinsicEventTrigger noncombat = IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "DamageAll", "ValidTarget", "Opponent", "CombatDamage", "False"))
+                .orElseThrow();
+        Assert.assertEquals(noncombat.eventType(), IntrinsicReferenceModel.EventType.DAMAGE_DEALT);
+        Assert.assertEquals(noncombat.turnScope(), IntrinsicEventTrigger.TurnScope.ANY_TURN);
+        Assert.assertEquals(noncombat.occurrenceMultiplier(), .75, 0.0000001);
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "DamageAll", "ValidTarget", "Opponent", "OptionalDecider", "You"))
+                .isEmpty());
+
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation mindblade = evaluator
+                .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                        .getCard("Mindblade Render"), CardStateName.Original);
+        Assert.assertTrue(mindblade.values().stream().anyMatch(value ->
+                value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.contribution().value() > 0), mindblade.toString());
+    }
+
+    @Test
     public void intrinsicBackendRejectsUnsupportedOutcomeFamilies() {
         final IntrinsicReferenceModel.PermanentProfile friendly = new IntrinsicReferenceModel.PermanentProfile(
                 true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());
