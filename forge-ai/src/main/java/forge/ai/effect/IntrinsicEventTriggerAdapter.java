@@ -7,6 +7,10 @@ import forge.game.trigger.TriggerType;
 
 /** Converts relationship-supported event triggers into bounded intrinsic inputs. */
 public final class IntrinsicEventTriggerAdapter {
+    private static final Set<String> SUPPORTED_TOKEN_FILTERS = Set.of(
+            "Card", "Card.token", "Card.token+YouCtrl", "Creature", "Creature.YouCtrl",
+            "Creature.YouOwn");
+
     private IntrinsicEventTriggerAdapter() {
     }
 
@@ -65,8 +69,8 @@ public final class IntrinsicEventTriggerAdapter {
             return (!parameters.containsKey("ValidPlayer")
                     || "You".equals(parameters.get("ValidPlayer")))
                     && !parameters.containsKey("ValidCard")
-                    && Set.of("Card", "Card.token", "Card.token+YouCtrl")
-                            .contains(parameters.getOrDefault("ValidToken", "Card"));
+                    && SUPPORTED_TOKEN_FILTERS.contains(
+                            parameters.getOrDefault("ValidToken", "Card"));
         }
         if (mode == TriggerType.Attacks) {
             return !parameters.containsKey("ValidPlayer") && !parameters.containsKey("ValidToken")
