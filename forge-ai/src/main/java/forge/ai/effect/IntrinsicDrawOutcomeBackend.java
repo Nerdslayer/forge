@@ -83,6 +83,8 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> DESTROY_ALL_PARAMETERS = parameters("ValidCards", "NoRegen");
     private static final Set<String> CHANGE_ZONE_ALL_PARAMETERS = parameters("ChangeType", "Origin",
             "Destination", "RememberChanged");
+    private static final Set<String> REMOVE_COUNTER_ALL_PARAMETERS = parameters("CounterType",
+            "CounterNum", "ValidCards", "ValidZone");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
             "haste", "reach", "menace", "fear", "intimidate", "vigilance", "trample", "deathtouch", "lifelink", "defender",
             "hexproof", "shroud", "indestructible", "shield", "stun", "ward", "detain",
@@ -270,6 +272,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Draw" -> acceptsDraw(node);
         case "PutCounter" -> acceptsCounter(node) || acceptsCounterChoice(node);
         case "RemoveCounter" -> acceptsRemoveCounter(node);
+        case "RemoveCounterAll" -> acceptsRemoveCounterAll(node);
         case "PutCounterAll" -> acceptsCounterAll(node);
         case "Pump" -> acceptsPump(node);
         case "PumpAll" -> acceptsPumpAll(node);
@@ -343,6 +346,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Draw" -> draw(node);
         case "PutCounter", "PutCounterAll" -> counter(node);
         case "RemoveCounter" -> removeCounter(node);
+        case "RemoveCounterAll" -> removeCounterAll(node);
         case "Pump", "PumpAll" -> pump(node);
         case "Debuff" -> debuff(node);
         case "Animate" -> animate(node);
@@ -1679,6 +1683,75 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> removeCounterAll(final AbilityOutcomeDescription node) {
+        // Group counter state is represented by one profile and count per side. This deliberately
+        // does not infer counters on absent profiles or invent a planeswalker population.
+        final CreatureGroupTarget target = creatureGroupTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic counter-removal group");
+        }
+        return new Outcome.Atomic<>(node.path(), current -> {
+            State projected = current;
+            int value = 0;
+            if (target.controller()) {
+                final GroupApplication application = applyRemoveCounterGroup(projected, node, true,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            if (target.opponent()) {
+                final GroupApplication application = applyRemoveCounterGroup(projected, node, false,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private GroupApplication applyRemoveCounterGroup(final State state,
+            final AbilityOutcomeDescription node, final boolean controller, final boolean other) {
+        final CreatureProfile representative = controller
+                ? state.controllerCreature() : state.opponentCreature();
+        if (!simpleKeywords(representative.keywords())) {
+            return GroupApplication.unsupported(state);
+        }
+
+        State projected = state;
+        int value = 0;
+        final int count = state.creatureCount(controller);
+        if (count > 0 && representative.present()) {
+            final PermanentProfile before = new PermanentProfile(true, PermanentKind.CREATURE,
+                    controller, representative.power(), representative.toughness(),
+                    representative.keywords());
+            final PermanentProfile after = removeCounterPermanent(before, node);
+            if (after == null) {
+                return GroupApplication.unsupported(state);
+            }
+            value = EffectMath.multiply(count, evaluator.evaluateCreatureDelta(
+                    representative, toCreature(after), controller));
+            projected = projected.withCreatures(controller, toCreature(after));
+        }
+
+        final PermanentProfile source = projected.sourcePermanent();
+        if (!other && isCreature(source) && source.controlledByAi() == controller) {
+            final PermanentProfile after = removeCounterPermanent(source, node);
+            if (after == null) {
+                return GroupApplication.unsupported(state);
+            }
+            value = EffectMath.add(value, evaluator.evaluateCreatureDelta(
+                    toCreature(source), toCreature(after), controller));
+            projected = projected.withSourcePermanent(after);
+        }
+        return new GroupApplication(projected, value, true);
+    }
+
     private static boolean acceptsDraw(final AbilityOutcomeDescription node) {
         // TODO: Library exhaustion, optional draws, replacements, targeted players and symbolic
         // amounts require explicit reference state. Unknown semantic fields fail closed here.
@@ -1726,6 +1799,18 @@ public final class IntrinsicDrawOutcomeBackend
                 && "1".equals(node.parameters().getOrDefault("TargetMin", "1"))
                 && "1".equals(node.parameters().getOrDefault("TargetMax", "1"))
                 && "Battlefield".equals(node.parameters().getOrDefault("TgtZone", "Battlefield"));
+    }
+
+    private static boolean acceptsRemoveCounterAll(final AbilityOutcomeDescription node) {
+        // Only one fixed counter on each represented creature is modeled. All-counter modes,
+        // arbitrary counter types, planeswalker groups, and non-battlefield groups remain open.
+        return REMOVE_COUNTER_ALL_PARAMETERS.containsAll(node.parameters().keySet())
+                && !"LOYALTY".equalsIgnoreCase(counterType(node))
+                && supportedCounterType(counterType(node))
+                && "1".equals(node.parameters().getOrDefault("CounterNum", "1"))
+                && (!node.parameters().containsKey("ValidZone")
+                        || "Battlefield".equalsIgnoreCase(node.parameters().get("ValidZone")))
+                && creatureGroupTarget(node) != null;
     }
 
     private static boolean acceptsCounterAll(final AbilityOutcomeDescription node) {
@@ -1884,6 +1969,7 @@ public final class IntrinsicDrawOutcomeBackend
         } else if ("RemoveCounter".equals(node.api()) && acceptsRemoveCounter(node)) {
             addCounterDimensions(List.of(node), dimensions);
         } else if (("PutCounterAll".equals(node.api()) && acceptsCounterAll(node))
+                || ("RemoveCounterAll".equals(node.api()) && acceptsRemoveCounterAll(node))
                 || ("PumpAll".equals(node.api()) && acceptsPumpAll(node))) {
             addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
         } else if (("Pump".equals(node.api()) && acceptsPump(node))

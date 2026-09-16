@@ -402,6 +402,27 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void removeCounterAllProjectsReferenceCreatureGroups() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> opposing = evaluate(leaf("RemoveCounterAll", Map.of(
+                "ValidCards", "Creature.OppCtrl", "CounterType", "P1P1")), initial);
+        Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(opposing.state().opponentCreature().power(), 2);
+        Assert.assertEquals(opposing.state().opponentCreature().toughness(), 2);
+        Assert.assertEquals(opposing.state().opponentCreatureCount(), 1);
+        Assert.assertTrue(opposing.value() > 0);
+
+        final OutcomePlan<State> friendly = evaluate(leaf("RemoveCounterAll", Map.of(
+                "ValidCards", "Creature.YouCtrl", "CounterType", "M1M1")), initial);
+        Assert.assertEquals(friendly.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(friendly.state().controllerCreature().power(), 3);
+        Assert.assertEquals(friendly.state().controllerCreature().toughness(), 3);
+        Assert.assertEquals(friendly.state().sourcePermanent().power(), 3);
+        Assert.assertTrue(friendly.value() > 0);
+    }
+
+    @Test
     public void keywordCountersReuseCreatureAbilityValue() {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> lifelink = evaluate(leaf("PutCounter", Map.of(
