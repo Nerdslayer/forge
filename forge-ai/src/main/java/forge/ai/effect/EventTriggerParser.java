@@ -89,6 +89,11 @@ final class EventTriggerParser {
     private static final Set<String> ATTACKER_UNBLOCKED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidDefender", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
+    private static final Set<String> ATTACKERS_DECLARED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidAttackers", "ValidAttackersAmount", "AttackingPlayer",
+            "AttackedTarget", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> BLOCKERS_DECLARED_TRIGGER_PARAMS = Set.of(
+            "Mode", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> TAPS_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "Attacker", "FirstTime", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -173,7 +178,10 @@ final class EventTriggerParser {
         if (mode == TriggerType.Attacks || mode == TriggerType.Blocks
                 || mode == TriggerType.AttackerBlocked
                 || mode == TriggerType.AttackerBlockedByCreature
-                || mode == TriggerType.AttackerUnblocked) {
+                || mode == TriggerType.AttackerUnblocked
+                || mode == TriggerType.AttackersDeclared
+                || mode == TriggerType.AttackersDeclaredOneTarget
+                || mode == TriggerType.BlockersDeclared) {
             return EffectType.ATTACKED_OR_BLOCKED;
         }
         if (mode == TriggerType.Taps) {
@@ -282,6 +290,13 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.Attacks) {
             return hasOnlyParams(parameters, ATTACKS_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.AttackersDeclared
+                || mode == TriggerType.AttackersDeclaredOneTarget) {
+            return hasOnlyParams(parameters, ATTACKERS_DECLARED_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.BlockersDeclared) {
+            return hasOnlyParams(parameters, BLOCKERS_DECLARED_TRIGGER_PARAMS);
         }
         if (mode == TriggerType.Blocks) {
             return hasOnlyParams(parameters, BLOCKS_TRIGGER_PARAMS);
