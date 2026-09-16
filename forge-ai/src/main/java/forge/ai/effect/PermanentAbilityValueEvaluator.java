@@ -246,11 +246,23 @@ public final class PermanentAbilityValueEvaluator {
             } else if (scheduled) {
                 // A production edge scores its consumer's reaction, not this producer's own
                 // draw/counter outcome. Even a self-reaction is a different trigger/outcome.
-                if (aggregateValue != 0) {
+                final SituationalFutureOutcomeEvaluator.Evaluation situational =
+                        SituationalFutureOutcomeEvaluator.evaluateScheduledTrigger(ai, candidate,
+                                value.path());
+                if (situational.supported()) {
+                    final int situationalValue = toInt(situational.value()
+                            * value.expectedOccurrences());
+                    if (situationalValue != 0) {
+                        destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
+                                null, null, AbilityValueKind.INTRINSIC_SCHEDULED, situationalValue,
+                                value.path() + ":scheduled-situational", situational.reason()));
+                    }
+                } else if (aggregateValue != 0) {
                     destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
                             null, null, AbilityValueKind.INTRINSIC_SCHEDULED, aggregateValue,
                             value.path() + ":scheduled",
-                            "Intrinsic scheduled " + api + " value (counted once)"));
+                            "Intrinsic scheduled " + api + " value (counted once; live refinement "
+                                    + situational.reason() + ")"));
                 }
             } else if ("Attacks".equals(description.parameters().get("Mode"))) {
                 // This is the same self opportunity represented by an attack production and
@@ -317,20 +329,9 @@ public final class PermanentAbilityValueEvaluator {
     }
 
     private static boolean isActiveLiveTrigger(final Card candidate, final String path) {
-        final int marker = path.lastIndexOf("/trigger:");
-        if (marker < 0) {
-            return false;
-        }
-        try {
-            final int index = Integer.parseInt(path.substring(marker + "/trigger:".length()));
-            if (index < 0 || index >= candidate.getTriggers().size()) {
-                return false;
-            }
-            final Trigger trigger = candidate.getTriggers().get(index);
-            return EffectAbilityUtils.isActiveBattlefieldTriggerIgnoringRequirements(candidate, trigger);
-        } catch (final RuntimeException ignored) {
-            return false;
-        }
+        final Trigger trigger = EffectAbilityUtils.triggerAtPath(candidate, path);
+        return trigger != null
+                && EffectAbilityUtils.isActiveBattlefieldTriggerIgnoringRequirements(candidate, trigger);
     }
 
     private static boolean isActiveLiveAbility(final Card candidate,

@@ -28,6 +28,24 @@ final class EffectAbilityUtils {
                 && trigger.zonesCheck(source.getZone());
     }
 
+    /** Returns the live trigger identified by a traversal path, or {@code null} if it is stale. */
+    static Trigger triggerAtPath(final Card source, final String path) {
+        if (source == null || path == null) {
+            return null;
+        }
+        final int marker = path.lastIndexOf("/trigger:");
+        if (marker < 0) {
+            return null;
+        }
+        try {
+            final int index = Integer.parseInt(path.substring(marker + "/trigger:".length()));
+            return index >= 0 && index < source.getTriggers().size()
+                    ? source.getTriggers().get(index) : null;
+        } catch (final RuntimeException ignored) {
+            return null;
+        }
+    }
+
     static SpellAbility copyTriggerOutcome(final Card source, final Trigger trigger) {
         final SpellAbility outcome = resolveTriggerOutcome(source, trigger);
         return outcome == null ? null : outcome.copy(source, false);
