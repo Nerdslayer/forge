@@ -7,6 +7,7 @@ import forge.ai.AITest;
 import forge.ai.AiProfileUtil;
 import forge.ai.AiProps;
 import forge.ai.ComputerUtil;
+import forge.ai.ComputerUtilAbility;
 import forge.ai.LobbyPlayerAi;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
@@ -15,6 +16,9 @@ import forge.game.card.CardCollection;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** Regression coverage for Mastermind's targeted-discard valuation tie-breaker. */
 public class TargetedDiscardAnalysisTest extends AITest {
@@ -51,5 +55,21 @@ public class TargetedDiscardAnalysisTest extends AITest {
 
         lobby.setAiProfile("Mastermind");
         Assert.assertTrue(AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_TARGETED_DISCARD_ANALYSIS));
+    }
+
+    @Test
+    public void castValueTieBreakerPreservesLegacyTieScope() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card lowerValue = addCardToZone("Craw Wurm", ai, ZoneType.Hand);
+        final Card higherValue = addCardToZone("Colossal Dreadmaw", ai, ZoneType.Hand);
+        final List<SpellAbility> abilities = new ArrayList<>(ComputerUtilAbility.getSpellAbilities(
+                new CardCollection(List.of(lowerValue, higherValue)), ai));
+
+        Assert.assertEquals(ComputerUtilAbility.saEvaluator.compare(abilities.get(0),
+                abilities.get(1)), 0);
+        CastCardValueTieBreaker.apply(ai, abilities);
+
+        Assert.assertSame(abilities.get(0).getHostCard(), higherValue);
     }
 }
