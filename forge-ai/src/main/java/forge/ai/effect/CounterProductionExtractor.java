@@ -10,17 +10,22 @@ import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
+import forge.game.card.CardCollectionView;
+import forge.game.card.CardLists;
 import forge.game.card.CounterType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
+import forge.game.zone.ZoneType;
 
 /** Extracts direct, fixed-recipient counter-added productions. */
 final class CounterProductionExtractor implements EffectProductionExtractor {
     static final CounterProductionExtractor INSTANCE = new CounterProductionExtractor();
 
     // TODO(effect analysis): Support targeted, distributed, multi-type, optional, ETB,
-    // replacement-modified, and additional trigger-origin counter productions.
+    // replacement-modified, and additional trigger-origin counter productions. PutCounterAll is
+    // currently limited to one fixed untargeted battlefield batch; reference batch extraction and
+    // intrinsic valuation still need recipient-population modeling.
 
     private CounterProductionExtractor() {
     }
@@ -55,7 +60,7 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
     }
 
     private static SpellAbility findSupportedCounterOutcome(final SpellAbility root) {
-        final SpellAbility outcome = EffectAbilityUtils.findOutcome(root, ApiType.PutCounter);
+        final SpellAbility outcome = findFirstOutcome(root, ApiType.PutCounter, ApiType.PutCounterAll);
         if (outcome == null || outcome.usesTargeting() || !outcome.hasParam("CounterType")
                 || outcome.hasParam("CounterTypes") || outcome.hasParam("Choices")
                 || outcome.hasParam("ChooseDifferent") || outcome.hasParam("DividedAsYouChoose")
@@ -63,7 +68,15 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
                 || outcome.hasParam("ExistingCounter") || outcome.hasParam("PutOnEachOther")
                 || outcome.hasParam("PutOnDefined") || outcome.hasParam("ETB")
                 || outcome.hasParam("UpTo") || outcome.hasParam("Optional")
+                || outcome.hasParam("ValidCards2") || outcome.hasParam("CounterType2")
+                || outcome.hasParam("CounterNum2") || outcome.hasParam("AmountByChosenMap")
                 || (outcome.hasParam("Placer") && !"You".equals(outcome.getParam("Placer")))) {
+            return null;
+        }
+        if (outcome.getApi() == ApiType.PutCounterAll && !outcome.hasParam("ValidCards")) {
+            return null;
+        }
+        if (outcome.getApi() != ApiType.PutCounter && outcome.getApi() != ApiType.PutCounterAll) {
             return null;
         }
         for (final String param : outcome.getMapParams().keySet()) {
@@ -72,6 +85,16 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
             }
         }
         return outcome;
+    }
+
+    private static SpellAbility findFirstOutcome(final SpellAbility root, final ApiType... apis) {
+        for (final ApiType api : apis) {
+            final SpellAbility outcome = EffectAbilityUtils.findOutcome(root, api);
+            if (outcome != null) {
+                return outcome;
+            }
+        }
+        return null;
     }
 
     private static EffectProduction createProduction(final Card source,
@@ -87,8 +110,10 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
             return null;
         }
 
-        final List<GameEntity> recipients = AbilityUtils.getDefinedEntities(source,
-                outcome.getParamOrDefault("Defined", "Self").split(" & "), outcome);
+        final List<? extends GameEntity> recipients = outcome.getApi() == ApiType.PutCounterAll
+                ? allBattlefieldRecipients(source, outcome)
+                : AbilityUtils.getDefinedEntities(source,
+                        outcome.getParamOrDefault("Defined", "Self").split(" & "), outcome);
         final List<EffectEvent> events = new ArrayList<>();
         for (final GameEntity recipient : recipients) {
             if (!(recipient instanceof Card) && !(recipient instanceof Player)
@@ -108,5 +133,12 @@ final class CounterProductionExtractor implements EffectProductionExtractor {
         }
         return events.isEmpty() ? null : new EffectProduction(
                 source, EffectType.COUNTER_ADDED, events, expectedBatches);
+    }
+
+    private static List<Card> allBattlefieldRecipients(final Card source,
+            final SpellAbility outcome) {
+        final CardCollectionView battlefield = source.getGame().getCardsIn(ZoneType.Battlefield);
+        return CardLists.getValidCards(battlefield, outcome.getParam("ValidCards"),
+                source.getController(), source, outcome);
     }
 }
