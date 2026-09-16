@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import java.util.function.Function;
 import forge.card.CardStateName;
 import forge.game.cost.Cost;
+import forge.game.cost.CostPayLife;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostPartMana;
 import forge.game.cost.CostTap;
@@ -166,7 +167,8 @@ public final class IntrinsicAbilityEvaluator {
                     outcomeStatusBeforeEvaluation(ability));
         }
         final IntrinsicActivationOccurrenceEstimate occurrence = IntrinsicActivationOccurrenceEstimator
-                .estimate(cost.manaCost(), cost.hasTapCost(), source, model, settings, timing);
+                .estimate(cost.manaCost(), cost.hasTapCost(), cost.lifeCost(), source, model, settings,
+                        timing);
         if (!occurrence.supported()) {
             return unsupported(ability, occurrence.reason(), SupportStatus.SUPPORTED,
                     outcomeStatusBeforeEvaluation(ability));
@@ -262,16 +264,28 @@ public final class IntrinsicAbilityEvaluator {
         } catch (final RuntimeException invalidCost) {
             return Optional.empty();
         }
-        if (!cost.hasManaCost() && !cost.hasTapCost() || cost.getTotalMana().countX() > 0) {
+        final boolean hasLifeCost = cost.getCostPartByType(CostPayLife.class) != null;
+        if ((!cost.hasManaCost() && !cost.hasTapCost() && !hasLifeCost)
+                || cost.getTotalMana().countX() > 0) {
             return Optional.empty();
         }
+        int lifeCost = 0;
         for (final CostPart part : cost.getCostParts()) {
-            if (!(part instanceof CostPartMana) && !(part instanceof CostTap)) {
+            if (part instanceof CostPayLife) {
+                if (!part.getAmount().matches("\\d+")) {
+                    return Optional.empty();
+                }
+                try {
+                    lifeCost = Math.addExact(lifeCost, Integer.parseInt(part.getAmount()));
+                } catch (final ArithmeticException | NumberFormatException invalidAmount) {
+                    return Optional.empty();
+                }
+            } else if (!(part instanceof CostPartMana) && !(part instanceof CostTap)) {
                 return Optional.empty();
             }
         }
         return Optional.of(new IntrinsicActivationCost(cost.getTotalMana().getCMC(),
-                cost.hasTapCost()));
+                cost.hasTapCost(), lifeCost));
     }
 
     private static AbilityOutcomeDescription withoutExecutionMetadata(
@@ -289,7 +303,7 @@ public final class IntrinsicAbilityEvaluator {
                 withoutExecutionMetadata(node.next(), depth + 1), node.issue());
     }
 
-    private record IntrinsicActivationCost(int manaCost, boolean hasTapCost) {
+    private record IntrinsicActivationCost(int manaCost, boolean hasTapCost, int lifeCost) {
     }
 
     /**
