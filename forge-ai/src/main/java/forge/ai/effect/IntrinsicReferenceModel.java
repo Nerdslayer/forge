@@ -32,7 +32,7 @@ public final class IntrinsicReferenceModel {
         MANA_EXPENDED,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
         ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET, SCRIED_OR_SURVEILLED,
-        TRANSFORMED, TURNED_FACE_UP
+        TRANSFORMED, TURNED_FACE_UP, ATTACHED_OR_UNATTACHED
     }
 
     /**
@@ -238,6 +238,9 @@ public final class IntrinsicReferenceModel {
         // so the generic prior is intentionally low and the adapter applies card/filter factors.
         events.put(EventType.TRANSFORMED, rateDistribution(0, .55, 1, .35, 2, .10));
         events.put(EventType.TURNED_FACE_UP, rateDistribution(0, .55, 1, .35, 2, .10));
+        // Attachments usually change only when an Aura or Equipment is cast or moved, while
+        // detachment is less common; the adapter applies source/recipient filters on top.
+        events.put(EventType.ATTACHED_OR_UNATTACHED, rateDistribution(0, .55, 1, .35, 2, .10));
         events.put(EventType.DAMAGE_DEALT, rateDistribution(0, .30, 1, .45, 2, .20, 3, .05));
         events.put(EventType.ZONE_CHANGED, rateDistribution(0, .20, 1, .50, 2, .25, 3, .05));
 
