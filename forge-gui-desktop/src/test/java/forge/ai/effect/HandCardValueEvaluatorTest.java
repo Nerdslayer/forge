@@ -15,7 +15,8 @@ public class HandCardValueEvaluatorTest extends AITest {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
         final Player owner = game.getPlayers().get(0);
-        final Card known = addCard("Grizzly Bears", owner);
+        final Card known = addCardToZone("Grizzly Bears", owner,
+                forge.game.zone.ZoneType.Hand);
         addCardToZone("Forest", owner, forge.game.zone.ZoneType.Hand);
         addCardToZone("Forest", owner, forge.game.zone.ZoneType.Hand);
 
@@ -36,7 +37,8 @@ public class HandCardValueEvaluatorTest extends AITest {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
         final Player owner = game.getPlayers().get(0);
-        final Card known = addCard("Grizzly Bears", owner);
+        final Card known = addCardToZone("Grizzly Bears", owner,
+                forge.game.zone.ZoneType.Hand);
 
         final HandValuationContext handContext = HandValuationContext.knownCardOnly(
                 ai, owner, known, 1);
@@ -54,6 +56,11 @@ public class HandCardValueEvaluatorTest extends AITest {
         Assert.assertEquals(handValue.futurePotentialValue(), intrinsicValue.currentPresenceValue());
         Assert.assertEquals(definitionValue, intrinsicValue);
         Assert.assertTrue(intrinsicValue.accessCost() > handValue.accessCost());
+
+        final CardValueBreakdown castValue = UnifiedCardValueEvaluator.evaluateCard(known,
+                ValuationContext.forCast(ai, true));
+        Assert.assertTrue(castValue.isComplete());
+        Assert.assertEquals(castValue, handValue);
     }
 
     @Test

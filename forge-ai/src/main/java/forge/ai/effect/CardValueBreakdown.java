@@ -35,6 +35,25 @@ public record CardValueBreakdown(int currentPresenceValue, int futurePotentialVa
         return completeness == ValuationCompleteness.COMPLETE;
     }
 
+    /**
+     * Adds independent valuation components together. Callers are responsible for ensuring the
+     * components represent distinct benefits or costs; this method only performs saturated
+     * arithmetic, combines completeness, and preserves attribution.
+     */
+    public CardValueBreakdown plus(final CardValueBreakdown other) {
+        if (other == null) {
+            throw new IllegalArgumentException("A breakdown is required for composition");
+        }
+        return new CardValueBreakdown(
+                add(currentPresenceValue, other.currentPresenceValue),
+                add(futurePotentialValue, other.futurePotentialValue),
+                add(transitionValue, other.transitionValue),
+                add(accessCost, other.accessCost),
+                add(contextAdjustment, other.contextAdjustment),
+                ValuationCompleteness.combine(completeness, other.completeness),
+                combineReasons(other.reasons));
+    }
+
     public CardValueBreakdown withFuturePotential(final int value,
             final ValuationCompleteness valueCompleteness, final List<String> valueReasons) {
         return new CardValueBreakdown(currentPresenceValue, value, transitionValue, accessCost,
