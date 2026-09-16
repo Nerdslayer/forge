@@ -28,6 +28,32 @@ final class CardDrawProductionExtractor implements EffectProductionExtractor {
     private CardDrawProductionExtractor() {
     }
 
+    /**
+     * Produces the next normal draw-step event for a player. This is a player action rather than
+     * a card ability, so it is added by the relationship analyzer alongside card productions.
+     */
+    static List<EffectProduction> extractNormalDrawStep(final Player recipient) {
+        if (recipient == null || !recipient.isInGame()
+                || recipient.getCardsIn(ZoneType.Library).isEmpty()
+                || StaticAbilityCantDraw.canDrawAmount(recipient, 1) <= 0) {
+            return List.of();
+        }
+        final Card source = EffectAnalysisCardFactory.createUnknownCard(
+                recipient, ZoneType.Battlefield);
+        final Card unknownCard = EffectAnalysisCardFactory.createUnknownCard(
+                recipient, ZoneType.Hand);
+        final Map<AbilityKey, Object> parameters = new EnumMap<>(AbilityKey.class);
+        parameters.put(AbilityKey.Card, unknownCard);
+        parameters.put(AbilityKey.Player, recipient);
+        // The next normal draw step starts a fresh turn, so it is the first draw of that turn.
+        parameters.put(AbilityKey.Number, 1);
+        parameters.put(AbilityKey.FirstTime, true);
+        final EffectEvent event = new EffectEvent(EffectType.CARD_DRAWN, recipient,
+                List.of(new EffectEvent.Subject(unknownCard, 1)), parameters);
+        return List.of(new EffectProduction(source, EffectType.CARD_DRAWN,
+                List.of(event), 1));
+    }
+
     @Override
     public List<EffectProduction> extract(final Player evaluatingAi, final Card source,
             final Trigger trigger) {

@@ -2860,8 +2860,46 @@ public class EffectRelationshipEvaluatorTest extends AITest {
 
         Assert.assertTrue(values.getOrDefault(oneDraw, 0) > 0, values.toString());
         Assert.assertEquals(values.get(threeDraws).intValue(), values.get(oneDraw) * 3);
-        Assert.assertEquals(values.get(consequence).intValue(),
-                values.get(oneDraw) + values.get(threeDraws));
+        // The consequence also sees the player's normal next draw step.
+        Assert.assertTrue(values.get(consequence) > values.get(oneDraw) + values.get(threeDraws),
+                values.toString());
+    }
+
+    @Test
+    public void testNormalDrawStepEvaluatesOwnDrawTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 2);
+
+        final Card consequence = addDrawCounterConsequence(
+                "Grizzly Bears", opponent, "Card.YouCtrl", "");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(consequence));
+
+        Assert.assertTrue(values.getOrDefault(consequence, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testNormalDrawStepEvaluatesOpponentDrawTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(ai, 2);
+
+        final Card consequence = addCard("Runeclaw Bear", opponent);
+        consequence.setSVar("EffectTestDrawOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Drawn | ValidPlayer$ Opponent"
+                + " | Execute$ EffectTestDrawOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(consequence));
+
+        Assert.assertTrue(values.getOrDefault(consequence, 0) > 0, values.toString());
     }
 
     @Test
@@ -2902,7 +2940,8 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(producer, consequence));
 
         Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
-        Assert.assertEquals(values.get(producer), values.get(consequence));
+        // The opponent's next normal draw also satisfies this broad player constraint.
+        Assert.assertTrue(values.get(consequence) >= values.get(producer), values.toString());
     }
 
     @Test
@@ -2922,7 +2961,8 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(producer, consequence));
 
         Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
-        Assert.assertEquals(values.get(producer), values.get(consequence));
+        // The AI's next normal draw also satisfies the opponent-player constraint.
+        Assert.assertTrue(values.get(consequence) >= values.get(producer), values.toString());
     }
 
     @Test
@@ -2945,7 +2985,8 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(producer, consequence));
 
         Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
-        Assert.assertEquals(values.get(producer), values.get(consequence));
+        // The opponent's next normal draw is an additional matching production.
+        Assert.assertTrue(values.get(consequence) >= values.get(producer), values.toString());
     }
 
     @Test
@@ -2984,7 +3025,8 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(producer, consequence));
 
         Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
-        Assert.assertEquals(values.get(producer), values.get(consequence));
+        // The consequence also sees the opponent's normal next draw step.
+        Assert.assertTrue(values.get(consequence) >= values.get(producer), values.toString());
     }
 
     @Test

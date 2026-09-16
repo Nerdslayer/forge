@@ -49,6 +49,7 @@ final class TriggeredEffectAnalyzer {
         extractPlayerProductions(evaluatingAi, evaluatingAi,
                 Set.of(EffectType.CARD_SEARCHED_OR_SELECTED, EffectType.SCRIED_OR_SURVEILLED),
                 productions, trace);
+        addNormalDrawStep(evaluatingAi, productions, trace);
         extractEffects(evaluatingAi, analyzedControllers, productions, consequences, trace);
 
         final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
@@ -102,6 +103,7 @@ final class TriggeredEffectAnalyzer {
             final Map<EffectType, List<EffectConsequence>> consequences,
             final EffectAnalysisTrace trace) {
         for (final Player controller : controllers) {
+            addNormalDrawStep(controller, productions, trace);
             // Land plays are player-wide opportunities, not one independent production per
             // battlefield land. The synthetic source is intentionally outside candidate cards;
             // matching consequences still receive their normal relationship contribution.
@@ -152,6 +154,14 @@ final class TriggeredEffectAnalyzer {
                 }
             }
         }
+    }
+
+    private static void addNormalDrawStep(final Player player,
+            final List<EffectProduction> productions, final EffectAnalysisTrace trace) {
+        final List<EffectProduction> drawSteps =
+                CardDrawProductionExtractor.extractNormalDrawStep(player);
+        productions.addAll(drawSteps);
+        drawSteps.forEach(trace::production);
     }
 
     private static void extractPlayerProductions(final Player evaluatingAi,
