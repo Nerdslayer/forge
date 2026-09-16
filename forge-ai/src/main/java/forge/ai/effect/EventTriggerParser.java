@@ -147,6 +147,9 @@ final class EventTriggerParser {
         if (mode == TriggerType.Drawn) {
             return EffectType.CARD_DRAWN;
         }
+        if (mode == TriggerType.LandPlayed) {
+            return EffectType.LAND_PLAYED;
+        }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return EffectType.CARD_DISCARDED;
         }

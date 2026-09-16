@@ -95,6 +95,12 @@ final class TriggeredEffectAnalyzer {
             final Map<EffectType, List<EffectConsequence>> consequences,
             final EffectAnalysisTrace trace) {
         for (final Player controller : controllers) {
+            // Land plays are player-wide opportunities, not one independent production per
+            // battlefield land. The synthetic source is intentionally outside candidate cards;
+            // matching consequences still receive their normal relationship contribution.
+            final List<EffectProduction> landPlays = LandPlayedProductionExtractor.extract(controller);
+            productions.addAll(landPlays);
+            landPlays.forEach(trace::production);
             for (final Card permanent : controller.getCardsIn(ZoneType.Battlefield)) {
                 try {
                     final List<EffectProduction> extracted =
