@@ -2435,6 +2435,73 @@ public class ComputerUtil {
                 visibleToChooser);
     }
 
+    /**
+     * Uses known-card valuation only to break a tie left by the normal own-discard heuristic.
+     * The legacy category and score remain authoritative; this is deliberately not a general
+     * replacement for the AI's discard logic.
+     */
+    static Card chooseKnownOwnDiscardOnLegacyTie(final Player ai,
+            final Iterable<Card> validCards, final Card legacyChoice) {
+        if (ai == null || legacyChoice == null
+                || !AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_OWN_DISCARD_VALUE_TIEBREAK)) {
+            return legacyChoice;
+        }
+
+        final List<Card> candidates = new ArrayList<>();
+        validCards.forEach(candidates::add);
+        if (candidates.size() < 2) {
+            return legacyChoice;
+        }
+
+        final List<Card> legacyTiePool;
+        final List<Card> lands = CardLists.filter(candidates, CardPredicates.LANDS);
+        if (lands.size() > 6 || lands.size() == candidates.size()) {
+            // getWorstLand has stateful land-specific scoring that this first slice does not
+            // duplicate. The existing land heuristic remains authoritative.
+            return legacyChoice;
+        }
+
+        final boolean hasEnchantments = candidates.stream().anyMatch(CardPredicates.ENCHANTMENTS);
+        final boolean hasArtifacts = candidates.stream().anyMatch(CardPredicates.ARTIFACTS);
+        final boolean hasCreatures = candidates.stream().anyMatch(CardPredicates.CREATURES);
+        if (hasEnchantments || hasArtifacts) {
+            legacyTiePool = CardLists.filter(candidates,
+                    (CardPredicates.ARTIFACTS.or(CardPredicates.ENCHANTMENTS))
+                            .and(card -> !card.hasSVar("DoNotDiscardIfAble")));
+            if (legacyTiePool.isEmpty() || !legacyTiePool.contains(legacyChoice)) {
+                return legacyChoice;
+            }
+        } else if (hasCreatures) {
+            legacyTiePool = CardLists.filter(candidates, CardPredicates.CREATURES);
+            if (!legacyTiePool.contains(legacyChoice)) {
+                return legacyChoice;
+            }
+        } else {
+            legacyTiePool = candidates;
+        }
+
+        final boolean creatureCategory = hasCreatures && !hasEnchantments && !hasArtifacts;
+        final int legacyScore = legacyTiePool.stream()
+                .mapToInt(card -> legacyDiscardScoreForOwnHand(card, !creatureCategory))
+                .min().orElse(Integer.MAX_VALUE);
+        final List<Card> tied = legacyTiePool.stream()
+                .filter(card -> legacyDiscardScoreForOwnHand(card, !creatureCategory) == legacyScore)
+                .collect(Collectors.toList());
+        if (tied.size() < 2) {
+            return legacyChoice;
+        }
+
+        return ActionValueTieBreaker.rankSupportedTie(tied, ValuationContext.forDiscard(ai, true),
+                card -> true, card -> new DiscardValuationAction(card, ai)).get(0);
+    }
+
+    private static int legacyDiscardScoreForOwnHand(final Card card, final boolean useCmc) {
+        if (useCmc) {
+            return card.getManaCost().getCMC();
+        }
+        return ComputerUtilCard.evaluateCreature(card);
+    }
+
     private static boolean usesTargetedDiscardAnalysis(final Player chooser, final Player discarder,
             final CardCollectionView visibleToChooser) {
         if (chooser == null || discarder == null || visibleToChooser == null

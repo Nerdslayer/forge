@@ -8,7 +8,9 @@ import forge.ai.AiProfileUtil;
 import forge.ai.AiProps;
 import forge.ai.ComputerUtil;
 import forge.ai.ComputerUtilAbility;
+import forge.ai.ComputerUtilCard;
 import forge.ai.LobbyPlayerAi;
+import forge.ai.PlayerControllerAi;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
 import forge.game.card.Card;
@@ -55,6 +57,30 @@ public class TargetedDiscardAnalysisTest extends AITest {
 
         lobby.setAiProfile("Mastermind");
         Assert.assertTrue(AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_TARGETED_DISCARD_ANALYSIS));
+    }
+
+    @Test
+    public void mastermindUsesCardValueOnlyForOwnDiscardCmcTies() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card shock = addCardToZone("Shock", ai, ZoneType.Hand);
+        final Card lavaSpike = addCardToZone("Lava Spike", ai, ZoneType.Hand);
+        final CardCollection validCards = new CardCollection(ai.getCardsIn(ZoneType.Hand));
+
+        ((LobbyPlayerAi) ai.getLobbyPlayer()).setAiProfile("Mastermind");
+        final Card legacyChoice = ComputerUtilCard.getWorstAI(validCards);
+        final Card expected = UnifiedActionValueEvaluator.evaluate(
+                new DiscardValuationAction(shock, ai), ValuationContext.forDiscard(ai, true))
+                .netValue() >= UnifiedActionValueEvaluator.evaluate(
+                new DiscardValuationAction(lavaSpike, ai), ValuationContext.forDiscard(ai, true))
+                .netValue() ? shock : lavaSpike;
+
+        final CardCollection result = ((PlayerControllerAi) ai.getController()).getAi()
+                .getCardsToDiscard(1, 1, validCards, null);
+
+        Assert.assertEquals(result.size(), 1);
+        Assert.assertSame(result.get(0), expected);
+        Assert.assertNotSame(result.get(0), legacyChoice);
     }
 
     @Test
