@@ -22,9 +22,8 @@ import com.google.common.collect.*;
 import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ProtectAi;
 import forge.ai.ability.TokenAi;
-import forge.ai.effect.CardValueBreakdown;
+import forge.ai.effect.ActionValueTieBreaker;
 import forge.ai.effect.DiscardValuationAction;
-import forge.ai.effect.UnifiedActionValueEvaluator;
 import forge.ai.effect.ValuationContext;
 import forge.card.CardStateName;
 import forge.card.CardType;
@@ -2476,7 +2475,9 @@ public class ComputerUtil {
 
             if (end - start > 1) {
                 final List<Card> tiedCards = new ArrayList<>(choices.subList(start, end));
-                final List<Card> rankedCards = rankKnownHandTie(tiedCards, discarder, context);
+                final List<Card> rankedCards = ActionValueTieBreaker.rankSupportedTie(tiedCards,
+                        context, card -> true,
+                        card -> new DiscardValuationAction(card, discarder));
                 for (int i = 0; i < rankedCards.size(); i++) {
                     choices.set(start + i, rankedCards.get(i));
                 }
@@ -2506,28 +2507,8 @@ public class ComputerUtil {
         }
 
         final ValuationContext context = ValuationContext.forDiscard(chooser, true);
-        return rankKnownHandTie(tiedCards, discarder, context).get(0);
-    }
-
-    private static List<Card> rankKnownHandTie(final List<Card> tiedCards,
-            final Player discarder, final ValuationContext context) {
-        final Map<Card, CardValueBreakdown> evaluations = new IdentityHashMap<>();
-        for (final Card card : tiedCards) {
-            final CardValueBreakdown evaluation = UnifiedActionValueEvaluator.evaluate(
-                    new DiscardValuationAction(card, discarder), context);
-            if (!evaluation.isComplete()) {
-                return tiedCards;
-            }
-            evaluations.put(card, evaluation);
-        }
-
-        final int firstValue = evaluations.get(tiedCards.get(0)).netValue();
-        if (tiedCards.stream().allMatch(card -> evaluations.get(card).netValue() == firstValue)) {
-            return tiedCards;
-        }
-        tiedCards.sort(Comparator.comparingInt(
-                (Card card) -> evaluations.get(card).netValue()).reversed());
-        return tiedCards;
+        return ActionValueTieBreaker.rankSupportedTie(tiedCards, context, card -> true,
+                card -> new DiscardValuationAction(card, discarder)).get(0);
     }
 
     public static String chooseSomeType(Player ai, String kindOfType, SpellAbility sa, Collection<String> validTypes) {
