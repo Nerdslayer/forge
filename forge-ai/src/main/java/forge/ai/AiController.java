@@ -1594,6 +1594,9 @@ public class AiController {
         try {
             all.sort(ComputerUtilAbility.saEvaluator); // put best spells first
             ComputerUtilAbility.sortCreatureSpells(all);
+            if (getBoolProperty(AiProps.ENABLE_CAST_VALUE_TIEBREAK)) {
+                CastCardValueTieBreaker.apply(player, all);
+            }
         } catch (IllegalArgumentException ex) {
             System.err.println(ex.getMessage());
             String assertex = ComparatorUtil.verifyTransitivity(ComputerUtilAbility.saEvaluator, all);
