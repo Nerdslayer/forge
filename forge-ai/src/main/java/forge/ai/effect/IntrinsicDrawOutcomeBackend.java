@@ -50,6 +50,9 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> DEBUFF_PARAMETERS = parameters("Defined", "Keywords",
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone",
             "Duration");
+    private static final Set<String> ANIMATE_PARAMETERS = parameters("Defined", "ValidTgts",
+            "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Duration",
+            "Power", "Toughness", "Types", "Keywords");
     private static final Set<String> TOKEN_PARAMETERS = parameters("TokenScript", "TokenOwner",
             "TokenAmount", "TokenPower", "TokenToughness", "TokenTypes", "TokenColors",
             "TokenTapped", "TokenAttacking", "TokenBlocking");
@@ -259,6 +262,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Pump" -> acceptsPump(node);
         case "PumpAll" -> acceptsPumpAll(node);
         case "Debuff" -> acceptsDebuff(node);
+        case "Animate" -> acceptsAnimate(node);
         case "Token" -> acceptsToken(node);
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
@@ -322,6 +326,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "PutCounter", "PutCounterAll" -> counter(node);
         case "Pump", "PumpAll" -> pump(node);
         case "Debuff" -> debuff(node);
+        case "Animate" -> animate(node);
         case "Token" -> token(node);
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
@@ -1028,6 +1033,39 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> animate(final AbilityOutcomeDescription node) {
+        final PermanentTarget target = permanentTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic animation target");
+        }
+        if (target.fixed() != null) {
+            return animateAtomic(node, target.fixed());
+        }
+        return new Outcome.Deferred<>(state -> new Outcome.Target<>(node.path() + ":target",
+                current -> permanentCandidates(current, target), State::withTarget,
+                animateAtomic(node, null), true));
+    }
+
+    private Outcome<State> animateAtomic(final AbilityOutcomeDescription node,
+            final TargetRef fixedTarget) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
+            if (target == null) {
+                return null;
+            }
+            final PermanentProfile before = permanent(current, target);
+            if (!before.present() || before.kind() == PermanentKind.PLANESWALKER
+                    || !simpleKeywords(before.keywords())) {
+                return null;
+            }
+            final PermanentProfile after = animatePermanent(before, node);
+            final int value = evaluator.evaluatePermanentDelta(before, after,
+                    controls(target, current));
+            return new Outcome.Transition<>((double) value,
+                    replacePermanent(current, target, after).clearTarget(), node.api());
+        });
+    }
+
     private Outcome<State> pumpAll(final AbilityOutcomeDescription node) {
         // TODO: Intrinsic group valuation currently uses one representative creature and an
         // independent recipient count. Subtypes, noncreature recipients, correlated populations,
@@ -1222,6 +1260,20 @@ public final class IntrinsicDrawOutcomeBackend
                 && keywords != null && !keywords.isEmpty() && counterTarget(node) != null;
     }
 
+    private static boolean acceptsAnimate(final AbilityOutcomeDescription node) {
+        // The reference profile can model a persistent creature conversion, but not temporary
+        // animation, subtype/color changes, or a planeswalker that remains a planeswalker.
+        final Set<String> keywords = supportedKeywords(node.parameters().get("Keywords"));
+        final String types = node.parameters().get("Types");
+        return ANIMATE_PARAMETERS.containsAll(node.parameters().keySet())
+                && Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))
+                && node.parameters().containsKey("Power") && node.parameters().containsKey("Toughness")
+                && literalNonnegativeOrAbsent(node, "Power")
+                && literalNonnegativeOrAbsent(node, "Toughness")
+                && types != null && hasCreatureType(types)
+                && keywords != null && permanentTarget(node) != null;
+    }
+
     private static boolean acceptsPumpAll(final AbilityOutcomeDescription node) {
         return acceptsPumpParameters(node)
                 && !node.parameters().containsKey("Defined")
@@ -1243,6 +1295,11 @@ public final class IntrinsicDrawOutcomeBackend
 
     private static Set<String> supportedKeywords(final String value) {
         return IntrinsicStaticAbilityEvaluator.parseSupportedKeywords(value);
+    }
+
+    private static boolean hasCreatureType(final String types) {
+        return List.of(types.split(",")).stream()
+                .map(type -> type.trim()).anyMatch("Creature"::equalsIgnoreCase);
     }
 
     private static CreatureGroupTarget creatureGroupTarget(final AbilityOutcomeDescription node) {
@@ -1346,6 +1403,8 @@ public final class IntrinsicDrawOutcomeBackend
                     || target.scope() == CounterTargetScope.OPPONENT_CREATURE) {
                 dimensions.add(OPPONENT_CREATURE);
             }
+        } else if ("Animate".equals(node.api()) && acceptsAnimate(node)) {
+            addRemovalDimensions(node, dimensions);
         } else if (("GainLife".equals(node.api()) || "LoseLife".equals(node.api()))
                 && acceptsLife(node)) {
             addPlayerDimensions(node, dimensions);
@@ -1692,7 +1751,9 @@ public final class IntrinsicDrawOutcomeBackend
         case SOURCE -> state.withSourcePermanent(replacement);
         case CONTROLLER_CREATURE -> state.withCreatures(true, toCreature(replacement));
         case OPPONENT_CREATURE -> state.withCreatures(false, toCreature(replacement));
-        case CONTROLLER_PERMANENT, OPPONENT_PERMANENT, CONTROLLER_PLAYER, OPPONENT_PLAYER -> state;
+        case CONTROLLER_PERMANENT -> state.withPermanent(true, replacement);
+        case OPPONENT_PERMANENT -> state.withPermanent(false, replacement);
+        case CONTROLLER_PLAYER, OPPONENT_PLAYER -> state;
         };
     }
 
@@ -1750,6 +1811,15 @@ public final class IntrinsicDrawOutcomeBackend
         }
         return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
                 profile.power(), profile.toughness(), keywords, profile.basicLand(), profile.loyalty());
+    }
+
+    private static PermanentProfile animatePermanent(final PermanentProfile profile,
+            final AbilityOutcomeDescription node) {
+        final Set<String> keywords = plusKeywords(profile.keywords(),
+                supportedKeywords(node.parameters().get("Keywords")));
+        return new PermanentProfile(true, PermanentKind.CREATURE, profile.controlledByAi(),
+                integer(node, "Power", profile.power()), integer(node, "Toughness", profile.toughness()),
+                keywords, profile.basicLand(), profile.loyalty());
     }
 
     private static Set<String> plusKeywords(final Set<String> original,
