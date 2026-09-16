@@ -27,7 +27,7 @@ public final class IntrinsicReferenceModel {
     public enum EventType {
         ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
         LAND_PLAYED,
-        CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, TAPPED,
+        CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, TAPPED, UNTAPPED,
         MANA_ADDED_OR_SPENT,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, DAMAGE_DEALT, ZONE_CHANGED
     }
@@ -194,6 +194,9 @@ public final class IntrinsicReferenceModel {
         events.put(EventType.TOKEN_CREATED, rateDistribution(0, .30, 1, .50, 2, .20));
         events.put(EventType.COUNTER_ADDED, rateDistribution(0, .40, 1, .45, 2, .15));
         events.put(EventType.TAPPED, rateDistribution(0, .20, 1, .55, 2, .25));
+        // A self-untap trigger usually gets one opportunity per controller turn. Extra untaps
+        // are possible, but remain a small tail because no live untap engine is modeled here.
+        events.put(EventType.UNTAPPED, rateDistribution(0, .20, 1, .65, 2, .15));
         // A mana-producing permanent is usually used once or a few times each turn. This
         // distribution is deliberately broad because it does not model the deck's land count,
         // mana dorks, or the controller's exact resource needs.
