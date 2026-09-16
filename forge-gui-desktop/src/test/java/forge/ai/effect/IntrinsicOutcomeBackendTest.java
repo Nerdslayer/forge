@@ -226,6 +226,31 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void persistentKeywordOutcomesReuseCreatureDeltaAndGroupCounts() {
+        final State initial = state(CREATURE, CREATURE, SOURCE);
+        final OutcomePlan<State> self = evaluate(leaf("Pump", Map.of(
+                "Defined", "Self", "KW", "Flying", "Duration", "Permanent")), initial);
+        Assert.assertEquals(self.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(self.value(), 20.0);
+        Assert.assertTrue(self.state().sourcePermanent().keywords().contains("flying"));
+
+        final OutcomePlan<State> group = evaluate(leaf("PumpAll", Map.of(
+                "ValidCards", "Creature.YouCtrl", "KW", "Flying", "Duration", "Perpetual")), initial);
+        Assert.assertEquals(group.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(group.value(), 40.0);
+        Assert.assertTrue(group.state().controllerCreature().keywords().contains("flying"));
+
+        final PermanentProfile flyingSource = new PermanentProfile(true, PermanentKind.CREATURE,
+                true, 2, 2, Set.of("Flying"));
+        final OutcomePlan<State> loss = evaluate(leaf("Debuff", Map.of(
+                "Defined", "Self", "Keywords", "Flying", "Duration", "Permanent")),
+                state(CREATURE, CREATURE, flyingSource));
+        Assert.assertEquals(loss.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(loss.value(), -20.0);
+        Assert.assertTrue(loss.state().sourcePermanent().keywords().isEmpty());
+    }
+
+    @Test
     public void realTargetScopesRespectSideOtherAndSourceAvailability() {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> friendly = evaluate(counter("Creature.YouCtrl+Other"), initial);
