@@ -51,6 +51,10 @@ public final class IntrinsicEventTriggerAdapter {
         if (target.isPresent()) {
             return target;
         }
+        final Optional<IntrinsicEventTrigger> combat = IntrinsicCombatTriggerAdapter.describe(parameters);
+        if (combat.isPresent()) {
+            return combat;
+        }
         final Optional<IntrinsicEventTrigger> manaExpend =
                 IntrinsicManaExpendTriggerAdapter.describe(parameters);
         if (manaExpend.isPresent()) {
@@ -141,6 +145,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicTargetTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicCombatTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (IntrinsicManaExpendTriggerAdapter.supports(parameters)) {
