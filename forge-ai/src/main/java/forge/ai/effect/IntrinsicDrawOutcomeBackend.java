@@ -43,7 +43,7 @@ public final class IntrinsicDrawOutcomeBackend
             "SpellDescription", "StackDescription");
     private static final Set<String> DRAW_PARAMETERS = parameters("NumCards", "Defined");
     private static final Set<String> COUNTER_PARAMETERS = parameters("CounterType", "CounterNum",
-            "Defined", "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
+            "Defined", "ValidCards", "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
     private static final Set<String> TOKEN_PARAMETERS = parameters("TokenScript", "TokenOwner",
             "TokenAmount", "TokenPower", "TokenToughness", "TokenTypes", "TokenColors",
             "TokenTapped", "TokenAttacking", "TokenBlocking");
@@ -249,6 +249,7 @@ public final class IntrinsicDrawOutcomeBackend
         return switch (node.api()) {
         case "Draw" -> acceptsDraw(node);
         case "PutCounter" -> acceptsCounter(node) || acceptsCounterChoice(node);
+        case "PutCounterAll" -> acceptsCounterAll(node);
         case "Token" -> acceptsToken(node);
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
@@ -309,7 +310,7 @@ public final class IntrinsicDrawOutcomeBackend
         }
         return switch (node.api()) {
         case "Draw" -> draw(node);
-        case "PutCounter" -> counter(node);
+        case "PutCounter", "PutCounterAll" -> counter(node);
         case "Token" -> token(node);
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
@@ -881,6 +882,9 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private Outcome<State> counter(final AbilityOutcomeDescription node) {
+        if ("PutCounterAll".equals(node.api())) {
+            return counterAll(node);
+        }
         if (counterChoice(node)) {
             final List<Outcome<State>> options = counterTypes(node).stream()
                     .map(type -> counter(withCounterType(node, type))).toList();
@@ -905,6 +909,71 @@ public final class IntrinsicDrawOutcomeBackend
             return new Outcome.Target<>(node.path() + ":target", current -> candidates(current, target),
                     State::withTarget, counterAtomic(node, null), true);
         });
+    }
+
+    private Outcome<State> counterAll(final AbilityOutcomeDescription node) {
+        // TODO: Intrinsic group valuation currently uses one representative creature and an
+        // independent recipient count. Subtypes, noncreature recipients, correlated populations,
+        // and effects that distribute different counters or amounts still need richer reference
+        // modeling.
+        final CounterGroupTarget target = counterGroupTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic counter group");
+        }
+        return new Outcome.Atomic<>(node.path(), current -> {
+            State projected = current;
+            int value = 0;
+            if (target.controller()) {
+                final GroupApplication application = applyCounterGroup(projected, node, true,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            if (target.opponent()) {
+                final GroupApplication application = applyCounterGroup(projected, node, false,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private GroupApplication applyCounterGroup(final State state,
+            final AbilityOutcomeDescription node, final boolean controller, final boolean other) {
+        final CreatureProfile representative = controller
+                ? state.controllerCreature() : state.opponentCreature();
+        if (!simpleKeywords(representative.keywords())) {
+            return GroupApplication.unsupported(state);
+        }
+
+        final int count = state.creatureCount(controller);
+        State projected = state;
+        int value = 0;
+        if (count > 0 && representative.present()) {
+            final PermanentProfile before = new PermanentProfile(true, PermanentKind.CREATURE,
+                    controller, representative.power(), representative.toughness(),
+                    representative.keywords());
+            final PermanentProfile after = addCounter(before, node);
+            value = EffectMath.add(value, EffectMath.multiply(count,
+                    evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after), controller)));
+            projected = projected.withCreatures(controller, toCreature(after));
+        }
+
+        final PermanentProfile source = projected.sourcePermanent();
+        if (!other && isCreature(source) && source.controlledByAi() == controller) {
+            final PermanentProfile after = addCounter(source, node);
+            value = EffectMath.add(value, evaluator.evaluateCreatureDelta(
+                    toCreature(source), toCreature(after), controller));
+            projected = projected.withSourcePermanent(after);
+        }
+        return new GroupApplication(projected, value, true);
     }
 
     private Outcome<State> counterAtomic(final AbilityOutcomeDescription node,
@@ -945,12 +1014,13 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private static boolean acceptsCounter(final AbilityOutcomeDescription node) {
-        // TODO: Other counters, group recipients, divided/optional targets, repeated shield/stun
+        // TODO: Other counters, divided/optional targets, repeated shield/stun
         // or keyword-counter scaling, counter replacement effects and shared Targeted references
         // need dedicated descriptors and projected state. Comma-separated counter choices also
         // need to be represented as explicit outcome choices before intrinsic evaluation can use
         // them.
         if (!COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
+                || node.parameters().containsKey("ValidCards")
                 || !supportedCounterType(counterType(node))) {
             return false;
         }
@@ -961,6 +1031,42 @@ public final class IntrinsicDrawOutcomeBackend
                 && "1".equals(node.parameters().getOrDefault("TargetMin", "1"))
                 && "1".equals(node.parameters().getOrDefault("TargetMax", "1"))
                 && "Battlefield".equals(node.parameters().getOrDefault("TgtZone", "Battlefield"));
+    }
+
+    private static boolean acceptsCounterAll(final AbilityOutcomeDescription node) {
+        return COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
+                && !node.parameters().containsKey("Defined")
+                && !node.parameters().containsKey("ValidTgts")
+                && supportedCounterType(counterType(node))
+                && literalPositive(node, "CounterNum", 1)
+                && counterGroupTarget(node) != null;
+    }
+
+    private static CounterGroupTarget counterGroupTarget(final AbilityOutcomeDescription node) {
+        final String definition = node.parameters().get("ValidCards");
+        if (definition == null || definition.isBlank() || definition.contains(",")) {
+            return null;
+        }
+        final String[] parts = definition.toLowerCase(Locale.ROOT).split("[+.]");
+        boolean creature = false;
+        boolean youControl = false;
+        boolean opponentControl = false;
+        boolean other = false;
+        for (final String part : parts) {
+            switch (part) {
+            case "creature" -> creature = true;
+            case "youctrl" -> youControl = true;
+            case "oppctrl" -> opponentControl = true;
+            case "other", "strictlyother" -> other = true;
+            default -> {
+                return null;
+            }
+            }
+        }
+        if (!creature || youControl && opponentControl) {
+            return null;
+        }
+        return new CounterGroupTarget(!opponentControl, !youControl, other);
     }
 
     private static boolean acceptsCounterChoice(final AbilityOutcomeDescription node) {
@@ -1014,6 +1120,16 @@ public final class IntrinsicDrawOutcomeBackend
                         || target.scope() == CounterTargetScope.OPPONENT_CREATURE)) {
                     dimensions.add(OPPONENT_CREATURE);
                 }
+            }
+        } else if ("PutCounterAll".equals(node.api()) && acceptsCounterAll(node)) {
+            final CounterGroupTarget target = counterGroupTarget(node);
+            if (target.controller()) {
+                dimensions.add(CONTROLLER_CREATURE_COUNT);
+                dimensions.add(CONTROLLER_CREATURE);
+            }
+            if (target.opponent()) {
+                dimensions.add(OPPONENT_CREATURE_COUNT);
+                dimensions.add(OPPONENT_CREATURE);
             }
         } else if (("GainLife".equals(node.api()) || "LoseLife".equals(node.api()))
                 && acceptsLife(node)) {
@@ -1140,6 +1256,14 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private record CounterTarget(CounterTargetScope scope, boolean other) { }
+
+    private record CounterGroupTarget(boolean controller, boolean opponent, boolean other) { }
+
+    private record GroupApplication(State state, int value, boolean supported) {
+        private static GroupApplication unsupported(final State state) {
+            return new GroupApplication(state, 0, false);
+        }
+    }
 
     private record TokenSpec(List<String> scripts, int amount, boolean recipientIsController) { }
 
