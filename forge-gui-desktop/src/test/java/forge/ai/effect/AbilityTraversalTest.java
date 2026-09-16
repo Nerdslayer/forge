@@ -157,6 +157,48 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicSpellCastTriggerUsesReferenceSpellRate() {
+        final CardAbilityTraversal.AbilityDescription trigger =
+                new CardAbilityTraversal.AbilityDescription("Original/trigger:0",
+                        CardAbilityTraversal.Origin.TRIGGER, CardAbilityTraversal.Provenance.PRINTED,
+                        Map.of("Mode", "SpellCast", "ValidCard", "Instant,Sorcery",
+                                "ValidActivatingPlayer", "You", "TriggerZones", "Battlefield"),
+                        new AbilityOutcomeDescription("draw", "Draw",
+                                Map.of("Defined", "You", "NumCards", "1"), List.of(), null, ""));
+        final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(trigger), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+
+        Assert.assertEquals(result.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+        Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                result.toString());
+        Assert.assertTrue(result.expectedOccurrences() > 0, result.toString());
+        Assert.assertTrue(result.contribution().value() > 0, result.toString());
+    }
+
+    @Test
+    public void printedSpellCastCardsReachIntrinsicTriggerEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        for (final String cardName : List.of("Young Pyromancer", "Zendikar Resurgent")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                    .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                            .getCard(cardName), CardStateName.Original);
+            Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                    description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                            && "SpellCast".equals(description.parameters().get("Mode"))), cardName);
+            Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                    value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                            && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                            && value.contribution().value() > 0),
+                    cardName + ": " + evaluation);
+        }
+    }
+
+    @Test
     public void intrinsicBackendRejectsUnsupportedOutcomeFamilies() {
         final IntrinsicReferenceModel.PermanentProfile friendly = new IntrinsicReferenceModel.PermanentProfile(
                 true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());

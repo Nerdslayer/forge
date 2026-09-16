@@ -10,6 +10,8 @@ final class EventTriggerParser {
     private EventTriggerParser() { }
     // TODO: Broader conditions/parameters still need separate adapters; intrinsic occurrence for
     // the relationship-supported event families is supplied by IntrinsicEventTriggerAdapter.
+    // SpellCast is intentionally handled by IntrinsicSpellCastTriggerAdapter because it is an
+    // intrinsic reference event, not yet a live EffectType relationship family.
     private static final Set<String> TOKEN_CREATED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidToken", "OnlyFirst", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
