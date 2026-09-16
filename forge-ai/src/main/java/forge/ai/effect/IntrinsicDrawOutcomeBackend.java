@@ -248,10 +248,12 @@ public final class IntrinsicDrawOutcomeBackend
 
     @Override
     public Outcome<State> bindTargets(final List<AbilityOutcomeDescription> chain, final Outcome<State> child) {
-        // TODO: Bind targets before resolution across sequences/modes, including shared Targeted
-        // references and all-targets-illegal resolution rules. Local single leaves are safe.
-        if (chain.size() > 1 && chain.stream().anyMatch(IntrinsicDrawOutcomeBackend::containsTarget)) {
-            return new Outcome.Unresolved<>("Unsupported intrinsic target-bearing sequence");
+        // A chain with one targeted child is safe: the planner resolves that child and then
+        // continues with the fixed or already-defined steps. Multiple targeted children still
+        // need shared-target bindings and all-targets-illegal resolution rules.
+        final long targetedChildren = chain.stream().filter(IntrinsicDrawOutcomeBackend::containsTarget).count();
+        if (targetedChildren > 1) {
+            return new Outcome.Unresolved<>("Unsupported intrinsic multiple-target sequence");
         }
         return child;
     }
