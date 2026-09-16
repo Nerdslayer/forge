@@ -183,6 +183,23 @@ public final class IntrinsicOutcomeEvaluator {
         if (hasKeyword(creature, "flying")) {
             value = addSaturated(value, power * 10);
         }
+        if (hasKeyword(creature, "reach") && !hasKeyword(creature, "flying")) {
+            value = addSaturated(value, 5);
+        }
+        if (hasKeyword(creature, "double strike") && power > 0) {
+            value = addSaturated(value, 10 + power * 15);
+        } else if (hasKeyword(creature, "first strike") && power > 0) {
+            value = addSaturated(value, 10 + power * 5);
+        }
+        if (hasKeyword(creature, "menace") && power > 0) {
+            value = addSaturated(value, power * 4);
+        }
+        if (hasKeyword(creature, "fear") && power > 0) {
+            value = addSaturated(value, power * 6);
+        }
+        if (hasKeyword(creature, "intimidate") && power > 0) {
+            value = addSaturated(value, power * 6);
+        }
         if (hasKeyword(creature, "deathtouch") && power > 0) {
             value = addSaturated(value, 25);
         }
