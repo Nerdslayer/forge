@@ -121,6 +121,23 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void spellCastTriggerContributesFutureRemovalValueWithoutCurrentProducer() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card spellEngine = addCard("Young Pyromancer", opponent);
+        final PermanentAbilityValueEvaluator.Breakdown value = evaluate(ai, List.of(spellEngine))
+                .get(spellEngine);
+
+        Assert.assertTrue(value.intrinsicValue() > 0, value.toString());
+        Assert.assertTrue(value.reasons().stream()
+                .anyMatch(reason -> reason.contains("Independent future-support allowance")),
+                value.toString());
+    }
+
+    @Test
     public void relationshipOnlyBreakdownPreservesLegacyRelationshipMap() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
