@@ -59,6 +59,9 @@ final class EventTriggerParser {
     private static final Set<String> DAMAGE_DEALT_ONCE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidSource", "ValidTarget", "CombatDamage", "AtLeastOneInstance",
             "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> DAMAGE_ALL_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidSource", "ValidTarget", "CombatDamage", "Execute",
+            "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> ATTACKS_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> BLOCKS_TRIGGER_PARAMS = Set.of(
@@ -125,6 +128,7 @@ final class EventTriggerParser {
             return EffectType.CARD_DISCARDED;
         }
         if (mode == TriggerType.DamageDone || mode == TriggerType.DamageDoneOnce
+                || mode == TriggerType.DamageAll
                 || mode == TriggerType.DamageDealtOnce) {
             return EffectType.DAMAGE_DEALT;
         }
@@ -202,6 +206,11 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.DamageDealtOnce) {
             return hasOnlyParams(parameters, DAMAGE_DEALT_ONCE_TRIGGER_PARAMS);
+        }
+        if (mode == TriggerType.DamageAll) {
+            return hasOnlyParams(parameters, DAMAGE_ALL_TRIGGER_PARAMS)
+                    && (!parameters.containsKey("CombatDamage")
+                        || isBoolean(parameters.get("CombatDamage")));
         }
         if (mode == TriggerType.ChangesZone) {
             return hasOnlyParams(parameters, CHANGES_ZONE_TRIGGER_PARAMS);

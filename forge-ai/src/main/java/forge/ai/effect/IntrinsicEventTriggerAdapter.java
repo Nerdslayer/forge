@@ -41,6 +41,14 @@ public final class IntrinsicEventTriggerAdapter {
                     IntrinsicEventTrigger.TurnScope.ANY_TURN,
                     counterRemovedAtMostOnce(parameters), 1));
         }
+        if (isSupportedDamageAllTrigger(parameters)) {
+            return Optional.of(new IntrinsicEventTrigger(
+                    damageAllEventType(parameters), damageAllTurnScope(parameters), false,
+                    damageAllOccurrenceMultiplier(parameters)));
+        }
+        if (EventTriggerParser.mode(parameters) == TriggerType.DamageAll) {
+            return Optional.empty();
+        }
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
             return Optional.empty();
         }
@@ -82,6 +90,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (isSupportedCounterRemovedTrigger(parameters)) {
+            return true;
+        }
+        if (isSupportedDamageAllTrigger(parameters)) {
             return true;
         }
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
@@ -444,6 +455,75 @@ public final class IntrinsicEventTriggerAdapter {
 
     private static boolean counterRemovedAtMostOnce(final Map<String, String> parameters) {
         return EventTriggerParser.mode(parameters) == TriggerType.CounterRemovedOnce;
+    }
+
+    // TODO: Support DamageAll filters for planeswalkers and noncreatures, combat batches with
+    // multiple damage sources, optional/conditional triggers, and source-specific card types.
+    private static boolean isSupportedDamageAllTrigger(final Map<String, String> parameters) {
+        if (parameters == null || EventTriggerParser.mode(parameters) != TriggerType.DamageAll) {
+            return false;
+        }
+        final Set<String> supportedParameters = Set.of("Mode", "ValidSource", "ValidTarget",
+                "CombatDamage", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+        if (!supportedParameters.containsAll(parameters.keySet())
+                || (parameters.containsKey("TriggerZones")
+                    && !"Battlefield".equalsIgnoreCase(parameters.get("TriggerZones")))
+                || (parameters.containsKey("CombatDamage")
+                    && !isBoolean(parameters.get("CombatDamage")))) {
+            return false;
+        }
+        return supportsDamageAllSource(parameters.get("ValidSource"))
+                && supportsDamageAllTarget(parameters.get("ValidTarget"));
+    }
+
+    private static boolean supportsDamageAllSource(final String source) {
+        if (source == null || "Card.Self".equals(source)) {
+            return true;
+        }
+        boolean creature = false;
+        for (final String part : source.split("[.+]")) {
+            if ("Creature".equals(part)) {
+                creature = true;
+            } else if (!Set.of("Self", "YouCtrl", "OppCtrl", "inZoneBattlefield",
+                    "inRealZoneBattlefield").contains(part)
+                    && !CardType.isACreatureType(part)) {
+                return false;
+            }
+        }
+        return creature;
+    }
+
+    private static boolean supportsDamageAllTarget(final String target) {
+        return target == null || Set.of("Player", "Opponent", "Player.Opponent").contains(target);
+    }
+
+    private static IntrinsicReferenceModel.EventType damageAllEventType(
+            final Map<String, String> parameters) {
+        return "True".equalsIgnoreCase(parameters.get("CombatDamage"))
+                ? IntrinsicReferenceModel.EventType.COMBAT_DAMAGE
+                : IntrinsicReferenceModel.EventType.DAMAGE_DEALT;
+    }
+
+    private static IntrinsicEventTrigger.TurnScope damageAllTurnScope(
+            final Map<String, String> parameters) {
+        final String source = parameters.getOrDefault("ValidSource", "");
+        if (source.contains("YouCtrl")) {
+            return IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN;
+        }
+        if (source.contains("OppCtrl")) {
+            return IntrinsicEventTrigger.TurnScope.OPPONENT_TURN;
+        }
+        return IntrinsicEventTrigger.TurnScope.ANY_TURN;
+    }
+
+    private static double damageAllOccurrenceMultiplier(final Map<String, String> parameters) {
+        final String source = parameters.getOrDefault("ValidSource", "");
+        final double sourceMultiplier = source.isBlank() ? 1
+                : source.contains("Self") ? .40
+                : source.contains(".") ? .55 : .70;
+        final String target = parameters.getOrDefault("ValidTarget", "Player");
+        final double targetMultiplier = "Player".equals(target) ? 1 : .75;
+        return sourceMultiplier * targetMultiplier;
     }
 
     /**
