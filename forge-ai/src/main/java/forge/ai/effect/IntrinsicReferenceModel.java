@@ -29,6 +29,7 @@ public final class IntrinsicReferenceModel {
         LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
+        MANA_EXPENDED,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
         ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET
     }
@@ -206,6 +207,12 @@ public final class IntrinsicReferenceModel {
         // mana dorks, or the controller's exact resource needs.
         events.put(EventType.MANA_ADDED_OR_SPENT,
                 rateDistribution(0, .10, 1, .20, 2, .25, 3, .20, 4, .15, 5, .10));
+        // Total mana spent during a turn has a longer tail than an individual mana event. This
+        // lets fixed ManaExpend thresholds use generic amount-threshold arithmetic while keeping
+        // high thresholds rare.
+        events.put(EventType.MANA_EXPENDED,
+                rateDistribution(0, .10, 1, .15, 2, .20, 3, .20, 4, .15, 5, .10,
+                        6, .05, 7, .03, 8, .02));
         events.put(EventType.LIFE_GAINED, rateDistribution(0, .35, 1, .45, 2, .15, 3, .05));
         events.put(EventType.LIFE_LOST, rateDistribution(0, .25, 1, .50, 2, .20, 3, .05));
         events.put(EventType.CARD_DRAWN, rateDistribution(0, .15, 1, .50, 2, .25, 3, .10));
