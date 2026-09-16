@@ -267,6 +267,17 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void commaSeparatedCounterTypesChooseTheBestSupportedMode() {
+        final State initial = state(CreatureProfile.absent(), CreatureProfile.absent(), SOURCE);
+        final OutcomePlan<State> result = evaluate(leaf("PutCounter", Map.of(
+                "Defined", "Self", "CounterType", "Flying,Lifelink,P1P1")), initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(result.state().sourcePermanent().power(), 3);
+        Assert.assertEquals(result.state().sourcePermanent().toughness(), 3);
+        Assert.assertEquals(result.value(), 25.0);
+    }
+
+    @Test
     public void targetProtectionAndProfileFlagsSurviveProjection() {
         final CreatureProfile protectedCreature = new CreatureProfile(true, 2, 2, Set.of(), true, true);
         final State initial = state(protectedCreature, protectedCreature, PermanentProfile.absent());
