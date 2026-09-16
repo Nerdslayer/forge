@@ -2322,7 +2322,8 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 "Grizzly Bears", opponent, "CHARGE", 1, "Self");
         final Card consequence = addCard("Runeclaw Bear", opponent);
         consequence.setSVar("EffectTestCounterBatchDraw",
-                "DB$ Draw | Defined$ You | NumCards$ 1");
+                "DB$ PutCounterAll | ValidCards$ Creature.YouCtrl"
+                        + " | CounterType$ P1P1 | CounterNum$ 1");
         addTrigger(consequence, "Mode$ CounterAddedAll | Valid$ Creature.YouCtrl"
                 + " | CounterType$ CHARGE | Execute$ EffectTestCounterBatchDraw"
                 + " | TriggerZones$ Battlefield");
