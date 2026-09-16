@@ -70,7 +70,9 @@ final class AffectedCardResolver {
         final List<WeightedCard> cards = new ArrayList<>();
         for (final Card card : matching) {
             if (additionalFilter.test(card)) {
-                cards.add(new WeightedCard(card, weights.getOrDefault(card, 1)));
+                // A group outcome affects each matching permanent once. Event subject counts
+                // describe repeated occurrences of one event, not duplicate group members.
+                cards.add(new WeightedCard(card, 1));
             }
         }
         return new Resolution(cards, false);
