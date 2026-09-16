@@ -885,7 +885,6 @@ public class AbilityTraversalTest extends AITest {
     public void intrinsicCombatGroupTriggersUseGenericDeclarationRates() {
         for (final Map<String, String> parameters : List.of(
                 Map.of("Mode", "AttackersDeclared", "TriggerZones", "Battlefield"),
-                Map.of("Mode", "AttackersDeclaredOneTarget"),
                 Map.of("Mode", "BlockersDeclared", "TriggerZones", "Battlefield"))) {
             final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
                     .orElseThrow();
@@ -897,8 +896,26 @@ public class AbilityTraversalTest extends AITest {
                     EntryTiming.NORMAL_SPEED).expectedOccurrences() > 0);
             Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters));
         }
+        final Map<String, String> threshold = Map.of("Mode", "AttackersDeclaredOneTarget",
+                "ValidAttackers", "Creature", "ValidAttackersAmount", "GE2",
+                "AttackingPlayer", "You", "AttackedTarget", "Player",
+                "TriggerZones", "Battlefield");
+        final IntrinsicEventTrigger thresholdTrigger = IntrinsicEventTriggerAdapter.describe(threshold)
+                .orElseThrow();
+        Assert.assertEquals(thresholdTrigger.eventType(),
+                IntrinsicReferenceModel.EventType.ATTACKERS_DECLARED);
+        Assert.assertEquals(thresholdTrigger.minimumEventAmount(), Integer.valueOf(2));
+        Assert.assertEquals(thresholdTrigger.turnScope(), IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN);
+        Assert.assertTrue(IntrinsicEventTriggerEstimator.estimate(thresholdTrigger,
+                new IntrinsicReferenceModel.PermanentProfile(true,
+                        IntrinsicReferenceModel.PermanentKind.CREATURE, true, 3, 3, Set.of()),
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
+                EntryTiming.NORMAL_SPEED).expectedOccurrences() > 0);
         Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
-                "Mode", "AttackersDeclared", "ValidAttackers", "Creature")));
+                "Mode", "AttackersDeclared", "ValidAttackers", "Creature.YouCtrl+powerGE4")));
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "AttackersDeclared", "ValidAttackers", "Creature",
+                "ValidAttackersAmount", "EQ2")));
         Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
                 "Mode", "BlockersDeclared", "ValidCard", "Creature.Self")));
     }

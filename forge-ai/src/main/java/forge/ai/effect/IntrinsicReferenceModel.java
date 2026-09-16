@@ -25,7 +25,8 @@ public final class IntrinsicReferenceModel {
     }
 
     public enum EventType {
-        ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
+        ATTACK, BLOCK, ATTACKERS_DECLARED, BLOCKERS_DECLARED, ATTACKER_BLOCKED,
+        ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
         ABILITY_RESOLVED, ABILITY_TRIGGERED,
         LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
@@ -182,6 +183,12 @@ public final class IntrinsicReferenceModel {
         final Map<EventType, WeightedDistribution<Double>> events = new EnumMap<>(EventType.class);
         events.put(EventType.ATTACK, rateDistribution(0, .20, .5, .50, 1, .30));
         events.put(EventType.BLOCK, rateDistribution(0, .35, .5, .45, 1, .20));
+        // Group declarations need their own count distributions. ATTACK and BLOCK represent
+        // per-permanent events and therefore cannot answer thresholds such as "two or more".
+        events.put(EventType.ATTACKERS_DECLARED,
+                rateDistribution(0, .20, 1, .35, 2, .25, 3, .15, 4, .05));
+        events.put(EventType.BLOCKERS_DECLARED,
+                rateDistribution(0, .30, 1, .40, 2, .20, 3, .08, 4, .02));
         events.put(EventType.ATTACKER_BLOCKED, rateDistribution(0, .30, .5, .50, 1, .20));
         events.put(EventType.ATTACKER_UNBLOCKED, rateDistribution(0, .25, .5, .50, 1, .25));
         events.put(EventType.COMBAT_DAMAGE, rateDistribution(0, .30, .5, .50, 1, .20));
