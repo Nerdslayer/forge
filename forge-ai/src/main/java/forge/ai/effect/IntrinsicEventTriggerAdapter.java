@@ -21,6 +21,10 @@ public final class IntrinsicEventTriggerAdapter {
         if (spellCast.isPresent()) {
             return spellCast;
         }
+        final Optional<IntrinsicEventTrigger> untap = IntrinsicUntapTriggerAdapter.describe(parameters);
+        if (untap.isPresent()) {
+            return untap;
+        }
         final Optional<IntrinsicEventTrigger> abilityCast = IntrinsicAbilityCastTriggerAdapter.describe(parameters);
         if (abilityCast.isPresent()) {
             return abilityCast;
@@ -59,6 +63,9 @@ public final class IntrinsicEventTriggerAdapter {
      */
     static boolean supportsIntrinsicParameters(final Map<String, String> parameters) {
         if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicUntapTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (IntrinsicAbilityCastTriggerAdapter.supports(parameters)) {

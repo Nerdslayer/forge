@@ -462,6 +462,40 @@ public class AbilityTraversalTest extends AITest {
                 value.path().contains("/trigger:")
                         && value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
                         && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                && value.contribution().value() > 0), evaluation.values().toString());
+    }
+
+    @Test
+    public void intrinsicUntapTriggerUsesControllerTurnRate() {
+        final Map<String, String> parameters = Map.of(
+                "Mode", "Untaps", "ValidCard", "Card.Self",
+                "ActivationLimit", "1", "TriggerZones", "Battlefield");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                .orElseThrow();
+        Assert.assertEquals(trigger.eventType(), IntrinsicReferenceModel.EventType.UNTAPPED);
+        Assert.assertEquals(trigger.turnScope(), IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN);
+        Assert.assertTrue(trigger.atMostOncePerTurn());
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters));
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "Untaps", "ValidCard", "Permanent.YouCtrl",
+                "TriggerZones", "Battlefield")).isEmpty());
+    }
+
+    @Test
+    public void intrinsicUntapCardTriggerReachesOutcomeEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation =
+                new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                        IntrinsicEvaluationSettings.defaults()).evaluateDefinitionDetails(
+                        forge.StaticData.instance().getCommonCards().getCard("Sphinx's Disciple"),
+                        CardStateName.Original);
+        Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                        && "Untaps".equals(description.parameters().get("Mode"))),
+                evaluation.descriptions().toString());
+        Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
                         && value.contribution().value() > 0), evaluation.values().toString());
     }
 
