@@ -11,6 +11,9 @@ final class IntrinsicCombatTriggerAdapter {
             "Mode", "ValidCard", "ValidBlocked", "ValidBlocker", "ValidDefender",
             "ActivationLimit", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> SELF_CARDS = Set.of("Card.Self", "Creature.Self");
+    private static final Set<TriggerType> GROUP_MODES = Set.of(
+            TriggerType.AttackersDeclared, TriggerType.AttackersDeclaredOneTarget,
+            TriggerType.BlockersDeclared);
     private static final Set<String> CARD_FILTERS = Set.of(
             "Card.Self", "Creature.Self", "Creature", "Creature.YouCtrl", "Creature.OppCtrl",
             "Permanent", "Permanent.YouCtrl", "Permanent.OppCtrl");
@@ -39,8 +42,15 @@ final class IntrinsicCombatTriggerAdapter {
         final TriggerType mode = EventTriggerParser.mode(parameters);
         if (!Set.of(TriggerType.Attacks, TriggerType.Blocks, TriggerType.AttackerBlocked,
                 TriggerType.AttackerBlockedOnce, TriggerType.AttackerBlockedByCreature,
-                TriggerType.AttackerUnblocked, TriggerType.AttackerUnblockedOnce).contains(mode)) {
+                TriggerType.AttackerUnblocked, TriggerType.AttackerUnblockedOnce)
+                .contains(mode) && !GROUP_MODES.contains(mode)) {
             return false;
+        }
+        if (GROUP_MODES.contains(mode)) {
+            // The generic group event rate does not model attacker/blocker count or target
+            // restrictions yet, so only the unfiltered declaration event is safe here.
+            return !parameters.containsKey("ValidCard") && !parameters.containsKey("ValidBlocked")
+                    && !parameters.containsKey("ValidBlocker") && !parameters.containsKey("ValidDefender");
         }
         if (parameters.containsKey("ValidCard")
                 && !CARD_FILTERS.contains(parameters.get("ValidCard"))) {
@@ -71,8 +81,9 @@ final class IntrinsicCombatTriggerAdapter {
     private static IntrinsicReferenceModel.EventType eventType(
             final Map<String, String> parameters) {
         return switch (EventTriggerParser.mode(parameters)) {
-        case Attacks -> IntrinsicReferenceModel.EventType.ATTACK;
-        case Blocks -> IntrinsicReferenceModel.EventType.BLOCK;
+        case Attacks, AttackersDeclared, AttackersDeclaredOneTarget ->
+                IntrinsicReferenceModel.EventType.ATTACK;
+        case Blocks, BlockersDeclared -> IntrinsicReferenceModel.EventType.BLOCK;
         case AttackerBlocked, AttackerBlockedOnce, AttackerBlockedByCreature ->
                 IntrinsicReferenceModel.EventType.ATTACKER_BLOCKED;
         case AttackerUnblocked, AttackerUnblockedOnce ->
@@ -90,8 +101,8 @@ final class IntrinsicCombatTriggerAdapter {
     private static double occurrenceMultiplier(final Map<String, String> parameters) {
         final TriggerType mode = EventTriggerParser.mode(parameters);
         final double event = switch (mode) {
-        case Attacks -> .90;
-        case Blocks -> .70;
+        case Attacks, AttackersDeclared, AttackersDeclaredOneTarget -> .90;
+        case Blocks, BlockersDeclared -> .70;
         case AttackerBlocked, AttackerBlockedOnce, AttackerBlockedByCreature -> .65;
         case AttackerUnblocked, AttackerUnblockedOnce -> .70;
         default -> 1;
@@ -102,8 +113,8 @@ final class IntrinsicCombatTriggerAdapter {
         return event * blocked * defender;
     }
 
-    // TODO: Add group declarations, complex combat predicates, and source-specific combat
-    // likelihood once the intrinsic reference model can represent them safely.
+    // TODO: Add attacker/blocker count predicates, target filters, complex combat predicates, and
+    // source-specific combat likelihood once the intrinsic reference model can represent them.
 
     private static boolean supportsBattlefield(final Map<String, String> parameters) {
         return !parameters.containsKey("TriggerZones")
