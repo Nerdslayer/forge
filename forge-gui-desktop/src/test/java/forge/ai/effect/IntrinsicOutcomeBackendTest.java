@@ -425,6 +425,31 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void selfTapTriggersUseTappedOrAttackRatesAndFirstTimeIsBounded() {
+        final AbilityOutcomeDescription self = leaf("PutCounter", Map.of(
+                "Defined", "Self", "CounterType", "P1P1"));
+        final IntrinsicReferenceModel model = IntrinsicReferenceModel.defaults();
+        final IntrinsicEvaluationSettings settings = IntrinsicEvaluationSettings.defaults();
+        final double tapped = IntrinsicEventTriggerEstimator.estimate(
+                IntrinsicEventTriggerAdapter.describe(Map.of("Mode", "Taps", "ValidCard", "Card.Self"))
+                        .orElseThrow(), SOURCE, model, settings, EntryTiming.NORMAL_SPEED).expectedOccurrences();
+        final IntrinsicAbilityEvaluator.AbilityValue result = evaluateAbility(self,
+                Map.of("Mode", "Taps", "ValidCard", "Card.Self"));
+        Assert.assertTrue(result.contribution().complete(), result.toString());
+        Assert.assertEquals(result.expectedOccurrences(), tapped, .0000001);
+        Assert.assertEquals(result.contribution().value(), tapped * 25, .0000001);
+
+        final Map<String, String> attackerTap = Map.of("Mode", "Taps", "ValidCard", "Card.Self",
+                "Attacker", "True", "FirstTime", "True");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(attackerTap).orElseThrow();
+        Assert.assertEquals(trigger.eventType(), IntrinsicReferenceModel.EventType.ATTACK);
+        Assert.assertTrue(trigger.atMostOncePerTurn());
+        Assert.assertTrue(evaluateAbility(self, attackerTap).contribution().complete());
+        Assert.assertFalse(evaluateAbility(self, Map.of("Mode", "Taps", "ValidCard", "Card.Self",
+                "Attacker", "False")).contribution().complete());
+    }
+
+    @Test
     public void nestedDrawsUseWeightedHandCasesInsteadOfFallbackHands() {
         final AbilityOutcomeDescription draw = leaf("Draw", Map.of("Defined", "You", "NumCards", "2"));
         final AbilityOutcomeDescription opponent = leaf("Draw", Map.of("Defined", "Opponent"));

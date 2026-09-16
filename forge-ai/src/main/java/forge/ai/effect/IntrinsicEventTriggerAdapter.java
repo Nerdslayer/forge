@@ -60,6 +60,16 @@ public final class IntrinsicEventTriggerAdapter {
             return !parameters.containsKey("ValidPlayer") && !parameters.containsKey("ValidToken")
                     && Set.of("Card.Self", "Creature.Self").contains(parameters.getOrDefault("ValidCard", ""));
         }
+        if (mode == TriggerType.Taps) {
+            // A self tap is represented by the generic tapped-event population. If the script
+            // explicitly requires tapping as an attacker, use the narrower attack population
+            // instead; non-attacker and attached/board-wide filters need richer populations.
+            return Set.of("Card.Self", "Creature.Self").contains(parameters.getOrDefault("ValidCard", ""))
+                    && !parameters.containsKey("ValidPlayer")
+                    && (!parameters.containsKey("Attacker")
+                        || "True".equalsIgnoreCase(parameters.get("Attacker")))
+                    && (!parameters.containsKey("FirstTime") || isBoolean(parameters.get("FirstTime")));
+        }
         if (mode == TriggerType.Drawn) {
             return !parameters.containsKey("ValidToken") && !parameters.containsKey("ValidCard")
                     && "Player".equals(parameters.getOrDefault("ValidPlayer", "Player"));
@@ -199,6 +209,9 @@ public final class IntrinsicEventTriggerAdapter {
 
     private static IntrinsicReferenceModel.EventType eventType(final TriggerType mode,
             final EffectType observed, final Map<String, String> parameters) {
+        if (mode == TriggerType.Taps && "True".equalsIgnoreCase(parameters.get("Attacker"))) {
+            return IntrinsicReferenceModel.EventType.ATTACK;
+        }
         if (observed == EffectType.ATTACKED_OR_BLOCKED) {
             return switch (mode) {
             case Attacks -> IntrinsicReferenceModel.EventType.ATTACK;
@@ -241,6 +254,7 @@ public final class IntrinsicEventTriggerAdapter {
         if (mode == TriggerType.Attacks || mode == TriggerType.AttackerBlocked
                 || mode == TriggerType.AttackerBlockedByCreature
                 || mode == TriggerType.AttackerUnblocked
+                || mode == TriggerType.Taps && "True".equalsIgnoreCase(parameters.get("Attacker"))
                 || EventTriggerParser.isSecondMainTappedCheckpoint(parameters)) {
             return IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN;
         }
@@ -256,6 +270,7 @@ public final class IntrinsicEventTriggerAdapter {
                 || mode == TriggerType.DamageDoneOnce || mode == TriggerType.DamageDealtOnce
                 || mode == TriggerType.SacrificedOnce || mode == TriggerType.DiscardedAll
                 || mode == TriggerType.LifeLostAll
+                || mode == TriggerType.Taps && "True".equalsIgnoreCase(parameters.get("FirstTime"))
                 || EventTriggerParser.isSecondMainTappedCheckpoint(parameters)
                 || "True".equalsIgnoreCase(parameters.get("FirstCardInDrawStep"));
     }
@@ -273,5 +288,9 @@ public final class IntrinsicEventTriggerAdapter {
         } catch (final NumberFormatException ignored) {
             return 0;
         }
+    }
+
+    private static boolean isBoolean(final String value) {
+        return "True".equalsIgnoreCase(value) || "False".equalsIgnoreCase(value);
     }
 }
