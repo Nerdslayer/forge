@@ -28,6 +28,19 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void nullTraceUsesTheSameDisabledDiagnosticsBehavior() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card target = addCard("Grizzly Bears", game.getPlayers().get(0));
+        final ValuationContext context = ValuationContext.forRemoval(ai, 0, 0);
+
+        final CardValueBreakdown result = UnifiedCardValueEvaluator.evaluatePermanent(target,
+                context, null);
+
+        Assert.assertEquals(result, UnifiedCardValueEvaluator.evaluatePermanent(target, context));
+    }
+
+    @Test
     public void removalActionRejectsAContextForAnotherDecision() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

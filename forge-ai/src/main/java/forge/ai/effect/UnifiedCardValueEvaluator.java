@@ -127,9 +127,11 @@ public final class UnifiedCardValueEvaluator {
             return CardValueBreakdown.unavailable(
                     "Removal-target valuation requires a permanent on the battlefield.");
         }
+        final EffectAnalysisTrace effectiveTrace = trace == null
+                ? EffectAnalysisTrace.disabled() : trace;
         final Map<Card, PermanentAbilityValueEvaluator.Breakdown> abilityValues =
                 PermanentAbilityValueEvaluator.evaluateRemovalAbilities(context.evaluatingAi(),
-                        List.of(candidate), trace, context.intrinsicWeightPercent() > 0,
+                        List.of(candidate), effectiveTrace, context.intrinsicWeightPercent() > 0,
                         context.relationshipWeightPercent() > 0);
         return buildPermanentBreakdown(context.evaluatingAi(), candidate, context,
                 abilityValues.get(candidate));
