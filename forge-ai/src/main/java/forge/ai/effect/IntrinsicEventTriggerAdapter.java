@@ -46,6 +46,9 @@ public final class IntrinsicEventTriggerAdapter {
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
             return false;
         }
+        if (EventTriggerParser.isSecondMainTappedCheckpoint(parameters)) {
+            return true;
+        }
         final TriggerType mode = EventTriggerParser.mode(parameters);
         if (mode == TriggerType.TokenCreated) {
             return "You".equals(parameters.get("ValidPlayer"))
