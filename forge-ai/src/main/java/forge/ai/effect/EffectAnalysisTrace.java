@@ -257,6 +257,9 @@ public final class EffectAnalysisTrace {
             }
             return ", milled=" + amount;
         }
+        if (production.type() == EffectType.SPELL_OR_ABILITY_COUNTERED) {
+            return ", counteredStackObjects=" + production.events().size();
+        }
         if (production.type() == EffectType.DAMAGE_DEALT) {
             int amount = 0;
             for (final EffectEvent event : production.events()) {

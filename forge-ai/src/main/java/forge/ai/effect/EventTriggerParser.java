@@ -113,6 +113,10 @@ final class EventTriggerParser {
     private static final Set<String> LAND_PLAYED_TRIGGER_PARAMS = Set.of(
             "Mode", "Origin", "ValidCard", "ValidSA", "NotFirstLand", "Execute",
             "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> COUNTERED_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidCause", "ValidSA", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> COUNTERED_VALID_CARDS = Set.of("Card");
 
 
     static EffectType observedType(final Trigger trigger) {
@@ -144,6 +148,9 @@ final class EventTriggerParser {
         if (mode == TriggerType.Milled || mode == TriggerType.MilledOnce
                 || mode == TriggerType.MilledAll) {
             return EffectType.CARD_MILLED;
+        }
+        if (mode == TriggerType.Countered) {
+            return EffectType.SPELL_OR_ABILITY_COUNTERED;
         }
         if (mode == TriggerType.DamageDone || mode == TriggerType.DamageDoneOnce
                 || mode == TriggerType.DamageAll
@@ -227,6 +234,9 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.LandPlayed) {
             return hasSupportedLandPlayedParameters(parameters);
+        }
+        if (mode == TriggerType.Countered) {
+            return hasSupportedCounteredParameters(parameters);
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return hasSupportedCardDiscardParameters(parameters);
@@ -344,6 +354,12 @@ final class EventTriggerParser {
         return hasOnlyParams(parameters, LAND_PLAYED_TRIGGER_PARAMS)
                 && (!parameters.containsKey("NotFirstLand")
                         || isBoolean(parameters.get("NotFirstLand")));
+    }
+
+    private static boolean hasSupportedCounteredParameters(final Map<String, String> parameters) {
+        return hasOnlyParams(parameters, COUNTERED_TRIGGER_PARAMS)
+                && (!parameters.containsKey("ValidCard")
+                        || COUNTERED_VALID_CARDS.contains(parameters.get("ValidCard")));
     }
 
     private static boolean isBoolean(final String value) {
