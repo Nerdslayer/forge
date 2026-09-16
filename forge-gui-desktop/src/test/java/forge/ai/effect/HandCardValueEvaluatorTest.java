@@ -99,9 +99,12 @@ public class HandCardValueEvaluatorTest extends AITest {
         Assert.assertFalse(access.castableNow());
         Assert.assertEquals(access.availableMana(), 0);
         Assert.assertEquals(access.landsInHand(), 2);
+        Assert.assertEquals(access.expectedLandsInHand(), 2.0, 0.001);
         Assert.assertEquals(access.knownManaAfterLookahead(), 2);
+        Assert.assertEquals(access.expectedManaAfterLookahead(), 2.0, 0.001);
         Assert.assertEquals(access.earliestKnownTurn(), 2);
         Assert.assertTrue(access.canReachWithKnownLands());
+        Assert.assertTrue(access.canReachWithExpectedResources());
     }
 
     @Test
@@ -120,8 +123,11 @@ public class HandCardValueEvaluatorTest extends AITest {
                 context);
 
         Assert.assertEquals(access.landsInHand(), 0);
+        Assert.assertEquals(access.expectedLandsInHand(), 0.8, 0.001);
         Assert.assertEquals(access.knownManaAfterLookahead(), 0);
+        Assert.assertEquals(access.expectedManaAfterLookahead(), 0.8, 0.001);
         Assert.assertFalse(access.canReachWithKnownLands());
+        Assert.assertFalse(access.canReachWithExpectedResources());
     }
 
     @Test
