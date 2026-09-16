@@ -221,6 +221,34 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void loyaltyCountersUsePermanentValueForSelfPlaneswalkers() {
+        final PermanentProfile planeswalker = new PermanentProfile(true, PermanentKind.PLANESWALKER,
+                true, 0, 0, Set.of(), false, 3);
+        final State initial = state(CreatureProfile.absent(), CreatureProfile.absent(), planeswalker);
+        final OutcomePlan<State> result = evaluate(leaf("PutCounter", Map.of(
+                "Defined", "Self", "CounterType", "LOYALTY")), initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(result.state().sourcePermanent().loyalty(), 4);
+        Assert.assertEquals(result.value(), 8.0);
+    }
+
+    @Test
+    public void shieldAndStunCountersReuseObservedCreatureKeywords() {
+        final State initial = state(CREATURE, CREATURE, SOURCE);
+        final OutcomePlan<State> shield = evaluate(leaf("PutCounter", Map.of(
+                "ValidTgts", "Creature.YouCtrl", "CounterType", "SHIELD")), initial);
+        Assert.assertEquals(shield.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(shield.state().controllerCreature().keywords().contains("SHIELD"));
+        Assert.assertEquals(shield.value(), 45.0);
+
+        final OutcomePlan<State> stun = evaluate(leaf("PutCounter", Map.of(
+                "ValidTgts", "Creature.OppCtrl", "CounterType", "STUN")), initial);
+        Assert.assertEquals(stun.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(stun.state().opponentCreature().keywords().contains("STUN"));
+        Assert.assertEquals(stun.value(), 20.0);
+    }
+
+    @Test
     public void targetProtectionAndProfileFlagsSurviveProjection() {
         final CreatureProfile protectedCreature = new CreatureProfile(true, 2, 2, Set.of(), true, true);
         final State initial = state(protectedCreature, protectedCreature, PermanentProfile.absent());

@@ -77,18 +77,24 @@ public final class IntrinsicReferenceModel {
     }
 
     public record PermanentProfile(boolean present, PermanentKind kind, boolean controlledByAi,
-            int power, int toughness, Set<String> keywords, boolean basicLand) {
+            int power, int toughness, Set<String> keywords, boolean basicLand, int loyalty) {
         public PermanentProfile(final boolean present, final PermanentKind kind,
                 final boolean controlledByAi, final int power, final int toughness,
                 final Set<String> keywords) {
-            this(present, kind, controlledByAi, power, toughness, keywords, false);
+            this(present, kind, controlledByAi, power, toughness, keywords, false, 0);
+        }
+
+        public PermanentProfile(final boolean present, final PermanentKind kind,
+                final boolean controlledByAi, final int power, final int toughness,
+                final Set<String> keywords, final boolean basicLand) {
+            this(present, kind, controlledByAi, power, toughness, keywords, basicLand, 0);
         }
 
         public PermanentProfile {
             if (kind == null) {
                 throw new IllegalArgumentException("Reference permanent needs a kind");
             }
-            if (power < 0 || toughness < 0) {
+            if (power < 0 || toughness < 0 || loyalty < 0) {
                 throw new IllegalArgumentException("Reference permanent size must be nonnegative");
             }
             keywords = keywords == null ? Set.of() : Set.copyOf(keywords);
@@ -96,7 +102,7 @@ public final class IntrinsicReferenceModel {
 
         public static PermanentProfile absent() {
             return new PermanentProfile(false, PermanentKind.PERMANENT, false,
-                    0, 0, Set.of(), false);
+                    0, 0, Set.of(), false, 0);
         }
     }
 
@@ -207,7 +213,7 @@ public final class IntrinsicReferenceModel {
                         new WeightedValue<>(new PermanentProfile(true, PermanentKind.ENCHANTMENT,
                                 false, 0, 0, Set.of()), .15),
                         new WeightedValue<>(new PermanentProfile(true, PermanentKind.PLANESWALKER,
-                                false, 0, 0, Set.of()), .05),
+                                false, 0, 0, Set.of(), false, 4), .05),
                         new WeightedValue<>(new PermanentProfile(true, PermanentKind.LAND,
                                 false, 0, 0, Set.of()), .15)),
                 availability,

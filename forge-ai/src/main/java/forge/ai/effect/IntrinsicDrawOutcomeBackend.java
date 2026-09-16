@@ -240,7 +240,7 @@ public final class IntrinsicDrawOutcomeBackend
         if (!node.choices().isEmpty()) { return false; }
         return switch (node.api()) {
         case "Draw" -> acceptsDraw(node);
-        case "PutCounter" -> acceptsP1P1(node);
+        case "PutCounter" -> acceptsCounter(node);
         case "Token" -> acceptsToken(node);
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
@@ -300,7 +300,7 @@ public final class IntrinsicDrawOutcomeBackend
         }
         return switch (node.api()) {
         case "Draw" -> draw(node);
-        case "PutCounter" -> p1p1(node);
+        case "PutCounter" -> counter(node);
         case "Token" -> token(node);
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
@@ -816,7 +816,7 @@ public final class IntrinsicDrawOutcomeBackend
 
     private static PermanentProfile withControl(final PermanentProfile profile, final boolean controller) {
         return new PermanentProfile(profile.present(), PermanentKind.TOKEN, controller,
-                profile.power(), profile.toughness(), profile.keywords(), profile.basicLand());
+                profile.power(), profile.toughness(), profile.keywords(), profile.basicLand(), profile.loyalty());
     }
 
     private static PermanentProfile withTokenOverrides(final PermanentProfile profile,
@@ -826,7 +826,7 @@ public final class IntrinsicDrawOutcomeBackend
                         ? integer(node, "TokenPower", profile.power()) : profile.power(),
                 node.parameters().containsKey("TokenToughness")
                         ? integer(node, "TokenToughness", profile.toughness()) : profile.toughness(),
-                profile.keywords(), profile.basicLand());
+                profile.keywords(), profile.basicLand(), profile.loyalty());
     }
 
     private static boolean literalNonnegativeOrAbsent(final AbilityOutcomeDescription node,
@@ -842,15 +842,15 @@ public final class IntrinsicDrawOutcomeBackend
         }
     }
 
-    private Outcome<State> p1p1(final AbilityOutcomeDescription node) {
+    private Outcome<State> counter(final AbilityOutcomeDescription node) {
         final CounterTarget target = counterTarget(node);
         if (target == null) {
             return unresolved(node, "Unsupported intrinsic counter target");
         }
         if (target.scope() == CounterTargetScope.SELF) {
-            return new Outcome.Deferred<>(state -> hasCreatureTarget(state, TargetRef.SOURCE)
-                    ? p1p1Atomic(node, TargetRef.SOURCE)
-                    : unresolved(node, "Self counter recipient is not a modeled creature"));
+            return new Outcome.Deferred<>(state -> hasCounterTarget(state, TargetRef.SOURCE, node)
+                    ? counterAtomic(node, TargetRef.SOURCE)
+                    : unresolved(node, "Self counter recipient is not a modeled permanent"));
         }
         return new Outcome.Deferred<>(state -> {
             // TODO: Protection, ward costs, conditional hexproof and counter restrictions need
@@ -859,15 +859,15 @@ public final class IntrinsicDrawOutcomeBackend
                 return unresolved(node, "Unmodeled reference target characteristics");
             }
             return new Outcome.Target<>(node.path() + ":target", current -> candidates(current, target),
-                    State::withTarget, p1p1Atomic(node, null), true);
+                    State::withTarget, counterAtomic(node, null), true);
         });
     }
 
-    private Outcome<State> p1p1Atomic(final AbilityOutcomeDescription node,
+    private Outcome<State> counterAtomic(final AbilityOutcomeDescription node,
             final TargetRef fixedTarget) {
         return new Outcome.Atomic<>(node.path(), current -> {
             final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
-            if (target == null || !hasCreatureTarget(current, target)) {
+            if (target == null || !hasCounterTarget(current, target, node)) {
                 return null;
             }
             final PermanentProfile before = permanent(current, target);
@@ -876,9 +876,16 @@ public final class IntrinsicDrawOutcomeBackend
             // remain conservative because their unmodeled keywords may affect target selection or
             // the meaning of the counter outcome.
             if (target != TargetRef.SOURCE && !simpleKeywords(before.keywords())) { return null; }
-            final PermanentProfile after = addP1P1(before, counterDelta(node));
-            final int value = evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
-                    controls(target, current));
+            if (("SHIELD".equalsIgnoreCase(counterType(node))
+                    || "STUN".equalsIgnoreCase(counterType(node)))
+                    && hasKeyword(before, counterType(node))) {
+                return null;
+            }
+            final PermanentProfile after = addCounter(before, node);
+            final int value = "LOYALTY".equalsIgnoreCase(counterType(node))
+                    ? evaluator.evaluatePermanentDelta(before, after, controls(target, current))
+                    : evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
+                            controls(target, current));
             return new Outcome.Transition<>((double) value,
                     replacePermanent(current, target, after).clearTarget(), node.api());
         });
@@ -894,15 +901,19 @@ public final class IntrinsicDrawOutcomeBackend
                 .filter(draw -> draw.amount() >= 0).isPresent();
     }
 
-    private static boolean acceptsP1P1(final AbilityOutcomeDescription node) {
-        // TODO: Other counters, group recipients, divided/optional targets, counter replacement
-        // effects and shared Targeted references need dedicated descriptors and projected state.
+    private static boolean acceptsCounter(final AbilityOutcomeDescription node) {
+        // TODO: Other counters, group recipients, divided/optional targets, repeated shield/stun
+        // counter scaling, counter replacement effects and shared Targeted references need
+        // dedicated descriptors and projected state.
         if (!COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
-                || !"P1P1".equalsIgnoreCase(node.parameters().get("CounterType"))
-                        && !"M1M1".equalsIgnoreCase(node.parameters().get("CounterType"))) {
+                || !Set.of("P1P1", "M1M1", "SHIELD", "STUN", "LOYALTY")
+                        .contains(counterType(node))) {
             return false;
         }
-        return counterTarget(node) != null && literalPositive(node, "CounterNum", 1)
+        final CounterTarget target = counterTarget(node);
+        return target != null && literalPositive(node, "CounterNum", 1)
+                && (!"LOYALTY".equalsIgnoreCase(counterType(node))
+                        || target.scope() == CounterTargetScope.SELF)
                 && "1".equals(node.parameters().getOrDefault("TargetMin", "1"))
                 && "1".equals(node.parameters().getOrDefault("TargetMax", "1"))
                 && "Battlefield".equals(node.parameters().getOrDefault("TgtZone", "Battlefield"));
@@ -923,7 +934,7 @@ public final class IntrinsicDrawOutcomeBackend
             } else if ("Opponent".equalsIgnoreCase(defined)) {
                 dimensions.add(OPPONENT_HAND);
             }
-        } else if ("PutCounter".equals(node.api()) && acceptsP1P1(node)) {
+        } else if ("PutCounter".equals(node.api()) && acceptsCounter(node)) {
             final CounterTarget target = counterTarget(node);
             if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
                     || target.scope() == CounterTargetScope.CONTROLLER_CREATURE)) {
@@ -1235,6 +1246,15 @@ public final class IntrinsicDrawOutcomeBackend
         };
     }
 
+    private static boolean hasCounterTarget(final State state, final TargetRef target,
+            final AbilityOutcomeDescription node) {
+        if ("LOYALTY".equalsIgnoreCase(counterType(node))) {
+            return target == TargetRef.SOURCE && state.sourcePermanent().present()
+                    && state.sourcePermanent().kind() == PermanentKind.PLANESWALKER;
+        }
+        return hasCreatureTarget(state, target);
+    }
+
     private static boolean controls(final TargetRef target, final State state) {
         return switch (target) {
         case CONTROLLER_CREATURE, CONTROLLER_PERMANENT, CONTROLLER_PLAYER -> true;
@@ -1269,16 +1289,37 @@ public final class IntrinsicDrawOutcomeBackend
                 || profile.kind() == PermanentKind.TOKEN);
     }
 
+    private static PermanentProfile addCounter(final PermanentProfile profile,
+            final AbilityOutcomeDescription node) {
+        final String type = counterType(node);
+        if ("LOYALTY".equals(type)) {
+            return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
+                    profile.power(), profile.toughness(), profile.keywords(), profile.basicLand(),
+                    boundedAdd(profile.loyalty(), integer(node, "CounterNum", 1)));
+        }
+        if ("SHIELD".equals(type) || "STUN".equals(type)) {
+            final Set<String> keywords = new LinkedHashSet<>(profile.keywords());
+            keywords.add(type);
+            return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
+                    profile.power(), profile.toughness(), keywords, profile.basicLand(), profile.loyalty());
+        }
+        return addP1P1(profile, counterDelta(node));
+    }
+
     private static PermanentProfile addP1P1(final PermanentProfile profile, final int amount) {
         final int power = boundedAdd(profile.power(), amount);
         final int toughness = boundedAdd(profile.toughness(), amount);
         return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
-                power, toughness, profile.keywords(), profile.basicLand());
+                power, toughness, profile.keywords(), profile.basicLand(), profile.loyalty());
     }
 
     private static int counterDelta(final AbilityOutcomeDescription node) {
         final int amount = integer(node, "CounterNum", 1);
         return "M1M1".equalsIgnoreCase(node.parameters().get("CounterType")) ? -amount : amount;
+    }
+
+    private static String counterType(final AbilityOutcomeDescription node) {
+        return node.parameters().getOrDefault("CounterType", "").trim().toUpperCase(Locale.ROOT);
     }
 
     private static int boundedAdd(final int left, final int right) {
@@ -1292,7 +1333,7 @@ public final class IntrinsicDrawOutcomeBackend
         if (profile.hexproof()) { keywords.add("Hexproof"); }
         if (profile.indestructible()) { keywords.add("Indestructible"); }
         return new PermanentProfile(profile.present(), PermanentKind.CREATURE, controller,
-                profile.power(), profile.toughness(), keywords);
+                profile.power(), profile.toughness(), keywords, false, 0);
     }
 
     private static CreatureProfile toCreature(final PermanentProfile profile) {

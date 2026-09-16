@@ -64,8 +64,11 @@ public final class IntrinsicAbilityEvaluator {
                 || !state.getBaseToughnessString().matches("\\d+"))) {
             throw new IllegalArgumentException("Variable creature characteristics require a reference profile");
         }
+        final String baseLoyalty = state.getBaseLoyalty();
+        final int loyalty = type.isPlaneswalker() && baseLoyalty != null
+                && baseLoyalty.matches("\\d+") ? Integer.parseInt(baseLoyalty) : 0;
         final PermanentProfile profile = new PermanentProfile(true, kind, true, Math.max(0, state.getBasePower()),
-                Math.max(0, state.getBaseToughness()), keywords, type.isBasicLand());
+                Math.max(0, state.getBaseToughness()), keywords, type.isBasicLand(), loyalty);
         final List<AbilityDescription> descriptions = CardAbilityTraversal.inspect(state);
         final List<AbilityValue> values = evaluate(descriptions, profile,
                 keywords.stream().anyMatch("Flash"::equalsIgnoreCase) ? EntryTiming.FLASH_LATE_TURN : EntryTiming.NORMAL_SPEED,
@@ -331,7 +334,7 @@ public final class IntrinsicAbilityEvaluator {
     private static PermanentProfile orientPermanent(final PermanentProfile profile,
             final boolean controlledByAi) {
         return new PermanentProfile(profile.present(), profile.kind(), controlledByAi, profile.power(),
-                profile.toughness(), profile.keywords(), profile.basicLand());
+                profile.toughness(), profile.keywords(), profile.basicLand(), profile.loyalty());
     }
 
     private static AbilityValue unsupported(final AbilityDescription ability, final String reason) {

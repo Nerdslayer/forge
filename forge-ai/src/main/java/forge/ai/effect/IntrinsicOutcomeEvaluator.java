@@ -235,7 +235,7 @@ public final class IntrinsicOutcomeEvaluator {
                 permanent.keywords().stream().anyMatch(keyword -> keyword.equalsIgnoreCase("hexproof")
                         || keyword.equalsIgnoreCase("shroud")),
                 permanent.keywords().stream().anyMatch(keyword -> keyword.equalsIgnoreCase("indestructible"))));
-        case PLANESWALKER -> addSaturated(180, permanent.power() * 8 + permanent.toughness() * 8);
+        case PLANESWALKER -> addSaturated(180, permanent.loyalty() * 8);
         case AURA -> 80;
         case ARTIFACT -> 100;
         case ENCHANTMENT -> 105;
