@@ -335,7 +335,7 @@ public class AbilityTraversalTest extends AITest {
                 description("Destroy", Map.of("Defined", "OpponentCtrl")),
                 description("ChangeZone", Map.of("Origin", "Battlefield", "Destination", "Exile",
                         "Defined", "OpponentCtrl")),
-                description("Sacrifice", Map.of("Defined", "Self")),
+                description("Sacrifice", Map.of("SacValid", "Creature")),
                 description("GainControl", Map.of("NewController", "You", "Defined", "OpponentCtrl")),
                 description("CopyPermanent", Map.of("Defined", "OpponentCtrl")),
                 description("Attach", Map.of("Defined", "YouCtrl")),

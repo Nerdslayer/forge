@@ -250,7 +250,33 @@ public class IntrinsicOutcomeBackendTest {
         Assert.assertEquals(backend().referenceDimensions(choice), Set.of(
                 IntrinsicDrawOutcomeBackend.CONTROLLER_CREATURE,
                 IntrinsicDrawOutcomeBackend.OPPONENT_HAND, IntrinsicDrawOutcomeBackend.CONTROLLER_HAND));
-        Assert.assertEquals(backend().referenceDimensions(leaf("Destroy", Map.of("ValidTgts", "Creature"))), Set.of());
+        Assert.assertEquals(backend().referenceDimensions(leaf("Destroy", Map.of("ValidTgts", "Creature"))), Set.of(
+                IntrinsicDrawOutcomeBackend.CONTROLLER_CREATURE,
+                IntrinsicDrawOutcomeBackend.OPPONENT_CREATURE));
+    }
+
+    @Test
+    public void removalBounceAndSelfSacrificeProjectReferenceState() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> destroy = evaluate(leaf("Destroy", Map.of(
+                "ValidTgts", "Creature.OppCtrl")), initial);
+        Assert.assertEquals(destroy.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(destroy.state().opponentCreature().present());
+        Assert.assertTrue(destroy.value() > 0);
+
+        final OutcomePlan<State> bounce = evaluate(leaf("ChangeZone", Map.of(
+                "ValidTgts", "Creature.OppCtrl", "Origin", "Battlefield", "Destination", "Hand")), initial);
+        Assert.assertEquals(bounce.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(bounce.state().opponentCreature().present());
+        Assert.assertEquals(bounce.state().opponentHand(), 8);
+        Assert.assertTrue(bounce.value() > 0);
+
+        final OutcomePlan<State> sacrifice = evaluate(leaf("Sacrifice", Map.of(
+                "Defined", "Self")), initial);
+        Assert.assertEquals(sacrifice.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(sacrifice.state().sourcePermanent().present());
+        Assert.assertTrue(sacrifice.value() < 0);
     }
 
     @Test

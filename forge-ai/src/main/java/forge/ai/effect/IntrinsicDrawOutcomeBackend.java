@@ -56,6 +56,11 @@ public final class IntrinsicDrawOutcomeBackend
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax");
     private static final Set<String> DAMAGE_ALL_PARAMETERS = parameters("ValidPlayers", "NumDmg",
             "DamageSource");
+    private static final Set<String> REMOVAL_PARAMETERS = parameters("Defined", "ValidTgts",
+            "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Origin",
+            "Destination", "NoRegen", "Radiance", "Duration", "ChangeNum", "ChangeType",
+            "Chooser", "DefinedPlayer", "GainControl", "Tapped", "RememberChanged");
+    private static final Set<String> SACRIFICE_PARAMETERS = parameters("Defined", "SacValid", "Amount");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
             "haste", "reach", "menace", "vigilance", "trample", "deathtouch", "lifelink", "defender",
             "hexproof", "shroud", "indestructible");
@@ -170,6 +175,18 @@ public final class IntrinsicDrawOutcomeBackend
                             sourcePermanent, target);
         }
 
+        State withPermanent(final boolean controller, final PermanentProfile profile) {
+            return controller
+                    ? new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
+                            opponentMana, controllerCreatureCount, opponentCreatureCount,
+                            controllerCreature, opponentCreature, profile, opponentPermanent,
+                            sourcePermanent, target)
+                    : new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
+                            opponentMana, controllerCreatureCount, opponentCreatureCount,
+                            controllerCreature, opponentCreature, controllerPermanent, profile,
+                            sourcePermanent, target);
+        }
+
         State withSourcePermanent(final PermanentProfile profile) {
             return new State(controllerHand, opponentHand, controllerLife, opponentLife,
                     controllerMana, opponentMana, controllerCreatureCount, opponentCreatureCount,
@@ -229,6 +246,8 @@ public final class IntrinsicDrawOutcomeBackend
         case "Discard" -> acceptsDiscard(node);
         case "Mana" -> acceptsMana(node);
         case "DealDamage", "DamageAll" -> acceptsDamage(node);
+        case "Destroy", "ChangeZone" -> acceptsRemoval(node);
+        case "Sacrifice" -> acceptsSacrifice(node);
         default -> false;
         };
     }
@@ -287,6 +306,8 @@ public final class IntrinsicDrawOutcomeBackend
         case "Discard" -> discard(node);
         case "Mana" -> mana(node);
         case "DealDamage", "DamageAll" -> damage(node);
+        case "Destroy", "ChangeZone" -> removal(node);
+        case "Sacrifice" -> sacrifice(node);
         default -> unresolved(node, "Unsupported intrinsic outcome API " + node.api());
         };
     }
@@ -490,6 +511,65 @@ public final class IntrinsicDrawOutcomeBackend
                 current.withLife(controller, Math.max(0, before - amount)), node.api());
     }
 
+    private Outcome<State> removal(final AbilityOutcomeDescription node) {
+        final PermanentTarget target = permanentTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic removal target");
+        }
+        if (target.fixed() != null) {
+            return removalAtomic(node, target.fixed());
+        }
+        return new Outcome.Deferred<>(state -> new Outcome.Target<>(node.path() + ":target",
+                current -> permanentCandidates(current, target), State::withTarget,
+                removalAtomic(node, null), true));
+    }
+
+    private Outcome<State> removalAtomic(final AbilityOutcomeDescription node,
+            final TargetRef fixedTarget) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
+            if (target == null) {
+                return null;
+            }
+            final PermanentProfile before = permanent(current, target);
+            if (!before.present()) {
+                return null;
+            }
+            final boolean destroy = "Destroy".equals(node.api());
+            if (destroy && hasKeyword(before, "indestructible")) {
+                return null;
+            }
+            if (fixedTarget == null && !canTarget(before, controls(target, current))) {
+                return null;
+            }
+            final boolean controller = controls(target, current);
+            int value = evaluator.evaluatePermanentDelta(before, PermanentProfile.absent(), controller);
+            State projected = removePermanent(current, target);
+            if (!destroy && "Hand".equalsIgnoreCase(node.parameters().get("Destination"))
+                    && before.kind() != PermanentKind.TOKEN) {
+                // The reference model has no token flag on creature profiles, so a modeled
+                // creature target represents a card. Live token bounce remains a separate case.
+                final int hand = controller ? current.controllerHand() : current.opponentHand();
+                value = EffectMath.add(value, evaluator.evaluateCardDraw(hand, 1, controller));
+                projected = projected.withHands(controller, EffectMath.add(hand, 1));
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private Outcome<State> sacrifice(final AbilityOutcomeDescription node) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final PermanentProfile source = current.sourcePermanent();
+            if (!source.present() || hasKeyword(source, "indestructible")
+                    || !"Self".equalsIgnoreCase(node.parameters().getOrDefault("SacValid", "Self"))) {
+                return null;
+            }
+            final int value = evaluator.evaluatePermanentDelta(source, PermanentProfile.absent(), true);
+            return new Outcome.Transition<>((double) value,
+                    current.withSourcePermanent(PermanentProfile.absent()).clearTarget(), node.api());
+        });
+    }
+
     private static TokenSpec tokenSpec(final AbilityOutcomeDescription node) {
         final String rawScripts = node.parameters().get("TokenScript");
         if (rawScripts == null || rawScripts.isBlank()) {
@@ -677,6 +757,42 @@ public final class IntrinsicDrawOutcomeBackend
                 && damageTarget(node) != null;
     }
 
+    private static boolean acceptsRemoval(final AbilityOutcomeDescription node) {
+        if (!REMOVAL_PARAMETERS.containsAll(node.parameters().keySet())) {
+            return false;
+        }
+        if ("Destroy".equals(node.api())) {
+            return !node.parameters().containsKey("Radiance") && permanentTarget(node) != null;
+        }
+        return "ChangeZone".equals(node.api())
+                && ("Exile".equalsIgnoreCase(node.parameters().get("Destination"))
+                        || "Hand".equalsIgnoreCase(node.parameters().get("Destination")))
+                && (!node.parameters().containsKey("Origin")
+                        || "Battlefield".equalsIgnoreCase(node.parameters().get("Origin")))
+                && !node.parameters().containsKey("Duration")
+                && !node.parameters().containsKey("ChangeNum")
+                && !node.parameters().containsKey("ChangeType")
+                && !node.parameters().containsKey("Chooser")
+                && !node.parameters().containsKey("DefinedPlayer")
+                && !node.parameters().containsKey("GainControl")
+                && !node.parameters().containsKey("Tapped")
+                && !node.parameters().containsKey("RememberChanged")
+                && permanentTarget(node) != null;
+    }
+
+    private static boolean acceptsSacrifice(final AbilityOutcomeDescription node) {
+        // Only fixed self-sacrifice is independent of an unknown board's choice and destination.
+        if (!SACRIFICE_PARAMETERS.containsAll(node.parameters().keySet())) {
+            return false;
+        }
+        return (!node.parameters().containsKey("Defined")
+                        || "Self".equalsIgnoreCase(node.parameters().get("Defined")))
+                && (!node.parameters().containsKey("SacValid")
+                        || "Self".equalsIgnoreCase(node.parameters().get("SacValid")))
+                && (!node.parameters().containsKey("Amount")
+                        || "1".equals(node.parameters().get("Amount")));
+    }
+
     private static boolean oneTarget(final AbilityOutcomeDescription node) {
         return "1".equals(node.parameters().getOrDefault("TargetMin", "1"))
                 && "1".equals(node.parameters().getOrDefault("TargetMax", "1"));
@@ -824,6 +940,9 @@ public final class IntrinsicDrawOutcomeBackend
         } else if (("DealDamage".equals(node.api()) || "DamageAll".equals(node.api()))
                 && acceptsDamage(node)) {
             addDamageDimensions(node, dimensions);
+        } else if (("Destroy".equals(node.api()) || "ChangeZone".equals(node.api()))
+                && acceptsRemoval(node)) {
+            addRemovalDimensions(node, dimensions);
         }
         for (final AbilityOutcomeDescription choice : node.choices()) {
             collectDimensions(choice, dimensions, visited, depth + 1);
@@ -898,6 +1017,41 @@ public final class IntrinsicDrawOutcomeBackend
         }
     }
 
+    private static void addRemovalDimensions(final AbilityOutcomeDescription node,
+            final Set<String> dimensions) {
+        final PermanentTarget target = permanentTarget(node);
+        if (target == null) {
+            return;
+        }
+        switch (target.scope()) {
+        case ANY_CREATURE -> {
+            dimensions.add(CONTROLLER_CREATURE);
+            dimensions.add(OPPONENT_CREATURE);
+        }
+        case CONTROLLER_CREATURE -> dimensions.add(CONTROLLER_CREATURE);
+        case OPPONENT_CREATURE -> dimensions.add(OPPONENT_CREATURE);
+        case ANY_PERMANENT -> {
+            dimensions.add(CONTROLLER_PERMANENT);
+            dimensions.add(OPPONENT_PERMANENT);
+        }
+        case CONTROLLER_PERMANENT -> dimensions.add(CONTROLLER_PERMANENT);
+        case OPPONENT_PERMANENT -> dimensions.add(OPPONENT_PERMANENT);
+        case SELF -> { }
+        }
+        if ("ChangeZone".equals(node.api())
+                && "Hand".equalsIgnoreCase(node.parameters().get("Destination"))) {
+            switch (target.scope()) {
+            case ANY_CREATURE, ANY_PERMANENT -> {
+                dimensions.add(CONTROLLER_HAND);
+                dimensions.add(OPPONENT_HAND);
+            }
+            case CONTROLLER_CREATURE, CONTROLLER_PERMANENT -> dimensions.add(CONTROLLER_HAND);
+            case OPPONENT_CREATURE, OPPONENT_PERMANENT -> dimensions.add(OPPONENT_HAND);
+            case SELF -> dimensions.add(CONTROLLER_HAND);
+            }
+        }
+    }
+
     private enum CounterTargetScope {
         SELF, ANY_CREATURE, CONTROLLER_CREATURE, OPPONENT_CREATURE
     }
@@ -914,6 +1068,94 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private record DamageTarget(DamageTargetScope scope, TargetRef fixed) { }
+
+    private enum PermanentTargetScope {
+        SELF, ANY_CREATURE, CONTROLLER_CREATURE, OPPONENT_CREATURE,
+        ANY_PERMANENT, CONTROLLER_PERMANENT, OPPONENT_PERMANENT
+    }
+
+    private record PermanentTarget(PermanentTargetScope scope, TargetRef fixed) { }
+
+    private static PermanentTarget permanentTarget(final AbilityOutcomeDescription node) {
+        final String defined = node.parameters().get("Defined");
+        final String validTargets = node.parameters().get("ValidTgts");
+        if (defined != null) {
+            return validTargets == null && "Self".equalsIgnoreCase(defined)
+                    ? new PermanentTarget(PermanentTargetScope.SELF, TargetRef.SOURCE) : null;
+        }
+        if (validTargets == null || !oneTarget(node)
+                || node.parameters().containsKey("TgtZone")
+                        && !"Battlefield".equalsIgnoreCase(node.parameters().get("TgtZone"))) {
+            return null;
+        }
+        return switch (validTargets.toLowerCase(Locale.ROOT)) {
+        case "creature" -> new PermanentTarget(PermanentTargetScope.ANY_CREATURE, null);
+        case "creature.youctrl" -> new PermanentTarget(PermanentTargetScope.CONTROLLER_CREATURE, null);
+        case "creature.oppctrl" -> new PermanentTarget(PermanentTargetScope.OPPONENT_CREATURE, null);
+        case "permanent", "permanent.nonland" ->
+                new PermanentTarget(PermanentTargetScope.ANY_PERMANENT, null);
+        case "permanent.youctrl", "permanent.nonland+youctrl" ->
+                new PermanentTarget(PermanentTargetScope.CONTROLLER_PERMANENT, null);
+        case "permanent.oppctrl", "permanent.nonland+oppctrl" ->
+                new PermanentTarget(PermanentTargetScope.OPPONENT_PERMANENT, null);
+        default -> null;
+        };
+    }
+
+    private static List<TargetRef> permanentCandidates(final State state,
+            final PermanentTarget target) {
+        final List<TargetRef> result = new java.util.ArrayList<>(2);
+        final boolean friendly = target.scope() != PermanentTargetScope.OPPONENT_CREATURE
+                && target.scope() != PermanentTargetScope.OPPONENT_PERMANENT;
+        final boolean opposing = target.scope() != PermanentTargetScope.CONTROLLER_CREATURE
+                && target.scope() != PermanentTargetScope.CONTROLLER_PERMANENT;
+        final boolean creatures = target.scope() == PermanentTargetScope.ANY_CREATURE
+                || target.scope() == PermanentTargetScope.CONTROLLER_CREATURE
+                || target.scope() == PermanentTargetScope.OPPONENT_CREATURE;
+        final boolean permanents = target.scope() == PermanentTargetScope.ANY_PERMANENT
+                || target.scope() == PermanentTargetScope.CONTROLLER_PERMANENT
+                || target.scope() == PermanentTargetScope.OPPONENT_PERMANENT;
+        if (creatures) {
+            if (friendly && canTarget(toPermanent(state.controllerCreature()), true)) {
+                result.add(TargetRef.CONTROLLER_CREATURE);
+            }
+            if (opposing && canTarget(toPermanent(state.opponentCreature()), false)) {
+                result.add(TargetRef.OPPONENT_CREATURE);
+            }
+        }
+        if (permanents) {
+            if (friendly && canTarget(state.controllerPermanent(), true)) {
+                result.add(TargetRef.CONTROLLER_PERMANENT);
+            }
+            if (opposing && canTarget(state.opponentPermanent(), false)) {
+                result.add(TargetRef.OPPONENT_PERMANENT);
+            }
+        }
+        return result;
+    }
+
+    private static PermanentProfile toPermanent(final CreatureProfile profile) {
+        return new PermanentProfile(profile.present(), PermanentKind.CREATURE, true,
+                profile.power(), profile.toughness(), profile.keywords());
+    }
+
+    private static boolean canTarget(final PermanentProfile profile, final boolean friendly) {
+        return profile.present() && !hasKeyword(profile, "shroud")
+                && (friendly || !hasKeyword(profile, "hexproof"));
+    }
+
+    private static State removePermanent(final State state, final TargetRef target) {
+        return switch (target) {
+        case SOURCE -> state.withSourcePermanent(PermanentProfile.absent());
+        case CONTROLLER_CREATURE -> state.withCreatures(true, CreatureProfile.absent())
+                .withCreatureCount(true, state.controllerCreatureCount() - 1);
+        case OPPONENT_CREATURE -> state.withCreatures(false, CreatureProfile.absent())
+                .withCreatureCount(false, state.opponentCreatureCount() - 1);
+        case CONTROLLER_PERMANENT -> state.withPermanent(true, PermanentProfile.absent());
+        case OPPONENT_PERMANENT -> state.withPermanent(false, PermanentProfile.absent());
+        case CONTROLLER_PLAYER, OPPONENT_PLAYER -> state;
+        };
+    }
 
     /**
      * Resolves only literal single-creature scopes. Defined group aliases are intentionally not
