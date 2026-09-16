@@ -64,15 +64,20 @@ final class AffectedCardResolver {
             final Predicate<Card> additionalFilter) {
         if (unprojected(context)) { return new Resolution(List.of(), false); }
         final Map<Card, Integer> weights = allPotentialCards(outcome, context);
+        final List<Card> currentBattlefield = currentBattlefield(outcome, context);
         final CardCollection candidates = new CardCollection(weights.keySet());
         final CardCollectionView matching = AbilityUtils.filterListByType(candidates,
                 outcome.getParamOrDefault("ValidCards", "Card"), outcome);
         final List<WeightedCard> cards = new ArrayList<>();
         for (final Card card : matching) {
             if (additionalFilter.test(card)) {
-                // A group outcome affects each matching permanent once. Event subject counts
-                // describe repeated occurrences of one event, not duplicate group members.
-                cards.add(new WeightedCard(card, 1));
+                // A current permanent is affected once, while an event-only token prototype can
+                // represent several newly created permanents. Do not use an event occurrence count
+                // for an object already on the battlefield: it describes repeated events, not
+                // duplicate group members.
+                final int occurrences = currentBattlefield.contains(card)
+                        ? 1 : weights.getOrDefault(card, 1);
+                cards.add(new WeightedCard(card, occurrences));
             }
         }
         return new Resolution(cards, false);
@@ -82,6 +87,13 @@ final class AffectedCardResolver {
         if (context.state() == null || !context.state().unprojectedBoard) { return false; }
         context.unsupported();
         return true;
+    }
+
+    private static List<Card> currentBattlefield(final SpellAbility outcome,
+            final OutcomeEvaluationContext context) {
+        return context.state() == null
+                ? new ArrayList<>(outcome.getHostCard().getGame().getCardsIn(ZoneType.Battlefield))
+                : context.state().battlefield(context.evaluatingAi());
     }
 
     static boolean supportsSingleBattlefieldTarget(final SpellAbility outcome) {

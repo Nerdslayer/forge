@@ -180,6 +180,29 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void genericCounterGroupsUseReferenceRecipientCounts() {
+        final State initial = state(CREATURE, CREATURE, SOURCE);
+        final OutcomePlan<State> friendly = evaluate(leaf("PutCounterAll", Map.of(
+                "ValidCards", "Creature.YouCtrl", "CounterType", "P1P1")), initial);
+        Assert.assertEquals(friendly.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(friendly.value(), 50.0);
+        Assert.assertEquals(friendly.state().controllerCreature().power(), 3);
+        Assert.assertEquals(friendly.state().sourcePermanent().power(), 3);
+
+        final OutcomePlan<State> opposing = evaluate(leaf("PutCounterAll", Map.of(
+                "ValidCards", "Creature.OppCtrl", "CounterType", "P1P1")), initial);
+        Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(opposing.value(), -25.0);
+        Assert.assertEquals(opposing.state().opponentCreature().power(), 3);
+
+        final OutcomePlan<State> other = evaluate(leaf("PutCounterAll", Map.of(
+                "ValidCards", "Creature.YouCtrl+StrictlyOther", "CounterType", "P1P1")), initial);
+        Assert.assertEquals(other.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(other.value(), 25.0);
+        Assert.assertEquals(other.state().sourcePermanent(), SOURCE);
+    }
+
+    @Test
     public void realTargetScopesRespectSideOtherAndSourceAvailability() {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> friendly = evaluate(counter("Creature.YouCtrl+Other"), initial);
