@@ -269,6 +269,7 @@ public final class IntrinsicDrawOutcomeBackend
         return switch (node.api()) {
         case "Draw" -> acceptsDraw(node);
         case "PutCounter" -> acceptsCounter(node) || acceptsCounterChoice(node);
+        case "RemoveCounter" -> acceptsRemoveCounter(node);
         case "PutCounterAll" -> acceptsCounterAll(node);
         case "Pump" -> acceptsPump(node);
         case "PumpAll" -> acceptsPumpAll(node);
@@ -341,6 +342,7 @@ public final class IntrinsicDrawOutcomeBackend
         return switch (node.api()) {
         case "Draw" -> draw(node);
         case "PutCounter", "PutCounterAll" -> counter(node);
+        case "RemoveCounter" -> removeCounter(node);
         case "Pump", "PumpAll" -> pump(node);
         case "Debuff" -> debuff(node);
         case "Animate" -> animate(node);
@@ -1632,6 +1634,51 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> removeCounter(final AbilityOutcomeDescription node) {
+        final CounterTarget target = counterTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic counter-removal target");
+        }
+        if (target.scope() == CounterTargetScope.SELF) {
+            return removeCounterAtomic(node, TargetRef.SOURCE);
+        }
+        return new Outcome.Deferred<>(state -> new Outcome.Target<>(node.path() + ":target",
+                current -> candidates(current, target), State::withTarget,
+                removeCounterAtomic(node, null), true));
+    }
+
+    private Outcome<State> removeCounterAtomic(final AbilityOutcomeDescription node,
+            final TargetRef fixedTarget) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
+            if (target == null || !hasCounterTarget(current, target, node)) {
+                return null;
+            }
+            final PermanentProfile before = permanent(current, target);
+            if (target != TargetRef.SOURCE && !simpleKeywords(before.keywords())) {
+                return null;
+            }
+            final String counterKeyword = counterKeyword(counterType(node));
+            if (counterKeyword != null && !hasKeyword(before, counterKeyword)) {
+                return null;
+            }
+
+            // A matching counter is assumed to exist because the reference state does not yet
+            // carry arbitrary counter inventory. Exact inventory, replacement effects, and
+            // multiple-counter choices must be modeled before this can become state-sensitive.
+            final PermanentProfile after = removeCounterPermanent(before, node);
+            if (after == null) {
+                return null;
+            }
+            final int value = "LOYALTY".equalsIgnoreCase(counterType(node))
+                    ? evaluator.evaluatePermanentDelta(before, after, controls(target, current))
+                    : evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
+                            controls(target, current));
+            return new Outcome.Transition<>((double) value,
+                    replacePermanent(current, target, after).clearTarget(), node.api());
+        });
+    }
+
     private static boolean acceptsDraw(final AbilityOutcomeDescription node) {
         // TODO: Library exhaustion, optional draws, replacements, targeted players and symbolic
         // amounts require explicit reference state. Unknown semantic fields fail closed here.
@@ -1655,6 +1702,25 @@ public final class IntrinsicDrawOutcomeBackend
         }
         final CounterTarget target = counterTarget(node);
         return target != null && literalPositive(node, "CounterNum", 1)
+                && (!"LOYALTY".equalsIgnoreCase(counterType(node))
+                        || target.scope() == CounterTargetScope.SELF)
+                && "1".equals(node.parameters().getOrDefault("TargetMin", "1"))
+                && "1".equals(node.parameters().getOrDefault("TargetMax", "1"))
+                && "Battlefield".equals(node.parameters().getOrDefault("TgtZone", "Battlefield"));
+    }
+
+    private static boolean acceptsRemoveCounter(final AbilityOutcomeDescription node) {
+        // The reference state assumes one matching counter is present. Keep this to one fixed
+        // counter and the already-valued creature/planeswalker counter types until arbitrary
+        // counter inventory and RemoveCounterAll/Proliferate state are represented.
+        if (!COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
+                || node.parameters().containsKey("ValidCards")
+                || !supportedCounterType(counterType(node))
+                || !"1".equals(node.parameters().getOrDefault("CounterNum", "1"))) {
+            return false;
+        }
+        final CounterTarget target = counterTarget(node);
+        return target != null
                 && (!"LOYALTY".equalsIgnoreCase(counterType(node))
                         || target.scope() == CounterTargetScope.SELF)
                 && "1".equals(node.parameters().getOrDefault("TargetMin", "1"))
@@ -1814,17 +1880,9 @@ public final class IntrinsicDrawOutcomeBackend
             final List<AbilityOutcomeDescription> counterNodes = acceptsCounter(node)
                     ? List.of(node) : acceptsCounterChoice(node) ? counterTypes(node).stream()
                             .map(type -> withCounterType(node, type)).toList() : List.of();
-            for (final AbilityOutcomeDescription counterNode : counterNodes) {
-                final CounterTarget target = counterTarget(counterNode);
-                if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
-                        || target.scope() == CounterTargetScope.CONTROLLER_CREATURE)) {
-                    dimensions.add(CONTROLLER_CREATURE);
-                }
-                if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
-                        || target.scope() == CounterTargetScope.OPPONENT_CREATURE)) {
-                    dimensions.add(OPPONENT_CREATURE);
-                }
-            }
+            addCounterDimensions(counterNodes, dimensions);
+        } else if ("RemoveCounter".equals(node.api()) && acceptsRemoveCounter(node)) {
+            addCounterDimensions(List.of(node), dimensions);
         } else if (("PutCounterAll".equals(node.api()) && acceptsCounterAll(node))
                 || ("PumpAll".equals(node.api()) && acceptsPumpAll(node))) {
             addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
@@ -1888,6 +1946,21 @@ public final class IntrinsicDrawOutcomeBackend
             collectDimensions(choice, dimensions, visited, depth + 1);
         }
         collectDimensions(node.next(), dimensions, visited, depth + 1);
+    }
+
+    private static void addCounterDimensions(final List<AbilityOutcomeDescription> nodes,
+            final Set<String> dimensions) {
+        for (final AbilityOutcomeDescription counterNode : nodes) {
+            final CounterTarget target = counterTarget(counterNode);
+            if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
+                    || target.scope() == CounterTargetScope.CONTROLLER_CREATURE)) {
+                dimensions.add(CONTROLLER_CREATURE);
+            }
+            if (target != null && (target.scope() == CounterTargetScope.ANY_CREATURE
+                    || target.scope() == CounterTargetScope.OPPONENT_CREATURE)) {
+                dimensions.add(OPPONENT_CREATURE);
+            }
+        }
     }
 
     private static void addCreatureGroupDimensions(final CreatureGroupTarget target,
@@ -2447,6 +2520,40 @@ public final class IntrinsicDrawOutcomeBackend
             result.addAll(additions);
         }
         return Set.copyOf(result);
+    }
+
+    private static PermanentProfile removeCounterPermanent(final PermanentProfile profile,
+            final AbilityOutcomeDescription node) {
+        final String type = counterType(node);
+        final int amount = integer(node, "CounterNum", 1);
+        if ("P1P1".equals(type)) {
+            if (profile.power() < amount || profile.toughness() < amount) {
+                return null;
+            }
+            final PermanentProfile after = addP1P1(profile, -amount);
+            return after.toughness() == 0 ? PermanentProfile.absent() : after;
+        }
+        if ("M1M1".equals(type)) {
+            return addP1P1(profile, amount);
+        }
+        if ("LOYALTY".equals(type)) {
+            final int loyalty = profile.loyalty() - amount;
+            if (loyalty < 0) {
+                return null;
+            }
+            return loyalty == 0 ? PermanentProfile.absent() : new PermanentProfile(profile.present(),
+                    profile.kind(), profile.controlledByAi(), profile.power(), profile.toughness(),
+                    profile.keywords(), profile.basicLand(), loyalty);
+        }
+        final String keyword = counterKeyword(type);
+        if (keyword == null) {
+            return null;
+        }
+        final Set<String> keywords = profile.keywords().stream()
+                .filter(value -> !value.equalsIgnoreCase(keyword))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return new PermanentProfile(profile.present(), profile.kind(), profile.controlledByAi(),
+                profile.power(), profile.toughness(), keywords, profile.basicLand(), profile.loyalty());
     }
 
     private static int counterDelta(final AbilityOutcomeDescription node) {
