@@ -41,6 +41,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (manaExpend.isPresent()) {
             return manaExpend;
         }
+        final Optional<IntrinsicEventTrigger> scrySurveil =
+                IntrinsicScrySurveilTriggerAdapter.describe(parameters);
+        if (scrySurveil.isPresent()) {
+            return scrySurveil;
+        }
         if (isSupportedManaTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
@@ -105,6 +110,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicManaExpendTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicScrySurveilTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {

@@ -31,7 +31,7 @@ public final class IntrinsicReferenceModel {
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         MANA_EXPENDED,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
-        ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET
+        ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET, SCRIED_OR_SURVEILLED
     }
 
     /**
@@ -228,6 +228,11 @@ public final class IntrinsicReferenceModel {
         // Targets are chosen frequently, but only a subset target the object or player described
         // by a particular trigger. The adapter applies an additional filter multiplier.
         events.put(EventType.BECAME_TARGET, rateDistribution(0, .45, .5, .35, 1, .20));
+        // Scry and surveil are common filtering events, but neither is guaranteed in a generic
+        // deck. The distribution represents opportunities per active turn before player scope
+        // and once-per-turn trigger restrictions are applied.
+        events.put(EventType.SCRIED_OR_SURVEILLED,
+                rateDistribution(0, .40, 1, .45, 2, .12, 3, .03));
         events.put(EventType.DAMAGE_DEALT, rateDistribution(0, .30, 1, .45, 2, .20, 3, .05));
         events.put(EventType.ZONE_CHANGED, rateDistribution(0, .20, 1, .50, 2, .25, 3, .05));
 
