@@ -168,6 +168,50 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testKnownAiHandSpellEvaluatesOpponentSpellCastTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        addCard("Mountain", ai);
+        addCardToZone("Shock", ai, ZoneType.Hand);
+        final Card observer = addCard("Grizzly Bears", opponent);
+        observer.setSVar("EffectTestCastOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(observer, "Mode$ SpellCast | ValidCard$ Instant"
+                + " | ValidActivatingPlayer$ Opponent | Execute$ EffectTestCastOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(observer));
+
+        Assert.assertTrue(values.getOrDefault(observer, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testKnownAiAbilityEvaluatesOpponentAbilityCastTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card activator = addCard("Grizzly Bears", ai);
+        activator.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ 0 | Defined$ You | LifeAmount$ 1", activator));
+        final Card observer = addCard("Grizzly Bears", opponent);
+        observer.setSVar("EffectTestAbilityCastOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(observer, "Mode$ AbilityCast | ValidActivatingPlayer$ Opponent"
+                + " | Execute$ EffectTestAbilityCastOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(observer));
+
+        Assert.assertTrue(values.getOrDefault(observer, 0) > 0, values.toString());
+    }
+
+    @Test
     public void testExpectedBlockEvaluatesSupportedBlocksOutcome() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

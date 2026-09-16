@@ -10,8 +10,8 @@ final class EventTriggerParser {
     private EventTriggerParser() { }
     // TODO: Broader conditions/parameters still need separate adapters; intrinsic occurrence for
     // the relationship-supported event families is supplied by IntrinsicEventTriggerAdapter.
-    // SpellCast is intentionally handled by IntrinsicSpellCastTriggerAdapter because it is an
-    // intrinsic reference event, not yet a live EffectType relationship family.
+    // Intrinsic adapters still own reference occurrence estimates; the live relationship pass
+    // additionally admits the bounded known-cast production adapter.
     private static final Set<String> TOKEN_CREATED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "ValidToken", "OnlyFirst", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -133,6 +133,12 @@ final class EventTriggerParser {
     private static final Set<String> BECAME_TARGET_ONCE_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidSource", "ValidTarget", "ValidCause", "Random", "ActivationLimit",
             "Execute", "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> SPELL_CAST_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidSA", "ValidActivatingPlayer", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> ABILITY_CAST_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidCard", "ValidSA", "ValidActivatingPlayer", "ActivationLimit", "Execute",
+            "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> COUNTERED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidCause", "ValidSA", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -173,6 +179,10 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.BecomesTarget || mode == TriggerType.BecomesTargetOnce) {
             return EffectType.BECAME_TARGET;
+        }
+        if (mode == TriggerType.SpellCast || mode == TriggerType.SpellCastOrCopy
+                || mode == TriggerType.SpellAbilityCast || mode == TriggerType.AbilityCast) {
+            return EffectType.SPELL_OR_ABILITY_CAST;
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return EffectType.CARD_DISCARDED;
@@ -288,6 +298,16 @@ final class EventTriggerParser {
                     && hasSupportedActivationLimit(parameters)
                     && (!parameters.containsKey("Random")
                             || isBoolean(parameters.get("Random")));
+        }
+        if (mode == TriggerType.SpellCast || mode == TriggerType.SpellCastOrCopy
+                || mode == TriggerType.SpellAbilityCast) {
+            return hasOnlyParams(parameters, SPELL_CAST_TRIGGER_PARAMS)
+                    && hasSupportedCastPlayer(parameters);
+        }
+        if (mode == TriggerType.AbilityCast) {
+            return hasOnlyParams(parameters, ABILITY_CAST_TRIGGER_PARAMS)
+                    && hasSupportedCastPlayer(parameters)
+                    && hasSupportedActivationLimit(parameters);
         }
         if (mode == TriggerType.Countered) {
             return hasSupportedCounteredParameters(parameters);
@@ -452,6 +472,12 @@ final class EventTriggerParser {
     private static boolean hasSupportedActivationLimit(final Map<String, String> parameters) {
         return !parameters.containsKey("ActivationLimit")
                 || "1".equals(parameters.get("ActivationLimit"));
+    }
+
+    private static boolean hasSupportedCastPlayer(final Map<String, String> parameters) {
+        return !parameters.containsKey("ValidActivatingPlayer")
+                || Set.of("You", "Controller", "Opponent", "Player",
+                        "Player.Opponent").contains(parameters.get("ValidActivatingPlayer"));
     }
 
     private static boolean hasSupportedCounteredParameters(final Map<String, String> parameters) {
