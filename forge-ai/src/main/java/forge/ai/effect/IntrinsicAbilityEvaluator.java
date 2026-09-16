@@ -21,8 +21,6 @@ import forge.ai.effect.IntrinsicDrawOutcomeBackend.State;
 
 /** Evaluates prepared definition descriptions without constructing or querying a live game. */
 public final class IntrinsicAbilityEvaluator {
-    private static final Set<String> SAFE_EVENT_TRIGGER_PARAMETERS = Set.of(
-            "Mode", "ValidPlayer", "ValidToken", "ValidCard", "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final int MAX_REFERENCE_CASES = 4096;
     private final IntrinsicReferenceModel model;
     private final IntrinsicEvaluationSettings settings;
@@ -265,30 +263,7 @@ public final class IntrinsicAbilityEvaluator {
         if (schedule != null) {
             return true;
         }
-        if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
-            return true;
-        }
-        if (!SAFE_EVENT_TRIGGER_PARAMETERS.containsAll(parameters.keySet())
-                || parameters.get("Mode") == null) {
-            return false;
-        }
-        final String mode = parameters.get("Mode");
-        if ("TokenCreated".equals(mode)) {
-            // The token reference rate describes this controller creating tokens; these filters
-            // merely repeat that event's identity and introduce no narrower population.
-            return "You".equals(parameters.get("ValidPlayer"))
-                    && !parameters.containsKey("ValidCard")
-                    && Set.of("Card", "Card.token", "Card.token+YouCtrl")
-                            .contains(parameters.getOrDefault("ValidToken", "Card"));
-        }
-        if ("Attacks".equals(mode)) {
-            return !parameters.containsKey("ValidPlayer") && !parameters.containsKey("ValidToken")
-                    && Set.of("Card.Self", "Creature.Self").contains(parameters.getOrDefault("ValidCard", ""));
-        }
-        // TODO: Side-specific rates, event batching, thresholds and card/amount predicates need
-        // validated reference adapters before admitting the other recognized event families.
-        return "Drawn".equals(mode) && !parameters.containsKey("ValidToken") && !parameters.containsKey("ValidCard")
-                && "Player".equals(parameters.getOrDefault("ValidPlayer", "Player"));
+        return IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters);
     }
 
     private static long referenceCaseCount(final List<ReferenceDimension> dimensions) {

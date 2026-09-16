@@ -2,6 +2,7 @@ package forge.ai.effect;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import forge.game.trigger.TriggerType;
 
 /** Converts relationship-supported event triggers into bounded intrinsic inputs. */
@@ -32,6 +33,47 @@ public final class IntrinsicEventTriggerAdapter {
         final IntrinsicEventTrigger.TurnScope turnScope = turnScope(mode, parameters);
         return Optional.of(new IntrinsicEventTrigger(eventType, turnScope,
                 atMostOncePerTurn(mode, parameters), occurrenceMultiplier(mode, parameters)));
+    }
+
+    /**
+     * Returns whether the current reference model can safely interpret this trigger's filters.
+     * Event recognition is intentionally broader: this method is the intrinsic evaluation gate.
+     */
+    static boolean supportsIntrinsicParameters(final Map<String, String> parameters) {
+        if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (!EventTriggerParser.hasSupportedParameters(parameters)) {
+            return false;
+        }
+        final TriggerType mode = EventTriggerParser.mode(parameters);
+        if (mode == TriggerType.TokenCreated) {
+            return "You".equals(parameters.get("ValidPlayer"))
+                    && !parameters.containsKey("ValidCard")
+                    && Set.of("Card", "Card.token", "Card.token+YouCtrl")
+                            .contains(parameters.getOrDefault("ValidToken", "Card"));
+        }
+        if (mode == TriggerType.Attacks) {
+            return !parameters.containsKey("ValidPlayer") && !parameters.containsKey("ValidToken")
+                    && Set.of("Card.Self", "Creature.Self").contains(parameters.getOrDefault("ValidCard", ""));
+        }
+        if (mode == TriggerType.Drawn) {
+            return !parameters.containsKey("ValidToken") && !parameters.containsKey("ValidCard")
+                    && "Player".equals(parameters.getOrDefault("ValidPlayer", "Player"));
+        }
+        if (mode == TriggerType.CounterAdded || mode == TriggerType.CounterAddedOnce) {
+            // Counter type is deliberately not used to change the generic counter rate yet. The
+            // reference model assumes a supported counter event; thresholds, FirstTime, and
+            // board-wide/other-object predicates need richer counter populations.
+            return Set.of("Card.Self", "Creature.Self").contains(parameters.get("ValidCard"))
+                    && (!parameters.containsKey("ValidSource")
+                            || "You".equals(parameters.get("ValidSource")))
+                    && !parameters.containsKey("CounterAmount")
+                    && !parameters.containsKey("FirstTime")
+                    && (!parameters.containsKey("ActivationLimit")
+                            || "1".equals(parameters.get("ActivationLimit")));
+        }
+        return false;
     }
 
     private static IntrinsicReferenceModel.EventType eventType(final TriggerType mode,
