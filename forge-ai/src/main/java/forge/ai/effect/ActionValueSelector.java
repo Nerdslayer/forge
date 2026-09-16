@@ -13,11 +13,16 @@ public final class ActionValueSelector {
     private ActionValueSelector() {
     }
 
+    /** One candidate's shared action breakdown, retained for callers that need diagnostics. */
+    public record CandidateEvaluation<T>(T candidate, CardValueBreakdown value) {
+    }
+
     /** Result of attempting to value and select a list of concrete candidates. */
-    public record Selection<T>(T selected, List<T> orderedCandidates, boolean valuationUsed,
-            String reason) {
+    public record Selection<T>(T selected, List<T> orderedCandidates,
+            List<CandidateEvaluation<T>> evaluations, boolean valuationUsed, String reason) {
         public Selection {
             orderedCandidates = orderedCandidates == null ? List.of() : List.copyOf(orderedCandidates);
+            evaluations = evaluations == null ? List.of() : List.copyOf(evaluations);
             reason = reason == null ? "" : reason;
         }
     }
@@ -55,14 +60,19 @@ public final class ActionValueSelector {
             }
         }
 
+        final List<CandidateEvaluation<T>> evaluations = candidates.stream()
+                .map(candidate -> new CandidateEvaluation<>(candidate, values.get(candidate)))
+                .toList();
         final List<T> ordered = new ArrayList<>(candidates);
         ordered.sort(Comparator.comparingInt(
                 (T candidate) -> values.get(candidate).netValue()).reversed());
-        return new Selection<>(ordered.get(0), ordered, true, "All action candidates were complete.");
+        return new Selection<>(ordered.get(0), ordered, evaluations, true,
+                "All action candidates were complete.");
     }
 
     private static <T> Selection<T> fallback(final List<T> candidates, final String reason) {
         final List<T> original = candidates == null ? List.of() : new ArrayList<>(candidates);
-        return new Selection<>(original.isEmpty() ? null : original.get(0), original, false, reason);
+        return new Selection<>(original.isEmpty() ? null : original.get(0), original, List.of(), false,
+                reason);
     }
 }

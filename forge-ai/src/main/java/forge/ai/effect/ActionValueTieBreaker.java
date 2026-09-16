@@ -1,7 +1,6 @@
 package forge.ai.effect;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,9 +26,7 @@ public final class ActionValueTieBreaker {
     public static <T> List<T> rankSupportedTie(final List<T> candidates,
             final ValuationContext context, final Predicate<T> supportedCandidate,
             final Function<T, ValuationAction> actionFactory) {
-        if (candidates == null || candidates.size() < 2 || context == null
-                || supportedCandidate == null || actionFactory == null
-                || !candidates.stream().allMatch(supportedCandidate)) {
+        if (candidates == null || candidates.size() < 2) {
             return candidates;
         }
         final ActionValueSelector.Selection<T> selection = ActionValueSelector.selectBest(candidates,
@@ -44,7 +41,6 @@ public final class ActionValueTieBreaker {
             return;
         }
 
-        final Map<SpellAbility, CardValueBreakdown> values = new IdentityHashMap<>();
         int start = 0;
         while (start < abilities.size()) {
             final SpellAbility first = abilities.get(start);
@@ -54,42 +50,32 @@ public final class ActionValueTieBreaker {
                 end++;
             }
             if (end - start > 1) {
-                reorderSupportedTie(ai, abilities, start, end, context,
-                        supportedCandidate, actionFactory, values);
+                reorderSupportedTie(abilities, start, end, context,
+                        supportedCandidate, actionFactory);
             }
             start = end;
         }
     }
 
-    private static void reorderSupportedTie(final Player ai, final List<SpellAbility> abilities,
-            final int start, final int end, final ValuationContext context,
+    private static void reorderSupportedTie(final List<SpellAbility> abilities, final int start,
+            final int end, final ValuationContext context,
             final Predicate<SpellAbility> supportedCandidate,
-            final Function<SpellAbility, ValuationAction> actionFactory,
-            final Map<SpellAbility, CardValueBreakdown> values) {
+            final Function<SpellAbility, ValuationAction> actionFactory) {
         final List<SpellAbility> tied = new ArrayList<>(abilities.subList(start, end));
-        if (!tied.stream().allMatch(supportedCandidate)) {
+        final ActionValueSelector.Selection<SpellAbility> selection = ActionValueSelector.selectBest(
+                tied, context, supportedCandidate, actionFactory);
+        if (!selection.valuationUsed() || selection.orderedCandidates().equals(tied)) {
             return;
         }
-
-        for (final SpellAbility ability : tied) {
-            final CardValueBreakdown value = values.computeIfAbsent(ability,
-                    candidate -> UnifiedActionValueEvaluator.evaluate(
-                            actionFactory.apply(candidate), context));
-            if (!value.isComplete()) {
-                return;
-            }
+        final Map<SpellAbility, CardValueBreakdown> values = new IdentityHashMap<>();
+        for (final ActionValueSelector.CandidateEvaluation<SpellAbility> evaluation
+                : selection.evaluations()) {
+            values.put(evaluation.candidate(), evaluation.value());
         }
-
-        final int firstValue = values.get(tied.get(0)).netValue();
-        if (tied.stream().allMatch(ability -> values.get(ability).netValue() == firstValue)) {
-            return;
+        for (int i = 0; i < selection.orderedCandidates().size(); i++) {
+            abilities.set(start + i, selection.orderedCandidates().get(i));
         }
-        tied.sort(Comparator.comparingInt(
-                (SpellAbility ability) -> values.get(ability).netValue()).reversed());
-        for (int i = 0; i < tied.size(); i++) {
-            abilities.set(start + i, tied.get(i));
-        }
-        logReordering(context, tied, values);
+        logReordering(context, selection.orderedCandidates(), values);
     }
 
     private static void logReordering(final ValuationContext context,
