@@ -16,12 +16,14 @@ import forge.game.zone.ZoneType;
  */
 public final class HandCardAccessEvaluator {
     private static final int LOOKAHEAD_TURNS = 3;
+    private static final double UNKNOWN_CARD_LAND_PROBABILITY = 0.40;
 
     private HandCardAccessEvaluator() {
     }
 
     public record Estimate(int manaCost, int availableMana, int landsInHand,
-            int knownManaAfterLookahead, int earliestKnownTurn, boolean castableNow,
+            double expectedLandsInHand, int knownManaAfterLookahead,
+            double expectedManaAfterLookahead, int earliestKnownTurn, boolean castableNow,
             List<String> reasons) {
         public Estimate {
             reasons = reasons == null ? List.of() : List.copyOf(reasons);
@@ -30,22 +32,29 @@ public final class HandCardAccessEvaluator {
         public boolean canReachWithKnownLands() {
             return earliestKnownTurn <= LOOKAHEAD_TURNS;
         }
+
+        public boolean canReachWithExpectedResources() {
+            return expectedManaAfterLookahead >= manaCost;
+        }
     }
 
     /**
      * Estimates access using generic mana and mana-producing lands only.
      *
-     * <p>TODO(unified valuation): account for colored mana, non-land mana sources, alternative
-     * costs, cost reducers, playable-land restrictions, and unknown cards drawn before the
-     * lookahead horizon.</p>
+     * <p>The known-land estimate never inspects hidden cards. For partial information, the
+     * expected-land estimate applies a deliberately broad 40% land heuristic to unknown cards;
+     * it is diagnostic only and must not be treated as a revealed card or a guaranteed land drop.
+     * TODO(unified valuation): account for colored mana, non-land mana sources, alternative costs,
+     * cost reducers, playable-land restrictions, and unknown cards drawn before the lookahead
+     * horizon.</p>
      */
     public static Estimate evaluate(final Card card, final HandValuationContext context) {
         if (card == null || context == null) {
-            return new Estimate(0, 0, 0, 0, Integer.MAX_VALUE, false,
+            return new Estimate(0, 0, 0, 0, 0, 0, Integer.MAX_VALUE, false,
                     List.of("Card access is unavailable without a card and hand context."));
         }
         if (!context.knows(card)) {
-            return new Estimate(0, 0, 0, 0, Integer.MAX_VALUE, false,
+            return new Estimate(0, 0, 0, 0, 0, 0, Integer.MAX_VALUE, false,
                     List.of("Card access is unavailable because the card is not known."));
         }
         final Player owner = context.handOwner();
@@ -59,8 +68,12 @@ public final class HandCardAccessEvaluator {
                 : (int) context.knownCards().stream()
                         .filter(CardPredicates.LANDS_PRODUCING_MANA)
                         .count();
+        final double expectedLandsInHand = landsInHand
+                + UNKNOWN_CARD_LAND_PROBABILITY * context.unknownCardCount();
         final boolean castableNow = manaCost <= availableMana;
         final int knownManaAfterLookahead = availableMana + Math.min(LOOKAHEAD_TURNS, landsInHand);
+        final double expectedManaAfterLookahead = availableMana
+                + Math.min(LOOKAHEAD_TURNS, expectedLandsInHand);
         final int earliestKnownTurn;
         if (castableNow) {
             earliestKnownTurn = 0;
@@ -73,10 +86,18 @@ public final class HandCardAccessEvaluator {
         final String horizon = canReach(earliestKnownTurn)
                 ? "known resources reach the cost in " + earliestKnownTurn + " turn(s)"
                 : "known resources do not reach the cost within " + LOOKAHEAD_TURNS + " turns";
-        return new Estimate(manaCost, availableMana, landsInHand, knownManaAfterLookahead,
-                earliestKnownTurn, castableNow,
+        final String expected = context.unknownCardCount() == 0
+                ? "full hand is known"
+                : String.format(java.util.Locale.ROOT,
+                        "expected %.2f mana-producing land(s) including %.2f from %d unknown card(s)",
+                        expectedLandsInHand,
+                        UNKNOWN_CARD_LAND_PROBABILITY * context.unknownCardCount(),
+                        context.unknownCardCount());
+        return new Estimate(manaCost, availableMana, landsInHand, expectedLandsInHand,
+                knownManaAfterLookahead, expectedManaAfterLookahead, earliestKnownTurn,
+                castableNow,
                 List.of("Generic mana access: " + availableMana + " now, " + landsInHand
-                        + " known mana-producing land(s) in hand", horizon));
+                        + " known mana-producing land(s) in hand", expected, horizon));
     }
 
     private static boolean canReach(final int turn) {
