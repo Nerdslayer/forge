@@ -23,6 +23,7 @@ import com.google.common.collect.Sets;
 import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ChangeZoneAi;
 import forge.ai.ability.LearnAi;
+import forge.ai.effect.ActivateAbilityValueTieBreaker;
 import forge.ai.effect.CastCardValueTieBreaker;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.ai.simulation.OnePlaySafetyChecker;
@@ -731,6 +732,9 @@ public class AiController {
             ComputerUtilAbility.sortCreatureSpells(all);
             if (getBoolProperty(AiProps.ENABLE_CAST_VALUE_TIEBREAK)) {
                 CastCardValueTieBreaker.apply(player, all);
+            }
+            if (getBoolProperty(AiProps.ENABLE_ACTIVATION_VALUE_TIEBREAK)) {
+                ActivateAbilityValueTieBreaker.apply(player, all);
             }
         } catch (IllegalArgumentException ex) {
             System.err.println(ex.getMessage());
@@ -1596,6 +1600,9 @@ public class AiController {
             ComputerUtilAbility.sortCreatureSpells(all);
             if (getBoolProperty(AiProps.ENABLE_CAST_VALUE_TIEBREAK)) {
                 CastCardValueTieBreaker.apply(player, all);
+            }
+            if (getBoolProperty(AiProps.ENABLE_ACTIVATION_VALUE_TIEBREAK)) {
+                ActivateAbilityValueTieBreaker.apply(player, all);
             }
         } catch (IllegalArgumentException ex) {
             System.err.println(ex.getMessage());

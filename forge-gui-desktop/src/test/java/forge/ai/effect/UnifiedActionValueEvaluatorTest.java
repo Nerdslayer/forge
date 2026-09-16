@@ -1,11 +1,14 @@
 package forge.ai.effect;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import forge.ai.AITest;
+import forge.ai.ComputerUtilAbility;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
 import forge.game.ability.ApiType;
@@ -85,6 +88,27 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
         Assert.assertTrue(result.transitionValue() > 0, result.toString());
         Assert.assertEquals(result.accessCost(), 25);
         Assert.assertTrue(result.netValue() < result.transitionValue());
+    }
+
+    @Test
+    public void activationTieBreakerUsesSharedValueOnlyForAnExactLegacyTie() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card weakSource = addCard("Grizzly Bears", ai);
+        final Card strongSource = addCard("Grizzly Bears", ai);
+        addCard("Forest", ai);
+        final SpellAbility weak = AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ 1 | Defined$ You | LifeAmount$ 1", weakSource);
+        final SpellAbility strong = AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ 1 | Defined$ You | LifeAmount$ 20", strongSource);
+        weak.setActivatingPlayer(ai);
+        strong.setActivatingPlayer(ai);
+        final List<SpellAbility> abilities = new ArrayList<>(List.of(weak, strong));
+
+        Assert.assertEquals(ComputerUtilAbility.saEvaluator.compare(weak, strong), 0);
+        ActivateAbilityValueTieBreaker.apply(ai, abilities);
+
+        Assert.assertSame(abilities.get(0), strong);
     }
 
     @Test
