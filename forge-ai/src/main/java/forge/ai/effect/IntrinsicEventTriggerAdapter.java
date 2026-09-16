@@ -77,6 +77,9 @@ public final class IntrinsicEventTriggerAdapter {
         if (EventTriggerParser.isSecondMainTappedCheckpoint(parameters)) {
             return true;
         }
+        if (mode == TriggerType.Exiled) {
+            return supportsExiled(parameters);
+        }
         if (mode == TriggerType.TokenCreated || mode == TriggerType.TokenCreatedOnce) {
             // TokenCreatedOnce commonly omits ValidPlayer because it is already scoped to the
             // active token-creation batch. Keep both forms limited to the same known token
@@ -282,6 +285,19 @@ public final class IntrinsicEventTriggerAdapter {
         return supportsDeathFilter(parameters.get("ValidCard"));
     }
 
+    private static boolean supportsExiled(final Map<String, String> parameters) {
+        if (!"Battlefield".equalsIgnoreCase(parameters.get("Origin"))
+                || parameters.containsKey("ValidCause")) {
+            return false;
+        }
+        // Exile is currently represented by the broad zone-change rate. Limit this first slice
+        // to common non-self creature triggers; source-specific departure and conditional exile
+        // need a destination-aware reference population.
+        final String validCard = parameters.get("ValidCard");
+        return validCard != null
+                && Set.of("Creature", "Creature.Other").contains(validCard);
+    }
+
     private static boolean supportsDeathFilter(final String value) {
         if (value == null || value.isBlank()) {
             return false;
@@ -397,6 +413,11 @@ public final class IntrinsicEventTriggerAdapter {
 
     private static double occurrenceMultiplier(final TriggerType mode,
             final Map<String, String> parameters) {
+        if (mode == TriggerType.Exiled) {
+            // Only a subset of zone changes are exiles, and the generic reference rate does not
+            // distinguish exile from other destinations.
+            return .25;
+        }
         if (mode != TriggerType.Drawn || !parameters.containsKey("Number")) {
             return 1;
         }
