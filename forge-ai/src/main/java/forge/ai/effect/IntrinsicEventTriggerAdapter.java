@@ -32,6 +32,10 @@ public final class IntrinsicEventTriggerAdapter {
         if (abilityCast.isPresent()) {
             return abilityCast;
         }
+        final Optional<IntrinsicEventTrigger> target = IntrinsicTargetTriggerAdapter.describe(parameters);
+        if (target.isPresent()) {
+            return target;
+        }
         if (isSupportedManaTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
@@ -90,6 +94,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicAbilityCastTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicTargetTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {
