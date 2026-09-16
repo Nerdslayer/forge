@@ -135,6 +135,37 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void activatedDrawUsesLiveHandValueForFutureAbility() {
+        final Game lowHandGame = initAndCreateGame();
+        final Player lowHandAi = lowHandGame.getPlayers().get(1);
+        final Player lowHandOpponent = lowHandGame.getPlayers().get(0);
+        setOpposingTeams(lowHandAi, lowHandOpponent);
+        final Card lowHandTome = addCard("Jayemdae Tome", lowHandOpponent);
+        fillLibrary(lowHandOpponent, 5);
+        final PermanentAbilityValueEvaluator.Breakdown lowHand = evaluate(
+                lowHandAi, List.of(lowHandTome)).get(lowHandTome);
+
+        final Game fullHandGame = initAndCreateGame();
+        final Player fullHandAi = fullHandGame.getPlayers().get(1);
+        final Player fullHandOpponent = fullHandGame.getPlayers().get(0);
+        setOpposingTeams(fullHandAi, fullHandOpponent);
+        final Card fullHandTome = addCard("Jayemdae Tome", fullHandOpponent);
+        fillLibrary(fullHandOpponent, 5);
+        for (int i = 0; i < 7; i++) {
+            addCardToZone("Runeclaw Bear", fullHandOpponent, forge.game.zone.ZoneType.Hand);
+        }
+        final PermanentAbilityValueEvaluator.Breakdown fullHand = evaluate(
+                fullHandAi, List.of(fullHandTome)).get(fullHandTome);
+
+        Assert.assertTrue(lowHand.intrinsicValue() > fullHand.intrinsicValue(),
+                "An activated draw should be more valuable with an emptier hand: low="
+                        + lowHand + ", full=" + fullHand);
+        Assert.assertTrue(lowHand.reasons().stream()
+                .anyMatch(reason -> reason.contains("Live activated")),
+                lowHand.toString());
+    }
+
+    @Test
     public void supportedEventTriggerContributesFutureRemovalValueWithoutCurrentProducer() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

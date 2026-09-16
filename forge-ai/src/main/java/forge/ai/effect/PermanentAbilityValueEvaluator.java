@@ -231,17 +231,32 @@ public final class PermanentAbilityValueEvaluator {
             }
             if (description.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
                 // Intrinsic activation occurrence already accounts for reference mana, repeated
-                // uses and bounded source survival. Keep only a discounted future allowance here
-                // until live mana competition and activation selection are modeled.
-                // TODO: Refine this with current/future mana, hand opportunity, tap state and
-                // willingness without charging the same activation value twice.
-                final int allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE, aggregateValue);
+                // uses and bounded source survival. Replace only the per-resolution outcome with
+                // the live estimate, and retain the conservative reference occurrence count.
+                // TODO: Refine occurrence itself with live/future mana, tap state and source
+                // survival without charging the same activation value twice.
+                final SituationalFutureOutcomeEvaluator.Evaluation situational =
+                        SituationalFutureOutcomeEvaluator.evaluateActivatedAbility(ai, candidate,
+                                value.path());
+                final int allowance;
+                final String contributionPath;
+                final String contributionReason;
+                if (situational.supported()) {
+                    allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE,
+                            toInt(situational.value() * value.expectedOccurrences()));
+                    contributionPath = value.path() + ":activation-future-situational";
+                    contributionReason = situational.reason();
+                } else {
+                    allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE, aggregateValue);
+                    contributionPath = value.path() + ":activation-future-opportunity";
+                    contributionReason = "Independent future-support allowance for activated " + api
+                            + " ability (reference uses are discounted; live refinement "
+                            + situational.reason() + ")";
+                }
                 if (allowance != 0) {
                     destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
                             null, null, AbilityValueKind.INTRINSIC_FUTURE_ALLOWANCE, allowance,
-                            value.path() + ":activation-future-opportunity",
-                            "Independent future-support allowance for activated " + api
-                                    + " ability (reference uses are discounted)"));
+                            contributionPath, contributionReason));
                 }
             } else if (scheduled) {
                 // A production edge scores its consumer's reaction, not this producer's own

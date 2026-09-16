@@ -14,8 +14,8 @@ import forge.game.trigger.Trigger;
  * it without hidden information.</p>
  */
 final class SituationalFutureOutcomeEvaluator {
-    // TODO(effect analysis): Extend live refinement to activations and event-triggered abilities,
-    // and report target/choice availability separately when a branch cannot be planned safely.
+    // TODO(effect analysis): Extend live refinement to event-triggered abilities and report
+    // target/choice availability separately when a branch cannot be planned safely.
     private SituationalFutureOutcomeEvaluator() {
     }
 
@@ -52,5 +52,28 @@ final class SituationalFutureOutcomeEvaluator {
         }
         return Evaluation.supported(PlannedOutcomeEvaluator.score(plan),
                 "Live scheduled outcome value (reference occurrence estimate retained)");
+    }
+
+    static Evaluation evaluateActivatedAbility(final Player evaluatingAi, final Card source,
+            final String path) {
+        if (evaluatingAi == null || source == null) {
+            return Evaluation.unsupported("missing live evaluation context");
+        }
+        final SpellAbility ability = EffectAbilityUtils.abilityAtPath(source, path);
+        if (ability == null) {
+            return Evaluation.unsupported("live ability could not be found");
+        }
+        final SpellAbility outcome = EffectAbilityUtils.copyActivatedAbility(source, ability);
+        if (outcome == null) {
+            return Evaluation.unsupported("live activation could not be copied safely");
+        }
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(outcome,
+                evaluatingAi);
+        if (!plan.complete()) {
+            return Evaluation.unsupported("live activation outcome is incomplete: " + plan.reason());
+        }
+        return Evaluation.supported(PlannedOutcomeEvaluator.score(plan),
+                "Live activated " + outcome.getApi().name()
+                        + " ability outcome value (reference occurrence estimate retained)");
     }
 }
