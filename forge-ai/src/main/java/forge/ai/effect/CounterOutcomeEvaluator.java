@@ -48,6 +48,9 @@ final class CounterOutcomeEvaluator implements OutcomeEvaluator {
         if (outcome.getApi() == ApiType.PutCounterAll && !outcome.hasParam("ValidCards")) {
             return false;
         }
+        if (outcome.getApi() == ApiType.PutCounter && outcome.hasParam("ValidCards")) {
+            return false;
+        }
         final boolean transfer = "EachFromSource".equals(outcome.getParam("CounterType"))
                 && outcome.hasParam("EachFromSource") && !outcome.getParam("EachFromSource").isBlank();
         final List<CounterType> counterTypes = transfer ? List.of() : parseCounterTypes(outcome.getParam("CounterType"));
