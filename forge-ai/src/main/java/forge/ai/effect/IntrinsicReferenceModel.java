@@ -27,6 +27,7 @@ public final class IntrinsicReferenceModel {
     public enum EventType {
         ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, TAPPED,
+        MANA_ADDED_OR_SPENT,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, DAMAGE_DEALT, ZONE_CHANGED
     }
 
@@ -184,6 +185,11 @@ public final class IntrinsicReferenceModel {
         events.put(EventType.TOKEN_CREATED, rateDistribution(0, .30, 1, .50, 2, .20));
         events.put(EventType.COUNTER_ADDED, rateDistribution(0, .40, 1, .45, 2, .15));
         events.put(EventType.TAPPED, rateDistribution(0, .20, 1, .55, 2, .25));
+        // A mana-producing permanent is usually used once or a few times each turn. This
+        // distribution is deliberately broad because it does not model the deck's land count,
+        // mana dorks, or the controller's exact resource needs.
+        events.put(EventType.MANA_ADDED_OR_SPENT,
+                rateDistribution(0, .10, 1, .20, 2, .25, 3, .20, 4, .15, 5, .10));
         events.put(EventType.LIFE_GAINED, rateDistribution(0, .35, 1, .45, 2, .15, 3, .05));
         events.put(EventType.LIFE_LOST, rateDistribution(0, .25, 1, .50, 2, .20, 3, .05));
         events.put(EventType.CARD_DRAWN, rateDistribution(0, .15, 1, .50, 2, .25, 3, .10));

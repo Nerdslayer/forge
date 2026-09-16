@@ -15,6 +15,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (spellCast.isPresent()) {
             return spellCast;
         }
+        if (isSupportedManaTrigger(parameters)) {
+            return Optional.of(new IntrinsicEventTrigger(
+                    IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
+                    manaTurnScope(parameters), false, manaOccurrenceMultiplier(parameters)));
+        }
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
             return Optional.empty();
         }
@@ -41,6 +46,9 @@ public final class IntrinsicEventTriggerAdapter {
      */
     static boolean supportsIntrinsicParameters(final Map<String, String> parameters) {
         if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (isSupportedManaTrigger(parameters)) {
             return true;
         }
         if (!EventTriggerParser.hasSupportedParameters(parameters)) {
@@ -149,6 +157,57 @@ public final class IntrinsicEventTriggerAdapter {
             return supportsSacrifice(parameters);
         }
         return false;
+    }
+
+    /**
+     * Supports the first intrinsic slice of {@code TapsForMana}. The live relationship analyzer
+     * does not yet normalize mana events, so this adapter intentionally remains intrinsic-only.
+     * We model broad land and self mana-source filters, while subtype, attachment, produced-mana,
+     * and condition-dependent filters need a richer reference resource model.
+     */
+    private static boolean isSupportedManaTrigger(final Map<String, String> parameters) {
+        if (parameters == null || EventTriggerParser.mode(parameters) != TriggerType.TapsForMana) {
+            return false;
+        }
+        final Set<String> supportedParameters = Set.of("Mode", "ValidCard", "Activator",
+                "TriggerZones", "Execute", "TriggerDescription", "Static");
+        if (!supportedParameters.containsAll(parameters.keySet())
+                || !validBooleanParameter(parameters, "Static")) {
+            return false;
+        }
+        if (parameters.containsKey("TriggerZones")
+                && !"Battlefield".equalsIgnoreCase(parameters.get("TriggerZones"))) {
+            return false;
+        }
+        final String validCard = parameters.get("ValidCard");
+        return Set.of("Land", "Land.Basic", "Land.nonBasic", "Card.Self", "Creature.Self",
+                "Creature").contains(validCard)
+                && (!parameters.containsKey("Activator")
+                    || Set.of("You", "Opponent").contains(parameters.get("Activator")));
+    }
+
+    private static IntrinsicEventTrigger.TurnScope manaTurnScope(final Map<String, String> parameters) {
+        return switch (parameters.getOrDefault("Activator", "Any")) {
+        case "You" -> IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN;
+        case "Opponent" -> IntrinsicEventTrigger.TurnScope.OPPONENT_TURN;
+        default -> IntrinsicEventTrigger.TurnScope.ANY_TURN;
+        };
+    }
+
+    private static double manaOccurrenceMultiplier(final Map<String, String> parameters) {
+        return switch (parameters.getOrDefault("ValidCard", "Land")) {
+        case "Land" -> 1;
+        case "Land.Basic" -> .65;
+        case "Land.nonBasic" -> .35;
+        case "Creature" -> .45;
+        case "Card.Self", "Creature.Self" -> .40;
+        default -> 0;
+        };
+    }
+
+    private static boolean validBooleanParameter(final Map<String, String> parameters,
+            final String name) {
+        return !parameters.containsKey(name) || isBoolean(parameters.get(name));
     }
 
     private static boolean supportsCreatureDeath(final Map<String, String> parameters) {
