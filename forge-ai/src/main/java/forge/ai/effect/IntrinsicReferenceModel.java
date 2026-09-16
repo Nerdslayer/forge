@@ -29,6 +29,7 @@ public final class IntrinsicReferenceModel {
         ABILITY_RESOLVED, ABILITY_TRIGGERED,
         LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
+        CONTROL_CHANGED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         MANA_EXPENDED,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
@@ -197,6 +198,9 @@ public final class IntrinsicReferenceModel {
         // generic prior remains conservative because exact causes and source populations are hidden.
         events.put(EventType.ABILITY_TRIGGERED,
                 rateDistribution(0, .20, 1, .50, 2, .22, 3, .06, 4, .02));
+        // Control changes are less common than ordinary spell or ability events and are often
+        // clustered in dedicated decks; exact permanent/source populations remain unresolved.
+        events.put(EventType.CONTROL_CHANGED, rateDistribution(0, .60, 1, .30, 2, .10));
         // A normal player gets about one land-play opportunity per turn. Extra-land effects are
         // represented by the small two- and three-land tail; card-specific filters remain
         // outside this first reference model.
