@@ -12,8 +12,16 @@ final class IntrinsicAbilityCastTriggerAdapter {
             "Execute", "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> SUPPORTED_PLAYER_FILTERS = Set.of(
             "You", "Opponent", "Player", "Player.Opponent");
-    private static final Set<String> SUPPORTED_ABILITY_FILTERS = Set.of(
-            "SpellAbility.!ManaAbility", "Activated.!ManaAbility");
+    private static final Map<String, Double> SUPPORTED_ABILITY_FILTERS = Map.ofEntries(
+            Map.entry("SpellAbility.!ManaAbility", 1.0),
+            Map.entry("Activated.!ManaAbility", 1.0),
+            Map.entry("Activated.Loyalty", .65),
+            Map.entry("Activated.Exhaust", .55),
+            Map.entry("Activated.Exhaust+!ManaAbility", .55),
+            Map.entry("Activated.Boast", .45),
+            Map.entry("Activated.Outlast", .35),
+            Map.entry("Activated.PowerUp", .45),
+            Map.entry("Activated.Ninjutsu", .35));
 
     private IntrinsicAbilityCastTriggerAdapter() {
     }
@@ -39,7 +47,7 @@ final class IntrinsicAbilityCastTriggerAdapter {
             return false;
         }
         if (parameters.containsKey("ValidSA")
-                && !SUPPORTED_ABILITY_FILTERS.contains(parameters.get("ValidSA"))) {
+                && !SUPPORTED_ABILITY_FILTERS.containsKey(parameters.get("ValidSA"))) {
             return false;
         }
         // A source-specific or permanent-specific ability population needs live board information.
@@ -67,6 +75,7 @@ final class IntrinsicAbilityCastTriggerAdapter {
     }
 
     private static double occurrenceMultiplier(final Map<String, String> parameters) {
-        return parameters.containsKey("ValidSA") ? .85 : 1;
+        return parameters.containsKey("ValidSA")
+                ? SUPPORTED_ABILITY_FILTERS.get(parameters.get("ValidSA")) : 1;
     }
 }

@@ -355,6 +355,19 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicAbilityCastTriggerUsesCategoryCadence() {
+        final Map<String, String> parameters = Map.of(
+                "Mode", "AbilityCast", "ValidActivatingPlayer", "You",
+                "ValidSA", "Activated.Exhaust");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                .orElseThrow();
+        Assert.assertEquals(trigger.occurrenceMultiplier(), .55);
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "AbilityCast", "ValidActivatingPlayer", "You",
+                "ValidSA", "Activated")).isEmpty());
+    }
+
+    @Test
     public void intrinsicAbilityCastCardTriggerReachesOutcomeEvaluation() {
         host();
         final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation =
@@ -376,7 +389,7 @@ public class AbilityTraversalTest extends AITest {
     public void specializedAbilityCastFiltersRemainConservative() {
         Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
                 "Mode", "AbilityCast", "ValidActivatingPlayer", "You",
-                "ValidSA", "Activated.Exhaust")).isEmpty());
+                "ValidSA", "Activated.Eternalize,Activated.Embalm")).isEmpty());
     }
 
     @Test
