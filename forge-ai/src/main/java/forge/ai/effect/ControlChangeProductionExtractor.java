@@ -10,10 +10,13 @@ import forge.game.ability.AbilityKey;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardCopyService;
+import forge.game.card.CardCollection;
+import forge.game.card.CardCollectionView;
 import forge.game.player.Player;
 import forge.game.player.PlayerCollection;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
+import forge.game.zone.ZoneType;
 
 /** Extracts predictable permanent-to-permanent control changes. */
 final class ControlChangeProductionExtractor implements EffectProductionExtractor {
@@ -71,16 +74,26 @@ final class ControlChangeProductionExtractor implements EffectProductionExtracto
 
     private static boolean isSupported(final SpellAbility gainControl) {
         return !EffectAbilityUtils.hasUnsupportedControlFlow(gainControl)
-                && !gainControl.hasParam("AllValid")
                 && !gainControl.hasParam("Choices")
                 && !gainControl.hasParam("Chooser")
                 && !gainControl.hasParam("Optional")
                 && !gainControl.hasParam("TargetingPlayer")
                 && !gainControl.hasParam("Untap")
                 && !gainControl.hasParam("AddKWs")
-                && (gainControl.usesTargeting()
-                        ? AffectedCardResolver.supportsSingleBattlefieldTarget(gainControl)
-                        : gainControl.hasParam("Defined"));
+                && (supportsStaticGroup(gainControl)
+                        || (gainControl.usesTargeting()
+                                ? AffectedCardResolver.supportsSingleBattlefieldTarget(gainControl)
+                                : gainControl.hasParam("Defined")));
+    }
+
+    private static boolean supportsStaticGroup(final SpellAbility gainControl) {
+        if (!gainControl.hasParam("AllValid") || gainControl.usesTargeting()
+                || gainControl.hasParam("Defined")) {
+            return false;
+        }
+        final String valid = gainControl.getParam("AllValid");
+        return valid != null && !valid.contains("Triggered") && !valid.contains("Remembered")
+                && !valid.contains("Chosen") && !valid.contains("Targeted");
     }
 
     private static Player resolveNewController(final Card source,
@@ -95,6 +108,13 @@ final class ControlChangeProductionExtractor implements EffectProductionExtracto
 
     private static List<Card> resolveTargets(final SpellAbility gainControl,
             final Player newController) {
+        if (gainControl.hasParam("AllValid")) {
+            final CardCollection battlefield = new CardCollection(
+                    gainControl.getHostCard().getGame().getCardsIn(ZoneType.Battlefield));
+            final CardCollectionView matching = AbilityUtils.filterListByType(battlefield,
+                    gainControl.getParam("AllValid"), gainControl);
+            return new ArrayList<>(matching);
+        }
         if (gainControl.usesTargeting()) {
             final Card selected = EffectCardTargetSelector.chooseBestControlChangeTarget(
                     gainControl, newController,

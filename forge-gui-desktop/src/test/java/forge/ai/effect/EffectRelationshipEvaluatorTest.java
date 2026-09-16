@@ -626,6 +626,32 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testAllValidGainControlProductionMatchesChangesControllerConsequence() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ GainControl | Cost$ 0 | AllValid$ Creature.YouCtrl"
+                        + " | NewController$ Opponent", producer));
+        addCard("Grizzly Bears", opponent);
+        final Card consequence = addCard("Memnite", opponent);
+        consequence.setSVar("EffectTestControlOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ ChangesController | ValidCard$ Card.OppCtrl"
+                + " | ValidOriginalController$ You | Execute$ EffectTestControlOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testTargetedLifeLossProductionInfersOpponentInTwoPlayerGame() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
