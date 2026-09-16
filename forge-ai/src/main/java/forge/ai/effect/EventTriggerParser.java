@@ -39,7 +39,7 @@ final class EventTriggerParser {
     private static final Set<String> CARD_DRAWN_VALID_CARDS = Set.of(
             "Card", "Card.YouCtrl", "Card.YouOwn", "Card.OppCtrl", "Card.OppOwn");
     private static final Set<String> CARD_DRAWN_VALID_PLAYERS = Set.of(
-            "Player", "Opponent", "Player.Opponent");
+            "You", "Player", "Opponent", "Player.Opponent");
     private static final Set<String> CARD_DISCARDED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidPlayer", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary", "ActivationLimit");
