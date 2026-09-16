@@ -46,4 +46,37 @@ final class EffectCardTargetSelector {
         }
         return best;
     }
+
+    static Card chooseBestControlChangeTarget(final SpellAbility ability,
+            final Player newController, final Predicate<Card> additionalFilter) {
+        if (!AffectedCardResolver.supportsSingleBattlefieldTarget(ability)
+                || newController == null) {
+            return null;
+        }
+        final Player activator = ability.getActivatingPlayer();
+        if (activator == null) {
+            return null;
+        }
+
+        Card best = null;
+        int bestValue = Integer.MIN_VALUE;
+        for (final Card candidate : ability.getHostCard().getGame()
+                .getCardsIn(ZoneType.Battlefield)) {
+            final SpellAbility targetCheck = ability.copy(ability.getHostCard(), false);
+            targetCheck.setActivatingPlayer(activator);
+            targetCheck.resetTargets();
+            if (!targetCheck.canTarget(candidate) || !additionalFilter.test(candidate)) {
+                continue;
+            }
+            final int permanentValue = ComputerUtilCard.evaluatePermanent(activator, candidate);
+            final int changeValue = candidate.getController() == newController
+                    ? 0 : candidate.getController().isOpponentOf(newController)
+                            ? permanentValue : EffectMath.negate(permanentValue);
+            if (best == null || changeValue > bestValue) {
+                best = candidate;
+                bestValue = changeValue;
+            }
+        }
+        return best;
+    }
 }
