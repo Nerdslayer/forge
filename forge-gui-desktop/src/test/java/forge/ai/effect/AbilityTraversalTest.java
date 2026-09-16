@@ -203,19 +203,21 @@ public class AbilityTraversalTest extends AITest {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
                 IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
-        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
-                .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
-                        .getCard("Groundchuck & Dirtbag"), CardStateName.Original);
+        for (final String cardName : List.of("Groundchuck & Dirtbag", "Zendikar Resurgent")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                    .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                            .getCard(cardName), CardStateName.Original);
 
-        Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
-                description.origin() == CardAbilityTraversal.Origin.TRIGGER
-                        && "TapsForMana".equals(description.parameters().get("Mode"))),
-                evaluation.toString());
-        Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
-                value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
-                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
-                        && value.expectedOccurrences() > 0
-                        && value.contribution().value() > 0), evaluation.toString());
+            Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                    description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                            && "TapsForMana".equals(description.parameters().get("Mode"))),
+                    evaluation.toString());
+            Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                    value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                            && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                            && value.expectedOccurrences() > 0
+                            && value.contribution().value() > 0), evaluation.toString());
+        }
 
         final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(Map.of(
                 "Mode", "TapsForMana", "ValidCard", "Land", "Activator", "You")).orElseThrow();

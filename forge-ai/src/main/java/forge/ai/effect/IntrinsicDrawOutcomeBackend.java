@@ -52,6 +52,8 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> DISCARD_PARAMETERS = parameters("Defined", "Mode", "NumCards",
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax");
     private static final Set<String> MANA_PARAMETERS = parameters("Defined", "Produced", "Amount");
+    private static final Set<String> MANA_REFLECTED_PARAMETERS = parameters("Defined", "ColorOrType",
+            "ReflectProperty", "Amount");
     private static final Set<String> DAMAGE_PARAMETERS = parameters("Defined", "NumDmg", "DamageSource",
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax");
     private static final Set<String> DAMAGE_ALL_PARAMETERS = parameters("ValidPlayers", "NumDmg",
@@ -251,6 +253,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
         case "Mana" -> acceptsMana(node);
+        case "ManaReflected" -> acceptsManaReflected(node);
         case "DealDamage", "DamageAll" -> acceptsDamage(node);
         case "Destroy", "ChangeZone" -> acceptsRemoval(node);
         case "Sacrifice" -> acceptsSacrifice(node);
@@ -311,6 +314,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
         case "Mana" -> mana(node);
+        case "ManaReflected" -> manaReflected(node);
         case "DealDamage", "DamageAll" -> damage(node);
         case "Destroy", "ChangeZone" -> removal(node);
         case "Sacrifice" -> sacrifice(node);
@@ -428,6 +432,22 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private Outcome<State> mana(final AbilityOutcomeDescription node) {
+        final boolean controller = "You".equals(node.parameters().getOrDefault("Defined", "You"));
+        final int amount = integer(node, "Amount", 1);
+        return new Outcome.Atomic<>(node.path(), current -> new Outcome.Transition<>(
+                (double) evaluator.evaluateMana(amount, controller),
+                current.withMana(controller, EffectMath.add(
+                        controller ? current.controllerMana() : current.opponentMana(), amount)),
+                node.api()));
+    }
+
+    /**
+     * Values the common "add one mana of the type just produced" trigger form. The reference
+     * state does not retain a color-specific mana pool, so this deliberately treats one reflected
+     * produced mana as one unrestricted mana. Other reflected properties and dynamic amounts need
+     * an event-linked resource model.
+     */
+    private Outcome<State> manaReflected(final AbilityOutcomeDescription node) {
         final boolean controller = "You".equals(node.parameters().getOrDefault("Defined", "You"));
         final int amount = integer(node, "Amount", 1);
         return new Outcome.Atomic<>(node.path(), current -> new Outcome.Transition<>(
@@ -746,6 +766,18 @@ public final class IntrinsicDrawOutcomeBackend
             return false;
         }
         return true;
+    }
+
+    private static boolean acceptsManaReflected(final AbilityOutcomeDescription node) {
+        // TODO: Retain the reflected mana color/type and connect the outcome to the triggering
+        // land's produced mana instead of using an unrestricted one-mana reference estimate.
+        if (!MANA_REFLECTED_PARAMETERS.containsAll(node.parameters().keySet())
+                || !Set.of("You", "Opponent").contains(node.parameters().getOrDefault("Defined", "You"))
+                || !"Produced".equals(node.parameters().get("ReflectProperty"))
+                || !"Type".equals(node.parameters().getOrDefault("ColorOrType", "Type"))) {
+            return false;
+        }
+        return !node.parameters().containsKey("Amount") || literalPositive(node, "Amount", 1);
     }
 
     private static boolean acceptsDamage(final AbilityOutcomeDescription node) {
