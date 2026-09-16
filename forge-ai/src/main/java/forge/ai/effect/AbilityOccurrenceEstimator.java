@@ -69,10 +69,17 @@ final class AbilityOccurrenceEstimator {
     }
 
     static double estimateAdditionalLandProbability(final Player player) {
+        return estimateAdditionalLandProbability(player, 0);
+    }
+
+    /** Estimates land availability after adding a known number of future draws to the hand. */
+    static double estimateAdditionalLandProbability(final Player player,
+            final int additionalCards) {
         if (player == null) {
             return 0;
         }
-        final int handSize = player.getCardsIn(ZoneType.Hand).size();
+        final int handSize = player.getCardsIn(ZoneType.Hand).size()
+                + Math.max(0, additionalCards);
         return 1 - Math.pow(1 - LAND_PER_HAND_CARD, handSize);
     }
 
