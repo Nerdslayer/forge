@@ -34,6 +34,7 @@ public final class IntrinsicReferenceModel {
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         MANA_EXPENDED,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
+        CARD_SEARCHED_OR_SELECTED,
         ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET, SCRIED_OR_SURVEILLED,
         TRANSFORMED, TURNED_FACE_UP, ATTACHED_OR_UNATTACHED
     }
@@ -242,6 +243,10 @@ public final class IntrinsicReferenceModel {
         // assume anything about the milled cards' characteristics; those filters remain gated by
         // the intrinsic trigger adapter.
         events.put(EventType.CARD_MILLED, rateDistribution(0, .40, 1, .45, 2, .12, 3, .03));
+        // Library searches are less common than ordinary draws and vary widely by format. This
+        // conservative rate intentionally models only the opportunity, not the card found.
+        events.put(EventType.CARD_SEARCHED_OR_SELECTED,
+                rateDistribution(0, .65, 1, .25, 2, .08, 3, .02));
         // Only a small fraction of generic stack interactions are countered. This is an event
         // opportunity prior, not a claim that every deck contains a counterspell.
         events.put(EventType.SPELL_OR_ABILITY_COUNTERED,

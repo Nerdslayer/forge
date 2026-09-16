@@ -75,6 +75,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (attachment.isPresent()) {
             return attachment;
         }
+        final Optional<IntrinsicEventTrigger> librarySearch =
+                IntrinsicLibrarySearchTriggerAdapter.describe(parameters);
+        if (librarySearch.isPresent()) {
+            return librarySearch;
+        }
         if (isSupportedManaTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
@@ -160,6 +165,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicAttachmentTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicLibrarySearchTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {

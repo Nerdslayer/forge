@@ -921,6 +921,31 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicLibrarySearchTriggersUseBoundedSearchRate() {
+        final Map<String, String> parameters = Map.of("Mode", "SearchedLibrary",
+                "ValidPlayer", "Player.Opponent", "SearchOwnLibrary", "True",
+                "ActivationLimit", "1", "TriggerZones", "Battlefield");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                .orElseThrow();
+        Assert.assertEquals(trigger.eventType(),
+                IntrinsicReferenceModel.EventType.CARD_SEARCHED_OR_SELECTED);
+        Assert.assertEquals(trigger.turnScope(), IntrinsicEventTrigger.TurnScope.OPPONENT_TURN);
+        Assert.assertTrue(trigger.atMostOncePerTurn());
+        Assert.assertTrue(IntrinsicEventTriggerEstimator.estimate(trigger,
+                new IntrinsicReferenceModel.PermanentProfile(true,
+                        IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
+                EntryTiming.NORMAL_SPEED).expectedOccurrences() > 0);
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters));
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "SearchedLibrary", "ValidPlayer", "Player.Opponent",
+                "SearchOwnLibrary", "False")));
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "SearchedLibrary", "ValidPlayer", "Player.Opponent",
+                "SearchOwnLibrary", "True", "ActivationLimit", "2")));
+    }
+
+    @Test
     public void intrinsicExiledTriggerUsesConservativeZoneChangeRate() {
         final Map<String, String> parameters = Map.of(
                 "Mode", "Exiled", "Origin", "Battlefield", "ValidCard", "Creature",
