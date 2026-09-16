@@ -116,6 +116,25 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicStaticHintSupportsNonCreatureScope() {
+        final CardAbilityTraversal.AbilityDescription tax =
+                new CardAbilityTraversal.AbilityDescription("Original/static:0",
+                        CardAbilityTraversal.Origin.STATIC,
+                        CardAbilityTraversal.Provenance.PRINTED,
+                        Map.of("Mode", "Continuous", "Affected", "Artifact.YouCtrl",
+                                "AIEffectValue", "-10"),
+                        AbilityOutcomeDescription.unresolved("static", "not an outcome"));
+        final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(tax), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.ENCHANTMENT, true, 0, 0, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+
+        Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+        Assert.assertEquals(result.contribution().value(), -20.0);
+    }
+
+    @Test
     public void cardDefinitionEvaluationIncludesSupportedIntrinsicAbilityValue() {
         host();
         final forge.item.PaperCard staff = forge.StaticData.instance().getCommonCards().getCard("Staff of Nin");
