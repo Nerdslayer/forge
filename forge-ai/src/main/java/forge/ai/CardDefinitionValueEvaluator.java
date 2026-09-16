@@ -4,6 +4,7 @@ import forge.ai.effect.CardAbilityTraversal;
 import forge.ai.effect.CardValueBreakdown;
 import forge.ai.effect.IntrinsicAbilityEvaluator;
 import forge.ai.effect.IntrinsicEvaluationSettings;
+import forge.ai.effect.IntrinsicOutcomeEvaluator;
 import forge.ai.effect.IntrinsicReferenceAggregate;
 import forge.ai.effect.IntrinsicReferenceModel;
 import forge.ai.effect.ValuationCompleteness;
@@ -37,6 +38,8 @@ public final class CardDefinitionValueEvaluator {
             "indestructible");
     private static final IntrinsicAbilityEvaluator INTRINSIC_EVALUATOR = new IntrinsicAbilityEvaluator(
             IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+    private static final IntrinsicOutcomeEvaluator PERMANENT_EVALUATOR = new IntrinsicOutcomeEvaluator(
+            IntrinsicEvaluationSettings.defaults());
 
     public record Contribution(String category, String label, int value) {
     }
@@ -92,7 +95,10 @@ public final class CardDefinitionValueEvaluator {
         addIntrinsicAbilityContributions(rules, editionCode, face, contributions, warnings);
 
         if (!face.getType().isCreature()) {
-            warnings.add("The initial definition evaluator supports creatures only.");
+            addNonCreaturePermanentContribution(face, contributions);
+            if (rules.getOtherPart() != null || rules.getAllFaces().size() > 1) {
+                warnings.add("Only single-faced cards are fully evaluated.");
+            }
             return finish(contributions, warnings, face.getManaCost().getCMC());
         }
         if (rules.getOtherPart() != null || rules.getAllFaces().size() > 1) {
@@ -129,6 +135,49 @@ public final class CardDefinitionValueEvaluator {
         }
 
         return finish(contributions, warnings, face.getManaCost().getCMC());
+    }
+
+    /**
+     * Reuses the nonrecursive reference permanent metric for noncreature permanents. Instants and
+     * sorceries have no battlefield presence; their supported printed spell outcomes are still
+     * included by the intrinsic ability evaluator above.
+     */
+    private static void addNonCreaturePermanentContribution(final ICardFace face,
+            final List<Contribution> contributions) {
+        final IntrinsicReferenceModel.PermanentKind kind = permanentKind(face);
+        if (kind == null) {
+            return;
+        }
+        final String loyaltyText = face.getInitialLoyalty();
+        final int loyalty = loyaltyText != null && loyaltyText.matches("\\d+")
+                ? Integer.parseInt(loyaltyText) : 0;
+        final IntrinsicReferenceModel.PermanentProfile profile =
+                new IntrinsicReferenceModel.PermanentProfile(true, kind, true, 0, 0,
+                        Set.of(), face.getType().isBasicLand(), loyalty);
+        final int value = PERMANENT_EVALUATOR.evaluatePermanent(profile);
+        if (value != 0) {
+            add(contributions, "Battlefield", "Base permanent", value);
+        }
+    }
+
+    private static IntrinsicReferenceModel.PermanentKind permanentKind(final ICardFace face) {
+        if (face.getType().isAura()) {
+            return IntrinsicReferenceModel.PermanentKind.AURA;
+        }
+        if (face.getType().isPlaneswalker()) {
+            return IntrinsicReferenceModel.PermanentKind.PLANESWALKER;
+        }
+        if (face.getType().isArtifact()) {
+            return IntrinsicReferenceModel.PermanentKind.ARTIFACT;
+        }
+        if (face.getType().isEnchantment()) {
+            return IntrinsicReferenceModel.PermanentKind.ENCHANTMENT;
+        }
+        if (face.getType().isLand()) {
+            return IntrinsicReferenceModel.PermanentKind.LAND;
+        }
+        return face.getType().isPermanent()
+                ? IntrinsicReferenceModel.PermanentKind.PERMANENT : null;
     }
 
     private static void addIntrinsicAbilityContributions(final CardRules rules, final String editionCode,
