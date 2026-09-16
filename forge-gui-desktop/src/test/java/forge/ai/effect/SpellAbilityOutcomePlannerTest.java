@@ -103,6 +103,28 @@ public class SpellAbilityOutcomePlannerTest extends AITest {
         Assert.assertFalse(SpellAbilityOutcomePlanner.evaluate(transfer, player).supported());
     }
 
+    @Test
+    public void groupCounterOutcomeCountsEachRecipientOnce() {
+        final Card source = source();
+        final Player player = source.getController();
+        final Card creature = player.getCreaturesInPlay().get(0);
+        final SpellAbility outcome = ability(source, "DB$ PutCounterAll"
+                + " | ValidCards$ Creature.YouCtrl | CounterType$ P1P1 | CounterNum$ 1");
+        final EffectEvent oneCounterEvent = new EffectEvent(EffectType.COUNTER_ADDED, player,
+                java.util.List.of(new EffectEvent.Subject(creature, 1)), java.util.Map.of());
+        final EffectEvent twoCounterEvent = new EffectEvent(EffectType.COUNTER_ADDED, player,
+                java.util.List.of(new EffectEvent.Subject(creature, 2)), java.util.Map.of());
+
+        final OutcomePlan<OutcomeState> one = SpellAbilityOutcomePlanner.evaluate(outcome, player,
+                oneCounterEvent);
+        final OutcomePlan<OutcomeState> two = SpellAbilityOutcomePlanner.evaluate(outcome, player,
+                twoCounterEvent);
+
+        Assert.assertTrue(one.supported(), one.reason());
+        Assert.assertTrue(two.supported(), two.reason());
+        Assert.assertEquals(two.value(), one.value());
+    }
+
     private Card source() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
