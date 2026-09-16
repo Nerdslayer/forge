@@ -96,6 +96,9 @@ public final class IntrinsicAbilityEvaluator {
             return unsupported(ability, "unsupported intrinsic origin", SupportStatus.UNSUPPORTED,
                     SupportStatus.NOT_EVALUATED);
         }
+        if (ability.origin() == CardAbilityTraversal.Origin.STATIC) {
+            return evaluateStatic(ability, source);
+        }
         if (ability.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
             return evaluateActivation(ability, source, timing, tokenProfileResolver);
         }
@@ -169,6 +172,19 @@ public final class IntrinsicAbilityEvaluator {
         final AbilityOutcomeDescription outcome = withoutExecutionMetadata(ability.outcome(), 0);
         return evaluateOutcome(ability, outcome, source, occurrence.expectedOccurrences(),
                 tokenProfileResolver, SupportStatus.SUPPORTED);
+    }
+
+    private AbilityValue evaluateStatic(final AbilityDescription ability,
+            final PermanentProfile source) {
+        final IntrinsicStaticAbilityEvaluator.Evaluation evaluation =
+                IntrinsicStaticAbilityEvaluator.evaluate(ability, source);
+        if (!evaluation.supported()) {
+            return unsupported(ability, evaluation.reason(), SupportStatus.UNSUPPORTED,
+                    SupportStatus.NOT_EVALUATED);
+        }
+        return new AbilityValue(ability.path(), 1,
+                new IntrinsicReferenceAggregate(evaluation.value(), 1, 0, 0, 0, 0, List.of()),
+                SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
     }
 
     private AbilityValue evaluateOutcome(final AbilityDescription ability,
