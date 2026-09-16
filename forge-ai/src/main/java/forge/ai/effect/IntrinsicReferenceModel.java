@@ -25,7 +25,8 @@ public final class IntrinsicReferenceModel {
     }
 
     public enum EventType {
-        ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, LAND_PLAYED,
+        ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
+        LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, TAPPED,
         MANA_ADDED_OR_SPENT,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, DAMAGE_DEALT, ZONE_CHANGED
@@ -180,6 +181,10 @@ public final class IntrinsicReferenceModel {
         events.put(EventType.ATTACKER_UNBLOCKED, rateDistribution(0, .25, .5, .50, 1, .25));
         events.put(EventType.COMBAT_DAMAGE, rateDistribution(0, .30, .5, .50, 1, .20));
         events.put(EventType.SPELL_CAST, rateDistribution(0, .10, 1, .50, 2, .30, 3, .10));
+        // Activated abilities are less frequent than spells in a generic deck, and many require
+        // mana or a tap. The broad rate is only for triggers that explicitly observe a supported
+        // non-mana ability population; specialized abilities remain outside this first slice.
+        events.put(EventType.ABILITY_CAST, rateDistribution(0, .30, .5, .42, 1, .22, 2, .06));
         // A normal player gets about one land-play opportunity per turn. Extra-land effects are
         // represented by the small two- and three-land tail; card-specific filters remain
         // outside this first reference model.
