@@ -219,6 +219,37 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void controllerAndOpponentLifeTriggersReachIntrinsicEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        for (final String cardName : List.of("Hallowed Priest", "Exquisite Blood")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                    .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                            .getCard(cardName), CardStateName.Original);
+            Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                    description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                            && Set.of("LifeGained", "LifeLost").contains(
+                                    description.parameters().get("Mode"))), cardName);
+            Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                    value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED),
+                    cardName + ": " + evaluation);
+            if ("Hallowed Priest".equals(cardName)) {
+                Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                        value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                                && value.contribution().value() > 0),
+                        cardName + ": " + evaluation);
+            } else {
+                // Exquisite Blood's "that much" amount is a trigger-dependent value, which the
+                // first intrinsic life-event slice intentionally leaves unresolved.
+                Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                        value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.UNSUPPORTED),
+                        cardName + ": " + evaluation);
+            }
+        }
+    }
+
+    @Test
     public void intrinsicBackendRejectsUnsupportedOutcomeFamilies() {
         final IntrinsicReferenceModel.PermanentProfile friendly = new IntrinsicReferenceModel.PermanentProfile(
                 true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());

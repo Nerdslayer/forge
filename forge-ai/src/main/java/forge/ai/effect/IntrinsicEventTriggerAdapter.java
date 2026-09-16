@@ -73,6 +73,19 @@ public final class IntrinsicEventTriggerAdapter {
                     && (!parameters.containsKey("ActivationLimit")
                             || "1".equals(parameters.get("ActivationLimit")));
         }
+        if (mode == TriggerType.LifeGained) {
+            // The reference life-gain rate represents the source controller's life events. A
+            // different source or player scope needs a side-specific event population.
+            return "You".equals(parameters.get("ValidPlayer"))
+                    && !parameters.containsKey("ValidSource");
+        }
+        if (mode == TriggerType.LifeLost || mode == TriggerType.LifeLostAll) {
+            // Opponent and controller life loss use the same conservative event rate for now.
+            // Amount thresholds and per-turn clauses need a distribution of event sizes.
+            return Set.of("You", "Opponent").contains(parameters.get("ValidPlayer"))
+                    && !parameters.containsKey("LifeAmount")
+                    && !parameters.containsKey("ValidAmountEach");
+        }
         return false;
     }
 
