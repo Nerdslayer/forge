@@ -129,7 +129,69 @@ public final class IntrinsicEventTriggerAdapter {
                     && Set.of("Card.Self", "Creature.Self").contains(parameters.get("ValidSource"))
                     && !parameters.containsKey("AtLeastOneInstance");
         }
+        if (mode == TriggerType.ChangesZone) {
+            return supportsCreatureDeath(parameters);
+        }
+        if (mode == TriggerType.Sacrificed || mode == TriggerType.SacrificedOnce) {
+            return supportsSacrifice(parameters);
+        }
         return false;
+    }
+
+    private static boolean supportsCreatureDeath(final Map<String, String> parameters) {
+        // This first intrinsic zone slice is deliberately limited to deaths observed while the
+        // source remains on the battlefield. Self-only death triggers need a departure-aware
+        // occurrence model; do not value them using the source-survival event estimator.
+        if (!"Battlefield".equalsIgnoreCase(parameters.get("Origin"))
+                || !"Graveyard".equalsIgnoreCase(parameters.get("Destination"))) {
+            return false;
+        }
+        return supportsDeathFilter(parameters.get("ValidCard"));
+    }
+
+    private static boolean supportsDeathFilter(final String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        boolean hasNonSelfCreature = false;
+        for (final String part : value.split(",")) {
+            final String filter = part.trim();
+            if ("Creature".equalsIgnoreCase(filter)
+                    || "Creature.Other".equalsIgnoreCase(filter)
+                    || "Creature.YouCtrl".equalsIgnoreCase(filter)
+                    || "Creature.OppCtrl".equalsIgnoreCase(filter)
+                    || "Creature.Other+YouCtrl".equalsIgnoreCase(filter)
+                    || "Creature.Other+OppCtrl".equalsIgnoreCase(filter)) {
+                hasNonSelfCreature = true;
+            } else if (!"Card.Self".equalsIgnoreCase(filter)
+                    && !"Creature.Self".equalsIgnoreCase(filter)) {
+                return false;
+            }
+        }
+        return hasNonSelfCreature;
+    }
+
+    private static boolean supportsSacrifice(final Map<String, String> parameters) {
+        if (parameters.containsKey("ValidCause")) {
+            return false;
+        }
+        final String player = parameters.get("ValidPlayer");
+        if (player != null && !Set.of("You", "Opponent", "Player", "Player.Opponent").contains(player)) {
+            return false;
+        }
+        final String value = parameters.get("ValidCard");
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        for (final String part : value.split(",")) {
+            final String filter = part.trim();
+            if (!Set.of("Permanent", "Permanent.Other", "Permanent.YouCtrl", "Permanent.OppCtrl",
+                    "Creature", "Creature.Other", "Creature.YouCtrl", "Creature.OppCtrl",
+                    "Creature.Other+YouCtrl", "Creature.Other+OppCtrl").contains(filter)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static IntrinsicReferenceModel.EventType eventType(final TriggerType mode,

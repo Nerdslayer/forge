@@ -266,6 +266,27 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void deathAndSacrificeTriggersReachIntrinsicEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        for (final String cardName : List.of("Blood Artist", "Zulaport Cutthroat", "Zhao, Ruthless Admiral")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = evaluator
+                    .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                            .getCard(cardName), CardStateName.Original);
+            Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                    value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED),
+                    cardName + ": " + evaluation);
+        }
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation bloodArtist = evaluator
+                .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                        .getCard("Blood Artist"), CardStateName.Original);
+        Assert.assertTrue(bloodArtist.values().stream().anyMatch(value ->
+                value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.contribution().value() > 0), bloodArtist.toString());
+    }
+
+    @Test
     public void selfDamageTriggersReachIntrinsicEvaluation() {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
