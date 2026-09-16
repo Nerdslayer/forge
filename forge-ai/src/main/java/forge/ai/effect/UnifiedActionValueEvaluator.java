@@ -24,12 +24,11 @@ public final class UnifiedActionValueEvaluator {
     /**
      * Evaluates one supported action from the supplied context.
      *
-     * <p>Removal is the first supported action adapter. Cast, activation, combat, and other
-     * action kinds should add dedicated value components here rather than teaching the shared
-     * card evaluator about every decision type.</p>
+     * <p>Removal and bounded cast/activation adapters compose dedicated action semantics here
+     * rather than teaching the shared card evaluator about every decision type.</p>
      *
-     * TODO(unified valuation): Add spell-cast, activation, attack, block, discard, and other
-     * action records as their cost and outcome semantics become explicit.
+     * TODO(unified valuation): Add attack, block, discard, and other action records as their cost
+     * and outcome semantics become explicit.
      */
     public static CardValueBreakdown evaluate(final ValuationAction action,
             final ValuationContext context, final EffectAnalysisTrace trace) {
@@ -53,7 +52,60 @@ public final class UnifiedActionValueEvaluator {
             }
             return evaluateCast(cast, context);
         }
+        if (action instanceof ActivateValuationAction activation) {
+            if (context.decision() != ValuationDecision.ACTIVATE
+                    || context.evaluatingAi() == null) {
+                return CardValueBreakdown.unsupported(
+                        "Activation actions require a situational activation valuation context.");
+            }
+            return evaluateActivation(activation, context);
+        }
         return CardValueBreakdown.unsupported("This action type is not supported yet.");
+    }
+
+    private static CardValueBreakdown evaluateActivation(final ActivateValuationAction action,
+            final ValuationContext context) {
+        // TODO: Include non-mana costs, tap opportunity cost, repeat-use value, and activation
+        // timing/stack considerations as dedicated action decisions begin using this adapter.
+        final Card source = action.source();
+        final Player ai = context.evaluatingAi();
+        if (!source.isInPlay() || source.isPhasedOut() || source.getController() != ai) {
+            return CardValueBreakdown.unavailable(
+                    "Activation valuation requires a source controlled by the AI in play.");
+        }
+        final SpellAbility ability = action.ability().copy(source, false);
+        ability.setActivatingPlayer(ai);
+        if (!ability.isActivatedAbility()) {
+            return CardValueBreakdown.unsupported("The action is not an activated ability.");
+        }
+        final ActivationOccurrenceRequest request = new SituationalAbilityOccurrenceContext(ai)
+                .activationRequest(source, ability);
+        if (!request.supported()) {
+            return CardValueBreakdown.unsupported("Activation is not modeled: " + request.reason());
+        }
+        if (!request.canPayNow()) {
+            return CardValueBreakdown.unavailable("Activation cannot currently be paid.");
+        }
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(ability, ai);
+        if (plan.unavailable()) {
+            return CardValueBreakdown.unavailable("Activation outcome is unavailable: " + plan.reason());
+        }
+        if (!plan.supported()) {
+            return CardValueBreakdown.unsupported("Activation outcome is unsupported: " + plan.reason());
+        }
+        final int manaCost = request.manaCost();
+        final int outcomeValue = EffectMath.negate(safeScore(plan.value()));
+        final List<String> reasons = new ArrayList<>();
+        reasons.add("Activation consumes " + manaCost + " mana"
+                + (request.hasTapCost() ? " and taps the source." : "."));
+        reasons.add("Immediate outcome benefit: " + outcomeValue);
+        final ActivationUseEstimate useEstimate = ActivatedAbilityUseEvaluator.estimate(source, ability);
+        reasons.add("Expected near-term uses if this ability remains available: "
+                + String.format("%.2f", useEstimate.expectedUses()));
+        return new CardValueBreakdown(0, 0, outcomeValue,
+                CardResourceValueEvaluator.evaluateMana(manaCost), 0,
+                planCompleteness(plan), reasons);
     }
 
     private static CardValueBreakdown evaluateCast(final CastValuationAction cast,

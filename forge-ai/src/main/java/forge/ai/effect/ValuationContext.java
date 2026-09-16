@@ -52,6 +52,13 @@ public record ValuationContext(Player evaluatingAi, ValuationMode mode,
                 ValuationDecision.CAST, 3, completeInformation, 0, 0);
     }
 
+    /** Creates a live context for evaluating one activated ability use. */
+    public static ValuationContext forActivation(final Player evaluatingAi,
+            final boolean completeInformation) {
+        return new ValuationContext(evaluatingAi, ValuationMode.SITUATIONAL,
+                ValuationDecision.ACTIVATE, 3, completeInformation, 0, 0);
+    }
+
     /** Creates a context for definition-only card evaluation. */
     public static ValuationContext intrinsicCard() {
         return new ValuationContext(null, ValuationMode.INTRINSIC_REFERENCE,

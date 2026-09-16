@@ -7,6 +7,7 @@ import org.testng.annotations.Test;
 
 import forge.ai.AITest;
 import forge.game.Game;
+import forge.game.ability.AbilityFactory;
 import forge.game.ability.ApiType;
 import forge.game.ability.SpellApiBased;
 import forge.game.card.Card;
@@ -63,6 +64,26 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
         Assert.assertTrue(result.isComplete(), result.toString());
         Assert.assertTrue(result.transitionValue() > 0, result.toString());
         Assert.assertEquals(result.accessCost(), 25 + 90);
+        Assert.assertTrue(result.netValue() < result.transitionValue());
+    }
+
+    @Test
+    public void activationActionValuesACompleteImmediateOutcomeAndChargesManaOnly() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card source = addCard("Grizzly Bears", ai);
+        addCard("Forest", ai);
+        final SpellAbility gainLife = AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ 1 | Defined$ You | LifeAmount$ 2", source);
+        gainLife.setActivatingPlayer(ai);
+
+        final CardValueBreakdown result = UnifiedActionValueEvaluator.evaluate(
+                new ActivateValuationAction(source, gainLife),
+                ValuationContext.forActivation(ai, true));
+
+        Assert.assertTrue(result.isComplete(), result.toString());
+        Assert.assertTrue(result.transitionValue() > 0, result.toString());
+        Assert.assertEquals(result.accessCost(), 25);
         Assert.assertTrue(result.netValue() < result.transitionValue());
     }
 
