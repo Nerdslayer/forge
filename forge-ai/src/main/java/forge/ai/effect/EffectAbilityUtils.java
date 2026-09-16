@@ -6,7 +6,10 @@ import forge.ai.ComputerUtilCost;
 import forge.game.ability.AbilityFactory;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
+import forge.game.card.CardState;
+import forge.game.spellability.LandAbility;
 import forge.game.spellability.SpellAbility;
+import forge.game.spellability.SpellPermanent;
 import forge.game.trigger.Trigger;
 
 /** Shared safe inspection helpers for parsed effect abilities. */
@@ -44,6 +47,36 @@ final class EffectAbilityUtils {
         } catch (final RuntimeException ignored) {
             return null;
         }
+    }
+
+    /** Returns the live printed ability identified by a traversal path, or {@code null}. */
+    static SpellAbility abilityAtPath(final Card source, final String path) {
+        if (source == null || path == null) {
+            return null;
+        }
+        final int marker = path.lastIndexOf("/ability:");
+        if (marker < 0) {
+            return null;
+        }
+        try {
+            final int requested = Integer.parseInt(path.substring(marker + "/ability:".length()));
+            if (requested < 0) {
+                return null;
+            }
+            final CardState state = source.getCurrentState();
+            int index = 0;
+            for (final SpellAbility ability : state.getSpellAbilities()) {
+                if (ability instanceof LandAbility || ability instanceof SpellPermanent) {
+                    continue;
+                }
+                if (index++ == requested) {
+                    return ability;
+                }
+            }
+        } catch (final RuntimeException ignored) {
+            // A changed live card can make a previously traversed path stale.
+        }
+        return null;
     }
 
     static SpellAbility copyTriggerOutcome(final Card source, final Trigger trigger) {
