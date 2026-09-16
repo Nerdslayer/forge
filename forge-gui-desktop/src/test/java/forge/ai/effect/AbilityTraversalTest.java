@@ -528,6 +528,44 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicBecomesTargetTriggerUsesTargetingRate() {
+        final Map<String, String> parameters = Map.of(
+                "Mode", "BecomesTarget", "ValidTarget", "Card.Self",
+                "ValidSource", "SpellAbility.OppCtrl", "FirstTime", "True",
+                "TriggerZones", "Battlefield");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                .orElseThrow();
+        Assert.assertEquals(trigger.eventType(), IntrinsicReferenceModel.EventType.BECAME_TARGET);
+        Assert.assertEquals(trigger.turnScope(), IntrinsicEventTrigger.TurnScope.ANY_TURN);
+        Assert.assertTrue(trigger.atMostOncePerTurn());
+        Assert.assertTrue(IntrinsicEventTriggerEstimator.estimate(trigger,
+                new IntrinsicReferenceModel.PermanentProfile(true,
+                        IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
+                EntryTiming.NORMAL_SPEED).expectedOccurrences() > 0);
+
+        final CardAbilityTraversal.AbilityDescription description =
+                new CardAbilityTraversal.AbilityDescription("targeted/draw",
+                        CardAbilityTraversal.Origin.TRIGGER,
+                        CardAbilityTraversal.Provenance.PRINTED, parameters,
+                        new AbilityOutcomeDescription("draw", "Draw",
+                                Map.of("Defined", "You", "NumCards", "1"), List.of(), null, ""));
+        final IntrinsicAbilityEvaluator.AbilityValue value = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(description), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+        Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                value.toString());
+        Assert.assertEquals(value.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                value.toString());
+        Assert.assertTrue(value.contribution().value() > 0, value.toString());
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters));
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "BecomesTarget", "ValidTarget", "Creature.EnchantedBy")));
+    }
+
+    @Test
     public void intrinsicExiledTriggerUsesConservativeZoneChangeRate() {
         final Map<String, String> parameters = Map.of(
                 "Mode", "Exiled", "Origin", "Battlefield", "ValidCard", "Creature",

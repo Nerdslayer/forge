@@ -30,7 +30,7 @@ public final class IntrinsicReferenceModel {
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
-        ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED
+        ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET
     }
 
     /**
@@ -218,6 +218,9 @@ public final class IntrinsicReferenceModel {
         // opportunity prior, not a claim that every deck contains a counterspell.
         events.put(EventType.SPELL_OR_ABILITY_COUNTERED,
                 rateDistribution(0, .65, 1, .30, 2, .05));
+        // Targets are chosen frequently, but only a subset target the object or player described
+        // by a particular trigger. The adapter applies an additional filter multiplier.
+        events.put(EventType.BECAME_TARGET, rateDistribution(0, .45, .5, .35, 1, .20));
         events.put(EventType.DAMAGE_DEALT, rateDistribution(0, .30, 1, .45, 2, .20, 3, .05));
         events.put(EventType.ZONE_CHANGED, rateDistribution(0, .20, 1, .50, 2, .25, 3, .05));
 
