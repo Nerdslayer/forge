@@ -43,13 +43,19 @@ final class AbilityOccurrenceEstimator {
             return AbilityOccurrenceEstimate.unsupported(request == null
                     ? "Missing activation occurrence request" : request.reason());
         }
-        final int currentUses = request.canPayNow()
+        final boolean lifeAvailableNow = request.currentLife() >= request.lifeCost();
+        final int currentUses = request.canPayNow() && lifeAvailableNow
                 ? usesForTurn(request.currentMana(), request.manaCost(), request.hasTapCost(),
                         request.sourceTapped(), false) : 0;
-        final int noLandUses = usesForTurn(request.nextTurnMana(), request.manaCost(),
-                request.hasTapCost(), false, true);
-        final int withLandUses = usesForTurn(EffectMath.add(request.nextTurnMana(), 1),
-                request.manaCost(), request.hasTapCost(), false, true);
+        // TODO: Project life gained/lost between turns and life paid by earlier activations. The
+        // first situational slice uses the current life total as a conservative stable proxy.
+        final boolean lifeAvailableNextTurn = request.nextTurnLife() >= request.lifeCost();
+        final int noLandUses = lifeAvailableNextTurn
+                ? usesForTurn(request.nextTurnMana(), request.manaCost(), request.hasTapCost(), false, true)
+                : 0;
+        final int withLandUses = lifeAvailableNextTurn
+                ? usesForTurn(EffectMath.add(request.nextTurnMana(), 1), request.manaCost(),
+                        request.hasTapCost(), false, true) : 0;
         final double landProbability = probability(request.nextLandProbability());
         final double expectedNextTurnUses = (1 - landProbability) * noLandUses
                 + landProbability * withLandUses;

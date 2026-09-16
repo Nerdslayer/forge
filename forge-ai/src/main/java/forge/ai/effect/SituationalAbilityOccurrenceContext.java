@@ -1,6 +1,6 @@
 package forge.ai.effect;
 
-import java.util.List;
+import java.util.OptionalInt;
 import java.util.Set;
 
 import forge.ai.AttackLikelihoodEvaluator;
@@ -8,6 +8,11 @@ import forge.ai.ComputerUtilCost;
 import forge.ai.ComputerUtilMana;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.card.Card;
+import forge.game.cost.Cost;
+import forge.game.cost.CostPayLife;
+import forge.game.cost.CostPart;
+import forge.game.cost.CostPartMana;
+import forge.game.cost.CostTap;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
@@ -63,8 +68,9 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
                 || !ability.isActivatedAbility() || source.isPhasedOut()) {
             return ActivationOccurrenceRequest.unsupported("Not an active activated ability");
         }
-        final forge.game.cost.Cost cost = ability.getPayCosts();
-        if (cost == null || !supportedCost(cost)) {
+        final Cost cost = ability.getPayCosts();
+        final OptionalInt lifeCost = supportedCost(cost);
+        if (cost == null || lifeCost.isEmpty()) {
             return ActivationOccurrenceRequest.unsupported("Unsupported activation cost");
         }
 
@@ -80,14 +86,16 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
         final int currentMana = Math.max(0, ComputerUtilMana.getAvailableManaEstimate(controller, true));
         final int nextTurnMana = Math.max(0, ComputerUtilMana.getAvailableManaEstimate(controller, false)
                 - controller.getManaPool().totalMana());
+        final int currentLife = Math.max(0, controller.getLife());
         final double landProbability = AbilityOccurrenceEstimator.estimateAdditionalLandProbability(controller);
         final boolean canPayNow = ComputerUtilCost.canPayCost(copy, controller, false);
         final Willingness willingness = estimateWillingness(source, copy, manaCost);
-        return new ActivationOccurrenceRequest(currentMana, nextTurnMana, manaCost,
-                cost.hasTapCost(), source.isTapped(), canPayNow, landProbability,
+        final String reason = willingness.reason()
+                + (lifeCost.getAsInt() == 0 ? "" : "; fixed life payment=" + lifeCost.getAsInt());
+        return new ActivationOccurrenceRequest(currentMana, nextTurnMana, manaCost, lifeCost.getAsInt(),
+                currentLife, currentLife, cost.hasTapCost(), source.isTapped(), canPayNow, landProbability,
                 willingness.multiplier(), willingness.outcomeValue(),
-                willingness.averageCardPlayValue(), willingness.outcomeSupported(), true,
-                willingness.reason());
+                willingness.averageCardPlayValue(), willingness.outcomeSupported(), true, reason);
     }
 
     static double estimateAdditionalLandProbability(final Player player) {
@@ -99,16 +107,26 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
         return new AbilityOccurrenceRequest(opportunity, 1, 1, 1, 1, 1, true, reason);
     }
 
-    private static boolean supportedCost(final forge.game.cost.Cost cost) {
-        // TODO: Add bounded estimates for sacrifice, discard, life, counter, X, and other
-        // non-mana costs. These must consume shared resources rather than being treated as free.
-        if (cost.getTotalMana().countX() > 0) {
-            return false;
+    private static OptionalInt supportedCost(final Cost cost) {
+        if (cost == null || cost.getTotalMana().countX() > 0) {
+            return OptionalInt.empty();
         }
-        final List<forge.game.cost.CostPart> parts = cost.getCostParts();
-        return parts.isEmpty() ? cost.getTotalMana().getCMC() == 0 : parts.stream().allMatch(part ->
-                part instanceof forge.game.cost.CostPartMana
-                        || part instanceof forge.game.cost.CostTap);
+        int lifeCost = 0;
+        for (final CostPart part : cost.getCostParts()) {
+            if (part instanceof CostPayLife) {
+                if (!part.getAmount().matches("\\d+")) {
+                    return OptionalInt.empty();
+                }
+                try {
+                    lifeCost = Math.addExact(lifeCost, Integer.parseInt(part.getAmount()));
+                } catch (final ArithmeticException | NumberFormatException invalidAmount) {
+                    return OptionalInt.empty();
+                }
+            } else if (!(part instanceof CostPartMana) && !(part instanceof CostTap)) {
+                return OptionalInt.empty();
+            }
+        }
+        return OptionalInt.of(lifeCost);
     }
 
     /** Estimates whether the controller will choose the activation in the current position. */

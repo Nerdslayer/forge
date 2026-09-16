@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import forge.ai.CardResourceValueEvaluator;
+import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.player.Player;
@@ -128,15 +129,19 @@ public final class UnifiedActionValueEvaluator {
         }
         final int manaCost = request.manaCost();
         final int outcomeValue = EffectMath.negate(safeScore(plan.value()));
+        final int lifeCostValue = request.lifeCost() == 0 ? 0
+                : EffectMath.negate(PlayerResourceValueEvaluator.evaluateLifeChange(ai.getLife(),
+                        ai.getLife() - request.lifeCost()));
         final List<String> reasons = new ArrayList<>();
         reasons.add("Activation consumes " + manaCost + " mana"
-                + (request.hasTapCost() ? " and taps the source." : "."));
+                + (request.hasTapCost() ? " and taps the source" : "")
+                + (request.lifeCost() == 0 ? "." : " and " + request.lifeCost() + " life."));
         reasons.add("Immediate outcome benefit: " + outcomeValue);
         final ActivationUseEstimate useEstimate = ActivatedAbilityUseEvaluator.estimate(source, ability);
         reasons.add("Expected near-term uses if this ability remains available: "
                 + String.format("%.2f", useEstimate.expectedUses()));
         return new CardValueBreakdown(0, 0, outcomeValue,
-                CardResourceValueEvaluator.evaluateMana(manaCost), 0,
+                EffectMath.add(CardResourceValueEvaluator.evaluateMana(manaCost), lifeCostValue), 0,
                 planCompleteness(plan), reasons);
     }
 

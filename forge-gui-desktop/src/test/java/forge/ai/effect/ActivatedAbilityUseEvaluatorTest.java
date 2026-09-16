@@ -71,6 +71,16 @@ public class ActivatedAbilityUseEvaluatorTest extends AITest {
     }
 
     @Test
+    public void fixedLifePaymentActivationUsesCurrentLifeAvailability() {
+        final Card source = setupSource(0, 0);
+        final ActivationUseEstimate estimate = estimate(source, "PayLife<3>");
+
+        Assert.assertTrue(estimate.supported(), estimate.reason());
+        Assert.assertEquals(estimate.currentUses(), 1);
+        Assert.assertTrue(estimate.expectedUses() > 0, estimate.toString());
+    }
+
+    @Test
     public void strongOutcomeIsMoreLikelyThanWeakOutcomeAtSameCost() {
         final Card source = setupSource(2, 1);
         final ActivationUseEstimate weak = estimate(source, "2", "1");
