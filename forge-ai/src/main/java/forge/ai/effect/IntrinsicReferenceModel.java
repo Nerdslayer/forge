@@ -31,7 +31,8 @@ public final class IntrinsicReferenceModel {
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         MANA_EXPENDED,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
-        ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET, SCRIED_OR_SURVEILLED
+        ZONE_CHANGED, SPELL_OR_ABILITY_COUNTERED, BECAME_TARGET, SCRIED_OR_SURVEILLED,
+        TRANSFORMED, TURNED_FACE_UP
     }
 
     /**
@@ -233,6 +234,10 @@ public final class IntrinsicReferenceModel {
         // and once-per-turn trigger restrictions are applied.
         events.put(EventType.SCRIED_OR_SURVEILLED,
                 rateDistribution(0, .40, 1, .45, 2, .12, 3, .03));
+        // Transformations and face-up changes are concentrated in decks that use those mechanics,
+        // so the generic prior is intentionally low and the adapter applies card/filter factors.
+        events.put(EventType.TRANSFORMED, rateDistribution(0, .55, 1, .35, 2, .10));
+        events.put(EventType.TURNED_FACE_UP, rateDistribution(0, .55, 1, .35, 2, .10));
         events.put(EventType.DAMAGE_DEALT, rateDistribution(0, .30, 1, .45, 2, .20, 3, .05));
         events.put(EventType.ZONE_CHANGED, rateDistribution(0, .20, 1, .50, 2, .25, 3, .05));
 
