@@ -53,6 +53,8 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> ANIMATE_PARAMETERS = parameters("Defined", "ValidTgts",
             "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Duration",
             "Power", "Toughness", "Types", "Keywords");
+    private static final Set<String> ANIMATE_ALL_PARAMETERS = parameters("ValidCards", "Duration",
+            "Power", "Toughness", "Types", "Keywords");
     private static final Set<String> TOKEN_PARAMETERS = parameters("TokenScript", "TokenOwner",
             "TokenAmount", "TokenPower", "TokenToughness", "TokenTypes", "TokenColors",
             "TokenTapped", "TokenAttacking", "TokenBlocking");
@@ -263,6 +265,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "PumpAll" -> acceptsPumpAll(node);
         case "Debuff" -> acceptsDebuff(node);
         case "Animate" -> acceptsAnimate(node);
+        case "AnimateAll" -> acceptsAnimateAll(node);
         case "Token" -> acceptsToken(node);
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
@@ -327,6 +330,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Pump", "PumpAll" -> pump(node);
         case "Debuff" -> debuff(node);
         case "Animate" -> animate(node);
+        case "AnimateAll" -> animateAll(node);
         case "Token" -> token(node);
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
@@ -1066,6 +1070,70 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> animateAll(final AbilityOutcomeDescription node) {
+        // TODO: Intrinsic group animation currently models only one representative creature per
+        // side. Noncreature permanents, subtype/color retention, and correlated populations need
+        // richer reference state before they can be admitted safely.
+        final CreatureGroupTarget target = creatureGroupTarget(node);
+        if (target == null) {
+            return unresolved(node, "Unsupported intrinsic animation group");
+        }
+        return new Outcome.Atomic<>(node.path(), current -> {
+            State projected = current;
+            int value = 0;
+            if (target.controller()) {
+                final GroupApplication application = applyAnimationGroup(projected, node, true,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            if (target.opponent()) {
+                final GroupApplication application = applyAnimationGroup(projected, node, false,
+                        target.other());
+                if (!application.supported()) {
+                    return null;
+                }
+                projected = application.state();
+                value = EffectMath.add(value, application.value());
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private GroupApplication applyAnimationGroup(final State state,
+            final AbilityOutcomeDescription node, final boolean controller, final boolean other) {
+        final CreatureProfile representative = controller
+                ? state.controllerCreature() : state.opponentCreature();
+        if (!simpleKeywords(representative.keywords())) {
+            return GroupApplication.unsupported(state);
+        }
+
+        final int count = state.creatureCount(controller);
+        State projected = state;
+        int value = 0;
+        if (count > 0 && representative.present()) {
+            final PermanentProfile before = new PermanentProfile(true, PermanentKind.CREATURE,
+                    controller, representative.power(), representative.toughness(),
+                    representative.keywords());
+            final PermanentProfile after = animatePermanent(before, node);
+            value = EffectMath.add(value, EffectMath.multiply(count,
+                    evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after), controller)));
+            projected = projected.withCreatures(controller, toCreature(after));
+        }
+
+        final PermanentProfile source = projected.sourcePermanent();
+        if (!other && isCreature(source) && source.controlledByAi() == controller) {
+            final PermanentProfile after = animatePermanent(source, node);
+            value = EffectMath.add(value, evaluator.evaluateCreatureDelta(
+                    toCreature(source), toCreature(after), controller));
+            projected = projected.withSourcePermanent(after);
+        }
+        return new GroupApplication(projected, value, true);
+    }
+
     private Outcome<State> pumpAll(final AbilityOutcomeDescription node) {
         // TODO: Intrinsic group valuation currently uses one representative creature and an
         // independent recipient count. Subtypes, noncreature recipients, correlated populations,
@@ -1274,6 +1342,18 @@ public final class IntrinsicDrawOutcomeBackend
                 && keywords != null && permanentTarget(node) != null;
     }
 
+    private static boolean acceptsAnimateAll(final AbilityOutcomeDescription node) {
+        final Set<String> keywords = supportedKeywords(node.parameters().get("Keywords"));
+        final String types = node.parameters().get("Types");
+        return ANIMATE_ALL_PARAMETERS.containsAll(node.parameters().keySet())
+                && Set.of("Permanent", "Perpetual").contains(node.parameters().get("Duration"))
+                && node.parameters().containsKey("Power") && node.parameters().containsKey("Toughness")
+                && literalNonnegativeOrAbsent(node, "Power")
+                && literalNonnegativeOrAbsent(node, "Toughness")
+                && types != null && hasCreatureType(types)
+                && keywords != null && creatureGroupTarget(node) != null;
+    }
+
     private static boolean acceptsPumpAll(final AbilityOutcomeDescription node) {
         return acceptsPumpParameters(node)
                 && !node.parameters().containsKey("Defined")
@@ -1405,6 +1485,16 @@ public final class IntrinsicDrawOutcomeBackend
             }
         } else if ("Animate".equals(node.api()) && acceptsAnimate(node)) {
             addRemovalDimensions(node, dimensions);
+        } else if ("AnimateAll".equals(node.api()) && acceptsAnimateAll(node)) {
+            final CreatureGroupTarget target = creatureGroupTarget(node);
+            if (target.controller()) {
+                dimensions.add(CONTROLLER_CREATURE_COUNT);
+                dimensions.add(CONTROLLER_CREATURE);
+            }
+            if (target.opponent()) {
+                dimensions.add(OPPONENT_CREATURE_COUNT);
+                dimensions.add(OPPONENT_CREATURE);
+            }
         } else if (("GainLife".equals(node.api()) || "LoseLife".equals(node.api()))
                 && acceptsLife(node)) {
             addPlayerDimensions(node, dimensions);

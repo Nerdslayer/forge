@@ -282,6 +282,26 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void persistentGroupAnimationUsesCreatureCountsAndSourceInteraction() {
+        final State initial = state(CREATURE, CREATURE, SOURCE);
+        final OutcomePlan<State> group = evaluate(leaf("AnimateAll", Map.of(
+                "ValidCards", "Creature.YouCtrl", "Power", "4", "Toughness", "4",
+                "Types", "Creature", "Keywords", "Flying", "Duration", "Permanent")), initial);
+        Assert.assertEquals(group.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(group.value() > 0);
+        Assert.assertEquals(group.state().controllerCreature().power(), 4);
+        Assert.assertEquals(group.state().sourcePermanent().toughness(), 4);
+        Assert.assertTrue(group.state().sourcePermanent().keywords().contains("flying"));
+
+        final OutcomePlan<State> opponentGroup = evaluate(leaf("AnimateAll", Map.of(
+                "ValidCards", "Creature.OppCtrl", "Power", "4", "Toughness", "4",
+                "Types", "Creature", "Duration", "Perpetual")), initial);
+        Assert.assertEquals(opponentGroup.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(opponentGroup.value() < 0);
+        Assert.assertEquals(opponentGroup.state().opponentCreature().power(), 4);
+    }
+
+    @Test
     public void realTargetScopesRespectSideOtherAndSourceAvailability() {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> friendly = evaluate(counter("Creature.YouCtrl+Other"), initial);
