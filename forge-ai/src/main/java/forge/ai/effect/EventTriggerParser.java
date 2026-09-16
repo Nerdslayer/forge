@@ -121,6 +121,12 @@ final class EventTriggerParser {
     private static final Set<String> SEARCHED_LIBRARY_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidPlayer", "SearchOwnLibrary", "ActivationLimit", "Execute",
             "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> SCRY_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidPlayer", "ActivationLimit", "Execute", "TriggerZones",
+            "TriggerDescription", "Secondary");
+    private static final Set<String> SURVEIL_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidPlayer", "FirstTime", "ActivationLimit", "Execute",
+            "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> COUNTERED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidCause", "ValidSA", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -155,6 +161,9 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.SearchedLibrary) {
             return EffectType.CARD_SEARCHED_OR_SELECTED;
+        }
+        if (mode == TriggerType.Scry || mode == TriggerType.Surveil) {
+            return EffectType.SCRIED_OR_SURVEILLED;
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return EffectType.CARD_DISCARDED;
@@ -254,6 +263,12 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.SearchedLibrary) {
             return hasSupportedSearchedLibraryParameters(parameters);
+        }
+        if (mode == TriggerType.Scry) {
+            return hasSupportedScryParameters(parameters);
+        }
+        if (mode == TriggerType.Surveil) {
+            return hasSupportedSurveilParameters(parameters);
         }
         if (mode == TriggerType.Countered) {
             return hasSupportedCounteredParameters(parameters);
@@ -393,6 +408,31 @@ final class EventTriggerParser {
                         || isBoolean(parameters.get("SearchOwnLibrary")))
                 && (!parameters.containsKey("ActivationLimit")
                         || "1".equals(parameters.get("ActivationLimit")));
+    }
+
+    private static boolean hasSupportedScryParameters(final Map<String, String> parameters) {
+        return hasOnlyParams(parameters, SCRY_TRIGGER_PARAMS)
+                && hasSupportedPlayer(parameters)
+                && hasSupportedActivationLimit(parameters);
+    }
+
+    private static boolean hasSupportedSurveilParameters(final Map<String, String> parameters) {
+        return hasOnlyParams(parameters, SURVEIL_TRIGGER_PARAMS)
+                && hasSupportedPlayer(parameters)
+                && hasSupportedActivationLimit(parameters)
+                && (!parameters.containsKey("FirstTime")
+                        || isBoolean(parameters.get("FirstTime")));
+    }
+
+    private static boolean hasSupportedPlayer(final Map<String, String> parameters) {
+        return !parameters.containsKey("ValidPlayer")
+                || Set.of("You", "Controller", "Opponent", "Player",
+                        "Player.Opponent").contains(parameters.get("ValidPlayer"));
+    }
+
+    private static boolean hasSupportedActivationLimit(final Map<String, String> parameters) {
+        return !parameters.containsKey("ActivationLimit")
+                || "1".equals(parameters.get("ActivationLimit"));
     }
 
     private static boolean hasSupportedCounteredParameters(final Map<String, String> parameters) {

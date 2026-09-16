@@ -89,6 +89,46 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testKnownOpponentScryEvaluatesScryTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        addFilteringAbility("Sol Ring", opponent, "Scry");
+        final Card observer = addCard("Grizzly Bears", opponent);
+        observer.setSVar("EffectTestScryOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(observer, "Mode$ Scry | ValidPlayer$ You | Execute$ EffectTestScryOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(observer));
+
+        Assert.assertTrue(values.getOrDefault(observer, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testKnownAiSurveilEvaluatesOpponentSurveilTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        addFilteringAbility("Sol Ring", ai, "Surveil");
+        final Card observer = addCard("Grizzly Bears", opponent);
+        observer.setSVar("EffectTestSurveilOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(observer, "Mode$ Surveil | ValidPlayer$ Player.Opponent"
+                + " | Execute$ EffectTestSurveilOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(observer));
+
+        Assert.assertTrue(values.getOrDefault(observer, 0) > 0, values.toString());
+    }
+
+    @Test
     public void testExpectedBlockEvaluatesSupportedBlocksOutcome() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -3687,6 +3727,15 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 "AB$ ChangeZone | Cost$ 0 | Origin$ Library | Destination$ Hand"
                         + " | ChangeType$ Card | ChangeNum$ 1"
                         + (noLooking ? " | NoLooking$ True" : ""), card));
+        return card;
+    }
+
+    private Card addFilteringAbility(final String cardName, final Player controller,
+            final String api) {
+        final Card card = addCard(cardName, controller);
+        final String amount = "Scry".equals(api) ? "ScryNum$ 1" : "Amount$ 1";
+        card.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ " + api + " | Cost$ 0 | Defined$ You | " + amount, card));
         return card;
     }
 

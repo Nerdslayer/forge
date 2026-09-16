@@ -25,6 +25,8 @@ final class EffectEventMatcherRegistry {
         MATCHERS.put(EffectType.LAND_PLAYED, LandPlayedEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.CARD_SEARCHED_OR_SELECTED,
                 LibrarySearchEventMatcher.INSTANCE);
+        MATCHERS.put(EffectType.SCRIED_OR_SURVEILLED,
+                ScrySurveilEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.SACRIFICED, SacrificeEventMatcher.INSTANCE);
         MATCHERS.put(EffectType.ZONE_CHANGED, ZoneChangedEventMatcher.INSTANCE);
     }

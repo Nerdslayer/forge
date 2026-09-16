@@ -29,7 +29,8 @@ final class EffectProductionExtractorRegistry {
             DestroyProductionExtractor.INSTANCE,
             ZoneChangeProductionExtractor.INSTANCE,
             SacrificeProductionExtractor.INSTANCE,
-            LibrarySearchProductionExtractor.INSTANCE);
+            LibrarySearchProductionExtractor.INSTANCE,
+            ScrySurveilProductionExtractor.INSTANCE);
 
     private EffectProductionExtractorRegistry() {
     }
