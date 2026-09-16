@@ -28,7 +28,7 @@ import forge.game.zone.ZoneType;
 final class SacrificeProductionExtractor implements EffectProductionExtractor {
     static final SacrificeProductionExtractor INSTANCE = new SacrificeProductionExtractor();
 
-    // TODO(effect analysis): Support optional, random, targeted, SacEachValid, variable/all,
+    // TODO(effect analysis): Support optional, random, SacEachValid, variable/all,
     // multi-definition, and choice-sensitive sacrifice effects; non-activated sacrifice costs;
     // destination and sacrifice replacement effects; sacrificed-card value dependencies; and
     // future/repeated activation likelihood. Destruction and lethal-damage deaths are separate.
@@ -112,8 +112,8 @@ final class SacrificeProductionExtractor implements EffectProductionExtractor {
 
     private static Map<Player, List<Card>> resolveEffectSacrifices(
             final SpellAbility sacrifice) {
-        if (sacrifice.usesTargeting() || sacrifice.hasParam("Optional")
-                || sacrifice.hasParam("Random") || sacrifice.hasParam("SacEachValid")
+        if (sacrifice.hasParam("Optional") || sacrifice.hasParam("Random")
+                || sacrifice.hasParam("SacEachValid")
                 || sacrifice.hasParam("Destroy") || sacrifice.hasParam("Echo")
                 || sacrifice.hasParam("CumulativeUpkeep")
                 || EffectAbilityUtils.hasUnsupportedControlFlow(sacrifice)) {
@@ -127,6 +127,16 @@ final class SacrificeProductionExtractor implements EffectProductionExtractor {
         }
         if (amount <= 0) {
             return Map.of();
+        }
+
+        if (sacrifice.usesTargeting()) {
+            if (amount != 1) {
+                return Map.of();
+            }
+            final Card selected = EffectCardTargetSelector.chooseBestDepartureTarget(
+                    sacrifice, card -> card.canBeSacrificedBy(sacrifice, true));
+            return selected == null ? Map.of()
+                    : Map.of(selected.getController(), List.of(selected));
         }
 
         final String valid = sacrifice.getParamOrDefault("SacValid", "Self");

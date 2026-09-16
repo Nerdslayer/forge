@@ -1532,6 +1532,31 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testTargetedSacrificeProductionMatchesSacrificeConsequence() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Sacrifice | Cost$ 0 | ValidTgts$ Creature.OppCtrl", producer));
+        addCard("Grizzly Bears", ai);
+        final Card consequence = addCard("Memnite", opponent);
+        consequence.setSVar("EffectTestSacrificeOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ Sacrificed | ValidPlayer$ Opponent"
+                + " | ValidCard$ Creature.OppCtrl | Execute$ EffectTestSacrificeOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testDestroyAllProducesIndividualAndBatchDiesEvents() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
