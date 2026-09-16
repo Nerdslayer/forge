@@ -753,7 +753,7 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
-    public void selfAttackUsesExistingRateWhileOtherCombatFiltersRemainUnsupported() {
+    public void selfAttackAndSelfBlockUseExistingRatesWhileOtherCombatFiltersRemainUnsupported() {
         final AbilityOutcomeDescription self = leaf("PutCounter", Map.of("Defined", "Self", "CounterType", "P1P1"));
         final IntrinsicReferenceModel model = IntrinsicReferenceModel.defaults();
         final double expected = IntrinsicEventTriggerEstimator.estimate(
@@ -766,11 +766,19 @@ public class IntrinsicOutcomeBackendTest {
             Assert.assertEquals(result.expectedOccurrences(), expected, .0000001);
             Assert.assertEquals(result.contribution().value(), expected * 25, .0000001);
         }
+        final double expectedBlocks = IntrinsicEventTriggerEstimator.estimate(
+                IntrinsicEventTriggerAdapter.describe(Map.of("Mode", "Blocks", "ValidCard", "Card.Self")).orElseThrow(),
+                SOURCE, model, IntrinsicEvaluationSettings.defaults(), EntryTiming.NORMAL_SPEED).expectedOccurrences();
+        final IntrinsicAbilityEvaluator.AbilityValue block = evaluateAbility(self,
+                Map.of("Mode", "Blocks", "ValidCard", "Card.Self"));
+        Assert.assertTrue(block.contribution().complete(), block.toString());
+        Assert.assertEquals(block.expectedOccurrences(), expectedBlocks, .0000001);
+        Assert.assertEquals(block.contribution().value(), expectedBlocks * 25, .0000001);
+
         for (final Map<String, String> trigger : List.of(
                 Map.of("Mode", "Attacks", "ValidCard", "Creature.YouCtrl"),
                 Map.of("Mode", "Attacks", "ValidCard", "Card.Self", "ValidPlayer", "You"),
-                Map.of("Mode", "Attacks", "ValidCard", "Card.Self", "Alone", "True"),
-                Map.of("Mode", "Blocks", "ValidCard", "Card.Self"))) {
+                Map.of("Mode", "Attacks", "ValidCard", "Card.Self", "Alone", "True"))) {
             Assert.assertFalse(evaluateAbility(self, trigger).contribution().complete(), trigger.toString());
         }
     }

@@ -24,8 +24,9 @@ public class PermanentAbilityRemovalTest extends AITest {
         ai.setTeam(0);
         opponent.setTeam(1);
         final Card drawEngine = addCard("Staff of Nin", opponent);
-        // With no creatures, the existing recipient-based analysis has nothing to credit here.
-        // A one-mana base-score gap lets this check rollout without prescribing new calibration.
+        // Give Staff a high-impact, one-toughness opposing creature that its activated ability can
+        // actually kill; the removal analysis should then credit that hostile future use.
+        addCard("Grim Lavamancer", ai);
         final Card expensiveBody = addCard("Akroma's Memorial", opponent);
         final List<Card> candidates = List.of(expensiveBody, drawEngine);
         final LobbyPlayerAi lobby = (LobbyPlayerAi) ai.getLobbyPlayer();
