@@ -336,3 +336,5 @@ ENABLE_INTRINSIC_REMOVAL_ANALYSIS=true
 INTRINSIC_REMOVAL_WEIGHT=100
 # Use full-hand card valuation when a targeted discard effect exposes the opponent's hand.
 ENABLE_TARGETED_DISCARD_ANALYSIS=true
+# Use definition/card value only to break exact legacy ties when choosing a spell to cast.
+ENABLE_CAST_VALUE_TIEBREAK=true
