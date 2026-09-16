@@ -162,6 +162,25 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void definitionValueUsesSharedPermanentMetricForNoncreatures() {
+        final CardRules artifact = CardRules.fromScript(List.of(
+                "Name:Test Artifact", "ManaCost:3", "Types:Artifact"));
+        final CardDefinitionValueEvaluator.Evaluation artifactValue =
+                new CardDefinitionValueEvaluator().evaluate(artifact);
+
+        assertTrue(artifactValue.isComplete());
+        assertEquals(artifactValue.battlefieldValue(), 100);
+        assertEquals(artifactValue.grossPointValue(), 100);
+
+        final CardRules instant = CardRules.fromScript(List.of(
+                "Name:Test Instant", "ManaCost:1 R", "Types:Instant"));
+        final CardDefinitionValueEvaluator.Evaluation instantValue =
+                new CardDefinitionValueEvaluator().evaluate(instant);
+        assertTrue(instantValue.isComplete());
+        assertEquals(instantValue.battlefieldValue(), 0);
+    }
+
+    @Test
     public void definitionValueReportsUnsupportedAbilities() {
         final CardRules rules = CardRules.fromScript(List.of(
                 "Name:Ability Creature", "ManaCost:G", "Types:Creature Beast", "PT:3/3",
@@ -172,8 +191,8 @@ public class CardCreatorDomainTest {
         assertFalse(evaluation.isComplete());
         assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.startsWith(
                 "Triggered ability 1 evaluation is not supported")));
-        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.startsWith(
-                "Activated or spell ability 1 evaluation is not supported")));
+        assertTrue(evaluation.contributions().stream().anyMatch(contribution ->
+                "Intrinsic ability".equals(contribution.category()) && contribution.value() > 0));
     }
 
     @Test
