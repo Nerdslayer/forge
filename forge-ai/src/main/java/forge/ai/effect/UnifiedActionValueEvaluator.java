@@ -82,10 +82,8 @@ public final class UnifiedActionValueEvaluator {
             return CardValueBreakdown.unavailable(
                     "Discard valuation requires the proposed card to be in the discarder hand.");
         }
-        final HandValuationContext handContext = context.completeInformation()
-                ? HandValuationContext.fullHand(context.evaluatingAi(), discarder)
-                : HandValuationContext.knownCardOnly(context.evaluatingAi(), discarder, card,
-                        discarder.getCardsIn(ZoneType.Hand).size());
+        final HandValuationContext handContext = HandValuationContext.forKnownCard(
+                context.evaluatingAi(), discarder, card, context.completeInformation());
         final CardValueBreakdown handValue = UnifiedCardValueEvaluator.evaluateCard(card,
                 handContext);
         final int valueToOwner = handValue.netValue();
