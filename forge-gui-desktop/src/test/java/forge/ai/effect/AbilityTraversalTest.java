@@ -604,6 +604,44 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicScryAndSurveilTriggersUseSelectionRate() {
+        final Map<String, String> parameters = Map.of(
+                "Mode", "Surveil", "ValidPlayer", "You", "ActivationLimit", "1",
+                "TriggerZones", "Battlefield");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                .orElseThrow();
+        Assert.assertEquals(trigger.eventType(),
+                IntrinsicReferenceModel.EventType.SCRIED_OR_SURVEILLED);
+        Assert.assertEquals(trigger.turnScope(), IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN);
+        Assert.assertTrue(trigger.atMostOncePerTurn());
+        Assert.assertTrue(IntrinsicEventTriggerEstimator.estimate(trigger,
+                new IntrinsicReferenceModel.PermanentProfile(true,
+                        IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
+                EntryTiming.NORMAL_SPEED).expectedOccurrences() > 0);
+
+        final CardAbilityTraversal.AbilityDescription description =
+                new CardAbilityTraversal.AbilityDescription("surveil/draw",
+                        CardAbilityTraversal.Origin.TRIGGER,
+                        CardAbilityTraversal.Provenance.PRINTED, parameters,
+                        new AbilityOutcomeDescription("draw", "Draw",
+                                Map.of("Defined", "You", "NumCards", "1"), List.of(), null, ""));
+        final IntrinsicAbilityEvaluator.AbilityValue value = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(description), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+        Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                value.toString());
+        Assert.assertEquals(value.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                value.toString());
+        Assert.assertTrue(value.contribution().value() > 0, value.toString());
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters));
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "Scry", "ValidPlayer", "You", "ToBottom", "True")));
+    }
+
+    @Test
     public void intrinsicExiledTriggerUsesConservativeZoneChangeRate() {
         final Map<String, String> parameters = Map.of(
                 "Mode", "Exiled", "Origin", "Battlefield", "ValidCard", "Creature",
