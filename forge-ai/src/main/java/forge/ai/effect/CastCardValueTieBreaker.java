@@ -12,7 +12,7 @@ import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
 
-/** Applies known-card valuation only to exact legacy ties in spell selection. */
+/** Applies shared cast-action valuation only to exact legacy ties in spell selection. */
 public final class CastCardValueTieBreaker {
     private CastCardValueTieBreaker() {
     }
@@ -28,7 +28,7 @@ public final class CastCardValueTieBreaker {
         }
 
         final ValuationContext context = ValuationContext.forCast(ai, true);
-        final CardValueCache cache = new CardValueCache(context);
+        final Map<SpellAbility, CardValueBreakdown> values = new IdentityHashMap<>();
         int start = 0;
         while (start < abilities.size()) {
             final SpellAbility first = abilities.get(start);
@@ -38,35 +38,35 @@ public final class CastCardValueTieBreaker {
                 end++;
             }
             if (end - start > 1) {
-                reorderSupportedTie(ai, abilities, start, end, cache);
+                reorderSupportedTie(ai, abilities, start, end, context, values);
             }
             start = end;
         }
     }
 
     private static void reorderSupportedTie(final Player ai, final List<SpellAbility> abilities,
-            final int start, final int end, final CardValueCache cache) {
+            final int start, final int end, final ValuationContext context,
+            final Map<SpellAbility, CardValueBreakdown> values) {
         final List<SpellAbility> tied = new ArrayList<>(abilities.subList(start, end));
         if (!tied.stream().allMatch(sa -> isSupportedCastCandidate(ai, sa))) {
             return;
         }
 
-        final Map<Card, CardValueBreakdown> values = new IdentityHashMap<>();
         for (final SpellAbility sa : tied) {
-            final Card card = sa.getHostCard();
-            final CardValueBreakdown value = cache.evaluate(card);
-            values.put(card, value);
+            final CardValueBreakdown value = values.computeIfAbsent(sa,
+                    candidate -> UnifiedActionValueEvaluator.evaluate(
+                            new CastValuationAction(candidate), context));
             if (!value.isComplete()) {
                 return;
             }
         }
 
-        final int firstValue = values.get(tied.get(0).getHostCard()).netValue();
-        if (tied.stream().allMatch(sa -> values.get(sa.getHostCard()).netValue() == firstValue)) {
+        final int firstValue = values.get(tied.get(0)).netValue();
+        if (tied.stream().allMatch(sa -> values.get(sa).netValue() == firstValue)) {
             return;
         }
         tied.sort(Comparator.comparingInt(
-                (SpellAbility sa) -> values.get(sa.getHostCard()).netValue()).reversed());
+                (SpellAbility sa) -> values.get(sa).netValue()).reversed());
         for (int i = 0; i < tied.size(); i++) {
             abilities.set(start + i, tied.get(i));
         }
