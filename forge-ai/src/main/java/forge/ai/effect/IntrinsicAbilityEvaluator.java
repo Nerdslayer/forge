@@ -156,6 +156,10 @@ public final class IntrinsicAbilityEvaluator {
     private AbilityValue evaluateActivation(final AbilityDescription ability,
             final PermanentProfile source, final EntryTiming timing,
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver) {
+        if (!supportsIntrinsicActivationParameters(ability.parameters())) {
+            return unsupported(ability, "unsupported intrinsic activation restrictions",
+                    SupportStatus.UNSUPPORTED, outcomeStatusBeforeEvaluation(ability));
+        }
         final IntrinsicActivationCost cost = intrinsicActivationCost(ability.parameters()).orElse(null);
         if (cost == null) {
             return unsupported(ability, "unsupported intrinsic activation cost", SupportStatus.UNSUPPORTED,
@@ -172,6 +176,21 @@ public final class IntrinsicAbilityEvaluator {
         final AbilityOutcomeDescription outcome = withoutExecutionMetadata(ability.outcome(), 0);
         return evaluateOutcome(ability, outcome, source, occurrence.expectedOccurrences(),
                 tokenProfileResolver, SupportStatus.SUPPORTED);
+    }
+
+    /**
+     * The occurrence model currently assumes an ordinary battlefield activation. Timing, zone,
+     * conditional, optional, and cost-modifying parameters need their own reference inputs.
+     */
+    private static boolean supportsIntrinsicActivationParameters(final Map<String, String> parameters) {
+        for (final String parameter : parameters.keySet()) {
+            if (parameter.startsWith("Activation") || parameter.startsWith("Condition")
+                    || parameter.startsWith("Check") || Set.of("Optional", "PlayerTurn",
+                            "SorcerySpeed", "PowerUp", "XMax", "ReduceCost").contains(parameter)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private AbilityValue evaluateStatic(final AbilityDescription ability,
