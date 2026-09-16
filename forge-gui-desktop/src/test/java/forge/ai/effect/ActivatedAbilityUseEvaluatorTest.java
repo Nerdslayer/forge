@@ -38,7 +38,9 @@ public class ActivatedAbilityUseEvaluatorTest extends AITest {
         Assert.assertEquals(estimate.currentUses(), 0);
         Assert.assertEquals(estimate.nextTurnUses(), 1);
         Assert.assertEquals(estimate.nextLandProbability(), 0.4);
-        Assert.assertEquals(estimate.expectedUses(), 0.3 * estimate.willingness(), 0.0001);
+        Assert.assertEquals(estimate.expectedUses(),
+                AbilityOccurrenceEstimator.NEXT_TURN_DISCOUNT
+                        * estimate.nextLandProbability() * estimate.willingness(), 0.0001);
         Assert.assertTrue(estimate.outcomeSupported());
     }
 
@@ -50,7 +52,9 @@ public class ActivatedAbilityUseEvaluatorTest extends AITest {
         Assert.assertTrue(estimate.supported(), estimate.reason());
         Assert.assertEquals(estimate.currentUses(), 4);
         Assert.assertEquals(estimate.nextTurnUses(), 4);
-        Assert.assertEquals(estimate.expectedUses(), 7.0 * estimate.willingness(), 0.0001);
+        Assert.assertEquals(estimate.expectedUses(),
+                (4 + AbilityOccurrenceEstimator.NEXT_TURN_DISCOUNT * 4)
+                        * estimate.willingness(), 0.0001);
     }
 
     @Test
@@ -61,7 +65,9 @@ public class ActivatedAbilityUseEvaluatorTest extends AITest {
         Assert.assertTrue(estimate.supported(), estimate.reason());
         Assert.assertEquals(estimate.currentUses(), 1);
         Assert.assertEquals(estimate.nextTurnUses(), 1);
-        Assert.assertEquals(estimate.expectedUses(), 1.75 * estimate.willingness(), 0.0001);
+        Assert.assertEquals(estimate.expectedUses(),
+                (1 + AbilityOccurrenceEstimator.NEXT_TURN_DISCOUNT)
+                        * estimate.willingness(), 0.0001);
     }
 
     @Test
