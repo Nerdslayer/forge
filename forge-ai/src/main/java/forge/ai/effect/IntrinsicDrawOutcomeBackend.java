@@ -73,6 +73,9 @@ public final class IntrinsicDrawOutcomeBackend
             "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Origin",
             "Destination", "NoRegen", "Radiance", "Duration", "ChangeNum", "ChangeType",
             "Chooser", "DefinedPlayer", "GainControl", "Tapped", "RememberChanged");
+    private static final Set<String> CONTROL_PARAMETERS = parameters("Defined", "ValidTgts",
+            "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "NewController",
+            "Duration");
     private static final Set<String> SACRIFICE_PARAMETERS = parameters("Defined", "SacValid", "Amount");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
             "haste", "reach", "menace", "fear", "intimidate", "vigilance", "trample", "deathtouch", "lifelink", "defender",
@@ -273,6 +276,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "ManaReflected" -> acceptsManaReflected(node);
         case "DealDamage", "DamageAll" -> acceptsDamage(node);
         case "Destroy", "ChangeZone" -> acceptsRemoval(node);
+        case "GainControl" -> acceptsGainControl(node);
         case "Sacrifice" -> acceptsSacrifice(node);
         default -> false;
         };
@@ -338,6 +342,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "ManaReflected" -> manaReflected(node);
         case "DealDamage", "DamageAll" -> damage(node);
         case "Destroy", "ChangeZone" -> removal(node);
+        case "GainControl" -> gainControl(node);
         case "Sacrifice" -> sacrifice(node);
         default -> unresolved(node, "Unsupported intrinsic outcome API " + node.api());
         };
@@ -619,6 +624,44 @@ public final class IntrinsicDrawOutcomeBackend
         });
     }
 
+    private Outcome<State> gainControl(final AbilityOutcomeDescription node) {
+        final PermanentTarget target = permanentTarget(node);
+        if (target == null || newControllerIsAi(node) == null) {
+            return unresolved(node, "Unsupported intrinsic control-change target");
+        }
+        if (target.fixed() != null) {
+            return gainControlAtomic(node, target.fixed());
+        }
+        return new Outcome.Deferred<>(state -> new Outcome.Target<>(node.path() + ":target",
+                current -> permanentCandidates(current, target), State::withTarget,
+                gainControlAtomic(node, null), true));
+    }
+
+    private Outcome<State> gainControlAtomic(final AbilityOutcomeDescription node,
+            final TargetRef fixedTarget) {
+        return new Outcome.Atomic<>(node.path(), current -> {
+            final TargetRef target = fixedTarget == null ? current.target() : fixedTarget;
+            if (target == null) {
+                return null;
+            }
+            final PermanentProfile before = permanent(current, target);
+            final Boolean newController = newControllerIsAi(node);
+            if (!before.present() || newController == null) {
+                return null;
+            }
+            final boolean oldController = controls(target, current);
+            if (oldController == newController) {
+                return new Outcome.Transition<>(0d, current.clearTarget(), node.api());
+            }
+            final int boardValue = evaluator.evaluatePermanent(before);
+            final int value = newController ? EffectMath.multiply(boardValue, 2)
+                    : EffectMath.multiply(boardValue, -2);
+            final PermanentProfile after = controlledPermanent(before, newController);
+            return new Outcome.Transition<>((double) value,
+                    moveControl(current, target, after, newController).clearTarget(), node.api());
+        });
+    }
+
     private static TokenSpec tokenSpec(final AbilityOutcomeDescription node) {
         final String rawScripts = node.parameters().get("TokenScript");
         if (rawScripts == null || rawScripts.isBlank()) {
@@ -838,6 +881,17 @@ public final class IntrinsicDrawOutcomeBackend
                 && !node.parameters().containsKey("GainControl")
                 && !node.parameters().containsKey("Tapped")
                 && !node.parameters().containsKey("RememberChanged")
+                && permanentTarget(node) != null;
+    }
+
+    private static boolean acceptsGainControl(final AbilityOutcomeDescription node) {
+        // Only a single battlefield target and a persistent, explicitly identified controller are
+        // reference-safe. Temporary control, exchanges, untapping and downstream static changes
+        // need a longer-lived projected-control model.
+        final String duration = node.parameters().get("Duration");
+        return CONTROL_PARAMETERS.containsAll(node.parameters().keySet())
+                && (duration == null || Set.of("Permanent", "Perpetual").contains(duration))
+                && newControllerIsAi(node) != null
                 && permanentTarget(node) != null;
     }
 
@@ -1497,6 +1551,8 @@ public final class IntrinsicDrawOutcomeBackend
                 dimensions.add(OPPONENT_CREATURE_COUNT);
                 dimensions.add(OPPONENT_CREATURE);
             }
+        } else if ("GainControl".equals(node.api()) && acceptsGainControl(node)) {
+            addRemovalDimensions(node, dimensions);
         } else if (("GainLife".equals(node.api()) || "LoseLife".equals(node.api()))
                 && acceptsLife(node)) {
             addPlayerDimensions(node, dimensions);
@@ -1824,6 +1880,59 @@ public final class IntrinsicDrawOutcomeBackend
         case OPPONENT_CREATURE, OPPONENT_PERMANENT, OPPONENT_PLAYER -> false;
         case SOURCE -> state.sourcePermanent().controlledByAi();
         };
+    }
+
+    private static Boolean newControllerIsAi(final AbilityOutcomeDescription node) {
+        final String value = node.parameters().getOrDefault("NewController", "You");
+        return switch (value.toLowerCase(Locale.ROOT)) {
+        case "you", "controller", "activatingplayer" -> true;
+        case "opponent", "opponentctrl", "opposingplayer" -> false;
+        default -> null;
+        };
+    }
+
+    private static PermanentProfile controlledPermanent(final PermanentProfile profile,
+            final boolean controller) {
+        return new PermanentProfile(profile.present(), profile.kind(), controller,
+                profile.power(), profile.toughness(), profile.keywords(), profile.basicLand(),
+                profile.loyalty());
+    }
+
+    private static State moveControl(final State state, final TargetRef target,
+            final PermanentProfile after, final boolean newController) {
+        return switch (target) {
+        case SOURCE -> state.withSourcePermanent(after);
+        case CONTROLLER_CREATURE -> moveCreatureControl(state, true, after, newController);
+        case OPPONENT_CREATURE -> moveCreatureControl(state, false, after, newController);
+        case CONTROLLER_PERMANENT -> movePermanentControl(state, true, after, newController);
+        case OPPONENT_PERMANENT -> movePermanentControl(state, false, after, newController);
+        case CONTROLLER_PLAYER, OPPONENT_PLAYER -> state;
+        };
+    }
+
+    private static State moveCreatureControl(final State state, final boolean fromController,
+            final PermanentProfile after, final boolean newController) {
+        final boolean destinationPresent = newController
+                ? state.controllerCreature().present() : state.opponentCreature().present();
+        State moved = state.withCreatures(fromController, CreatureProfile.absent())
+                .withCreatureCount(fromController,
+                        state.creatureCount(fromController) - 1)
+                .withCreatureCount(newController, state.creatureCount(newController) + 1);
+        if (!destinationPresent) {
+            moved = moved.withCreatures(newController, toCreature(after));
+        }
+        return moved;
+    }
+
+    private static State movePermanentControl(final State state, final boolean fromController,
+            final PermanentProfile after, final boolean newController) {
+        final boolean destinationPresent = newController
+                ? state.controllerPermanent().present() : state.opponentPermanent().present();
+        State moved = state.withPermanent(fromController, PermanentProfile.absent());
+        if (!destinationPresent) {
+            moved = moved.withPermanent(newController, after);
+        }
+        return moved;
     }
 
     private static PermanentProfile permanent(final State state, final TargetRef target) {
