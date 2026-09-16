@@ -324,6 +324,62 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicAbilityCastTriggerUsesReferenceAbilityRate() {
+        final Map<String, String> parameters = Map.of(
+                "Mode", "AbilityCast", "ValidCard", "Permanent.inZoneBattlefield",
+                "ValidSA", "Activated.!ManaAbility", "ValidActivatingPlayer", "Opponent",
+                "ActivationLimit", "1", "TriggerZones", "Battlefield");
+        final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                .orElseThrow();
+        Assert.assertEquals(trigger.eventType(), IntrinsicReferenceModel.EventType.ABILITY_CAST);
+        Assert.assertEquals(trigger.turnScope(), IntrinsicEventTrigger.TurnScope.OPPONENT_TURN);
+        Assert.assertTrue(trigger.atMostOncePerTurn());
+        Assert.assertTrue(trigger.occurrenceMultiplier() > 0);
+
+        final CardAbilityTraversal.AbilityDescription description =
+                new CardAbilityTraversal.AbilityDescription("ability-cast/trigger",
+                        CardAbilityTraversal.Origin.TRIGGER,
+                        CardAbilityTraversal.Provenance.PRINTED, parameters,
+                        new AbilityOutcomeDescription("draw", "Draw",
+                                Map.of("Defined", "You", "NumCards", "1"), List.of(), null, ""));
+        final IntrinsicAbilityEvaluator.AbilityValue value = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(description), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+        Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                value.toString());
+        Assert.assertEquals(value.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                value.toString());
+        Assert.assertTrue(value.contribution().value() > 0, value.toString());
+    }
+
+    @Test
+    public void intrinsicAbilityCastCardTriggerReachesOutcomeEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation =
+                new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                        IntrinsicEvaluationSettings.defaults()).evaluateDefinitionDetails(
+                        forge.StaticData.instance().getCommonCards().getCard("Wizened Mentor"),
+                        CardStateName.Original);
+        Assert.assertTrue(evaluation.descriptions().stream().anyMatch(description ->
+                description.origin() == CardAbilityTraversal.Origin.TRIGGER
+                        && "AbilityCast".equals(description.parameters().get("Mode"))),
+                evaluation.descriptions().toString());
+        Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                value.triggerStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                        && value.contribution().value() > 0), evaluation.values().toString());
+    }
+
+    @Test
+    public void specializedAbilityCastFiltersRemainConservative() {
+        Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
+                "Mode", "AbilityCast", "ValidActivatingPlayer", "You",
+                "ValidSA", "Activated.Exhaust")).isEmpty());
+    }
+
+    @Test
     public void printedSpellCastCardsReachIntrinsicTriggerEvaluation() {
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(

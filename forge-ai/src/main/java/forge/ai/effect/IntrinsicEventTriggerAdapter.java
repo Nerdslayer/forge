@@ -21,6 +21,10 @@ public final class IntrinsicEventTriggerAdapter {
         if (spellCast.isPresent()) {
             return spellCast;
         }
+        final Optional<IntrinsicEventTrigger> abilityCast = IntrinsicAbilityCastTriggerAdapter.describe(parameters);
+        if (abilityCast.isPresent()) {
+            return abilityCast;
+        }
         if (isSupportedManaTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
@@ -55,6 +59,9 @@ public final class IntrinsicEventTriggerAdapter {
      */
     static boolean supportsIntrinsicParameters(final Map<String, String> parameters) {
         if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicAbilityCastTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {
