@@ -42,6 +42,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (abilityTriggered.isPresent()) {
             return abilityTriggered;
         }
+        final Optional<IntrinsicEventTrigger> controlChange =
+                IntrinsicControlChangeTriggerAdapter.describe(parameters);
+        if (controlChange.isPresent()) {
+            return controlChange;
+        }
         final Optional<IntrinsicEventTrigger> target = IntrinsicTargetTriggerAdapter.describe(parameters);
         if (target.isPresent()) {
             return target;
@@ -130,6 +135,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicAbilityTriggeredTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicControlChangeTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (IntrinsicTargetTriggerAdapter.supports(parameters)) {
