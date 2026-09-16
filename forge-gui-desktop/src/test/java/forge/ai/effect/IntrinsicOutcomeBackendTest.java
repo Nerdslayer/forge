@@ -203,6 +203,29 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void permanentPumpOutcomesReuseCreatureDeltaAndGroupCounts() {
+        final State initial = state(CREATURE, CREATURE, SOURCE);
+        final OutcomePlan<State> self = evaluate(leaf("Pump", Map.of(
+                "Defined", "Self", "NumAtt", "+1", "NumDef", "+2", "Duration", "Permanent")), initial);
+        Assert.assertEquals(self.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(self.value(), 35.0);
+        Assert.assertEquals(self.state().sourcePermanent().power(), 3);
+        Assert.assertEquals(self.state().sourcePermanent().toughness(), 4);
+
+        final OutcomePlan<State> group = evaluate(leaf("PumpAll", Map.of(
+                "ValidCards", "Creature.YouCtrl", "NumAtt", "+1", "NumDef", "+1",
+                "Duration", "Perpetual")), initial);
+        Assert.assertEquals(group.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(group.value(), 50.0);
+        Assert.assertEquals(group.state().controllerCreature().power(), 3);
+        Assert.assertEquals(group.state().sourcePermanent().power(), 3);
+
+        final OutcomePlan<State> temporary = evaluate(leaf("Pump", Map.of(
+                "Defined", "Self", "NumAtt", "+1", "NumDef", "+1", "Duration", "UntilEndOfTurn")), initial);
+        Assert.assertEquals(temporary.completeness(), Completeness.UNSUPPORTED);
+    }
+
+    @Test
     public void realTargetScopesRespectSideOtherAndSourceAvailability() {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> friendly = evaluate(counter("Creature.YouCtrl+Other"), initial);
