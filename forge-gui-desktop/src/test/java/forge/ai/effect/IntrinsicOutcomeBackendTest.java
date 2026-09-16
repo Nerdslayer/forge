@@ -383,6 +383,13 @@ public class IntrinsicOutcomeBackendTest {
         Assert.assertEquals(opposing.state().opponentCreature().toughness(), 2);
         Assert.assertTrue(opposing.value() > 0);
 
+        final OutcomePlan<State> lethal = evaluate(leaf("RemoveCounter", Map.of(
+                "ValidTgts", "Creature.OppCtrl", "CounterType", "P1P1")), state(CREATURE,
+                        new CreatureProfile(true, 1, 1, Set.of(), false, false), SOURCE));
+        Assert.assertEquals(lethal.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(lethal.state().opponentCreature().present());
+        Assert.assertEquals(lethal.state().opponentCreatureCount(), 0);
+
         final PermanentProfile planeswalker = new PermanentProfile(true, PermanentKind.PLANESWALKER,
                 true, 0, 0, Set.of(), false, 3);
         final OutcomePlan<State> loyalty = evaluate(leaf("RemoveCounter", Map.of(
