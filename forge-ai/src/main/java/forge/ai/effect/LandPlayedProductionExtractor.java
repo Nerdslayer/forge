@@ -13,8 +13,6 @@ import forge.game.zone.ZoneType;
 
 /** Produces one player-wide expected land-play event for live relationship analysis. */
 final class LandPlayedProductionExtractor {
-    private static final double LAND_PER_HAND_CARD = .40;
-
     // TODO(effect analysis): Model additional land drops, known land identity, land-play timing,
     // land-play costs, and multi-turn card draw/land availability rather than one conservative
     // next-opportunity estimate.
@@ -27,8 +25,8 @@ final class LandPlayedProductionExtractor {
         }
         // A normal next turn includes one draw. Hand size is public even when its contents are
         // hidden, so the same 40%-per-card estimate used by activation occurrence can be reused.
-        final int visibleCards = controller.getCardsIn(ZoneType.Hand).size() + 1;
-        final double expectedBatches = 1 - Math.pow(1 - LAND_PER_HAND_CARD, visibleCards);
+        final double expectedBatches = AbilityOccurrenceEstimator
+                .estimateAdditionalLandProbability(controller, 1);
         if (expectedBatches <= 0) {
             return List.of();
         }
