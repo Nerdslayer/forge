@@ -46,6 +46,11 @@ public final class IntrinsicEventTriggerAdapter {
         if (scrySurveil.isPresent()) {
             return scrySurveil;
         }
+        final Optional<IntrinsicEventTrigger> stateChange =
+                IntrinsicStateChangeTriggerAdapter.describe(parameters);
+        if (stateChange.isPresent()) {
+            return stateChange;
+        }
         if (isSupportedManaTrigger(parameters)) {
             return Optional.of(new IntrinsicEventTrigger(
                     IntrinsicReferenceModel.EventType.MANA_ADDED_OR_SPENT,
@@ -113,6 +118,9 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         if (IntrinsicScrySurveilTriggerAdapter.supports(parameters)) {
+            return true;
+        }
+        if (IntrinsicStateChangeTriggerAdapter.supports(parameters)) {
             return true;
         }
         if (isSupportedManaTrigger(parameters)) {
