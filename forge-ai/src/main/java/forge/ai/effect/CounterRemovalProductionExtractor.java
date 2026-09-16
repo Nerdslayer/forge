@@ -13,6 +13,8 @@ import forge.game.card.Card;
 import forge.game.card.CardCollectionView;
 import forge.game.card.CardLists;
 import forge.game.card.CounterType;
+import forge.game.cost.CostPart;
+import forge.game.cost.CostRemoveCounter;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
@@ -49,7 +51,17 @@ final class CounterRemovalProductionExtractor implements EffectProductionExtract
             final SpellAbility ability) {
         final ProductionOpportunity opportunity = ProductionOpportunity.fromActivatedAbility(
                 source, ability);
-        return opportunity == null ? List.of() : extractFromOpportunity(source, opportunity);
+        if (opportunity == null) {
+            return List.of();
+        }
+        final List<EffectProduction> productions = new ArrayList<>();
+        final EffectProduction costProduction = createCostProduction(source, opportunity.root(),
+                opportunity.expectedBatches());
+        if (costProduction != null) {
+            productions.add(costProduction);
+        }
+        productions.addAll(extractFromOpportunity(source, opportunity));
+        return productions;
     }
 
     private static List<EffectProduction> extractFromOpportunity(final Card source,
@@ -131,17 +143,68 @@ final class CounterRemovalProductionExtractor implements EffectProductionExtract
                 outcome.getParamOrDefault("ValidZone", "Battlefield"));
     }
 
+    private static EffectProduction createCostProduction(final Card source,
+            final SpellAbility ability, final double expectedBatches) {
+        if (ability.getPayCosts() == null) {
+            return null;
+        }
+        CostRemoveCounter removalCost = null;
+        for (final CostPart part : ability.getPayCosts().getCostParts()) {
+            if (!(part instanceof CostRemoveCounter candidate)) {
+                continue;
+            }
+            if (removalCost != null || !candidate.payCostFromSource()
+                    || candidate.counter == null) {
+                return null;
+            }
+            removalCost = candidate;
+        }
+        if (removalCost == null) {
+            return null;
+        }
+
+        final int existing = source.getCounters(removalCost.counter);
+        final int amount = removalAmount(source, removalCost.getAmount(), ability, existing);
+        if (amount <= 0 || !source.canRemoveCounters(removalCost.counter)) {
+            return null;
+        }
+        final int actualAmount = Math.min(existing, amount);
+        if (actualAmount <= 0) {
+            return null;
+        }
+        return new EffectProduction(source, EffectType.COUNTER_REMOVED,
+                List.of(createEvent(source, source, removalCost.counter, actualAmount, existing)),
+                expectedBatches);
+    }
+
     private static int removalAmount(final Card source, final SpellAbility outcome,
             final int existing) {
-        final String raw = outcome.getParam("CounterNum");
+        return removalAmount(source, outcome.getParam("CounterNum"), outcome, existing);
+    }
+
+    private static int removalAmount(final Card source, final String raw,
+            final SpellAbility ability, final int existing) {
         if ("All".equalsIgnoreCase(raw)) {
             return existing;
         }
         try {
-            return AbilityUtils.calculateAmount(source, raw, outcome);
+            return AbilityUtils.calculateAmount(source, raw, ability);
         } catch (final RuntimeException ignored) {
             return 0;
         }
+    }
+
+    private static EffectEvent createEvent(final Card source, final Card recipient,
+            final CounterType counterType, final int amount, final int existing) {
+        final Map<AbilityKey, Object> parameters = new EnumMap<>(AbilityKey.class);
+        parameters.put(AbilityKey.Card, recipient);
+        parameters.put(AbilityKey.CounterType, counterType);
+        parameters.put(AbilityKey.CounterAmount, amount);
+        parameters.put(AbilityKey.NewCounterAmount, existing - amount);
+        parameters.put(AbilityKey.Player, source.getController());
+        parameters.put(AbilityKey.Source, source.getController());
+        return new EffectEvent(EffectType.COUNTER_REMOVED, source.getController(),
+                List.of(new EffectEvent.Subject(recipient, amount)), parameters);
     }
 
     private static List<Card> allBattlefieldRecipients(final Card source,

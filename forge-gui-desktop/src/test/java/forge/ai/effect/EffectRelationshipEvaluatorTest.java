@@ -2471,6 +2471,35 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testCounterRemovalCostIsAProduction() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 1);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.setCounters(CounterEnumType.CHARGE, 1);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Draw | Cost$ SubCounter<1/CHARGE/CARDNAME> | Defined$ You | NumCards$ 1",
+                producer));
+
+        final Card consequence = addCard("Grizzly Bears", opponent);
+        consequence.setSVar("EffectTestCounterRemovalCostOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(consequence, "Mode$ CounterRemovedOnce | ValidCard$ Card.YouCtrl"
+                + " | CounterType$ CHARGE | Remaining$ 0"
+                + " | Execute$ EffectTestCounterRemovalCostOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testDrawProductionCreatesOneEventPerDrawnCard() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
