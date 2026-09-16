@@ -43,8 +43,13 @@ public final class UnifiedCardValueEvaluator {
             return CardValueBreakdown.unavailable("A card and valuation context are required.");
         }
         if (context.mode() == ValuationMode.SITUATIONAL
-                && context.decision() == ValuationDecision.HAND_SELECTION) {
+                && (context.decision() == ValuationDecision.HAND_SELECTION
+                        || context.decision() == ValuationDecision.CAST)) {
             return evaluateHandCard(card, context);
+        }
+        if (context.mode() == ValuationMode.SITUATIONAL
+                && context.decision() == ValuationDecision.REMOVAL_TARGET) {
+            return evaluatePermanent(card, context, EffectAnalysisTrace.disabled());
         }
         if (context.mode() != ValuationMode.INTRINSIC_REFERENCE
                 || context.decision() != ValuationDecision.GENERAL_CARD) {
@@ -91,10 +96,39 @@ public final class UnifiedCardValueEvaluator {
         return HandCardValueEvaluator.evaluateKnownCard(card, context);
     }
 
+    /**
+     * Evaluates one live permanent through a situational context. The initial live adapter is
+     * intentionally limited to removal-target valuation; later decisions can add their own
+     * action-specific components without changing the intrinsic definition entry point.
+     */
+    public static CardValueBreakdown evaluatePermanent(final Card candidate,
+            final ValuationContext context, final EffectAnalysisTrace trace) {
+        if (candidate == null || context == null) {
+            return CardValueBreakdown.unavailable("A permanent and valuation context are required.");
+        }
+        if (context.mode() != ValuationMode.SITUATIONAL
+                || context.decision() != ValuationDecision.REMOVAL_TARGET
+                || context.evaluatingAi() == null) {
+            return CardValueBreakdown.unsupported(
+                    "Live permanent valuation currently requires a removal-target context.");
+        }
+        if (!candidate.isInZone(ZoneType.Battlefield)) {
+            return CardValueBreakdown.unavailable(
+                    "Removal-target valuation requires a permanent on the battlefield.");
+        }
+        final Map<Card, PermanentAbilityValueEvaluator.Breakdown> abilityValues =
+                PermanentAbilityValueEvaluator.evaluateRemovalAbilities(context.evaluatingAi(),
+                        List.of(candidate), trace, context.intrinsicWeightPercent() > 0,
+                        context.relationshipWeightPercent() > 0);
+        return buildPermanentBreakdown(context.evaluatingAi(), candidate, context,
+                abilityValues.get(candidate));
+    }
+
     private static CardValueBreakdown evaluateHandCard(final Card card,
             final ValuationContext context) {
         if (!card.isInZone(ZoneType.Hand)) {
-            return CardValueBreakdown.unavailable("Hand selection requires a card in hand.");
+            return CardValueBreakdown.unavailable(
+                    "Hand or casting valuation requires a card in hand.");
         }
         final Player handOwner = card.getOwner() == null ? card.getController() : card.getOwner();
         if (handOwner == null) {
@@ -160,24 +194,32 @@ public final class UnifiedCardValueEvaluator {
         final Map<Card, RemovalCandidateEvaluation> result = new HashMap<>();
         for (final Card candidate : candidateList) {
             final PermanentAbilityValueEvaluator.Breakdown abilityValue = abilityValues.get(candidate);
+            final CardValueBreakdown permanentRemovalValue = buildPermanentBreakdown(ai, candidate,
+                    context, abilityValue);
             final int relationshipValue = abilityValue == null ? 0 : abilityValue.relationshipValue();
             final int intrinsicValue = abilityValue == null ? 0 : abilityValue.intrinsicValue();
-            final int weightedFuture = add(
-                    applyWeight(relationshipValue, context.relationshipWeightPercent()),
-                    applyWeight(intrinsicValue, context.intrinsicWeightPercent()));
-            final List<String> reasons = abilityValue == null
-                    ? List.of() : abilityValue.reasons();
-            final ValuationCompleteness completeness = weightedFuture == 0 && reasons.isEmpty()
-                    ? ValuationCompleteness.COMPLETE : ValuationCompleteness.PARTIAL;
-            final CardValueBreakdown permanentRemovalValue = new CardValueBreakdown(
-                    ComputerUtilCard.evaluatePermanent(ai, candidate), weightedFuture, 0, 0,
-                    removalContextAdjustment(ai, candidate), completeness, reasons);
             final CardValueBreakdown breakdown = RemovalActionEvaluator.evaluate(ai, candidate,
                     permanentRemovalValue, actionKind);
             result.put(candidate, new RemovalCandidateEvaluation(breakdown,
                     relationshipValue, intrinsicValue));
         }
         return result;
+    }
+
+    private static CardValueBreakdown buildPermanentBreakdown(final Player ai, final Card candidate,
+            final ValuationContext context,
+            final PermanentAbilityValueEvaluator.Breakdown abilityValue) {
+        final int relationshipValue = abilityValue == null ? 0 : abilityValue.relationshipValue();
+        final int intrinsicValue = abilityValue == null ? 0 : abilityValue.intrinsicValue();
+        final int weightedFuture = add(
+                applyWeight(relationshipValue, context.relationshipWeightPercent()),
+                applyWeight(intrinsicValue, context.intrinsicWeightPercent()));
+        final List<String> reasons = abilityValue == null
+                ? List.of() : abilityValue.reasons();
+        final ValuationCompleteness completeness = weightedFuture == 0 && reasons.isEmpty()
+                ? ValuationCompleteness.COMPLETE : ValuationCompleteness.PARTIAL;
+        return new CardValueBreakdown(ComputerUtilCard.evaluatePermanent(ai, candidate), weightedFuture,
+                0, 0, removalContextAdjustment(ai, candidate), completeness, reasons);
     }
 
     /** Preserves the existing base removal priority for callers that do not enable analysis. */

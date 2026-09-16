@@ -6,6 +6,7 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import forge.ai.AITest;
+import forge.ai.ComputerUtilCard;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
@@ -95,6 +96,36 @@ public class RemovalActionEvaluatorTest extends AITest {
         Assert.assertEquals(RemovalActionKind.from(exile), RemovalActionKind.EXILE);
         Assert.assertEquals(RemovalActionKind.from(bounce), RemovalActionKind.BOUNCE);
         Assert.assertEquals(destroy.getApi(), ApiType.Destroy);
+    }
+
+    @Test
+    public void sharedCardEntryPointEvaluatesLivePermanentForRemoval() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        final Card target = addCard("Grizzly Bears", opponent);
+
+        final CardValueBreakdown result = UnifiedCardValueEvaluator.evaluateCard(target,
+                ValuationContext.forRemoval(ai, 0, 0));
+
+        Assert.assertTrue(result.isComplete());
+        Assert.assertEquals(result.currentPresenceValue(),
+                ComputerUtilCard.evaluatePermanent(ai, target));
+        Assert.assertEquals(result.futurePotentialValue(), 0);
+    }
+
+    @Test
+    public void livePermanentAdapterDoesNotTreatHandCardsAsBattlefieldTargets() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        final Card handCard = addCardToZone("Grizzly Bears", opponent,
+                forge.game.zone.ZoneType.Hand);
+
+        final CardValueBreakdown result = UnifiedCardValueEvaluator.evaluateCard(handCard,
+                ValuationContext.forRemoval(ai, 0, 0));
+
+        Assert.assertEquals(result.completeness(), ValuationCompleteness.UNAVAILABLE);
     }
 
     private static CardValueBreakdown baseValue() {

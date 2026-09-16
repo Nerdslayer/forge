@@ -48,6 +48,25 @@ public class UnifiedValuationFoundationTest {
     }
 
     @Test
+    public void breakdownPlusCombinesDistinctComponentsAndReasons() {
+        final CardValueBreakdown first = new CardValueBreakdown(100, 20, -5, 30, 2,
+                ValuationCompleteness.COMPLETE, List.of("first"));
+        final CardValueBreakdown second = new CardValueBreakdown(40, 10, 5, 15, -2,
+                ValuationCompleteness.PARTIAL, List.of("second"));
+
+        final CardValueBreakdown combined = first.plus(second);
+
+        Assert.assertEquals(combined.currentPresenceValue(), 140);
+        Assert.assertEquals(combined.futurePotentialValue(), 30);
+        Assert.assertEquals(combined.transitionValue(), 0);
+        Assert.assertEquals(combined.accessCost(), 45);
+        Assert.assertEquals(combined.contextAdjustment(), 0);
+        Assert.assertEquals(combined.netValue(), 125);
+        Assert.assertEquals(combined.completeness(), ValuationCompleteness.PARTIAL);
+        Assert.assertEquals(combined.reasons(), List.of("first", "second"));
+    }
+
+    @Test
     public void cardDefinitionEvaluationUsesSharedComponents() {
         final CardDefinitionValueEvaluator.Evaluation evaluation =
                 new CardDefinitionValueEvaluator.Evaluation(130, 100, 20, 10, 100,
