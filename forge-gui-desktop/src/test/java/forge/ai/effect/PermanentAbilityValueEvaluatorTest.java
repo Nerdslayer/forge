@@ -51,6 +51,25 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void completeIntrinsicTapSequencesContributeToRemovalValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        // Wylie has a printed Taps trigger whose outcome is the complete GainLife -> Draw
+        // sequence. This verifies the live removal bridge uses the same sequence planner as
+        // standalone intrinsic evaluation.
+        final Card card = addCard("Wylie Duke, Atiin Hero", opponent);
+
+        final PermanentAbilityValueEvaluator.Breakdown value = evaluate(ai, List.of(card)).get(card);
+        Assert.assertTrue(value.intrinsicValue() > 0, value.toString());
+        Assert.assertTrue(value.reasons().stream()
+                .anyMatch(reason -> reason.contains("Independent future-support allowance")),
+                value.toString());
+    }
+
+    @Test
     public void relationshipOnlyBreakdownPreservesLegacyRelationshipMap() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

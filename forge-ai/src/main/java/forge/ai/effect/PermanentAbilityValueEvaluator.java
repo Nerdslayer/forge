@@ -197,7 +197,7 @@ public final class PermanentAbilityValueEvaluator {
                         + aggregate.unresolvedReasons());
                 continue;
             }
-            if (!isSafeAtomicOutcome(description.outcome())) {
+            if (!isSafeIntrinsicOutcome(description.outcome())) {
                 addSkipped(destination, candidate, value.path(), "outcome is outside safe intrinsic slice");
                 continue;
             }
@@ -231,9 +231,15 @@ public final class PermanentAbilityValueEvaluator {
                 // fixed future-support allowance. It is NOT the full intrinsic baseline and
                 // does not increase with the number of current producers.
                 // TODO: Other event predicates and contextual self-opportunity refinement.
-                if (!java.util.Set.of("TokenCreated", "Drawn").contains(description.parameters().get("Mode"))
+                if (!java.util.Set.of("TokenCreated", "Drawn", "Taps")
+                        .contains(description.parameters().get("Mode"))
                         || value.expectedOccurrences() <= 0) {
                     addSkipped(destination, candidate, value.path(), "no future-support policy for this event");
+                    continue;
+                }
+                if (overlapsKnownConsequence(candidate, value.path(), relationshipEntries)) {
+                    destination.add(AbilityValueContribution.duplicate(candidate, identity,
+                            "known relationship already represents this future tap opportunity"));
                     continue;
                 }
                 final int allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE,
@@ -298,20 +304,12 @@ public final class PermanentAbilityValueEvaluator {
                         || path.equals(entry.relatedAbility().path()));
     }
 
-    private static boolean isSafeAtomicOutcome(final AbilityOutcomeDescription outcome) {
-        // TODO(effect analysis): Admit validated complete choices and sequences once their
-        // selected-mode and simultaneous-batch semantics can be attributed without importing a
-        // full intrinsic baseline into removal scoring. This first slice is intentionally atomic.
-        if (outcome == null || !outcome.issue().isEmpty() || !outcome.choices().isEmpty()
-                || outcome.next() != null) {
-            return false;
-        }
-        final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(
-                IntrinsicEvaluationSettings.defaults());
-        // The backend's admission predicate is the single source of truth for atomic intrinsic
-        // outcome support. Keep this boundary synchronized as new pure reference outcomes are
-        // added; choices/sequences remain deliberately excluded above.
-        return backend.acceptsNode(outcome);
+    private static boolean isSafeIntrinsicOutcome(final AbilityOutcomeDescription outcome) {
+        // Complete choice, random, sequence, and simultaneous-batch trees are already evaluated
+        // by IntrinsicAbilityEvaluator. Do not reimplement their semantics here: the aggregate's
+        // complete/unresolved checks above are the admission gate. Unsupported branches remain
+        // skipped, and dynamic/conditional forms still fail closed there.
+        return outcome != null && outcome.issue().isEmpty();
     }
 
     private static int toInt(final double value) {
