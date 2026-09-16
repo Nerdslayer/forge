@@ -8,6 +8,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.function.Function;
 import forge.card.CardStateName;
+import forge.game.cost.Cost;
+import forge.game.cost.CostPart;
+import forge.game.cost.CostPartMana;
+import forge.game.cost.CostTap;
 import forge.game.card.CardState;
 import forge.item.IPaperCard;
 import forge.ai.effect.IntrinsicReferenceModel.PermanentKind;
@@ -87,11 +91,18 @@ public final class IntrinsicAbilityEvaluator {
             final IntrinsicReferenceModel.PermanentProfile source, final EntryTiming timing,
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver) {
         final ScheduledTriggerParser.Schedule schedule = ScheduledTriggerParser.parse(ability.parameters()).orElse(null);
-        // TODO: Other origins, conditional and non-battlefield triggers, and granted abilities.
-        if (ability.origin() != CardAbilityTraversal.Origin.TRIGGER
-                || ability.provenance() == CardAbilityTraversal.Provenance.GRANTED) {
+        if (ability.provenance() == CardAbilityTraversal.Provenance.GRANTED) {
             return unsupported(ability, "unsupported intrinsic origin", SupportStatus.UNSUPPORTED,
                     SupportStatus.NOT_EVALUATED);
+        }
+        if (ability.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
+            return evaluateActivation(ability, source, timing, tokenProfileResolver);
+        }
+        // TODO: Spell, static, replacement, conditional and non-battlefield origins need dedicated
+        // reference adapters. Delayed-trigger discovery and granted abilities are also deferred.
+        if (ability.origin() != CardAbilityTraversal.Origin.TRIGGER) {
+            return unsupported(ability, "unsupported intrinsic origin", SupportStatus.UNSUPPORTED,
+                    outcomeStatusBeforeEvaluation(ability));
         }
         if (!"Battlefield".equalsIgnoreCase(
                 ability.parameters().getOrDefault("TriggerZones", "Battlefield"))
@@ -126,24 +137,47 @@ public final class IntrinsicAbilityEvaluator {
             }
             occurrences = estimate.expectedOccurrences();
         }
-        return evaluateOutcome(ability, source, occurrences, tokenProfileResolver, SupportStatus.SUPPORTED);
+        return evaluateOutcome(ability, ability.outcome(), source, occurrences, tokenProfileResolver,
+                SupportStatus.SUPPORTED);
+    }
+
+    private AbilityValue evaluateActivation(final AbilityDescription ability,
+            final PermanentProfile source, final EntryTiming timing,
+            final Function<String, Optional<PermanentProfile>> tokenProfileResolver) {
+        final IntrinsicActivationCost cost = intrinsicActivationCost(ability.parameters()).orElse(null);
+        if (cost == null) {
+            return unsupported(ability, "unsupported intrinsic activation cost", SupportStatus.UNSUPPORTED,
+                    outcomeStatusBeforeEvaluation(ability));
+        }
+        final IntrinsicActivationOccurrenceEstimate occurrence = IntrinsicActivationOccurrenceEstimator
+                .estimate(cost.manaCost(), cost.hasTapCost(), source, model, settings, timing);
+        if (!occurrence.supported()) {
+            return unsupported(ability, occurrence.reason(), SupportStatus.SUPPORTED,
+                    outcomeStatusBeforeEvaluation(ability));
+        }
+        // Cost/AB/SP are execution metadata, not outcomes. Removing them lets the same backend
+        // evaluate an activation's already-supported outcome without treating its cost as free.
+        final AbilityOutcomeDescription outcome = withoutExecutionMetadata(ability.outcome(), 0);
+        return evaluateOutcome(ability, outcome, source, occurrence.expectedOccurrences(),
+                tokenProfileResolver, SupportStatus.SUPPORTED);
     }
 
     private AbilityValue evaluateOutcome(final AbilityDescription ability,
-            final PermanentProfile source, final double occurrences,
+            final AbilityOutcomeDescription outcomeDescription, final PermanentProfile source,
+            final double occurrences,
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver,
             final SupportStatus triggerStatus) {
         final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(settings,
                 source, tokenProfileResolver);
-        if (ability.outcome() == null) {
+        if (outcomeDescription == null) {
             return unsupported(ability, "missing intrinsic outcome", triggerStatus, SupportStatus.UNSUPPORTED);
         }
         final Outcome<State> outcome;
         final List<ReferenceDimension> dimensions;
         final List<ReferenceCase> cases;
         try {
-            dimensions = referenceDimensions(backend, ability.outcome());
-            outcome = new OutcomeDescriptionCompiler<>(backend).compile(ability.outcome());
+            dimensions = referenceDimensions(backend, outcomeDescription);
+            outcome = new OutcomeDescriptionCompiler<>(backend).compile(outcomeDescription);
             if (referenceCaseCount(dimensions) > MAX_REFERENCE_CASES) {
                 return unsupported(ability, "intrinsic reference case limit exceeded", triggerStatus,
                         SupportStatus.UNSUPPORTED);
@@ -170,6 +204,48 @@ public final class IntrinsicAbilityEvaluator {
                         : aggregate.unsupportedCaseProbability() > 0 && aggregate.partialCaseProbability() == 0
                                 ? SupportStatus.UNSUPPORTED : SupportStatus.PARTIAL;
         return new AbilityValue(ability.path(), occurrences, aggregate, triggerStatus, outcomeStatus);
+    }
+
+    private static Optional<IntrinsicActivationCost> intrinsicActivationCost(
+            final Map<String, String> parameters) {
+        final String encoded = parameters.get("Cost");
+        if (encoded == null || encoded.isBlank()) {
+            return Optional.empty();
+        }
+        final Cost cost;
+        try {
+            cost = new Cost(encoded, true);
+        } catch (final RuntimeException invalidCost) {
+            return Optional.empty();
+        }
+        if (!cost.hasManaCost() && !cost.hasTapCost() || cost.getTotalMana().countX() > 0) {
+            return Optional.empty();
+        }
+        for (final CostPart part : cost.getCostParts()) {
+            if (!(part instanceof CostPartMana) && !(part instanceof CostTap)) {
+                return Optional.empty();
+            }
+        }
+        return Optional.of(new IntrinsicActivationCost(cost.getTotalMana().getCMC(),
+                cost.hasTapCost()));
+    }
+
+    private static AbilityOutcomeDescription withoutExecutionMetadata(
+            final AbilityOutcomeDescription node, final int depth) {
+        if (node == null || depth > 24) {
+            return node;
+        }
+        final Map<String, String> parameters = new java.util.HashMap<>(node.parameters());
+        parameters.remove("Cost");
+        parameters.remove("AB");
+        parameters.remove("SP");
+        final List<AbilityOutcomeDescription> choices = node.choices().stream()
+                .map(choice -> withoutExecutionMetadata(choice, depth + 1)).toList();
+        return new AbilityOutcomeDescription(node.path(), node.api(), parameters, choices,
+                withoutExecutionMetadata(node.next(), depth + 1), node.issue());
+    }
+
+    private record IntrinsicActivationCost(int manaCost, boolean hasTapCost) {
     }
 
     /**
