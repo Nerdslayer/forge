@@ -373,6 +373,35 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void removeCounterReusesSignedCreatureAndPermanentDeltas() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> opposing = evaluate(leaf("RemoveCounter", Map.of(
+                "ValidTgts", "Creature.OppCtrl", "CounterType", "P1P1")), initial);
+        Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(opposing.state().opponentCreature().power(), 2);
+        Assert.assertEquals(opposing.state().opponentCreature().toughness(), 2);
+        Assert.assertTrue(opposing.value() > 0);
+
+        final PermanentProfile planeswalker = new PermanentProfile(true, PermanentKind.PLANESWALKER,
+                true, 0, 0, Set.of(), false, 3);
+        final OutcomePlan<State> loyalty = evaluate(leaf("RemoveCounter", Map.of(
+                "Defined", "Self", "CounterType", "LOYALTY")),
+                state(CreatureProfile.absent(), CreatureProfile.absent(), planeswalker));
+        Assert.assertEquals(loyalty.completeness(), Completeness.COMPLETE);
+        Assert.assertEquals(loyalty.state().sourcePermanent().loyalty(), 2);
+
+        final PermanentProfile flyingSource = new PermanentProfile(true, PermanentKind.CREATURE,
+                true, 2, 2, Set.of("Flying"));
+        final OutcomePlan<State> keyword = evaluate(leaf("RemoveCounter", Map.of(
+                "Defined", "Self", "CounterType", "FLYING")),
+                state(CreatureProfile.absent(), CreatureProfile.absent(), flyingSource));
+        Assert.assertEquals(keyword.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(keyword.state().sourcePermanent().keywords().contains("Flying"));
+        Assert.assertTrue(keyword.value() < 0);
+    }
+
+    @Test
     public void keywordCountersReuseCreatureAbilityValue() {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> lifelink = evaluate(leaf("PutCounter", Map.of(
