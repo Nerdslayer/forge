@@ -1222,7 +1222,9 @@ public final class IntrinsicDrawOutcomeBackend
                     ? new CounterTarget(CounterTargetScope.SELF, false) : null;
         }
         if (validTargets == null || validTargets.isBlank()) {
-            return null;
+            // Forge uses an omitted recipient for the common "put a counter on CARDNAME" form.
+            // This is safe for intrinsic evaluation because the source is the only fixed recipient.
+            return new CounterTarget(CounterTargetScope.SELF, false);
         }
         final boolean other = validTargets.toLowerCase(Locale.ROOT).contains("other");
         return switch (validTargets.toLowerCase(Locale.ROOT)) {

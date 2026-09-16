@@ -382,6 +382,28 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void implicitSelfCounterAndSecondMainTappedTriggerAreIntrinsicallyEvaluated() {
+        host();
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                        .getCard("Reluctant Role Model"), CardStateName.Original);
+        boolean found = false;
+        for (int i = 0; i < evaluation.descriptions().size(); i++) {
+            final Map<String, String> parameters = evaluation.descriptions().get(i).parameters();
+            if ("Phase".equals(parameters.get("Mode")) && "Main".equals(parameters.get("Phase"))
+                    && "2".equals(parameters.get("PhaseCount"))
+                    && "Card.tapped".equals(parameters.get("IsPresent"))) {
+                found = true;
+                final IntrinsicAbilityEvaluator.AbilityValue value = evaluation.values().get(i);
+                Assert.assertTrue(value.contribution().complete(), value.toString());
+                Assert.assertTrue(value.contribution().value() > 0, value.toString());
+            }
+        }
+        Assert.assertTrue(found, evaluation.descriptions().toString());
+    }
+
+    @Test
     public void relationshipSupportedEventTriggersHaveIntrinsicAdapters() {
         final List<Map<String, String>> parameters = List.of(
                 Map.of("Mode", "TokenCreated", "ValidPlayer", "You"),
