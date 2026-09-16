@@ -79,21 +79,21 @@ public class AbilityTraversalTest extends AITest {
 
     @Test
     public void intrinsicStaticSupportedKeywordUsesPermanentDelta() {
-        final CardAbilityTraversal.AbilityDescription lifelink =
+        final CardAbilityTraversal.AbilityDescription evasion =
                 new CardAbilityTraversal.AbilityDescription("Original/static:0",
                         CardAbilityTraversal.Origin.STATIC,
                         CardAbilityTraversal.Provenance.PRINTED,
                         Map.of("Mode", "Continuous", "Affected", "Creature.YouCtrl",
-                                "AddKeyword", "Lifelink"),
+                                "AddKeyword", "Flying & First Strike"),
                         AbilityOutcomeDescription.unresolved("static", "not an outcome"));
         final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(
                 IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
-                        List.of(lifelink), new IntrinsicReferenceModel.PermanentProfile(true,
+                        List.of(evasion), new IntrinsicReferenceModel.PermanentProfile(true,
                                 IntrinsicReferenceModel.PermanentKind.ENCHANTMENT, true, 0, 0, Set.of()),
                         EntryTiming.NORMAL_SPEED).get(0);
 
         Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
-        Assert.assertEquals(result.contribution().value(), 40.0);
+        Assert.assertEquals(result.contribution().value(), 80.0);
     }
 
     @Test

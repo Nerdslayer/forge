@@ -21,10 +21,10 @@ final class IntrinsicStaticAbilityEvaluator {
     private static final Set<String> ALLOWED_PARAMS = Set.of(
             "Mode", "Affected", "AddPower", "AddToughness", "AddKeyword", "Description");
     private static final Set<String> SUPPORTED_KEYWORDS = Set.of(
-            "flying", "deathtouch", "lifelink", "trample", "vigilance", "defender",
-            "indestructible", "hexproof", "shroud", "ward", "shield", "stun", "detain",
-            "can't attack", "cantattack", "can't block", "cantblock", "can't untap",
-            "cantuntap");
+            "flying", "reach", "first strike", "double strike", "menace", "fear", "intimidate",
+            "deathtouch", "lifelink", "trample", "vigilance", "defender", "indestructible",
+            "hexproof", "shroud", "ward", "shield", "stun", "detain", "can't attack",
+            "cantattack", "can't block", "cantblock", "can't untap", "cantuntap");
     private static final double FUTURE_RECIPIENTS = 2.0;
     private static final double TRIBAL_FUTURE_RECIPIENTS = 1.5;
     private static final CreatureProfile DEFAULT_RECIPIENT =
