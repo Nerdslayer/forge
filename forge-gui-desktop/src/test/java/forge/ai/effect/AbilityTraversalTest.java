@@ -587,6 +587,34 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicEventAdapterSupportsCommonScopedVariants() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final List<Map<String, String>> parameters = List.of(
+                Map.of("Mode", "TokenCreatedOnce", "ValidToken", "Card.token"),
+                Map.of("Mode", "Drawn", "ValidPlayer", "You"),
+                Map.of("Mode", "Drawn", "ValidPlayer", "Opponent"),
+                Map.of("Mode", "LifeGained", "ValidPlayer", "Opponent"),
+                Map.of("Mode", "LifeGained", "ValidPlayer", "Player.Opponent"));
+        for (final Map<String, String> parameter : parameters) {
+            final CardAbilityTraversal.AbilityDescription description =
+                    new CardAbilityTraversal.AbilityDescription("scoped/trigger",
+                            CardAbilityTraversal.Origin.TRIGGER,
+                            CardAbilityTraversal.Provenance.PRINTED, parameter,
+                            new AbilityOutcomeDescription("draw", "Draw",
+                                    Map.of("Defined", "You", "NumCards", "1"), List.of(), null, ""));
+            final IntrinsicAbilityEvaluator.AbilityValue value = evaluator.evaluate(
+                    List.of(description), new IntrinsicReferenceModel.PermanentProfile(true,
+                            IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                    EntryTiming.NORMAL_SPEED).get(0);
+            Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED,
+                    parameter.toString() + ": " + value);
+            Assert.assertTrue(value.contribution().value() > 0, parameter.toString() + ": " + value);
+        }
+    }
+
+    @Test
     public void eventTriggerOccurrenceUsesItsReferenceRateAndSurvivalHorizon() {
         final Card card = host();
         final Map<String, String> parameters = Map.of("Mode", "Drawn", "ValidPlayer", "Player");

@@ -58,8 +58,12 @@ public final class IntrinsicEventTriggerAdapter {
             return true;
         }
         final TriggerType mode = EventTriggerParser.mode(parameters);
-        if (mode == TriggerType.TokenCreated) {
-            return "You".equals(parameters.get("ValidPlayer"))
+        if (mode == TriggerType.TokenCreated || mode == TriggerType.TokenCreatedOnce) {
+            // TokenCreatedOnce commonly omits ValidPlayer because it is already scoped to the
+            // active token-creation batch. Keep both forms limited to the same known token
+            // population; the event rate supplies the once-per-turn distinction.
+            return (!parameters.containsKey("ValidPlayer")
+                    || "You".equals(parameters.get("ValidPlayer")))
                     && !parameters.containsKey("ValidCard")
                     && Set.of("Card", "Card.token", "Card.token+YouCtrl")
                             .contains(parameters.getOrDefault("ValidToken", "Card"));
@@ -79,8 +83,11 @@ public final class IntrinsicEventTriggerAdapter {
                     && (!parameters.containsKey("FirstTime") || isBoolean(parameters.get("FirstTime")));
         }
         if (mode == TriggerType.Drawn) {
+            // Draws can happen on either player's turn, so the player recipient changes the
+            // population being observed, not the turn scope used by the reference model.
             return !parameters.containsKey("ValidToken") && !parameters.containsKey("ValidCard")
-                    && "Player".equals(parameters.getOrDefault("ValidPlayer", "Player"));
+                    && Set.of("You", "Opponent", "Player", "Player.Opponent")
+                            .contains(parameters.getOrDefault("ValidPlayer", "Player"));
         }
         if (mode == TriggerType.CounterAdded || mode == TriggerType.CounterAddedOnce) {
             // Counter type is deliberately not used to change the generic counter rate yet. The
@@ -97,8 +104,10 @@ public final class IntrinsicEventTriggerAdapter {
         }
         if (mode == TriggerType.LifeGained) {
             // The reference life-gain rate represents the source controller's life events. A
-            // different source or player scope needs a side-specific event population.
-            return "You".equals(parameters.get("ValidPlayer"))
+            // different source or player scope is still represented by the same coarse rate; a
+            // future live/reference model can split event populations by recipient.
+            return Set.of("You", "Opponent", "Player", "Player.Opponent")
+                    .contains(parameters.get("ValidPlayer"))
                     && !parameters.containsKey("ValidSource");
         }
         if (mode == TriggerType.LifeLost || mode == TriggerType.LifeLostAll) {
