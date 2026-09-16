@@ -1229,6 +1229,7 @@ public class AiController {
                             }
                         }
                     }
+                    worst = ComputerUtil.chooseKnownOwnDiscardOnLegacyTie(player, validCards, worst);
                     discardList.add(worst);
                     validCards.remove(worst);
                 }
