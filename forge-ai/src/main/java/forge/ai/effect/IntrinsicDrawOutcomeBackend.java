@@ -753,7 +753,11 @@ public final class IntrinsicDrawOutcomeBackend
                 return null;
             }
             final PermanentProfile before = permanent(current, target);
-            if (!simpleKeywords(before.keywords())) { return null; }
+            // A fixed self recipient has the source profile, so unmodeled abilities on the card
+            // do not prevent evaluating this independent P/T delta. Generic reference targets
+            // remain conservative because their unmodeled keywords may affect target selection or
+            // the meaning of the counter outcome.
+            if (target != TargetRef.SOURCE && !simpleKeywords(before.keywords())) { return null; }
             final PermanentProfile after = addP1P1(before, integer(node, "CounterNum", 1));
             final int value = evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
                     controls(target, current));

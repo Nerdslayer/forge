@@ -282,6 +282,11 @@ public class AbilityTraversalTest extends AITest {
                         value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
                                 && value.contribution().value() > 0),
                         cardName + ": " + evaluation);
+            } else {
+                Assert.assertTrue(evaluation.values().stream().anyMatch(value ->
+                        value.outcomeStatus() == IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
+                                && value.contribution().value() > 0),
+                        cardName + ": " + evaluation);
             }
         }
     }
