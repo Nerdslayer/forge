@@ -22,8 +22,8 @@ import com.google.common.collect.*;
 import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ProtectAi;
 import forge.ai.ability.TokenAi;
+import forge.ai.effect.CardValueCache;
 import forge.ai.effect.CardValueBreakdown;
-import forge.ai.effect.UnifiedCardValueEvaluator;
 import forge.ai.effect.ValuationContext;
 import forge.card.CardStateName;
 import forge.card.CardType;
@@ -2510,10 +2510,10 @@ public class ComputerUtil {
 
     private static List<Card> rankKnownHandTie(final List<Card> tiedCards,
             final ValuationContext context) {
+        final CardValueCache cache = new CardValueCache(context);
         final Map<Card, CardValueBreakdown> evaluations = new IdentityHashMap<>();
         for (final Card card : tiedCards) {
-            final CardValueBreakdown evaluation = UnifiedCardValueEvaluator.evaluateCard(card,
-                    context);
+            final CardValueBreakdown evaluation = cache.evaluate(card);
             if (!evaluation.isComplete()) {
                 return tiedCards;
             }

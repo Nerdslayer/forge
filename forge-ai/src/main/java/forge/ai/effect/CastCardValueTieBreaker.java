@@ -28,6 +28,7 @@ public final class CastCardValueTieBreaker {
         }
 
         final ValuationContext context = ValuationContext.forCast(ai, true);
+        final CardValueCache cache = new CardValueCache(context);
         int start = 0;
         while (start < abilities.size()) {
             final SpellAbility first = abilities.get(start);
@@ -37,14 +38,14 @@ public final class CastCardValueTieBreaker {
                 end++;
             }
             if (end - start > 1) {
-                reorderSupportedTie(ai, abilities, start, end, context);
+                reorderSupportedTie(ai, abilities, start, end, cache);
             }
             start = end;
         }
     }
 
     private static void reorderSupportedTie(final Player ai, final List<SpellAbility> abilities,
-            final int start, final int end, final ValuationContext context) {
+            final int start, final int end, final CardValueCache cache) {
         final List<SpellAbility> tied = new ArrayList<>(abilities.subList(start, end));
         if (!tied.stream().allMatch(sa -> isSupportedCastCandidate(ai, sa))) {
             return;
@@ -53,8 +54,8 @@ public final class CastCardValueTieBreaker {
         final Map<Card, CardValueBreakdown> values = new IdentityHashMap<>();
         for (final SpellAbility sa : tied) {
             final Card card = sa.getHostCard();
-            final CardValueBreakdown value = values.computeIfAbsent(card,
-                    candidate -> UnifiedCardValueEvaluator.evaluateCard(candidate, context));
+            final CardValueBreakdown value = cache.evaluate(card);
+            values.put(card, value);
             if (!value.isComplete()) {
                 return;
             }
