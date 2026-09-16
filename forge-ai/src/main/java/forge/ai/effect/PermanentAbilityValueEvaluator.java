@@ -24,7 +24,7 @@ public final class PermanentAbilityValueEvaluator {
             "DamageDone", "DamageDoneOnce", "DamageDealtOnce", "ChangesZone", "ChangesZoneAll",
             "Sacrificed", "SacrificedOnce", "Attacks", "Blocks", "AttackerBlocked",
             "AttackerBlockedByCreature", "AttackerUnblocked", "Taps", "TapsForMana", "SpellCast",
-            "Phase");
+            "LandPlayed", "Phase");
 
     private PermanentAbilityValueEvaluator() {
     }

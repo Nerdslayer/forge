@@ -25,7 +25,7 @@ public final class IntrinsicReferenceModel {
     }
 
     public enum EventType {
-        ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST,
+        ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, TAPPED,
         MANA_ADDED_OR_SPENT,
         LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, DAMAGE_DEALT, ZONE_CHANGED
@@ -180,6 +180,10 @@ public final class IntrinsicReferenceModel {
         events.put(EventType.ATTACKER_UNBLOCKED, rateDistribution(0, .25, .5, .50, 1, .25));
         events.put(EventType.COMBAT_DAMAGE, rateDistribution(0, .30, .5, .50, 1, .20));
         events.put(EventType.SPELL_CAST, rateDistribution(0, .10, 1, .50, 2, .30, 3, .10));
+        // A normal player gets about one land-play opportunity per turn. Extra-land effects are
+        // represented by the small two- and three-land tail; card-specific filters remain
+        // outside this first reference model.
+        events.put(EventType.LAND_PLAYED, rateDistribution(0, .15, 1, .70, 2, .12, 3, .03));
         events.put(EventType.CREATURE_DIED, rateDistribution(0, .25, 1, .50, 2, .20, 3, .05));
         events.put(EventType.PERMANENT_SACRIFICED, rateDistribution(0, .50, 1, .40, 2, .10));
         events.put(EventType.TOKEN_CREATED, rateDistribution(0, .30, 1, .50, 2, .20));
