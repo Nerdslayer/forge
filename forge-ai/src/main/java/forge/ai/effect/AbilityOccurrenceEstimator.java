@@ -77,10 +77,25 @@ final class AbilityOccurrenceEstimator {
 
     private static int usesForTurn(final int availableMana, final int manaCost,
             final boolean hasTapCost, final boolean sourceTapped, final boolean assumeUntapped) {
+        return activationUsesForTurn(availableMana, manaCost, hasTapCost, sourceTapped,
+                assumeUntapped, MAX_USES_PER_TURN);
+    }
+
+    /**
+     * Shared bounded activation-use arithmetic for situational and intrinsic estimates.
+     * Intrinsic callers provide their configured cap; situational callers retain the historical
+     * four-use cap above.
+     */
+    static int activationUsesForTurn(final int availableMana, final int manaCost,
+            final boolean hasTapCost, final boolean sourceTapped, final boolean assumeUntapped,
+            final int maximumUsesPerTurn) {
+        if (maximumUsesPerTurn <= 0) {
+            return 0;
+        }
         if (hasTapCost) {
             // A tap ability can be used once between untaps. A future opportunity assumes the
             // source untaps; current availability is checked separately by canPayNow.
-            return Math.min(MAX_USES_PER_TURN,
+            return Math.min(maximumUsesPerTurn,
                     availableMana >= manaCost && (assumeUntapped || !sourceTapped) ? 1 : 0);
         }
         if (manaCost <= 0) {
@@ -88,7 +103,7 @@ final class AbilityOccurrenceEstimator {
             // Keep one expected use until the outcome model can establish safe repeatability.
             return 1;
         }
-        return Math.min(MAX_USES_PER_TURN, availableMana / manaCost);
+        return Math.min(maximumUsesPerTurn, availableMana / manaCost);
     }
 
     private static double probability(final double value) {
