@@ -663,6 +663,26 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void damageAllProjectsLethalCreatureGroupsAlongsidePlayerDamage() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 2, 2, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> result = evaluate(leaf("DamageAll", Map.of(
+                "ValidCards", "Creature.OppCtrl", "ValidPlayers", "Opponent", "NumDmg", "2")),
+                initial);
+        Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(result.state().opponentCreature().present());
+        Assert.assertEquals(result.state().opponentCreatureCount(), 0);
+        Assert.assertEquals(result.state().opponentLife(), 18);
+        Assert.assertTrue(result.value() > 0);
+
+        final OutcomePlan<State> nonlethal = evaluate(leaf("DamageAll", Map.of(
+                "ValidCards", "Creature.OppCtrl", "NumDmg", "1")), initial);
+        Assert.assertEquals(nonlethal.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(nonlethal.state().opponentCreature().present());
+        Assert.assertEquals(nonlethal.value(), 0.0);
+    }
+
+    @Test
     public void referenceDepthLimitFailsClosedInsteadOfUsingFallbackDimensions() {
         AbilityOutcomeDescription tree = leaf("Draw", Map.of("Defined", "Opponent"));
         for (int i = 0; i < 30; i++) {
