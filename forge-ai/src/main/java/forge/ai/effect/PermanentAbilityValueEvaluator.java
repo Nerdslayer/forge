@@ -231,7 +231,7 @@ public final class PermanentAbilityValueEvaluator {
                 // fixed future-support allowance. It is NOT the full intrinsic baseline and
                 // does not increase with the number of current producers.
                 // TODO: Other event predicates and contextual self-opportunity refinement.
-                if (!java.util.Set.of("TokenCreated", "Drawn", "Taps")
+                if (!java.util.Set.of("TokenCreated", "Drawn", "Taps", "TapsForMana")
                         .contains(description.parameters().get("Mode"))
                         || value.expectedOccurrences() <= 0) {
                     addSkipped(destination, candidate, value.path(), "no future-support policy for this event");
