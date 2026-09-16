@@ -334,3 +334,5 @@ EFFECT_SYNERGY_WEIGHT=100
 ENABLE_INTRINSIC_REMOVAL_ANALYSIS=true
 # Percentage applied to admitted intrinsic future potential, separately from relationships.
 INTRINSIC_REMOVAL_WEIGHT=100
+# Use full-hand card valuation when a targeted discard effect exposes the opponent's hand.
+ENABLE_TARGETED_DISCARD_ANALYSIS=true

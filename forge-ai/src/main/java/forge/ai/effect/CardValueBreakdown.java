@@ -1,5 +1,6 @@
 package forge.ai.effect;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,7 +38,25 @@ public record CardValueBreakdown(int currentPresenceValue, int futurePotentialVa
     public CardValueBreakdown withFuturePotential(final int value,
             final ValuationCompleteness valueCompleteness, final List<String> valueReasons) {
         return new CardValueBreakdown(currentPresenceValue, value, transitionValue, accessCost,
-                contextAdjustment, valueCompleteness, valueReasons);
+                contextAdjustment, ValuationCompleteness.combine(completeness, valueCompleteness),
+                combineReasons(valueReasons));
+    }
+
+    /** Adds an action-specific transition while preserving the existing attribution. */
+    public CardValueBreakdown withTransitionValue(final int value,
+            final ValuationCompleteness valueCompleteness, final List<String> valueReasons) {
+        final List<String> combinedReasons = combineReasons(valueReasons);
+        return new CardValueBreakdown(currentPresenceValue, futurePotentialValue, value,
+                accessCost, contextAdjustment,
+                ValuationCompleteness.combine(completeness, valueCompleteness), combinedReasons);
+    }
+
+    private List<String> combineReasons(final List<String> additionalReasons) {
+        final List<String> combinedReasons = new ArrayList<>(reasons);
+        if (additionalReasons != null) {
+            combinedReasons.addAll(additionalReasons);
+        }
+        return combinedReasons;
     }
 
     public static CardValueBreakdown unavailable(final String reason) {

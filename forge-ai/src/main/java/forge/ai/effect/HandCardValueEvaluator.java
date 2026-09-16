@@ -59,13 +59,16 @@ public final class HandCardValueEvaluator {
         }
 
         final int manaInvestment = evaluation.manaInvestment();
-        final int playableValue = Math.max(0, evaluation.grossPointValue() - manaInvestment);
+        final int netValue = evaluation.grossPointValue() - manaInvestment;
+        final HandCardAccessEvaluator.Estimate access = HandCardAccessEvaluator.evaluate(card,
+                context);
         final List<String> reasons = new ArrayList<>();
         reasons.add("Known card definition value " + evaluation.grossPointValue());
         reasons.add("Printed mana investment " + manaInvestment);
-        reasons.add("Net playable value " + playableValue);
+        reasons.add("Net hand value " + netValue);
         reasons.add("Hand has " + context.totalHandSize() + " cards, including "
                 + context.knownCards().size() + " known");
+        reasons.addAll(access.reasons());
         return new CardValueBreakdown(0, evaluation.grossPointValue(), 0, manaInvestment, 0,
                 ValuationCompleteness.COMPLETE, reasons);
     }

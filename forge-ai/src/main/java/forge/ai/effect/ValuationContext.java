@@ -38,6 +38,13 @@ public record ValuationContext(Player evaluatingAi, ValuationMode mode,
                 relationshipWeightPercent, intrinsicWeightPercent);
     }
 
+    /** Creates the live context used when selecting a card from a hand. */
+    public static ValuationContext forHandSelection(final Player evaluatingAi,
+            final boolean completeInformation) {
+        return new ValuationContext(evaluatingAi, ValuationMode.SITUATIONAL,
+                ValuationDecision.HAND_SELECTION, 3, completeInformation, 0, 0);
+    }
+
     /** Creates a context for definition-only card evaluation. */
     public static ValuationContext intrinsicCard() {
         return new ValuationContext(null, ValuationMode.INTRINSIC_REFERENCE,

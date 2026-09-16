@@ -5,10 +5,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import forge.ai.CardDefinitionValueEvaluator;
 import forge.ai.ComputerUtil;
 import forge.ai.ComputerUtilCard;
+import forge.card.CardEdition;
+import forge.card.CardRules;
 import forge.game.card.Card;
 import forge.game.player.Player;
+import forge.game.zone.ZoneType;
+import forge.item.IPaperCard;
 
 /**
  * Shared entry point for situational card valuation.
@@ -19,7 +24,87 @@ import forge.game.player.Player;
  * transition and access components through this same breakdown later.</p>
  */
 public final class UnifiedCardValueEvaluator {
+    private static final CardDefinitionValueEvaluator DEFINITION_EVALUATOR =
+            new CardDefinitionValueEvaluator();
+
     private UnifiedCardValueEvaluator() {
+    }
+
+    /**
+     * Evaluates a card through the shared context-aware entry point.
+     *
+     * <p>General intrinsic contexts use the definition evaluator. Hand-selection contexts use the
+     * supplied information boundary to distinguish a complete hand from one known card in an
+     * otherwise hidden hand. A live permanent still needs a future situational adapter so current
+     * presence is not confused with a definition-only estimate.</p>
+     */
+    public static CardValueBreakdown evaluateCard(final Card card, final ValuationContext context) {
+        if (card == null || context == null) {
+            return CardValueBreakdown.unavailable("A card and valuation context are required.");
+        }
+        if (context.mode() == ValuationMode.SITUATIONAL
+                && context.decision() == ValuationDecision.HAND_SELECTION) {
+            return evaluateHandCard(card, context);
+        }
+        if (context.mode() != ValuationMode.INTRINSIC_REFERENCE
+                || context.decision() != ValuationDecision.GENERAL_CARD) {
+            return CardValueBreakdown.unsupported(
+                    "This entry point only evaluates general intrinsic card definitions.");
+        }
+
+        final IPaperCard paperCard = card.getPaperCard();
+        if (paperCard == null || paperCard.getRules() == null) {
+            return CardValueBreakdown.unavailable("The card has no evaluable definition.");
+        }
+        return evaluateCard(paperCard.getRules(), paperCard.getEdition(), context);
+    }
+
+    /** Evaluates a card definition with the default unknown edition context. */
+    public static CardValueBreakdown evaluateCard(final CardRules rules,
+            final ValuationContext context) {
+        return evaluateCard(rules, CardEdition.UNKNOWN_CODE, context);
+    }
+
+    /** Evaluates a card definition without requiring a live game card. */
+    public static CardValueBreakdown evaluateCard(final CardRules rules, final String editionCode,
+            final ValuationContext context) {
+        if (rules == null || context == null) {
+            return CardValueBreakdown.unavailable("A card definition and valuation context are required.");
+        }
+        if (context.mode() != ValuationMode.INTRINSIC_REFERENCE
+                || context.decision() != ValuationDecision.GENERAL_CARD) {
+            return CardValueBreakdown.unsupported(
+                    "Definition valuation requires a general intrinsic-card context.");
+        }
+        try {
+            return DEFINITION_EVALUATOR.evaluate(rules, editionCode)
+                    .toCardValueBreakdown();
+        } catch (final RuntimeException ex) {
+            return CardValueBreakdown.unsupported(
+                    "The card definition could not be evaluated safely.");
+        }
+    }
+
+    /** Evaluates a known card in a hand through the shared card valuation entry point. */
+    public static CardValueBreakdown evaluateCard(final Card card,
+            final HandValuationContext context) {
+        return HandCardValueEvaluator.evaluateKnownCard(card, context);
+    }
+
+    private static CardValueBreakdown evaluateHandCard(final Card card,
+            final ValuationContext context) {
+        if (!card.isInZone(ZoneType.Hand)) {
+            return CardValueBreakdown.unavailable("Hand selection requires a card in hand.");
+        }
+        final Player handOwner = card.getOwner() == null ? card.getController() : card.getOwner();
+        if (handOwner == null) {
+            return CardValueBreakdown.unavailable("The hand owner is unavailable.");
+        }
+        final HandValuationContext handContext = context.completeInformation()
+                ? HandValuationContext.fullHand(context.evaluatingAi(), handOwner)
+                : HandValuationContext.knownCardOnly(context.evaluatingAi(), handOwner, card,
+                        handOwner.getCardsIn(ZoneType.Hand).size());
+        return evaluateCard(card, handContext);
     }
 
     /** Raw relationship and intrinsic values retained for removal diagnostics. */
