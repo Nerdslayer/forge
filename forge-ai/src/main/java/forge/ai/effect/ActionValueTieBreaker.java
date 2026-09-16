@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import org.tinylog.Logger;
+
 import forge.ai.ComputerUtilAbility;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
@@ -69,5 +71,24 @@ final class ActionValueTieBreaker {
         for (int i = 0; i < tied.size(); i++) {
             abilities.set(start + i, tied.get(i));
         }
+        logReordering(context, tied, values);
+    }
+
+    private static void logReordering(final ValuationContext context,
+            final List<SpellAbility> ordered, final Map<SpellAbility, CardValueBreakdown> values) {
+        if (!Boolean.parseBoolean(System.getProperty(EffectAnalysisTrace.ENABLE_PROPERTY, "true"))) {
+            return;
+        }
+        final StringBuilder details = new StringBuilder("[AI Effect Analysis] Action tie-break: ")
+                .append("decision=").append(context.decision()).append(", ordered=");
+        for (int i = 0; i < ordered.size(); i++) {
+            if (i > 0) {
+                details.append(", ");
+            }
+            final SpellAbility ability = ordered.get(i);
+            details.append(ability.getHostCard().getName()).append("=")
+                    .append(values.get(ability).netValue());
+        }
+        Logger.info(details.toString());
     }
 }
