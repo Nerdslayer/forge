@@ -25,6 +25,7 @@ import forge.ai.ability.ChangeZoneAi;
 import forge.ai.ability.LearnAi;
 import forge.ai.effect.ActivateAbilityValueTieBreaker;
 import forge.ai.effect.CastCardValueTieBreaker;
+import forge.ai.effect.ManaActionCombinationSelector;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.ai.simulation.OnePlaySafetyChecker;
 import forge.ai.simulation.SpellAbilityPicker;
@@ -1614,7 +1615,12 @@ public class AiController {
         FutureTask<SpellAbility> future = new FutureTask<>(() -> {
             //avoid ComputerUtil.aiLifeInDanger in loops as it slows down a lot.. call this outside loops will generally be fast...
             boolean isLifeInDanger = useLivingEnd && ComputerUtil.aiLifeInDanger(player, true, 0);
-            for (final SpellAbility sa : ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player)) {
+            final List<SpellAbility> playableAbilities =
+                    ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player);
+            if (getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)) {
+                ManaActionCombinationSelector.apply(player, playableAbilities, skipCounter);
+            }
+            for (final SpellAbility sa : playableAbilities) {
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }

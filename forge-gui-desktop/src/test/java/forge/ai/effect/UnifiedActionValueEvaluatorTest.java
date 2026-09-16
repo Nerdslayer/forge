@@ -14,6 +14,7 @@ import forge.game.ability.AbilityFactory;
 import forge.game.ability.ApiType;
 import forge.game.ability.SpellApiBased;
 import forge.game.card.Card;
+import forge.game.card.CardCollection;
 import forge.game.cost.Cost;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
@@ -196,6 +197,55 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
         Assert.assertFalse(selection.valuationUsed(), selection.reason());
         Assert.assertSame(selection.selected(), action);
         Assert.assertEquals(selection.orderedCandidates(), candidates);
+    }
+
+    @Test
+    public void manaCombinationSelectorCanPreferTwoSmallerSpellsOverOneLargerSpell() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        addCard("Forest", ai);
+        addCard("Forest", ai);
+        addCard("Forest", ai);
+        addCard("Forest", ai);
+        addCardToZone("Grizzly Bears", ai, ZoneType.Hand);
+        addCardToZone("Grizzly Bears", ai, ZoneType.Hand);
+        addCardToZone("Hill Giant", ai, ZoneType.Hand);
+
+        final List<SpellAbility> abilities = ComputerUtilAbility.getSpellAbilities(
+                new CardCollection(ai.getCardsIn(ZoneType.Hand)), ai);
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.select(ai, abilities, true);
+
+        Assert.assertTrue(selection.hasAction(), selection.toString());
+        Assert.assertEquals(selection.usedMana(), 4, selection.toString());
+        Assert.assertEquals(selection.actions().size(), 2, selection.toString());
+        Assert.assertEquals(selection.firstAction().getHostCard().getName(), "Grizzly Bears");
+    }
+
+    @Test
+    public void manaCombinationSelectorUsesFairRateFallbackForUnsupportedCast() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        addCard("Forest", ai);
+        addCard("Forest", ai);
+        addCard("Forest", ai);
+        addCard("Forest", ai);
+        addCard("Forest", ai);
+        final Card knownOneDrop = addCardToZone("Savannah Lions", ai, ZoneType.Hand);
+        final Card unknownFiveDrop = addCardToZone("Grizzly Bears", ai, ZoneType.Hand);
+        final SpellAbility unsupported = new SpellApiBased(ApiType.RollPlanarDice, unknownFiveDrop,
+                new Cost("5", false), null, Map.of());
+        unsupported.setActivatingPlayer(ai);
+
+        final List<SpellAbility> abilities = new ArrayList<>();
+        abilities.add(knownOneDrop.getSpellAbilities().get(0));
+        abilities.add(unsupported);
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.select(ai, abilities, true);
+
+        Assert.assertTrue(selection.hasAction(), selection.toString());
+        Assert.assertSame(selection.firstAction(), unsupported);
+        Assert.assertEquals(selection.fallbackCandidateCount(), 1);
     }
 
     @Test
