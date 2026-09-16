@@ -98,7 +98,14 @@ public final class IntrinsicAbilityEvaluator {
         if (ability.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
             return evaluateActivation(ability, source, timing, tokenProfileResolver);
         }
-        // TODO: Spell, static, replacement, conditional and non-battlefield origins need dedicated
+        if (ability.origin() == CardAbilityTraversal.Origin.SPELL) {
+            // A normal instant or sorcery resolves once. The same backend used by triggers and
+            // activations still evaluates its targets, choices, sequences and partial branches.
+            // TODO: Add alternative/additional costs, X values, timing, and cast-from-zone rules.
+            return evaluateOutcome(ability, withoutExecutionMetadata(ability.outcome(), 0), source,
+                    1, tokenProfileResolver, SupportStatus.SUPPORTED);
+        }
+        // TODO: Static, replacement, conditional and non-battlefield origins need dedicated
         // reference adapters. Delayed-trigger discovery and granted abilities are also deferred.
         if (ability.origin() != CardAbilityTraversal.Origin.TRIGGER) {
             return unsupported(ability, "unsupported intrinsic origin", SupportStatus.UNSUPPORTED,

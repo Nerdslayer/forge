@@ -82,11 +82,10 @@ public final class CardAbilityTraversal {
         return List.copyOf(result);
     }
 
-    /** The normal cast/land-play actions are not printed abilities on the card. */
+    /** Permanent cast and land-play wrappers are not printed abilities on the card. */
     private static boolean isImplicitCastAbility(final SpellAbility ability) {
         return ability instanceof LandAbility
-                || ability instanceof SpellPermanent
-                || ability.isSpell() && ability.isBasicSpell();
+                || ability instanceof SpellPermanent;
     }
 
     private static AbilityDescription entry(final String path, final Origin origin, final CardTraitBase ability) {
