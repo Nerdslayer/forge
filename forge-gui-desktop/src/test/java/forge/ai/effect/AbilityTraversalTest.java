@@ -777,6 +777,8 @@ public class AbilityTraversalTest extends AITest {
                 Map.of("Mode", "TokenCreatedOnce"),
                 Map.of("Mode", "CounterAdded"),
                 Map.of("Mode", "CounterAddedOnce"),
+                Map.of("Mode", "CounterAddedAll", "Valid", "Creature.YouCtrl",
+                        "CounterType", "P1P1"),
                 Map.of("Mode", "LifeGained"),
                 Map.of("Mode", "LifeLost"),
                 Map.of("Mode", "LifeLostAll"),
@@ -855,6 +857,30 @@ public class AbilityTraversalTest extends AITest {
             }
             Assert.assertTrue(found, cardName + ": " + evaluation.descriptions());
         }
+    }
+
+    @Test
+    public void printedCounterAddedAllTriggerReachesIntrinsicEvaluation() {
+        host();
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation evaluation = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                .evaluateDefinitionDetails(forge.StaticData.instance().getCommonCards()
+                        .getCard("Cloaked Cadet"), CardStateName.Original);
+
+        boolean found = false;
+        for (int i = 0; i < evaluation.descriptions().size(); i++) {
+            final Map<String, String> parameters = evaluation.descriptions().get(i).parameters();
+            if ("CounterAddedAll".equals(parameters.get("Mode"))) {
+                found = true;
+                final IntrinsicAbilityEvaluator.AbilityValue value = evaluation.values().get(i);
+                Assert.assertEquals(value.triggerStatus(),
+                        IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED, value.toString());
+                Assert.assertEquals(value.outcomeStatus(),
+                        IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED, value.toString());
+                Assert.assertTrue(value.contribution().value() > 0, value.toString());
+            }
+        }
+        Assert.assertTrue(found, evaluation.descriptions().toString());
     }
 
     @Test
