@@ -51,7 +51,7 @@ public class RemovalActionEvaluatorTest extends AITest {
     public void bounceUsesPublicHandSizeForUnsupportedKnownCard() {
         final Game game = initAndCreateGame();
         final Player opponent = game.getPlayers().get(0);
-        final Card target = addCard("Sol Ring", opponent);
+        final Card target = addCard("Akroma's Memorial", opponent);
 
         final CardValueBreakdown emptyHand = RemovalActionEvaluator.evaluate(target, baseValue(),
                 RemovalActionKind.BOUNCE);

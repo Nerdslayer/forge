@@ -34,7 +34,47 @@ public class AbilityTraversalTest extends AITest {
                 CardStateName.Original);
         Assert.assertTrue(staticCard.descriptions().stream().anyMatch(description ->
                 description.origin() == CardAbilityTraversal.Origin.STATIC));
-        Assert.assertTrue(staticCard.values().stream().anyMatch(value -> !value.contribution().complete()));
+        Assert.assertTrue(staticCard.values().stream().anyMatch(value -> value.contribution().complete()
+                && value.contribution().value() > 0), staticCard.values().toString());
+    }
+
+    @Test
+    public void intrinsicStaticPAndTValueUsesSharedCreatureDelta() {
+        final CardAbilityTraversal.AbilityDescription anthem =
+                new CardAbilityTraversal.AbilityDescription("Original/static:0",
+                        CardAbilityTraversal.Origin.STATIC,
+                        CardAbilityTraversal.Provenance.PRINTED,
+                        Map.of("Mode", "Continuous", "Affected", "Creature.YouCtrl+Other",
+                                "AddPower", "1", "AddToughness", "1"),
+                        AbilityOutcomeDescription.unresolved("static", "not an outcome"));
+        final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(anthem), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+
+        Assert.assertEquals(result.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+        Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+        Assert.assertEquals(result.contribution().value(), 50.0);
+    }
+
+    @Test
+    public void intrinsicStaticNegativeOpponentEffectUsesRecipientPolarity() {
+        final CardAbilityTraversal.AbilityDescription weakness =
+                new CardAbilityTraversal.AbilityDescription("Original/static:0",
+                        CardAbilityTraversal.Origin.STATIC,
+                        CardAbilityTraversal.Provenance.PRINTED,
+                        Map.of("Mode", "Continuous", "Affected", "Creature.OppCtrl",
+                                "AddToughness", "-1"),
+                        AbilityOutcomeDescription.unresolved("static", "not an outcome"));
+        final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(weakness), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+
+        Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+        Assert.assertEquals(result.contribution().value(), 20.0);
     }
 
     @Test

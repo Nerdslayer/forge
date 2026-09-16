@@ -4,7 +4,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import forge.ai.effect.IntrinsicReferenceModel.CreatureProfile;
-import forge.card.CardType;
 import forge.game.card.Card;
 import forge.game.player.Player;
 import forge.game.staticability.StaticAbility;
@@ -42,8 +41,10 @@ final class StaticAbilityFutureAllowanceEvaluator {
             return Optional.empty();
         }
 
-        final Scope scope = Scope.parse(ability.getParamOrDefault("Affected", ""));
-        if (scope == null) {
+        final String affected = ability.getParamOrDefault("Affected", "");
+        final StaticAbilityScope scope = StaticAbilityScope.parse(affected);
+        if (scope == null || scope == StaticAbilityScope.SELF
+                || scope == StaticAbilityScope.ATTACHED) {
             return Optional.empty();
         }
 
@@ -84,8 +85,7 @@ final class StaticAbilityFutureAllowanceEvaluator {
             signedValue = EffectMath.add(signedValue,
                     signedForRecipient(evaluatingAi, evaluatingAi, perRecipient));
         }
-        final boolean tribal = java.util.Arrays.stream(ability.getParam("Affected")
-                .replace("Creature.", "").split("\\+")).anyMatch(CardType::isACreatureType);
+        final boolean tribal = scope.isTribal(affected);
         final double futureRecipients = tribal ? TRIBAL_FUTURE_RECIPIENTS_PER_SIDE : FUTURE_RECIPIENTS_PER_SIDE;
         signedValue = EffectMath.multiply(futureRecipients * FUTURE_RECIPIENT_SURVIVAL,
                 signedValue);
@@ -126,61 +126,4 @@ final class StaticAbilityFutureAllowanceEvaluator {
         }
     }
 
-    private enum Scope {
-        CONTROLLER,
-        OPPONENT,
-        BOTH;
-
-        static Scope parse(final String affected) {
-            if (affected == null) {
-                return null;
-            }
-            return switch (affected.trim()) {
-            case "Creature.YouCtrl", "Creature.YouCtrl+Other" -> CONTROLLER;
-            case "Creature.OppCtrl", "Creature.OppCtrl+Other" -> OPPONENT;
-            case "Creature", "Creature.Other" -> BOTH;
-            default -> simpleTribalScope(affected);
-            };
-        }
-
-        private static Scope simpleTribalScope(final String affected) {
-            if (affected == null) {
-                return null;
-            }
-            // Parse only a conjunction of controller/other qualifiers and one real creature
-            // subtype. A capitalized validity predicate (Tapped, Attacking, etc.) is NOT a tribe.
-            if (!affected.startsWith("Creature.")) { return null; }
-            final String[] pieces = affected.substring("Creature.".length()).split("\\+", -1);
-            Scope scope = BOTH;
-            boolean controller = false;
-            boolean tribe = false;
-            boolean other = false;
-            for (final String piece : pieces) {
-                if ("YouCtrl".equals(piece) || "OppCtrl".equals(piece)) {
-                    if (controller) { return null; }
-                    controller = true;
-                    scope = "YouCtrl".equals(piece) ? CONTROLLER : OPPONENT;
-                } else if ("Other".equals(piece)) {
-                    if (other) { return null; }
-                    other = true;
-                } else if (CardType.isACreatureType(piece)) {
-                    if (tribe) { return null; }
-                    tribe = true;
-                } else { return null; }
-            }
-            return scope;
-        }
-
-        boolean includesController() {
-            return this == CONTROLLER || this == BOTH;
-        }
-
-        boolean includesOpponent() {
-            return this == OPPONENT || this == BOTH;
-        }
-
-        String description() {
-            return name().toLowerCase(java.util.Locale.ROOT);
-        }
-    }
 }
