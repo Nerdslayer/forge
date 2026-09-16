@@ -733,6 +733,53 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testCounteredSpellProductionMatchesCounteredTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 1);
+
+        final Card producer = addCard("Sol Ring", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Counter | Cost$ 0 | TargetType$ Spell | TgtPrompt$ Select target spell"
+                        + " | ValidTgts$ Card", producer));
+        final Card consequence = addCard("Baral, Chief of Compliance", opponent);
+        consequence.setSVar("EffectTestCounteredOutcome",
+                "DB$ Draw | Defined$ You | NumCards$ 1");
+        addTrigger(consequence, "Mode$ Countered | ValidCause$ SpellAbility.YouCtrl"
+                + " | ValidSA$ Spell | Execute$ EffectTestCounteredOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final SpellAbility counterAbility = producer.getSpellAbilities().stream()
+                .filter(ability -> ability.getApi() == ApiType.Counter)
+                .findFirst().orElseThrow();
+        final List<EffectProduction> productions = EffectProductionExtractorRegistry.extract(
+                ai, producer, counterAbility);
+        Assert.assertTrue(productions.stream().anyMatch(production ->
+                production.type() == EffectType.SPELL_OR_ABILITY_COUNTERED),
+                counterAbility.getMapParams().toString());
+
+        final Trigger counteredTrigger = consequence.getTriggers().stream()
+                .filter(trigger -> trigger.getMode().name().equals("Countered"))
+                .findFirst().orElseThrow();
+        final EffectConsequence parsedConsequence = EffectConsequenceExtractorRegistry.extract(
+                consequence, counteredTrigger);
+        Assert.assertNotNull(parsedConsequence, counteredTrigger.getMapParams().toString());
+        final EffectProduction countered = productions.stream()
+                .filter(production -> production.type() == EffectType.SPELL_OR_ABILITY_COUNTERED)
+                .findFirst().orElseThrow();
+        Assert.assertFalse(CounteredEventMatcher.INSTANCE.match(countered, parsedConsequence).isEmpty(),
+                countered.events().toString());
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, consequence));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(producer), values.get(consequence));
+    }
+
+    @Test
     public void testTargetedLifeLossProductionInfersOpponentInTwoPlayerGame() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
