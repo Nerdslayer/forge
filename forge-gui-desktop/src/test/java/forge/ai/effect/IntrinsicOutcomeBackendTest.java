@@ -528,6 +528,28 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void destroyAllProjectsCreatureGroupRemovalAndPreservesIndestructibleCreatures() {
+        final State initial = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of(), false, false), SOURCE);
+        final OutcomePlan<State> opposing = evaluate(leaf("DestroyAll", Map.of(
+                "ValidCards", "Creature.OppCtrl")), initial);
+        Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(opposing.state().opponentCreature().present());
+        Assert.assertEquals(opposing.state().opponentCreatureCount(), 0);
+        Assert.assertTrue(opposing.state().sourcePermanent().present());
+        Assert.assertTrue(opposing.value() > 0);
+
+        final State indestructible = state(CREATURE,
+                new CreatureProfile(true, 3, 3, Set.of("indestructible"), false, false), SOURCE);
+        final OutcomePlan<State> protectedGroup = evaluate(leaf("DestroyAll", Map.of(
+                "ValidCards", "Creature.OppCtrl")), indestructible);
+        Assert.assertEquals(protectedGroup.completeness(), Completeness.COMPLETE);
+        Assert.assertTrue(protectedGroup.state().opponentCreature().present());
+        Assert.assertEquals(protectedGroup.state().opponentCreatureCount(), 1);
+        Assert.assertEquals(protectedGroup.value(), 0.0);
+    }
+
+    @Test
     public void fightProjectsSimultaneousDeathsAndCombatKeywords() {
         final PermanentProfile fighter = new PermanentProfile(true, PermanentKind.CREATURE,
                 true, 3, 3, Set.of("indestructible"));
