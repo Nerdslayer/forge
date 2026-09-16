@@ -19,7 +19,8 @@ final class IntrinsicStaticAbilityEvaluator {
     // TODO(effect analysis): Add validated adapters for unsupported static keywords, restrictions,
     // dynamic predicates, characteristic-defining abilities, permissions, and multi-effect text.
     private static final Set<String> ALLOWED_PARAMS = Set.of(
-            "Mode", "Affected", "AddPower", "AddToughness", "AddKeyword", "Description");
+            "Mode", "Affected", "AddPower", "AddToughness", "SetPower", "SetToughness",
+            "AddKeyword", "Description");
     private static final Set<String> SUPPORTED_KEYWORDS = Set.of(
             "flying", "reach", "first strike", "double strike", "menace", "fear", "intimidate",
             "deathtouch", "lifelink", "trample", "vigilance", "defender", "indestructible",
@@ -57,11 +58,17 @@ final class IntrinsicStaticAbilityEvaluator {
         }
         final int powerChange = literalInteger(ability.parameters().get("AddPower"), 0);
         final int toughnessChange = literalInteger(ability.parameters().get("AddToughness"), 0);
+        final int setPower = literalInteger(ability.parameters().get("SetPower"), Integer.MIN_VALUE);
+        final int setToughness = literalInteger(ability.parameters().get("SetToughness"), Integer.MIN_VALUE);
         if (!ability.parameters().containsKey("AddPower")
-                && !ability.parameters().containsKey("AddToughness") && addedKeywords.isEmpty()) {
+                && !ability.parameters().containsKey("AddToughness")
+                && !ability.parameters().containsKey("SetPower")
+                && !ability.parameters().containsKey("SetToughness") && addedKeywords.isEmpty()) {
             return unsupported("static effect has no intrinsically valued change");
         }
         if (powerChange == Integer.MIN_VALUE || toughnessChange == Integer.MIN_VALUE
+                || (ability.parameters().containsKey("SetPower") && setPower < 0)
+                || (ability.parameters().containsKey("SetToughness") && setToughness <= 0)
                 || powerChange < -2 || toughnessChange <= -2
                 || powerChange > 20 || toughnessChange > 20) {
             // Do not pretend a generic reference creature survives a static effect that can reduce
@@ -77,7 +84,8 @@ final class IntrinsicStaticAbilityEvaluator {
                 return unsupported("self P/T static change requires a creature reference source");
             }
             final PermanentProfile after = withPowerAndToughness(source,
-                    source.power() + powerChange, source.toughness() + toughnessChange,
+                    applySetAndAdd(source.power(), setPower, powerChange),
+                    applySetAndAdd(source.toughness(), setToughness, toughnessChange),
                     addedKeywords);
             perRecipient = evaluator.evaluatePermanentDelta(source, after, true);
             recipientCount = 1;
@@ -85,7 +93,8 @@ final class IntrinsicStaticAbilityEvaluator {
             final CreatureProfile before = scope == StaticAbilityScope.ATTACHED
                     ? DEFAULT_ATTACHED_CREATURE : DEFAULT_RECIPIENT;
             final CreatureProfile after = new CreatureProfile(true,
-                    before.power() + powerChange, before.toughness() + toughnessChange,
+                    applySetAndAdd(before.power(), setPower, powerChange),
+                    applySetAndAdd(before.toughness(), setToughness, toughnessChange),
                     plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
                     before.indestructible());
             perRecipient = evaluator.evaluateCreatureDelta(before, after, true);
@@ -132,12 +141,24 @@ final class IntrinsicStaticAbilityEvaluator {
     /** Values a fixed change on the generic creature used by future-recipient estimates. */
     static int evaluateGenericCreatureDelta(final int powerChange, final int toughnessChange,
             final Set<String> addedKeywords) {
+        return evaluateGenericCreatureDelta(powerChange, toughnessChange, Integer.MIN_VALUE,
+                Integer.MIN_VALUE, addedKeywords);
+    }
+
+    /** Values a fixed set-and-add change on the generic creature used by future estimates. */
+    static int evaluateGenericCreatureDelta(final int powerChange, final int toughnessChange,
+            final int setPower, final int setToughness, final Set<String> addedKeywords) {
         final CreatureProfile before = DEFAULT_RECIPIENT;
         final CreatureProfile after = new CreatureProfile(true,
-                before.power() + powerChange, before.toughness() + toughnessChange,
+                applySetAndAdd(before.power(), setPower, powerChange),
+                applySetAndAdd(before.toughness(), setToughness, toughnessChange),
                 plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
                 before.indestructible());
         return new IntrinsicOutcomeEvaluator().evaluateCreatureDelta(before, after, true);
+    }
+
+    private static int applySetAndAdd(final int before, final int set, final int add) {
+        return (set == Integer.MIN_VALUE ? before : set) + add;
     }
 
     private static Set<String> plusKeywords(final Set<String> original,

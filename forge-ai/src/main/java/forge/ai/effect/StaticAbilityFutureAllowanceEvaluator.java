@@ -17,7 +17,8 @@ final class StaticAbilityFutureAllowanceEvaluator {
     private static final double TRIBAL_FUTURE_RECIPIENTS_PER_SIDE = 1.5;
     private static final double FUTURE_RECIPIENT_SURVIVAL = .70;
     private static final Set<String> ALLOWED_PARAMS = Set.of(
-            "Mode", "Affected", "AddPower", "AddToughness", "AddKeyword", "Description");
+            "Mode", "Affected", "AddPower", "AddToughness", "SetPower", "SetToughness",
+            "AddKeyword", "Description");
 
     private StaticAbilityFutureAllowanceEvaluator() {
     }
@@ -49,20 +50,27 @@ final class StaticAbilityFutureAllowanceEvaluator {
 
         final boolean hasPower = ability.hasParam("AddPower");
         final boolean hasToughness = ability.hasParam("AddToughness");
+        final boolean hasSetPower = ability.hasParam("SetPower");
+        final boolean hasSetToughness = ability.hasParam("SetToughness");
         final boolean hasKeyword = ability.hasParam("AddKeyword");
-        if (!hasPower && !hasToughness && !hasKeyword) {
+        if (!hasPower && !hasToughness && !hasSetPower && !hasSetToughness && !hasKeyword) {
             return Optional.empty();
         }
         final Integer powerChange = hasPower ? literalInteger(ability.getParam("AddPower")) : 0;
         final Integer toughnessChange = hasToughness
                 ? literalInteger(ability.getParam("AddToughness")) : 0;
-        if (powerChange == null || toughnessChange == null) {
+        final Integer setPower = hasSetPower ? literalInteger(ability.getParam("SetPower")) : Integer.MIN_VALUE;
+        final Integer setToughness = hasSetToughness
+                ? literalInteger(ability.getParam("SetToughness")) : Integer.MIN_VALUE;
+        if (powerChange == null || toughnessChange == null || setPower == null || setToughness == null) {
             return Optional.empty();
         }
 
         // Avoid pretending to score deaths or negative-power combat heuristics using a clamped
         // reference body. Those require richer state handling than this simple anthem delta.
-        if (powerChange < -2 || toughnessChange <= -2 || powerChange > 20 || toughnessChange > 20) {
+        if (powerChange < -2 || toughnessChange <= -2 || powerChange > 20 || toughnessChange > 20
+                || (hasSetPower && (setPower < 0 || setPower > 20))
+                || (hasSetToughness && (setToughness <= 0 || setToughness > 20))) {
             return Optional.empty();
         }
         final Set<String> addedKeywords = IntrinsicStaticAbilityEvaluator.parseSupportedKeywords(
@@ -70,7 +78,8 @@ final class StaticAbilityFutureAllowanceEvaluator {
         if (addedKeywords == null) {
             return Optional.empty();
         }
-        final int automaticPerRecipient = creatureDelta(powerChange, toughnessChange, addedKeywords);
+        final int automaticPerRecipient = creatureDelta(powerChange, toughnessChange, setPower,
+                setToughness, addedKeywords);
         // AIEffectValue is deliberately not in ALLOWED_PARAMS. Hints supplement current live
         // recipient evaluation, but are not enough evidence for a future generic recipient.
         final int perRecipient = automaticPerRecipient;
@@ -108,9 +117,9 @@ final class StaticAbilityFutureAllowanceEvaluator {
     }
 
     private static int creatureDelta(final int powerChange, final int toughnessChange,
-            final Set<String> addedKeywords) {
+            final int setPower, final int setToughness, final Set<String> addedKeywords) {
         return IntrinsicStaticAbilityEvaluator.evaluateGenericCreatureDelta(powerChange,
-                toughnessChange, addedKeywords);
+                toughnessChange, setPower, setToughness, addedKeywords);
     }
 
     private static int signedForRecipient(final Player evaluatingAi, final Player recipient,
