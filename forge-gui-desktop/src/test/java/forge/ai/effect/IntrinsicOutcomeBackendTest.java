@@ -475,6 +475,17 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void selfSacrificeIgnoresIndestructible() {
+        final PermanentProfile indestructibleSource = new PermanentProfile(true, PermanentKind.CREATURE,
+                true, 2, 2, Set.of("indestructible"));
+        final OutcomePlan<State> sacrifice = evaluate(leaf("Sacrifice", Map.of(
+                "Defined", "Self")), state(CREATURE, CREATURE, indestructibleSource));
+        Assert.assertEquals(sacrifice.completeness(), Completeness.COMPLETE);
+        Assert.assertFalse(sacrifice.state().sourcePermanent().present());
+        Assert.assertTrue(sacrifice.value() < 0);
+    }
+
+    @Test
     public void referenceDepthLimitFailsClosedInsteadOfUsingFallbackDimensions() {
         AbilityOutcomeDescription tree = leaf("Draw", Map.of("Defined", "Opponent"));
         for (int i = 0; i < 30; i++) {
