@@ -51,6 +51,37 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void scheduledDrawUsesLiveHandValueForFutureAbility() {
+        final Game lowHandGame = initAndCreateGame();
+        final Player lowHandAi = lowHandGame.getPlayers().get(1);
+        final Player lowHandOpponent = lowHandGame.getPlayers().get(0);
+        setOpposingTeams(lowHandAi, lowHandOpponent);
+        final Card lowHandStaff = addCard("Staff of Nin", lowHandOpponent);
+        fillLibrary(lowHandOpponent, 5);
+        final PermanentAbilityValueEvaluator.Breakdown lowHand = evaluate(
+                lowHandAi, List.of(lowHandStaff)).get(lowHandStaff);
+
+        final Game fullHandGame = initAndCreateGame();
+        final Player fullHandAi = fullHandGame.getPlayers().get(1);
+        final Player fullHandOpponent = fullHandGame.getPlayers().get(0);
+        setOpposingTeams(fullHandAi, fullHandOpponent);
+        final Card fullHandStaff = addCard("Staff of Nin", fullHandOpponent);
+        fillLibrary(fullHandOpponent, 5);
+        for (int i = 0; i < 7; i++) {
+            addCardToZone("Runeclaw Bear", fullHandOpponent, forge.game.zone.ZoneType.Hand);
+        }
+        final PermanentAbilityValueEvaluator.Breakdown fullHand = evaluate(
+                fullHandAi, List.of(fullHandStaff)).get(fullHandStaff);
+
+        Assert.assertTrue(lowHand.intrinsicValue() > fullHand.intrinsicValue(),
+                "A scheduled draw should be more valuable with an emptier hand: low="
+                        + lowHand + ", full=" + fullHand);
+        Assert.assertTrue(lowHand.reasons().stream()
+                .anyMatch(reason -> reason.contains("Live scheduled outcome value")),
+                lowHand.toString());
+    }
+
+    @Test
     public void completeIntrinsicTapSequencesContributeToRemovalValue() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
