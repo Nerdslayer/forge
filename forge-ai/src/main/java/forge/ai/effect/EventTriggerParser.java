@@ -118,6 +118,9 @@ final class EventTriggerParser {
     private static final Set<String> LAND_PLAYED_TRIGGER_PARAMS = Set.of(
             "Mode", "Origin", "ValidCard", "ValidSA", "NotFirstLand", "Execute",
             "TriggerZones", "TriggerDescription", "Secondary");
+    private static final Set<String> SEARCHED_LIBRARY_TRIGGER_PARAMS = Set.of(
+            "Mode", "ValidPlayer", "SearchOwnLibrary", "ActivationLimit", "Execute",
+            "TriggerZones", "TriggerDescription", "Secondary");
     private static final Set<String> COUNTERED_TRIGGER_PARAMS = Set.of(
             "Mode", "ValidCard", "ValidCause", "ValidSA", "Execute", "TriggerZones",
             "TriggerDescription", "Secondary");
@@ -149,6 +152,9 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.LandPlayed) {
             return EffectType.LAND_PLAYED;
+        }
+        if (mode == TriggerType.SearchedLibrary) {
+            return EffectType.CARD_SEARCHED_OR_SELECTED;
         }
         if (mode == TriggerType.Discarded || mode == TriggerType.DiscardedAll) {
             return EffectType.CARD_DISCARDED;
@@ -245,6 +251,9 @@ final class EventTriggerParser {
         }
         if (mode == TriggerType.LandPlayed) {
             return hasSupportedLandPlayedParameters(parameters);
+        }
+        if (mode == TriggerType.SearchedLibrary) {
+            return hasSupportedSearchedLibraryParameters(parameters);
         }
         if (mode == TriggerType.Countered) {
             return hasSupportedCounteredParameters(parameters);
@@ -372,6 +381,18 @@ final class EventTriggerParser {
         return hasOnlyParams(parameters, LAND_PLAYED_TRIGGER_PARAMS)
                 && (!parameters.containsKey("NotFirstLand")
                         || isBoolean(parameters.get("NotFirstLand")));
+    }
+
+    private static boolean hasSupportedSearchedLibraryParameters(
+            final Map<String, String> parameters) {
+        return hasOnlyParams(parameters, SEARCHED_LIBRARY_TRIGGER_PARAMS)
+                && (!parameters.containsKey("ValidPlayer")
+                        || Set.of("You", "Controller", "Opponent", "Player",
+                                "Player.Opponent").contains(parameters.get("ValidPlayer")))
+                && (!parameters.containsKey("SearchOwnLibrary")
+                        || isBoolean(parameters.get("SearchOwnLibrary")))
+                && (!parameters.containsKey("ActivationLimit")
+                        || "1".equals(parameters.get("ActivationLimit")));
     }
 
     private static boolean hasSupportedCounteredParameters(final Map<String, String> parameters) {

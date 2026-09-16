@@ -42,6 +42,10 @@ final class TriggeredEffectAnalyzer {
 
         final List<EffectProduction> productions = new ArrayList<>();
         final Map<EffectType, List<EffectConsequence>> consequences = new EnumMap<>(EffectType.class);
+        // A removal target can profit when the evaluating AI searches its library (for example,
+        // an opposing Archivist of Oghma). Model only the normalized search production from the
+        // AI's known battlefield abilities; do not broaden this pass to all allied relationships.
+        extractLibrarySearches(evaluatingAi, evaluatingAi, productions, trace);
         extractEffects(evaluatingAi, analyzedControllers, productions, consequences, trace);
 
         final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
@@ -143,6 +147,57 @@ final class TriggeredEffectAnalyzer {
                         // Unknown or malformed card scripts must not disrupt AI decisions.
                     }
                 }
+            }
+        }
+    }
+
+    private static void extractLibrarySearches(final Player evaluatingAi, final Player controller,
+            final List<EffectProduction> productions, final EffectAnalysisTrace trace) {
+        if (controller == null) {
+            return;
+        }
+        for (final Card permanent : controller.getCardsIn(ZoneType.Battlefield)) {
+            for (final SpellAbility ability : permanent.getSpellAbilities()) {
+                try {
+                    addLibrarySearchProductions(evaluatingAi, permanent, ability,
+                            productions, trace);
+                } catch (final RuntimeException ignored) {
+                    // Unknown or malformed card scripts must not disrupt AI decisions.
+                }
+            }
+            for (final Trigger trigger : permanent.getTriggers()) {
+                try {
+                    addLibrarySearchProductions(evaluatingAi, permanent, trigger,
+                            productions, trace);
+                } catch (final RuntimeException ignored) {
+                    // Unknown or malformed card scripts must not disrupt AI decisions.
+                }
+            }
+        }
+    }
+
+    private static void addLibrarySearchProductions(final Player evaluatingAi,
+            final Card source, final SpellAbility ability, final List<EffectProduction> productions,
+            final EffectAnalysisTrace trace) {
+        final List<EffectProduction> extracted = EffectProductionExtractorRegistry.extract(
+                evaluatingAi, source, ability);
+        for (final EffectProduction production : extracted) {
+            if (production.type() == EffectType.CARD_SEARCHED_OR_SELECTED) {
+                productions.add(production);
+                trace.production(production);
+            }
+        }
+    }
+
+    private static void addLibrarySearchProductions(final Player evaluatingAi,
+            final Card source, final Trigger trigger, final List<EffectProduction> productions,
+            final EffectAnalysisTrace trace) {
+        final List<EffectProduction> extracted = EffectProductionExtractorRegistry.extract(
+                evaluatingAi, source, trigger);
+        for (final EffectProduction production : extracted) {
+            if (production.type() == EffectType.CARD_SEARCHED_OR_SELECTED) {
+                productions.add(production);
+                trace.production(production);
             }
         }
     }

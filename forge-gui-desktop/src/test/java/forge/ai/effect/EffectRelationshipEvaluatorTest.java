@@ -47,6 +47,48 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testKnownAiLibrarySearchEvaluatesOpponentSearchTrigger() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        addSearchAbility("Sol Ring", ai, false);
+        final Card observer = addCard("Grizzly Bears", opponent);
+        observer.setSVar("EffectTestSearchOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(observer, "Mode$ SearchedLibrary | ValidPlayer$ Player.Opponent"
+                + " | SearchOwnLibrary$ True | Execute$ EffectTestSearchOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(observer));
+
+        Assert.assertTrue(values.getOrDefault(observer, 0) > 0, values.toString());
+    }
+
+    @Test
+    public void testNoLookingLibraryChangeDoesNotProduceSearchEvent() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        addSearchAbility("Sol Ring", ai, true);
+        final Card observer = addCard("Grizzly Bears", opponent);
+        observer.setSVar("EffectTestSearchOutcome",
+                "DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1");
+        addTrigger(observer, "Mode$ SearchedLibrary | ValidPlayer$ Player.Opponent"
+                + " | SearchOwnLibrary$ True | Execute$ EffectTestSearchOutcome"
+                + " | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(observer));
+
+        Assert.assertTrue(values.isEmpty(), values.toString());
+    }
+
+    @Test
     public void testExpectedBlockEvaluatesSupportedBlocksOutcome() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -3635,6 +3677,16 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 + " | TokenOwner$ " + owner + " | TokenAmount$ " + amount);
         addTrigger(card, "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | Execute$ EffectTestToken"
                 + " | TriggerZones$ Battlefield");
+        return card;
+    }
+
+    private Card addSearchAbility(final String cardName, final Player controller,
+            final boolean noLooking) {
+        final Card card = addCard(cardName, controller);
+        card.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ ChangeZone | Cost$ 0 | Origin$ Library | Destination$ Hand"
+                        + " | ChangeType$ Card | ChangeNum$ 1"
+                        + (noLooking ? " | NoLooking$ True" : ""), card));
         return card;
     }
 
