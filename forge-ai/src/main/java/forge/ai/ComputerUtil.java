@@ -22,6 +22,9 @@ import com.google.common.collect.*;
 import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ProtectAi;
 import forge.ai.ability.TokenAi;
+import forge.ai.effect.CardValueBreakdown;
+import forge.ai.effect.UnifiedCardValueEvaluator;
+import forge.ai.effect.ValuationContext;
 import forge.card.CardStateName;
 import forge.card.CardType;
 import forge.card.ColorSet;
@@ -65,6 +68,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -2284,6 +2288,12 @@ public class ComputerUtil {
     }
 
     public static CardCollection getCardsToDiscardFromOpponent(Player chooser, Player discarder, SpellAbility sa, CardCollection validCards, int min, int max) {
+        return getCardsToDiscardFromOpponent(chooser, discarder, sa, validCards, min, max, null);
+    }
+
+    public static CardCollection getCardsToDiscardFromOpponent(Player chooser, Player discarder,
+            SpellAbility sa, CardCollection validCards, int min, int max,
+            CardCollectionView visibleToChooser) {
         // Focus on keycards
         boolean foundKeycard = false;
         List<String> keyCards = discarder.getRegisteredPlayer().getDeck().getKeyCards();
@@ -2307,7 +2317,8 @@ public class ComputerUtil {
                 return new CardCollection(goodChoices.getFirst());
             }
 
-            Card nearTermThreat = getBestNearTermDiscardThreat(discarder, goodChoices);
+            Card nearTermThreat = getBestNearTermDiscardThreat(chooser, discarder, goodChoices,
+                    visibleToChooser);
             if (nearTermThreat != null) {
                 return new CardCollection(nearTermThreat);
             }
@@ -2315,7 +2326,11 @@ public class ComputerUtil {
             if (sa.hasParam("DiscardValid")) {
                 final String validString = sa.getParam("DiscardValid");
                 if (validString.contains("Creature") && !validString.contains("nonCreature")) {
-                    final Card c = ComputerUtilCard.getBestCreatureAI(goodChoices);
+                    final CardCollection creatures = CardLists.filter(goodChoices,
+                            CardPredicates.CREATURES);
+                    final Card legacyChoice = ComputerUtilCard.getBestCreatureAI(creatures);
+                    final Card c = chooseKnownHandValueOnLegacyTie(chooser, discarder, creatures,
+                            legacyChoice, ComputerUtilCard::evaluateCreature, visibleToChooser);
                     if (c != null) {
                         return new CardCollection(c);
                     }
@@ -2366,12 +2381,14 @@ public class ComputerUtil {
         if (!foundKeycard) {
             goodChoices.sort(CardLists.TextLenComparator);
             CardLists.sortByCmcDesc(goodChoices);
+            applyKnownHandValueTieBreak(chooser, discarder, goodChoices, visibleToChooser);
         }
 
         return goodChoices.subList(0, max);
     }
 
-    private static Card getBestNearTermDiscardThreat(Player discarder, CardCollection goodChoices) {
+    private static Card getBestNearTermDiscardThreat(final Player chooser, final Player discarder,
+            final CardCollection goodChoices, final CardCollectionView visibleToChooser) {
         int manaSources = ComputerUtilMana.getAvailableManaEstimate(discarder, false);
         if (CardLists.count(discarder.getCardsIn(ZoneType.Hand), CardPredicates.LANDS_PRODUCING_MANA) > 0) {
             manaSources++;
@@ -2384,16 +2401,132 @@ public class ComputerUtil {
             return null;
         }
 
-        return ComputerUtilCard.getBestAI(nearTermChoices);
+        final Card legacyChoice = ComputerUtilCard.getBestAI(nearTermChoices);
+        final boolean allCreatures = nearTermChoices.stream().allMatch(Card::isCreature);
+        final ToIntFunction<Card> legacyScore = allCreatures
+                ? ComputerUtilCard::evaluateCreature : ComputerUtil::legacyDiscardScore;
+        return chooseKnownHandValueOnLegacyTie(chooser, discarder, nearTermChoices, legacyChoice,
+                legacyScore, visibleToChooser);
+    }
+
+    private static int legacyDiscardScore(final Card card) {
+        int score = card.getCMC();
+        if (card.isEnchanted()) {
+            final List<Card> auras = CardLists.filterControlledBy(card.getEnchantedBy(),
+                    card.getController());
+            score += Aggregates.sum(auras, Card::getCMC) + auras.size();
+        }
+        return score;
     }
 
     public static CardCollection getCardsToDiscardFromFriend(Player aiChooser, Player p, SpellAbility sa, CardCollection validCards, int min, int max) {
+        return getCardsToDiscardFromFriend(aiChooser, p, sa, validCards, min, max, null);
+    }
+
+    public static CardCollection getCardsToDiscardFromFriend(Player aiChooser, Player p,
+            SpellAbility sa, CardCollection validCards, int min, int max,
+            CardCollectionView visibleToChooser) {
         if (p == aiChooser) { // ask that ai player what he would like to discard
             final AiController aic = ((PlayerControllerAi)p.getController()).getAi();
             return aic.getCardsToDiscard(min, max, validCards, sa);
         }
         // no special options for human or remote friends
-        return getCardsToDiscardFromOpponent(aiChooser, p, sa, validCards, min, max);
+        return getCardsToDiscardFromOpponent(aiChooser, p, sa, validCards, min, max,
+                visibleToChooser);
+    }
+
+    private static boolean usesTargetedDiscardAnalysis(final Player chooser, final Player discarder,
+            final CardCollectionView visibleToChooser) {
+        if (chooser == null || discarder == null || visibleToChooser == null
+                || !AiProfileUtil.getBoolProperty(chooser, AiProps.ENABLE_TARGETED_DISCARD_ANALYSIS)) {
+            return false;
+        }
+        final CardCollectionView hand = discarder.getCardsIn(ZoneType.Hand);
+        if (visibleToChooser.size() < hand.size()) {
+            return false;
+        }
+        for (final Card card : hand) {
+            if (!visibleToChooser.contains(card)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Uses known-card valuation only to break ties left by the legacy targeted-discard logic.
+     * The legacy ordering is already established by CMC (with text length as its stable
+     * fallback), so cards with different CMCs must not be reordered by the new evaluator.
+     */
+    private static void applyKnownHandValueTieBreak(final Player chooser, final Player discarder,
+            final CardCollection choices, final CardCollectionView visibleToChooser) {
+        if (!usesTargetedDiscardAnalysis(chooser, discarder, visibleToChooser) || choices.size() < 2) {
+            return;
+        }
+
+        final ValuationContext context = ValuationContext.forHandSelection(chooser, true);
+        int start = 0;
+        while (start < choices.size()) {
+            final int cmc = choices.get(start).getCMC();
+            int end = start + 1;
+            while (end < choices.size() && choices.get(end).getCMC() == cmc) {
+                end++;
+            }
+
+            if (end - start > 1) {
+                final List<Card> tiedCards = new ArrayList<>(choices.subList(start, end));
+                final List<Card> rankedCards = rankKnownHandTie(tiedCards, context);
+                for (int i = 0; i < rankedCards.size(); i++) {
+                    choices.set(start + i, rankedCards.get(i));
+                }
+            }
+            start = end;
+        }
+    }
+
+    private static Card chooseKnownHandValueOnLegacyTie(final Player chooser,
+            final Player discarder, final Iterable<Card> candidates, final Card legacyChoice,
+            final ToIntFunction<Card> legacyScore, final CardCollectionView visibleToChooser) {
+        if (legacyChoice == null || !usesTargetedDiscardAnalysis(chooser, discarder, visibleToChooser)) {
+            return legacyChoice;
+        }
+
+        final List<Card> candidateList = new ArrayList<>();
+        candidates.forEach(candidateList::add);
+        if (candidateList.size() < 2) {
+            return legacyChoice;
+        }
+        final int bestScore = candidateList.stream().mapToInt(legacyScore).max().orElse(Integer.MIN_VALUE);
+        final List<Card> tiedCards = candidateList.stream()
+                .filter(card -> legacyScore.applyAsInt(card) == bestScore)
+                .collect(Collectors.toList());
+        if (tiedCards.size() < 2) {
+            return legacyChoice;
+        }
+
+        final ValuationContext context = ValuationContext.forHandSelection(chooser, true);
+        return rankKnownHandTie(tiedCards, context).get(0);
+    }
+
+    private static List<Card> rankKnownHandTie(final List<Card> tiedCards,
+            final ValuationContext context) {
+        final Map<Card, CardValueBreakdown> evaluations = new IdentityHashMap<>();
+        for (final Card card : tiedCards) {
+            final CardValueBreakdown evaluation = UnifiedCardValueEvaluator.evaluateCard(card,
+                    context);
+            if (!evaluation.isComplete()) {
+                return tiedCards;
+            }
+            evaluations.put(card, evaluation);
+        }
+
+        final int firstValue = evaluations.get(tiedCards.get(0)).netValue();
+        if (tiedCards.stream().allMatch(card -> evaluations.get(card).netValue() == firstValue)) {
+            return tiedCards;
+        }
+        tiedCards.sort(Comparator.comparingInt(
+                (Card card) -> evaluations.get(card).netValue()).reversed());
+        return tiedCards;
     }
 
     public static String chooseSomeType(Player ai, String kindOfType, SpellAbility sa, Collection<String> validTypes) {

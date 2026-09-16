@@ -1,5 +1,7 @@
 package forge.ai.effect;
 
+import java.util.List;
+
 import forge.game.card.Card;
 import forge.game.player.Player;
 import forge.game.zone.ZoneType;
@@ -34,7 +36,7 @@ public final class RemovalActionEvaluator {
         final int handSize = owner.getCardsIn(ZoneType.Hand).size();
         final HandValuationContext handContext = HandValuationContext.knownCardOnly(evaluatingAi,
                 owner, candidate, handSize + 1);
-        final CardValueBreakdown knownCardValue = HandCardValueEvaluator.evaluateKnownCard(candidate,
+        final CardValueBreakdown knownCardValue = UnifiedCardValueEvaluator.evaluateCard(candidate,
                 handContext);
         final int returnedCardValue = knownCardValue.netValue();
 
@@ -42,29 +44,15 @@ public final class RemovalActionEvaluator {
         // known-card evaluator uses the printed definition when supported and deliberately falls
         // back to a generic value when it is not. TODO(effect analysis): Account for the owner's
         // hidden alternatives, cast timing, replay likelihood, and renewed entry effects.
-        return new CardValueBreakdown(
-                permanentRemovalValue.currentPresenceValue(),
-                permanentRemovalValue.futurePotentialValue(),
-                EffectMath.negate(returnedCardValue),
-                permanentRemovalValue.accessCost(),
-                permanentRemovalValue.contextAdjustment(),
+        return permanentRemovalValue.withTransitionValue(EffectMath.negate(returnedCardValue),
                 combineCompleteness(permanentRemovalValue, knownCardValue),
-                permanentRemovalValue.reasons());
+                List.of("Bounce retains hand value " + returnedCardValue
+                        + " for the returned card."));
     }
 
     private static ValuationCompleteness combineCompleteness(final CardValueBreakdown permanent,
             final CardValueBreakdown handValue) {
-        if (permanent.completeness() == ValuationCompleteness.UNAVAILABLE
-                || handValue.completeness() == ValuationCompleteness.UNAVAILABLE) {
-            return ValuationCompleteness.UNAVAILABLE;
-        }
-        if (permanent.completeness() == ValuationCompleteness.UNSUPPORTED
-                || handValue.completeness() == ValuationCompleteness.UNSUPPORTED) {
-            return ValuationCompleteness.UNSUPPORTED;
-        }
-        return permanent.completeness() == ValuationCompleteness.PARTIAL
-                || handValue.completeness() == ValuationCompleteness.PARTIAL
-                ? ValuationCompleteness.PARTIAL : ValuationCompleteness.COMPLETE;
+        return ValuationCompleteness.combine(permanent.completeness(), handValue.completeness());
     }
 
 }

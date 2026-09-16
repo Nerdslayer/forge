@@ -20,6 +20,34 @@ public class UnifiedValuationFoundationTest {
     }
 
     @Test
+    public void transitionCompositionPreservesExistingReasons() {
+        final CardValueBreakdown breakdown = new CardValueBreakdown(100, 40, 0, 30, 5,
+                ValuationCompleteness.COMPLETE, List.of("current value"));
+
+        final CardValueBreakdown changed = breakdown.withTransitionValue(-25,
+                ValuationCompleteness.PARTIAL, List.of("returned card"));
+
+        Assert.assertEquals(changed.transitionValue(), -25);
+        Assert.assertEquals(changed.grossValue(), 120);
+        Assert.assertEquals(changed.netValue(), 90);
+        Assert.assertEquals(changed.completeness(), ValuationCompleteness.PARTIAL);
+        Assert.assertEquals(changed.reasons(), List.of("current value", "returned card"));
+    }
+
+    @Test
+    public void componentCompositionPreservesMostRestrictiveCompleteness() {
+        final CardValueBreakdown partial = new CardValueBreakdown(100, 40, 0, 30, 5,
+                ValuationCompleteness.PARTIAL, List.of());
+
+        Assert.assertEquals(partial.withFuturePotential(20, ValuationCompleteness.COMPLETE,
+                List.of()).completeness(), ValuationCompleteness.PARTIAL);
+        Assert.assertEquals(partial.withTransitionValue(20, ValuationCompleteness.UNAVAILABLE,
+                List.of()).completeness(), ValuationCompleteness.UNAVAILABLE);
+        Assert.assertEquals(ValuationCompleteness.combine(ValuationCompleteness.UNSUPPORTED,
+                ValuationCompleteness.PARTIAL), ValuationCompleteness.UNSUPPORTED);
+    }
+
+    @Test
     public void cardDefinitionEvaluationUsesSharedComponents() {
         final CardDefinitionValueEvaluator.Evaluation evaluation =
                 new CardDefinitionValueEvaluator.Evaluation(130, 100, 20, 10, 100,

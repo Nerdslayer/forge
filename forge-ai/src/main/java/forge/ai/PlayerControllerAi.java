@@ -674,8 +674,10 @@ public class PlayerControllerAi extends PlayerController {
         boolean isTargetFriendly = !p.isOpponentOf(player);
 
         return isTargetFriendly
-               ? ComputerUtil.getCardsToDiscardFromFriend(player, p, sa, validCards, min, max)
-               : ComputerUtil.getCardsToDiscardFromOpponent(player, p, sa, validCards, min, max);
+               ? ComputerUtil.getCardsToDiscardFromFriend(player, p, sa, validCards, min, max,
+                       visibleToChooser)
+               : ComputerUtil.getCardsToDiscardFromOpponent(player, p, sa, validCards, min, max,
+                       visibleToChooser);
     }
 
     @Override
