@@ -79,7 +79,8 @@ public final class PermanentAbilityValueEvaluator {
                     && candidate.getController().isOpponentOf(ai)
                     && isInspectableBattlefieldPermanent(candidate)) {
                 final IntrinsicEvaluation intrinsic = intrinsicCache.computeIfAbsent(candidate,
-                        card -> evaluateIntrinsic(ai, card, applyRelationshipCredit ? relationshipEntries : List.of()));
+                        card -> evaluateIntrinsic(ai, card,
+                                applyRelationshipCredit ? relationshipEntries : List.of(), effectiveTrace));
                 reasons.addAll(intrinsic.reasons());
                 for (final AbilityValueContribution contribution : intrinsic.contributions()) {
                     if (contribution.counted()) {
@@ -134,17 +135,19 @@ public final class PermanentAbilityValueEvaluator {
     }
 
     private static IntrinsicEvaluation evaluateIntrinsic(final Player ai, final Card candidate,
-            final List<AbilityValueContribution> relationshipEntries) {
+            final List<AbilityValueContribution> relationshipEntries,
+            final EffectAnalysisTrace trace) {
         final List<AbilityValueContribution> contributions = new ArrayList<>();
         final List<String> reasons = new ArrayList<>();
         collectStaticFutureAllowances(ai, candidate, contributions, reasons);
-        collectIntrinsicAbilities(ai, candidate, relationshipEntries, contributions, reasons);
+        collectIntrinsicAbilities(ai, candidate, relationshipEntries, contributions, reasons, trace);
         return new IntrinsicEvaluation(contributions, reasons);
     }
 
     private static void collectIntrinsicAbilities(final Player ai, final Card candidate,
             final List<AbilityValueContribution> relationshipEntries,
-            final List<AbilityValueContribution> destination, final List<String> reasons) {
+            final List<AbilityValueContribution> destination, final List<String> reasons,
+            final EffectAnalysisTrace trace) {
         if (candidate.getPaperCard() == null) {
             reasons.add(candidate.getName() + ": intrinsic value skipped (no public definition)");
             return;
@@ -192,6 +195,8 @@ public final class PermanentAbilityValueEvaluator {
                 continue;
             }
             final IntrinsicReferenceAggregate aggregate = value.contribution();
+            trace.intrinsicAbility(candidate, value.path(), description.origin().name(),
+                    value.expectedOccurrences(), value.triggerStatus(), value.outcomeStatus(), aggregate);
             if (!aggregate.complete() || aggregate.unresolvedRandomProbability() != 0) {
                 addSkipped(destination, candidate, value.path(), "intrinsic outcome is incomplete: "
                         + aggregate.unresolvedReasons());
