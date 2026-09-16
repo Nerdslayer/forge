@@ -49,7 +49,7 @@ public final class UnifiedCardValueEvaluator {
         }
         if (context.mode() == ValuationMode.SITUATIONAL
                 && context.decision() == ValuationDecision.REMOVAL_TARGET) {
-            return evaluatePermanent(card, context, EffectAnalysisTrace.disabled());
+            return evaluatePermanent(card, context);
         }
         if (context.mode() != ValuationMode.INTRINSIC_REFERENCE
                 || context.decision() != ValuationDecision.GENERAL_CARD) {
@@ -100,6 +100,17 @@ public final class UnifiedCardValueEvaluator {
      * Evaluates one live permanent through a situational context. The initial live adapter is
      * intentionally limited to removal-target valuation; later decisions can add their own
      * action-specific components without changing the intrinsic definition entry point.
+     */
+    public static CardValueBreakdown evaluatePermanent(final Card candidate,
+            final ValuationContext context) {
+        return evaluatePermanent(candidate, context, EffectAnalysisTrace.disabled());
+    }
+
+    /**
+     * Evaluates one live permanent with optional effect-analysis diagnostics.
+     *
+     * <p>Callers that do not need diagnostics should use the two-argument overload so the
+     * evaluator remains a simple reusable API and tracing stays an explicit concern.</p>
      */
     public static CardValueBreakdown evaluatePermanent(final Card candidate,
             final ValuationContext context, final EffectAnalysisTrace trace) {
