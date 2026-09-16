@@ -10,6 +10,7 @@ enum EffectType {
     LIFE_LOST,
     CARD_DRAWN,
     CARD_DISCARDED,
+    CARD_MILLED,
     DAMAGE_DEALT,
     FOUGHT,
     CONTROL_CHANGED,

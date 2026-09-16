@@ -701,6 +701,38 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
+    public void testMillProductionMatchesIndividualAndBatchConsequences() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        stockLibrary(opponent, 5);
+
+        final Card producer = addCard("Runeclaw Bear", opponent);
+        producer.addSpellAbility(AbilityFactory.getAbility(
+                "AB$ Mill | Cost$ 0 | Defined$ You | NumCards$ 2", producer));
+
+        final Card individual = addCard("Memnite", opponent);
+        individual.setSVar("EffectTestMilledIndividualOutcome",
+                "DB$ Draw | Defined$ You | NumCards$ 1");
+        addTrigger(individual, "Mode$ Milled | ValidPlayer$ You"
+                + " | Execute$ EffectTestMilledIndividualOutcome | TriggerZones$ Battlefield");
+
+        final Card batch = addCard("Grizzly Bears", opponent);
+        batch.setSVar("EffectTestMilledBatchOutcome",
+                "DB$ Draw | Defined$ You | NumCards$ 1");
+        addTrigger(batch, "Mode$ MilledOnce | ValidPlayer$ You"
+                + " | Execute$ EffectTestMilledBatchOutcome | TriggerZones$ Battlefield");
+
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, individual, batch));
+
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(individual, 0) > 0, values.toString());
+        Assert.assertTrue(values.getOrDefault(batch, 0) > 0, values.toString());
+    }
+
+    @Test
     public void testTargetedLifeLossProductionInfersOpponentInTwoPlayerGame() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
