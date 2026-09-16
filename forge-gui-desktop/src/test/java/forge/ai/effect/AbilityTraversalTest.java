@@ -882,6 +882,28 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void intrinsicCombatGroupTriggersUseGenericDeclarationRates() {
+        for (final Map<String, String> parameters : List.of(
+                Map.of("Mode", "AttackersDeclared", "TriggerZones", "Battlefield"),
+                Map.of("Mode", "AttackersDeclaredOneTarget"),
+                Map.of("Mode", "BlockersDeclared", "TriggerZones", "Battlefield"))) {
+            final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter.describe(parameters)
+                    .orElseThrow();
+            Assert.assertEquals(trigger.turnScope(), IntrinsicEventTrigger.TurnScope.ANY_TURN);
+            Assert.assertTrue(IntrinsicEventTriggerEstimator.estimate(trigger,
+                    new IntrinsicReferenceModel.PermanentProfile(true,
+                            IntrinsicReferenceModel.PermanentKind.CREATURE, true, 3, 3, Set.of()),
+                    IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(),
+                    EntryTiming.NORMAL_SPEED).expectedOccurrences() > 0);
+            Assert.assertTrue(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters));
+        }
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "AttackersDeclared", "ValidAttackers", "Creature")));
+        Assert.assertFalse(IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(Map.of(
+                "Mode", "BlockersDeclared", "ValidCard", "Creature.Self")));
+    }
+
+    @Test
     public void intrinsicExiledTriggerUsesConservativeZoneChangeRate() {
         final Map<String, String> parameters = Map.of(
                 "Mode", "Exiled", "Origin", "Battlefield", "ValidCard", "Creature",
