@@ -26,6 +26,7 @@ public final class IntrinsicReferenceModel {
 
     public enum EventType {
         ATTACK, BLOCK, ATTACKER_BLOCKED, ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
+        ABILITY_RESOLVED,
         LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
@@ -188,6 +189,10 @@ public final class IntrinsicReferenceModel {
         // mana or a tap. The broad rate is only for triggers that explicitly observe a supported
         // non-mana ability population; specialized abilities remain outside this first slice.
         events.put(EventType.ABILITY_CAST, rateDistribution(0, .30, .5, .42, 1, .22, 2, .06));
+        // Most abilities that are put on the stack resolve once, but a generic deck has relatively
+        // few abilities worth observing. The adapter narrows this rate for common source filters.
+        events.put(EventType.ABILITY_RESOLVED,
+                rateDistribution(0, .20, 1, .48, 2, .22, 3, .08, 4, .02));
         // A normal player gets about one land-play opportunity per turn. Extra-land effects are
         // represented by the small two- and three-land tail; card-specific filters remain
         // outside this first reference model.
