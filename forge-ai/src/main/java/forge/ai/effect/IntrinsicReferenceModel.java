@@ -29,7 +29,8 @@ public final class IntrinsicReferenceModel {
         LAND_PLAYED,
         CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
-        LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, DAMAGE_DEALT, ZONE_CHANGED
+        LIFE_GAINED, LIFE_LOST, CARD_DRAWN, CARD_DISCARDED, CARD_MILLED, DAMAGE_DEALT,
+        ZONE_CHANGED
     }
 
     /**
@@ -209,6 +210,10 @@ public final class IntrinsicReferenceModel {
         events.put(EventType.LIFE_LOST, rateDistribution(0, .25, 1, .50, 2, .20, 3, .05));
         events.put(EventType.CARD_DRAWN, rateDistribution(0, .15, 1, .50, 2, .25, 3, .10));
         events.put(EventType.CARD_DISCARDED, rateDistribution(0, .35, 1, .45, 2, .15, 3, .05));
+        // Mill events are less common than ordinary discard in a generic deck. The model does not
+        // assume anything about the milled cards' characteristics; those filters remain gated by
+        // the intrinsic trigger adapter.
+        events.put(EventType.CARD_MILLED, rateDistribution(0, .40, 1, .45, 2, .12, 3, .03));
         events.put(EventType.DAMAGE_DEALT, rateDistribution(0, .30, 1, .45, 2, .20, 3, .05));
         events.put(EventType.ZONE_CHANGED, rateDistribution(0, .20, 1, .50, 2, .25, 3, .05));
 

@@ -13,6 +13,8 @@ public final class IntrinsicEventTriggerAdapter {
             "Creature.YouOwn");
     private static final Set<String> SUPPORTED_LAND_FILTERS = Set.of(
             "Land", "Land.YouCtrl", "Land.OppCtrl");
+    private static final Set<String> SUPPORTED_MILLED_PLAYERS = Set.of(
+            "You", "Opponent", "Player", "Player.Opponent");
 
     private IntrinsicEventTriggerAdapter() {
     }
@@ -198,6 +200,15 @@ public final class IntrinsicEventTriggerAdapter {
                             || ("You".equals(player) && controllerCard)
                             || ("Opponent".equals(player) && opponentCard))
                         || !playerScope && (controllerCard || opponentCard));
+        }
+        if (mode == TriggerType.Milled || mode == TriggerType.MilledOnce
+                || mode == TriggerType.MilledAll) {
+            // The reference model knows only that a generic card was milled. Do not infer that a
+            // hidden milled card has a type, subtype, or other characteristic.
+            return (!parameters.containsKey("ValidPlayer")
+                    || SUPPORTED_MILLED_PLAYERS.contains(parameters.get("ValidPlayer")))
+                    && (!parameters.containsKey("ValidCard")
+                        || "Card".equals(parameters.get("ValidCard")));
         }
         if (mode == TriggerType.DamageDone || mode == TriggerType.DamageDoneOnce) {
             final String source = parameters.get("ValidSource");
@@ -595,6 +606,7 @@ public final class IntrinsicEventTriggerAdapter {
         case LIFE_LOST -> IntrinsicReferenceModel.EventType.LIFE_LOST;
         case CARD_DRAWN -> IntrinsicReferenceModel.EventType.CARD_DRAWN;
         case CARD_DISCARDED -> IntrinsicReferenceModel.EventType.CARD_DISCARDED;
+        case CARD_MILLED -> IntrinsicReferenceModel.EventType.CARD_MILLED;
         case DAMAGE_DEALT -> IntrinsicReferenceModel.EventType.DAMAGE_DEALT;
         case SACRIFICED -> IntrinsicReferenceModel.EventType.PERMANENT_SACRIFICED;
         case ZONE_CHANGED -> zoneEventType(parameters);
