@@ -196,6 +196,21 @@ public class CardCreatorDomainTest {
     }
 
     @Test
+    public void definitionValueNotesUnfactoredAdditionalSpellCosts() {
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Additional Cost Spell", "ManaCost:3 B", "Types:Sorcery",
+                "A:SP$ Draw | Cost$ 3 B Sac<1/Creature> | NumCards$ 3 | SpellDescription$ Draw three cards.",
+                "Oracle:As an additional cost to cast this spell, sacrifice a creature. Draw three cards."));
+
+        final CardDefinitionValueEvaluator.Evaluation evaluation =
+                new CardDefinitionValueEvaluator().evaluate(rules);
+
+        assertFalse(evaluation.isComplete());
+        assertTrue(evaluation.warnings().stream().anyMatch(warning -> warning.contains(
+                "Additional cost on spell ability 1 is not factored into this evaluation.")));
+    }
+
+    @Test
     public void customRepositoryWritesOnlyUnderItsConfiguredRoot() throws Exception {
         final Path root = Files.createTempDirectory("card-creator-cards");
         final CustomCardRepository repository = new CustomCardRepository(root);

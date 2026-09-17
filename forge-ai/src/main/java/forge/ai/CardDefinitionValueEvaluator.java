@@ -13,6 +13,9 @@ import forge.card.CardRarity;
 import forge.card.CardRules;
 import forge.card.CardStateName;
 import forge.card.ICardFace;
+import forge.game.ability.AbilityFactory;
+import forge.game.cost.Cost;
+import forge.game.cost.CostPartMana;
 import forge.item.PaperCard;
 
 import java.util.ArrayList;
@@ -201,6 +204,10 @@ public final class CardDefinitionValueEvaluator {
 
         final Map<String, CardAbilityTraversal.AbilityDescription> byPath = new HashMap<>();
         for (final CardAbilityTraversal.AbilityDescription description : intrinsic.descriptions()) {
+            if (description.provenance() == CardAbilityTraversal.Provenance.PRINTED
+                    && hasUnfactoredAdditionalCost(description)) {
+                warnings.add(additionalCostMessage(description));
+            }
             byPath.put(description.path(), description);
         }
         for (final IntrinsicAbilityEvaluator.AbilityValue value : intrinsic.values()) {
@@ -225,6 +232,38 @@ public final class CardDefinitionValueEvaluator {
         }
     }
 
+    /** Returns whether an ability has a non-mana cost that the intrinsic model does not price. */
+    private static boolean hasUnfactoredAdditionalCost(
+            final CardAbilityTraversal.AbilityDescription description) {
+        if (description.origin() != CardAbilityTraversal.Origin.SPELL
+                && description.origin() != CardAbilityTraversal.Origin.ACTIVATION) {
+            return false;
+        }
+        return hasUnfactoredAdditionalCost(description.parameters());
+    }
+
+    private static boolean hasUnfactoredAdditionalCost(final Map<String, String> parameters) {
+        final String encoded = parameters.get("Cost");
+        if (encoded == null || encoded.isBlank()) {
+            return false;
+        }
+        try {
+            return new Cost(encoded, true).getCostParts().stream()
+                    .anyMatch(part -> !(part instanceof CostPartMana));
+        } catch (final RuntimeException ignored) {
+            // The ordinary ability diagnostics report malformed or otherwise unsupported costs.
+            return false;
+        }
+    }
+
+    private static String additionalCostMessage(
+            final CardAbilityTraversal.AbilityDescription description) {
+        final String kind = description.origin() == CardAbilityTraversal.Origin.ACTIVATION
+                ? "activated ability" : "spell ability";
+        return "Additional cost on " + kind + " " + abilityNumber(description)
+                + " is not factored into this evaluation.";
+    }
+
     private static boolean hasAbilityRecords(final ICardFace face) {
         return face.getTriggers().iterator().hasNext()
                 || face.getAbilities().iterator().hasNext()
@@ -234,17 +273,45 @@ public final class CardDefinitionValueEvaluator {
 
     private static void addFallbackAbilityWarnings(final List<String> warnings, final ICardFace face) {
         addFallbackAbilityWarning(warnings, face.getTriggers(), "Triggered");
-        addFallbackAbilityWarning(warnings, face.getAbilities(), "Activated or spell");
+        addFallbackAbilityWarning(warnings, face.getAbilities(), "Activated or spell", true);
         addFallbackAbilityWarning(warnings, face.getStaticAbilities(), "Static");
         addFallbackAbilityWarning(warnings, face.getReplacements(), "Replacement");
     }
 
     private static void addFallbackAbilityWarning(final List<String> warnings,
             final Iterable<String> abilities, final String kind) {
+        addFallbackAbilityWarning(warnings, abilities, kind, false);
+    }
+
+    private static void addFallbackAbilityWarning(final List<String> warnings,
+            final Iterable<String> abilities, final String kind, final boolean inspectCosts) {
         int count = 0;
-        for (final String ignored : abilities) {
+        for (final String ability : abilities) {
+            if (inspectCosts && hasUnfactoredAdditionalCost(ability)) {
+                warnings.add("Additional cost on " + additionalCostKind(ability) + " " + (count + 1)
+                        + " is not factored into this evaluation.");
+            }
             warnings.add(kind + " ability " + ++count
                     + " evaluation is not supported because the ability could not be analyzed.");
+        }
+    }
+
+    private static boolean hasUnfactoredAdditionalCost(final String ability) {
+        try {
+            final Map<String, String> parameters = AbilityFactory.getMapParams(ability);
+            return (parameters.containsKey("SP") || parameters.containsKey("AB"))
+                    && hasUnfactoredAdditionalCost(parameters);
+        } catch (final RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static String additionalCostKind(final String ability) {
+        try {
+            return AbilityFactory.getMapParams(ability).containsKey("AB")
+                    ? "activated ability" : "spell ability";
+        } catch (final RuntimeException ignored) {
+            return "spell ability";
         }
     }
 
