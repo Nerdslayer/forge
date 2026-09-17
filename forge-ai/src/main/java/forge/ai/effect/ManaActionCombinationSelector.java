@@ -10,6 +10,7 @@ import org.tinylog.Logger;
 import forge.ai.CardResourceValueEvaluator;
 import forge.ai.ComputerUtilCost;
 import forge.ai.ComputerUtilMana;
+import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.player.Player;
@@ -22,7 +23,8 @@ import forge.game.zone.ZoneType;
  * <p>The engine still executes one action at a time. This selector only reorders the supplied
  * list, so the normal AI legality, targeting, and safety checks remain authoritative after the
  * selected action is returned. A small dynamic-programming table compares combinations by their
- * independently evaluated net values and a modest unused-mana penalty.</p>
+ * independently evaluated gross action values and a modest unused-mana penalty; mana constrains
+ * which combinations are legal instead of being subtracted from every action again.</p>
  *
  * <p>This deliberately does not simulate the combined actions. It therefore does not model board
  * changes, colored-mana-source conflicts, or an action changing the value or legality of a later
@@ -167,6 +169,19 @@ public final class ManaActionCombinationSelector {
             return null;
         }
 
+        final ActivationOccurrenceRequest activationRequest;
+        if (cast) {
+            activationRequest = null;
+        } else {
+            activationRequest = new SituationalAbilityOccurrenceContext(ai)
+                    .activationRequest(host, ability);
+            if (!activationRequest.supported()) {
+                // Unsupported additional costs need their own value model. Treating them as a
+                // fair mana sink would risk selecting a harmful activation.
+                return null;
+            }
+        }
+
         final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(action, context);
         final ActionValueFallbackEvaluator.Estimate fallback;
         if (value.isComplete()) {
@@ -178,19 +193,20 @@ public final class ManaActionCombinationSelector {
         } else if (cast) {
             fallback = ActionValueFallbackEvaluator.cast(manaCost);
         } else {
-            final ActivationOccurrenceRequest request = new SituationalAbilityOccurrenceContext(ai)
-                    .activationRequest(host, ability);
-            if (!request.supported()) {
-                // Unsupported additional costs need their own value model. Treating them as a
-                // fair mana sink would risk selecting a harmful activation.
-                return null;
-            }
-            fallback = ActionValueFallbackEvaluator.activation(ai, manaCost, request.lifeCost());
+            fallback = ActionValueFallbackEvaluator.activation(ai, manaCost,
+                    activationRequest.lifeCost());
         }
         final boolean tapCost = ability.getPayCosts().hasTapCost();
         final int maxUses = cast || tapCost || manaCost == 0
                 ? 1 : Math.max(1, availableMana / manaCost);
-        final int candidateValue = fallback == null ? value.netValue() : fallback.value();
+        int candidateValue = fallback == null ? value.grossValue() : fallback.value();
+        if (fallback == null && activationRequest != null && activationRequest.lifeCost() > 0) {
+            // Gross action value does not include access costs. Life is not part of the mana
+            // constraint, so preserve it as an explicit penalty for known activations.
+            final int lifeCostValue = EffectMath.negate(PlayerResourceValueEvaluator.evaluateLifeChange(
+                    ai.getLife(), ai.getLife() - activationRequest.lifeCost()));
+            candidateValue = EffectMath.subtract(candidateValue, lifeCostValue);
+        }
         return new Candidate(ability, manaCost, candidateValue, cast, maxUses, fallback != null);
     }
 

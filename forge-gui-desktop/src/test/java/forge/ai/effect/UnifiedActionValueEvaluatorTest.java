@@ -223,6 +223,26 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void manaCombinationSelectorUsesGrossValueForAHighCostPermanent() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        for (int i = 0; i < 6; i++) {
+            addCard("Forest", ai);
+        }
+        addCardToZone("Savannah Lions", ai, ZoneType.Hand);
+        addCardToZone("Colossal Dreadmaw", ai, ZoneType.Hand);
+
+        final List<SpellAbility> abilities = ComputerUtilAbility.getSpellAbilities(
+                new CardCollection(ai.getCardsIn(ZoneType.Hand)), ai);
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.select(ai, abilities, true);
+
+        Assert.assertTrue(selection.hasAction(), selection.toString());
+        Assert.assertEquals(selection.usedMana(), 6, selection.toString());
+        Assert.assertEquals(selection.firstAction().getHostCard().getName(), "Colossal Dreadmaw");
+    }
+
+    @Test
     public void manaCombinationSelectorUsesFairRateFallbackForUnsupportedCast() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
