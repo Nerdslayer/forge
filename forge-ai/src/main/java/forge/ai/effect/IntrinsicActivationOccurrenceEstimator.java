@@ -1,6 +1,7 @@
 package forge.ai.effect;
 
 import forge.ai.effect.IntrinsicReferenceModel.PermanentProfile;
+import forge.ai.effect.IntrinsicReferenceModel.PermanentKind;
 
 /**
  * Estimates repeated uses of a simple activated ability in a game-free reference situation.
@@ -42,7 +43,12 @@ public final class IntrinsicActivationOccurrenceEstimator {
                                         settings.maximumActivationUsesPerTurn()) : 0))
                         .sum())
                 .sum();
-        final double currentUses = usesPerTurn;
+        // Tap abilities are valued only on the source controller's turns. A creature also cannot
+        // pay a tap cost during the turn it entered because of summoning sickness.
+        final double currentUses = hasTapCost
+                && (!entryTiming.firstTurnIsControllerTurn()
+                        || source.kind() == PermanentKind.CREATURE)
+                ? 0 : usesPerTurn;
         double expected = currentUses;
         int futureTurns = 0;
         final PermanentSurvivalEstimate survival = new PermanentSurvivalEstimator(model)
@@ -50,6 +56,12 @@ public final class IntrinsicActivationOccurrenceEstimator {
         final int maximumTurns = settings.recurringTriggerResolutions();
         for (final SurvivalCheckpoint checkpoint : SurvivalCheckpoint.values()) {
             if (!checkpoint.isTurnStart()) {
+                continue;
+            }
+            // Tap abilities are intentionally valued only on the source controller's turns. This
+            // keeps the bounded intrinsic horizon at one current opportunity plus the next two
+            // controller turns instead of counting both players' turns in each round.
+            if (hasTapCost && !checkpoint.isControllerTurn(entryTiming)) {
                 continue;
             }
             final int controllerTurn = checkpoint.controllerTurnNumber(entryTiming);

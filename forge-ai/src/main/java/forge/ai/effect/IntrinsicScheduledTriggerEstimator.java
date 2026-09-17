@@ -77,7 +77,6 @@ public final class IntrinsicScheduledTriggerEstimator {
 
     private static boolean isControllerTurn(final SurvivalCheckpoint checkpoint,
             final EntryTiming entryTiming) {
-        final boolean oddTurn = checkpoint.turnNumber() % 2 == 1;
-        return entryTiming.firstTurnIsControllerTurn() == oddTurn;
+        return checkpoint.isControllerTurn(entryTiming);
     }
 }

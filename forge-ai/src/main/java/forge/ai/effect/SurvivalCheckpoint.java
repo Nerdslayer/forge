@@ -34,6 +34,15 @@ public enum SurvivalCheckpoint {
         return !turnStart;
     }
 
+    /** Returns whether this checkpoint is the source controller's turn. */
+    public boolean isControllerTurn(final EntryTiming entryTiming) {
+        if (entryTiming == null) {
+            throw new IllegalArgumentException("Entry timing is required");
+        }
+        final boolean oddTurn = turnNumber % 2 == 1;
+        return entryTiming.firstTurnIsControllerTurn() == oddTurn;
+    }
+
     /** Returns the controller's turn number represented by this checkpoint. */
     public int controllerTurnNumber(final EntryTiming entryTiming) {
         if (entryTiming == null) {
