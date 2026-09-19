@@ -343,4 +343,4 @@ ENABLE_CAST_VALUE_TIEBREAK=true
 # Use complete immediate activation value only to break exact legacy ties when choosing an ability.
 ENABLE_ACTIVATION_VALUE_TIEBREAK=true
 # Compare independent combinations of currently payable casts and activations within available mana.
-ENABLE_ACTION_COMBINATION_VALUE_SELECTION=true
+ENABLE_ACTION_COMBINATION_VALUE_SELECTION=false
