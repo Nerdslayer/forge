@@ -1,6 +1,6 @@
 package forge.ai.effect;
 
-import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.Set;
 
 import forge.ai.AttackLikelihoodEvaluator;
@@ -69,8 +69,8 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
             return ActivationOccurrenceRequest.unsupported("Not an active activated ability");
         }
         final Cost cost = ability.getPayCosts();
-        final OptionalInt lifeCost = supportedCost(cost);
-        if (cost == null || lifeCost.isEmpty()) {
+        final Optional<SupportedActivationCost> supportedCost = supportedActivationCost(cost);
+        if (supportedCost.isEmpty()) {
             return ActivationOccurrenceRequest.unsupported("Unsupported activation cost");
         }
 
@@ -82,7 +82,8 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
             return ActivationOccurrenceRequest.unsupported("Current activation restrictions are not met");
         }
 
-        final int manaCost = cost.getTotalMana().getCMC();
+        final SupportedActivationCost activationCost = supportedCost.get();
+        final int manaCost = activationCost.manaCost();
         final int currentMana = Math.max(0, ComputerUtilMana.getAvailableManaEstimate(controller, true));
         final int nextTurnMana = Math.max(0, ComputerUtilMana.getAvailableManaEstimate(controller, false)
                 - controller.getManaPool().totalMana());
@@ -91,8 +92,10 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
         final boolean canPayNow = ComputerUtilCost.canPayCost(copy, controller, false);
         final Willingness willingness = estimateWillingness(source, copy, manaCost);
         final String reason = willingness.reason()
-                + (lifeCost.getAsInt() == 0 ? "" : "; fixed life payment=" + lifeCost.getAsInt());
-        return new ActivationOccurrenceRequest(currentMana, nextTurnMana, manaCost, lifeCost.getAsInt(),
+                + (activationCost.lifeCost() == 0 ? ""
+                        : "; fixed life payment=" + activationCost.lifeCost());
+        return new ActivationOccurrenceRequest(currentMana, nextTurnMana, manaCost,
+                activationCost.lifeCost(),
                 currentLife, currentLife, cost.hasTapCost(), source.isTapped(), canPayNow, landProbability,
                 willingness.multiplier(), willingness.outcomeValue(),
                 willingness.averageCardPlayValue(), willingness.outcomeSupported(), true, reason);
@@ -107,26 +110,30 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
         return new AbilityOccurrenceRequest(opportunity, 1, 1, 1, 1, 1, true, reason);
     }
 
-    private static OptionalInt supportedCost(final Cost cost) {
+    static Optional<SupportedActivationCost> supportedActivationCost(final Cost cost) {
         if (cost == null || cost.getTotalMana().countX() > 0) {
-            return OptionalInt.empty();
+            return Optional.empty();
         }
         int lifeCost = 0;
         for (final CostPart part : cost.getCostParts()) {
             if (part instanceof CostPayLife) {
                 if (!part.getAmount().matches("\\d+")) {
-                    return OptionalInt.empty();
+                    return Optional.empty();
                 }
                 try {
                     lifeCost = Math.addExact(lifeCost, Integer.parseInt(part.getAmount()));
                 } catch (final ArithmeticException | NumberFormatException invalidAmount) {
-                    return OptionalInt.empty();
+                    return Optional.empty();
                 }
             } else if (!(part instanceof CostPartMana) && !(part instanceof CostTap)) {
-                return OptionalInt.empty();
+                return Optional.empty();
             }
         }
-        return OptionalInt.of(lifeCost);
+        return Optional.of(new SupportedActivationCost(cost.getTotalMana().getCMC(), lifeCost,
+                cost.hasTapCost()));
+    }
+
+    record SupportedActivationCost(int manaCost, int lifeCost, boolean hasTapCost) {
     }
 
     /** Estimates whether the controller will choose the activation in the current position. */

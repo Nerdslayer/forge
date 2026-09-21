@@ -269,6 +269,26 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void manaCombinationSelectorSkipsCrewCostsBeforePaymentSearch() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card jet = addCard("Royal Talon Fighter Jet", ai);
+        addCard("Grizzly Bears", ai);
+        final SpellAbility crew = jet.getSpellAbilities().stream()
+                .filter(SpellAbility::isCrew)
+                .findFirst()
+                .orElseThrow();
+
+        Assert.assertNull(crew.getActivatingPlayer());
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.select(ai, List.of(crew), true);
+
+        Assert.assertFalse(selection.hasAction(), selection.toString());
+        Assert.assertEquals(selection.evaluatedCandidateCount(), 0);
+        Assert.assertNull(crew.getActivatingPlayer(), "Valuation must not mutate the live ability");
+    }
+
+    @Test
     public void removalActionRejectsAContextForAnotherDecision() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

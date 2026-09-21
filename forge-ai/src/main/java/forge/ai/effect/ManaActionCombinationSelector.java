@@ -7,6 +7,8 @@ import java.util.StringJoiner;
 
 import org.tinylog.Logger;
 
+import forge.ai.AiProfileUtil;
+import forge.ai.AiProps;
 import forge.ai.CardResourceValueEvaluator;
 import forge.ai.ComputerUtilCost;
 import forge.ai.ComputerUtilMana;
@@ -77,24 +79,38 @@ public final class ManaActionCombinationSelector {
             return emptySelection(0, 0);
         }
 
+        final EffectEvaluationBudget budget = EffectEvaluationBudget.fromTimeoutMillis(
+                actionSelectionTimeoutMillis(ai));
         final int availableMana;
         try {
+            budget.check();
             availableMana = Math.max(0,
                     ComputerUtilMana.getAvailableManaEstimate(ai, true));
+            budget.check();
+        } catch (final EffectEvaluationBudget.Exceeded exceeded) {
+            return timedOut(0, 0);
         } catch (final RuntimeException ignored) {
             // The existing chooser remains the safe fallback if mana estimation is unavailable.
             return emptySelection(0, 0);
         }
         final List<Candidate> candidates = new ArrayList<>();
         for (final SpellAbility ability : abilities) {
+            try {
+                budget.check();
+            } catch (final EffectEvaluationBudget.Exceeded exceeded) {
+                return timedOut(availableMana, candidates.size());
+            }
             if (Thread.currentThread().isInterrupted()) {
                 return emptySelection(availableMana, candidates.size());
             }
             try {
-                final Candidate candidate = createCandidate(ai, ability, availableMana, skipCounter);
+                final Candidate candidate = createCandidate(ai, ability, availableMana, skipCounter,
+                        budget);
                 if (candidate != null) {
                     candidates.add(candidate);
                 }
+            } catch (final EffectEvaluationBudget.Exceeded exceeded) {
+                return timedOut(availableMana, candidates.size());
             } catch (final RuntimeException ignored) {
                 // One unusual card or ability must not suppress the legacy action chooser.
             }
@@ -107,7 +123,17 @@ public final class ManaActionCombinationSelector {
                 : Math.max(0, ai.getCardsIn(ZoneType.Hand).size() - ai.getMaxHandSize());
         final int handPressureValue = handOverflow == 0 ? 0
                 : CardResourceValueEvaluator.evaluateNextCard(ai.getMaxHandSize());
-        final State best = solve(candidates, availableMana, handOverflow);
+        try {
+            budget.check();
+        } catch (final EffectEvaluationBudget.Exceeded exceeded) {
+            return timedOut(availableMana, candidates.size());
+        }
+        final State best;
+        try {
+            best = solve(candidates, availableMana, handOverflow, budget);
+        } catch (final EffectEvaluationBudget.Exceeded exceeded) {
+            return timedOut(availableMana, candidates.size());
+        }
         final int fallbackCandidateCount = (int) candidates.stream()
                 .filter(Candidate::fallback).count();
         if (best == null || best.actions().isEmpty()) {
@@ -126,7 +152,8 @@ public final class ManaActionCombinationSelector {
     }
 
     private static Candidate createCandidate(final Player ai, final SpellAbility ability,
-            final int availableMana, final boolean skipCounter) {
+            final int availableMana, final boolean skipCounter,
+            final EffectEvaluationBudget budget) {
         if (ability == null || ability.getHostCard() == null || ability.getPayCosts() == null
                 || ability.getPayCosts().getTotalMana() == null
                 || skipCounter && ability.getApi() == ApiType.Counter
@@ -144,45 +171,48 @@ public final class ManaActionCombinationSelector {
             return null;
         }
 
-        ability.setActivatingPlayer(ai);
         final ValuationAction action;
         final ValuationContext context;
         final boolean cast;
+        final SituationalAbilityOccurrenceContext.SupportedActivationCost activationCost;
         if (ability.isSpell() && host.isInZone(ZoneType.Hand)
                 && (host.getOwner() == ai || host.getController() == ai)) {
-            if (host.isLand() || !ability.canCastTiming(ai)
-                    || !ComputerUtilCost.canPayCost(ability, ai, ability.isTrigger())) {
+            final SpellAbility probe = ability.copy(host, ai, false);
+            probe.setActivatingPlayer(ai);
+            if (host.isLand() || !probe.canCastTiming(ai)
+                    || !ComputerUtilCost.canPayCost(probe, ai, probe.isTrigger())) {
                 return null;
             }
-            action = new CastValuationAction(ability);
+            action = new CastValuationAction(probe);
             context = ValuationContext.forCast(ai, true);
             cast = true;
+            activationCost = null;
         } else if (ability.isActivatedAbility() && host.isInPlay()
                 && host.getController() == ai && !host.isPhasedOut()) {
-            if (!ComputerUtilCost.canPayCost(ability, ai, false)) {
+            // Reject unsupported costs before payment probing. In particular, CostTapType is
+            // used by crew abilities and its payment search can be expensive even though this
+            // selector cannot value that activation yet.
+            activationCost = SituationalAbilityOccurrenceContext.supportedActivationCost(
+                    ability.getPayCosts()).orElse(null);
+            if (activationCost == null) {
                 return null;
             }
-            action = new ActivateValuationAction(host, ability);
+            final SpellAbility probe = ability.copy(host, false);
+            probe.setActivatingPlayer(ai);
+            if (!ComputerUtilCost.canPayCost(probe, ai, false)) {
+                return null;
+            }
+            action = new ActivateValuationAction(host, probe);
             context = ValuationContext.forActivation(ai, true);
             cast = false;
         } else {
             return null;
         }
 
-        final ActivationOccurrenceRequest activationRequest;
-        if (cast) {
-            activationRequest = null;
-        } else {
-            activationRequest = new SituationalAbilityOccurrenceContext(ai)
-                    .activationRequest(host, ability);
-            if (!activationRequest.supported()) {
-                // Unsupported additional costs need their own value model. Treating them as a
-                // fair mana sink would risk selecting a harmful activation.
-                return null;
-            }
-        }
-
-        final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(action, context);
+        budget.check();
+        final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(action, context,
+                EffectAnalysisTrace.disabled(), budget);
+        budget.check();
         final ActionValueFallbackEvaluator.Estimate fallback;
         if (value.isComplete()) {
             fallback = null;
@@ -194,33 +224,36 @@ public final class ManaActionCombinationSelector {
             fallback = ActionValueFallbackEvaluator.cast(manaCost);
         } else {
             fallback = ActionValueFallbackEvaluator.activation(ai, manaCost,
-                    activationRequest.lifeCost());
+                    activationCost.lifeCost());
         }
         final boolean tapCost = ability.getPayCosts().hasTapCost();
         final int maxUses = cast || tapCost || manaCost == 0
                 ? 1 : Math.max(1, availableMana / manaCost);
         int candidateValue = fallback == null ? value.grossValue() : fallback.value();
-        if (fallback == null && activationRequest != null && activationRequest.lifeCost() > 0) {
+        if (fallback == null && !cast && activationCost.lifeCost() > 0) {
             // Gross action value does not include access costs. Life is not part of the mana
             // constraint, so preserve it as an explicit penalty for known activations.
             final int lifeCostValue = EffectMath.negate(PlayerResourceValueEvaluator.evaluateLifeChange(
-                    ai.getLife(), ai.getLife() - activationRequest.lifeCost()));
+                    ai.getLife(), ai.getLife() - activationCost.lifeCost()));
             candidateValue = EffectMath.subtract(candidateValue, lifeCostValue);
         }
         return new Candidate(ability, manaCost, candidateValue, cast, maxUses, fallback != null);
     }
 
     private static State solve(final List<Candidate> candidates, final int availableMana,
-            final int handOverflow) {
+            final int handOverflow, final EffectEvaluationBudget budget) {
         State[][] states = new State[availableMana + 1][handOverflow + 1];
         states[0][0] = new State(0, 0, 0, List.of());
 
         for (final List<Candidate> group : groupCandidates(candidates)) {
+            budget.check();
             final State[][] nextStates = copyStates(states);
             for (final Candidate candidate : group) {
+                budget.check();
                 final int uses = Math.min(candidate.maxUses(),
                         candidate.manaCost() == 0 ? 1 : availableMana / candidate.manaCost());
                 for (int mana = 0; mana <= availableMana; mana++) {
+                    budget.check();
                     for (int casts = 0; casts <= handOverflow; casts++) {
                         final State current = states[mana][casts];
                         if (current == null) {
@@ -248,6 +281,7 @@ public final class ManaActionCombinationSelector {
         State best = null;
         int bestScore = Integer.MIN_VALUE;
         for (int mana = 0; mana <= availableMana; mana++) {
+            budget.check();
             for (int casts = 0; casts <= handOverflow; casts++) {
                 final State state = states[mana][casts];
                 if (state == null || state.actions().isEmpty()) {
@@ -318,6 +352,21 @@ public final class ManaActionCombinationSelector {
     private static Selection emptySelection(final int availableMana, final int evaluated) {
         return new Selection(null, List.of(), availableMana, 0, availableMana,
                 -availableMana * UNUSED_MANA_PENALTY, 0, evaluated, 0);
+    }
+
+    private static Selection timedOut(final int availableMana, final int evaluated) {
+        Logger.warn("[AI Effect Analysis] Mana action combination timed out after evaluating {} candidates; "
+                + "preserving legacy action ordering.", evaluated);
+        return emptySelection(availableMana, evaluated);
+    }
+
+    private static int actionSelectionTimeoutMillis(final Player ai) {
+        try {
+            return Math.max(1, AiProfileUtil.getIntProperty(ai,
+                    AiProps.ACTION_COMBINATION_VALUE_SELECTION_TIMEOUT_MS));
+        } catch (final RuntimeException invalidProfileValue) {
+            return 100;
+        }
     }
 
     private static void logSelection(final Selection selection) {

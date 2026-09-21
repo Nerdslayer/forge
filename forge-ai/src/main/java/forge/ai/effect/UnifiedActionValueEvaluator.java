@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import forge.ai.CardResourceValueEvaluator;
+import forge.ai.ComputerUtilCost;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
@@ -33,6 +34,12 @@ public final class UnifiedActionValueEvaluator {
      */
     public static CardValueBreakdown evaluate(final ValuationAction action,
             final ValuationContext context, final EffectAnalysisTrace trace) {
+        return evaluate(action, context, trace, null);
+    }
+
+    static CardValueBreakdown evaluate(final ValuationAction action,
+            final ValuationContext context, final EffectAnalysisTrace trace,
+            final EffectEvaluationBudget budget) {
         if (action == null || context == null) {
             return CardValueBreakdown.unavailable("An action and valuation context are required.");
         }
@@ -59,7 +66,7 @@ public final class UnifiedActionValueEvaluator {
                 return CardValueBreakdown.unsupported(
                         "Cast actions require a situational cast valuation context.");
             }
-            return evaluateCast(cast, context);
+            return evaluateCast(cast, context, budget);
         }
         if (action instanceof ActivateValuationAction activation) {
             if (context.decision() != ValuationDecision.ACTIVATE
@@ -67,7 +74,7 @@ public final class UnifiedActionValueEvaluator {
                 return CardValueBreakdown.unsupported(
                         "Activation actions require a situational activation valuation context.");
             }
-            return evaluateActivation(activation, context);
+            return evaluateActivation(activation, context, budget);
         }
         return CardValueBreakdown.unsupported("This action type is not supported yet.");
     }
@@ -97,7 +104,7 @@ public final class UnifiedActionValueEvaluator {
     }
 
     private static CardValueBreakdown evaluateActivation(final ActivateValuationAction action,
-            final ValuationContext context) {
+            final ValuationContext context, final EffectEvaluationBudget budget) {
         // TODO: Include non-mana costs, tap opportunity cost, repeat-use value, and activation
         // timing/stack considerations as dedicated action decisions begin using this adapter.
         final Card source = action.source();
@@ -111,42 +118,47 @@ public final class UnifiedActionValueEvaluator {
         if (!ability.isActivatedAbility()) {
             return CardValueBreakdown.unsupported("The action is not an activated ability.");
         }
-        final ActivationOccurrenceRequest request = new SituationalAbilityOccurrenceContext(ai)
-                .activationRequest(source, ability);
-        if (!request.supported()) {
-            return CardValueBreakdown.unsupported("Activation is not modeled: " + request.reason());
+        final SituationalAbilityOccurrenceContext.SupportedActivationCost activationCost =
+                SituationalAbilityOccurrenceContext.supportedActivationCost(ability.getPayCosts())
+                        .orElse(null);
+        if (activationCost == null) {
+            return CardValueBreakdown.unsupported("Activation cost is not modeled.");
         }
-        if (!request.canPayNow()) {
+        if (!ability.getRestrictions().checkZoneRestrictions(source, ability)
+                || ability.getConditions() != null && !ability.getConditions().areMet(ability)) {
+            return CardValueBreakdown.unavailable("Activation restrictions are not currently met.");
+        }
+        if (!ComputerUtilCost.canPayCost(ability, ai, false)) {
             return CardValueBreakdown.unavailable("Activation cannot currently be paid.");
         }
 
-        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(ability, ai);
+        if (budget != null) {
+            budget.check();
+        }
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(ability, ai, budget);
         if (plan.unavailable()) {
             return CardValueBreakdown.unavailable("Activation outcome is unavailable: " + plan.reason());
         }
         if (!plan.supported()) {
             return CardValueBreakdown.unsupported("Activation outcome is unsupported: " + plan.reason());
         }
-        final int manaCost = request.manaCost();
+        final int manaCost = activationCost.manaCost();
         final int outcomeValue = EffectMath.negate(safeScore(plan.value()));
-        final int lifeCostValue = request.lifeCost() == 0 ? 0
+        final int lifeCostValue = activationCost.lifeCost() == 0 ? 0
                 : EffectMath.negate(PlayerResourceValueEvaluator.evaluateLifeChange(ai.getLife(),
-                        ai.getLife() - request.lifeCost()));
+                        ai.getLife() - activationCost.lifeCost()));
         final List<String> reasons = new ArrayList<>();
         reasons.add("Activation consumes " + manaCost + " mana"
-                + (request.hasTapCost() ? " and taps the source" : "")
-                + (request.lifeCost() == 0 ? "." : " and " + request.lifeCost() + " life."));
+                + (activationCost.hasTapCost() ? " and taps the source" : "")
+                + (activationCost.lifeCost() == 0 ? "." : " and " + activationCost.lifeCost() + " life."));
         reasons.add("Immediate outcome benefit: " + outcomeValue);
-        final ActivationUseEstimate useEstimate = ActivatedAbilityUseEvaluator.estimate(source, ability);
-        reasons.add("Expected near-term uses if this ability remains available: "
-                + String.format("%.2f", useEstimate.expectedUses()));
         return new CardValueBreakdown(0, 0, outcomeValue,
                 EffectMath.add(CardResourceValueEvaluator.evaluateMana(manaCost), lifeCostValue), 0,
                 planCompleteness(plan), reasons);
     }
 
     private static CardValueBreakdown evaluateCast(final CastValuationAction cast,
-            final ValuationContext context) {
+            final ValuationContext context, final EffectEvaluationBudget budget) {
         // TODO: Include non-mana additional costs, alternative costs, X values, timing/flash
         // availability, and entry effects as the cast-action adapter becomes more complete.
         final Card card = cast.subject();
@@ -164,7 +176,10 @@ public final class UnifiedActionValueEvaluator {
         final int accessCost = EffectMath.add(
                 CardResourceValueEvaluator.evaluateCardOpportunityCost(),
                 CardResourceValueEvaluator.evaluateManaInvestment(manaCost));
-        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(ability, ai);
+        if (budget != null) {
+            budget.check();
+        }
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(ability, ai, budget);
         final List<String> reasons = new ArrayList<>();
         reasons.add("Cast action consumes one card and " + manaCost + " mana.");
         if (!plan.reason().isBlank()) {

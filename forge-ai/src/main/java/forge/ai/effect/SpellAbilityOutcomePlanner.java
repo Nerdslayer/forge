@@ -34,15 +34,34 @@ public final class SpellAbilityOutcomePlanner {
 
     public static OutcomePlan<OutcomeState> evaluate(final SpellAbility ability,
             final Player evaluatingAi) {
-        return evaluate(ability, evaluatingAi, null);
+        return evaluate(ability, evaluatingAi, (EffectEvent) null, null);
+    }
+
+    static OutcomePlan<OutcomeState> evaluate(final SpellAbility ability,
+            final Player evaluatingAi, final EffectEvaluationBudget budget) {
+        return evaluate(ability, evaluatingAi, null, budget);
     }
 
     static OutcomePlan<OutcomeState> evaluate(final SpellAbility ability,
             final Player evaluatingAi, final EffectEvent event) {
+        return evaluate(ability, evaluatingAi, event, null);
+    }
+
+    static OutcomePlan<OutcomeState> evaluate(final SpellAbility ability,
+            final Player evaluatingAi, final EffectEvent event,
+            final EffectEvaluationBudget budget) {
         final OutcomeState state = new OutcomeState();
         try {
-            if (!supports(ability)) { return OutcomePlan.unsupported(state, "Unsupported ability form"); }
-            return new OutcomePlanner<OutcomeState>().evaluate(compile(ability, evaluatingAi, event, 0), state);
+            if (budget != null) {
+                budget.check();
+            }
+            if (!supports(ability, budget)) {
+                return OutcomePlan.unsupported(state, "Unsupported ability form");
+            }
+            return new OutcomePlanner<OutcomeState>(4096, budget)
+                    .evaluate(compile(ability, evaluatingAi, event, 0), state);
+        } catch (final EffectEvaluationBudget.Exceeded exceeded) {
+            throw exceeded;
         } catch (final RuntimeException unsupported) {
             return OutcomePlan.unsupported(state, unsupported.getMessage());
         }
@@ -50,13 +69,22 @@ public final class SpellAbilityOutcomePlanner {
 
     static boolean supports(final SpellAbility ability) {
         try {
-            return supports(ability, 0);
+            return supports(ability, 0, null);
         } catch (final RuntimeException unsupported) {
             return false;
         }
     }
 
-    private static boolean supports(final SpellAbility ability, final int depth) {
+    private static boolean supports(final SpellAbility ability,
+            final EffectEvaluationBudget budget) {
+        return supports(ability, 0, budget);
+    }
+
+    private static boolean supports(final SpellAbility ability, final int depth,
+            final EffectEvaluationBudget budget) {
+        if (budget != null) {
+            budget.check();
+        }
         if (ability == null || depth > 24 || ability.getActivatingPlayer() == null) { return false; }
         // TODO: Hoist every announcement-time target across stochastic modal/subability chains.
         // Until then, reject ambiguous timing instead of letting a target see future randomness.
@@ -76,7 +104,8 @@ public final class SpellAbilityOutcomePlanner {
             final List<AbilitySub> options = ability.getAdditionalAbilityList("Choices");
             if (options == null || options.isEmpty()) { return false; }
             for (final SpellAbility option : options) {
-                if (!supports(option, depth + 1) || crossModeReference(option, 0)) { return false; }
+                if (!supports(option, depth + 1, budget)
+                        || crossModeReference(option, 0)) { return false; }
             }
             final int maximum = AbilityUtils.calculateAmount(ability.getHostCard(),
                     ability.getParamOrDefault(ability.getApi() == ApiType.Charm ? "CharmNum" : "ChoiceAmount", "1"), ability);
@@ -91,7 +120,8 @@ public final class SpellAbilityOutcomePlanner {
         } else if (OutcomeEvaluatorRegistry.findAtomic(leaf(ability)) == null) {
             return false;
         }
-        return ability.getSubAbility() == null || supports(ability.getSubAbility(), depth + 1);
+        return ability.getSubAbility() == null
+                || supports(ability.getSubAbility(), depth + 1, budget);
     }
 
     private static boolean crossModeReference(final SpellAbility ability, final int depth) {

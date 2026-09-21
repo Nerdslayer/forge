@@ -10,19 +10,24 @@ import forge.ai.effect.OutcomePlan.Completeness;
 /** Bounded exhaustive planning; continuation evaluation keeps choices and later effects coupled. */
 public final class OutcomePlanner<S> {
     private final int budget;
+    private final EffectEvaluationBudget timeBudget;
     private int remaining;
     private int depth;
 
-    public OutcomePlanner() { this(4096); }
+    public OutcomePlanner() { this(4096, null); }
 
-    public OutcomePlanner(final int budget) {
+    public OutcomePlanner(final int budget) { this(budget, null); }
+
+    OutcomePlanner(final int budget, final EffectEvaluationBudget timeBudget) {
         if (budget <= 0) { throw new IllegalArgumentException("Positive budget required"); }
         this.budget = budget;
+        this.timeBudget = timeBudget;
     }
 
     public OutcomePlan<S> evaluate(final Outcome<S> outcome, final S state) {
         remaining = budget;
         depth = 0;
+        checkTimeBudget();
         try {
             return solve(outcome, state, s -> OutcomePlan.complete(0, s));
         } catch (final SearchLimit exceeded) {
@@ -33,6 +38,7 @@ public final class OutcomePlanner<S> {
 
     private OutcomePlan<S> solve(final Outcome<S> outcome, final S state,
             final Function<S, OutcomePlan<S>> next) {
+        checkTimeBudget();
         if (++depth > 128) { throw new SearchLimit(); }
         try {
             return solveNode(outcome, state, next);
@@ -43,6 +49,7 @@ public final class OutcomePlanner<S> {
 
     private OutcomePlan<S> solveNode(final Outcome<S> outcome, final S state,
             final Function<S, OutcomePlan<S>> next) {
+        checkTimeBudget();
         if (--remaining < 0) { throw new SearchLimit(); }
         if (outcome instanceof Outcome.Unresolved<S> unresolved) {
             return OutcomePlan.unsupported(state, unresolved.reason());
@@ -78,6 +85,7 @@ public final class OutcomePlanner<S> {
             OutcomePlan<S> best = null;
             final List<String> unresolved = new ArrayList<>();
             for (final List<Integer> selected : selections) {
+                checkTimeBudget();
                 final List<Outcome<S>> children = new ArrayList<>();
                 for (final int index : selected) { children.add(choice.options().get(index)); }
                 final OutcomePlan<S> candidate = sequence(children, 0, state, next);
@@ -104,6 +112,7 @@ public final class OutcomePlanner<S> {
         final List<String> unresolved = new ArrayList<>();
         final double totalWeight = random.options().stream().mapToDouble(Outcome.Weighted::weight).sum();
         for (final Outcome.Weighted<S> option : random.options()) {
+            checkTimeBudget();
             final OutcomePlan<S> branch = solve(option.outcome(), state, next);
             branches.add(branch);
             supported |= branch.supported();
@@ -129,8 +138,10 @@ public final class OutcomePlanner<S> {
     private <D> OutcomePlan<S> batch(final Outcome.Batch<S, D> batch, final S state,
             final Function<S, OutcomePlan<S>> next) {
         return solve(new Outcome.Atomic<S>(batch.description(), snapshot -> {
+            checkTimeBudget();
             final List<D> prepared = new ArrayList<>();
             for (final Function<S, D> prepare : batch.preparations()) {
+                checkTimeBudget();
                 if (--remaining < 0) { throw new SearchLimit(); }
                 final D change = prepare.apply(snapshot);
                 if (change == null) { return null; }
@@ -152,6 +163,7 @@ public final class OutcomePlanner<S> {
         OutcomePlan<S> best = null;
         final List<String> unresolved = new ArrayList<>();
         for (final T candidate : target.candidates().apply(state)) {
+            checkTimeBudget();
             final OutcomePlan<S> plan = solve(target.child(), target.bind().apply(state, candidate), next);
             if (!plan.unavailable() && betterCandidate(plan, best, target.maximize())) {
                 best = decision(plan, DecisionKind.TARGET, target.id(), List.of(candidate));
@@ -171,6 +183,7 @@ public final class OutcomePlanner<S> {
 
     private void combinations(final Outcome.Choice<S> choice, final int start,
             final List<Integer> selected, final List<List<Integer>> result) {
+        checkTimeBudget();
         if (--remaining < 0) { throw new SearchLimit(); }
         if (selected.size() >= choice.minimum()) { result.add(List.copyOf(selected)); }
         if (selected.size() == choice.maximum()) { return; }
@@ -194,6 +207,12 @@ public final class OutcomePlanner<S> {
 
     private static <S> String reason(final OutcomePlan<S> plan) {
         return plan.reason().isBlank() ? plan.completeness().name() : plan.reason();
+    }
+
+    private void checkTimeBudget() {
+        if (timeBudget != null) {
+            timeBudget.check();
+        }
     }
 
     private static <S> OutcomePlan<S> decision(final OutcomePlan<S> plan,

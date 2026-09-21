@@ -1617,6 +1617,7 @@ public class AiController {
             boolean isLifeInDanger = useLivingEnd && ComputerUtil.aiLifeInDanger(player, true, 0);
             final List<SpellAbility> playableAbilities =
                     ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player);
+            playableAbilities.removeIf(this::isFailedActionSuppressed);
             if (getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)) {
                 ManaActionCombinationSelector.apply(player, playableAbilities, skipCounter);
             }
@@ -2318,6 +2319,11 @@ public class AiController {
             return simPicker.chooseModeForAbility(sa, possible, min, num, allowRepeat);
         }
         return null;
+    }
+
+    private boolean isFailedActionSuppressed(final SpellAbility ability) {
+        return player.getController() instanceof PlayerControllerAi controller
+                && controller.isFailedActionSuppressed(ability);
     }
 
     public CardCollectionView chooseSacrificeType(String type, SpellAbility ability, boolean effect, int amount, final CardCollectionView exclude) {

@@ -58,6 +58,22 @@ public class PlayerControllerAi extends PlayerController {
     private final AiController brains;
 
     private boolean pilotsNonAggroDeck = false;
+    private volatile FailedAction failedAction;
+
+    private record FailedAction(long gameTimestamp, int hostId, ApiType api,
+            String description) {
+        private static FailedAction from(final SpellAbility ability, final long gameTimestamp) {
+            return new FailedAction(gameTimestamp, ability.getHostCard().getId(), ability.getApi(),
+                    ability.getDescription());
+        }
+
+        private boolean matches(final SpellAbility ability) {
+            return ability != null && ability.getHostCard() != null
+                    && hostId == ability.getHostCard().getId()
+                    && api == ability.getApi()
+                    && Objects.equals(description, ability.getDescription());
+        }
+    }
 
     public PlayerControllerAi(Game game, Player p, LobbyPlayer lp) {
         super(game, p, lp);
@@ -83,6 +99,12 @@ public class PlayerControllerAi extends PlayerController {
 
     public AiController getAi() {
         return brains;
+    }
+
+    /** Returns whether this action failed at the current game timestamp and should not be retried. */
+    boolean isFailedActionSuppressed(final SpellAbility ability) {
+        clearExpiredFailedAction();
+        return failedAction != null && failedAction.matches(ability);
     }
 
     @Override
@@ -839,14 +861,34 @@ public class PlayerControllerAi extends PlayerController {
 
     @Override
     public boolean playChosenSpellAbility(SpellAbility sa) {
+        if (sa == null || isFailedActionSuppressed(sa)) {
+            return false;
+        }
+        final boolean success;
         if (sa.isLandAbility()) {
             if (sa.canPlay()) {
                 sa.resolve();
+                success = true;
+            } else {
+                success = false;
             }
         } else {
-            ComputerUtil.handlePlayingSpellAbility(player, sa, getDeferredTargetingPlayerAction(sa));
+            success = ComputerUtil.handlePlayingSpellAbility(player, sa,
+                    getDeferredTargetingPlayerAction(sa));
         }
-        return true;
+        if (success) {
+            failedAction = null;
+        } else {
+            failedAction = FailedAction.from(sa, player.getGame().getTimestamp());
+        }
+        return success;
+    }
+
+    private void clearExpiredFailedAction() {
+        if (failedAction != null
+                && failedAction.gameTimestamp() != player.getGame().getTimestamp()) {
+            failedAction = null;
+        }
     }
 
     /**
