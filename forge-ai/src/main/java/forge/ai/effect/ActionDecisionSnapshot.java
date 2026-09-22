@@ -142,6 +142,12 @@ public record ActionDecisionSnapshot(PhaseType phase, boolean aiTurn, boolean st
         if (produced == null || produced.isBlank()) {
             return List.of();
         }
+        // Forge uses Combo for ordinary modal lands as well as for dynamic effects. A static
+        // list such as "Combo G W" represents one mana chosen from those colors, not two mana.
+        // Keep the dynamic forms below unsupported until their choices can be resolved safely.
+        if (manaPart.isComboMana()) {
+            return parseSimpleComboOutput(produced);
+        }
         if (manaPart.isSpecialMana()) {
             return List.of();
         }
@@ -177,6 +183,34 @@ public record ActionDecisionSnapshot(PhaseType phase, boolean aiTurn, boolean st
             outputMasks.add((int) color);
         }
         return outputMasks;
+    }
+
+    private static List<Integer> parseSimpleComboOutput(final String produced) {
+        final String prefix = "Combo ";
+        if (!produced.startsWith(prefix)) {
+            return List.of();
+        }
+        final String choices = produced.substring(prefix.length()).trim();
+        if (choices.equals("Any")) {
+            return List.of((int) ManaAtom.ALL_MANA_COLORS);
+        }
+        if (choices.isBlank() || choices.contains("Chosen") || choices.contains("ColorIdentity")
+                || choices.contains("ColorID") || choices.contains("NotedColors")
+                || choices.contains("AnyDifferent")) {
+            return List.of();
+        }
+        int mask = 0;
+        for (final String token : choices.split(" ")) {
+            if (token.isBlank()) {
+                continue;
+            }
+            final byte color = ManaAtom.fromName(token);
+            if (color == 0) {
+                return List.of();
+            }
+            mask |= color;
+        }
+        return mask == 0 ? List.of() : List.of(mask);
     }
 
     private static boolean isUncertainManaActivation(final SpellAbility ability,

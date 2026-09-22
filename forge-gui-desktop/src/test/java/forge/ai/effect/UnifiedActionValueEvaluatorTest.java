@@ -9,6 +9,7 @@ import org.testng.annotations.Test;
 
 import forge.ai.AITest;
 import forge.ai.ComputerUtilAbility;
+import forge.card.mana.ManaAtom;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
 import forge.game.ability.ApiType;
@@ -320,6 +321,35 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
         Assert.assertTrue(selection.firstAction().getHostCard().getName().equals("Savannah Lions")
                 || selection.firstAction().getHostCard().getName().equals("Llanowar Elves"),
                 selection.toString());
+    }
+
+    @Test
+    public void actionDecisionSnapshotSupportsStaticComboLandAsOneFlexibleMana() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        addCard("Blossoming Sands", ai);
+
+        final ActionDecisionSnapshot snapshot = ActionDecisionSnapshot.capture(ai);
+
+        Assert.assertTrue(snapshot.manaResourcesComplete(), snapshot.toString());
+        Assert.assertEquals(snapshot.manaSources().size(), 1, snapshot.toString());
+        final ActionManaSource source = snapshot.manaSources().get(0);
+        Assert.assertEquals(source.outputMasks().size(), 1, source.toString());
+        Assert.assertTrue((source.outputMasks().get(0) & ManaAtom.GREEN) != 0,
+                source.toString());
+        Assert.assertTrue((source.outputMasks().get(0) & ManaAtom.WHITE) != 0,
+                source.toString());
+    }
+
+    @Test
+    public void actionDecisionSnapshotKeepsDynamicComboLandFailClosed() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        addCard("Command Tower", ai);
+
+        final ActionDecisionSnapshot snapshot = ActionDecisionSnapshot.capture(ai);
+
+        Assert.assertFalse(snapshot.manaResourcesComplete(), snapshot.toString());
     }
 
     @Test

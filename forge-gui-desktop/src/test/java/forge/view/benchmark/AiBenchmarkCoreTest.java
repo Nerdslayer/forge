@@ -183,6 +183,7 @@ public class AiBenchmarkCoreTest {
 
         Assert.assertEquals(defaultOptions.deckDirectory.getFileName().toString(), "EffectSynergyRemoval");
         Assert.assertEquals(defaultOptions.deckDirectory.getParent().getFileName().toString(), "benchmark");
+        Assert.assertEquals(defaultOptions.workerHeap, "4g");
         Assert.assertNull(explicitOptions.deckDirectory);
     }
 

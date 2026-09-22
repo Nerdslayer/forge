@@ -40,7 +40,7 @@ final class BenchmarkOptions {
     int multiplier = 1;
     int workers = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 4));
     long timeoutSeconds = 300;
-    String workerHeap = "512m";
+    String workerHeap = "4g";
     boolean resume;
     boolean help;
 
@@ -226,7 +226,7 @@ final class BenchmarkOptions {
                   --repetitions <count>      Compatibility alias for --multiplier
                   --workers <count>          Maximum concurrent child JVMs (default: min(CPUs, 4))
                   --timeout-seconds <count>  Hard timeout for each game (default: 300)
-                  --worker-heap <size>       Maximum heap per worker (default: 512m)
+                  --worker-heap <size>       Maximum heap per worker (default: 4g)
                   --resume                   Reuse completed per-game result files
                   --help                     Show this help
                 """;
