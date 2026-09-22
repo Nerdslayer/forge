@@ -103,12 +103,12 @@ public class ActivatedAbilityUseEvaluatorTest extends AITest {
     }
 
     @Test
-    public void unsupportedNonManaCostsAreExplicit() {
+    public void numericSacrificeCostsAreSupported() {
         final Card source = setupSource(0, 0);
         final ActivationUseEstimate estimate = estimate(source, "Sac<1/Creature>");
 
-        Assert.assertFalse(estimate.supported());
-        Assert.assertEquals(estimate.expectedUses(), 0.0);
+        Assert.assertTrue(estimate.supported());
+        Assert.assertTrue(estimate.expectedUses() > 0.0, estimate.toString());
     }
 
     private Card setupSource(final int lands, final int handSize) {
