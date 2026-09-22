@@ -2,8 +2,10 @@ package forge.ai.effect;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.StringJoiner;
 import java.util.function.Predicate;
 
@@ -56,6 +58,10 @@ public final class ManaActionCombinationSelector {
         public boolean hasAction() {
             return firstAction != null;
         }
+    }
+
+    /** Results of comparing one proposed plan with the plan anchored to the legacy first action. */
+    public record Comparison(Selection proposed, Selection legacy) {
     }
 
     /**
@@ -138,6 +144,94 @@ public final class ManaActionCombinationSelector {
         return select(ai, abilities, skipCounter, requiredFirstAction, snapshot, candidateFilter);
     }
 
+    /**
+     * Compares the global proposal and legacy-anchored proposal using one candidate analysis and
+     * one wall-clock budget. The caller can use both results for the same conservative gate.
+     */
+    public static Comparison compare(final Player ai, final List<SpellAbility> abilities,
+            final boolean skipCounter, final SpellAbility requiredFirstAction,
+            final ActionDecisionSnapshot snapshot,
+            final Predicate<SpellAbility> candidateFilter) {
+        final int availableMana = snapshot == null ? 0 : snapshot.availableMana();
+        if (snapshot != null && !snapshot.manaResourcesComplete()) {
+            logSkipped(snapshot, "mana_source_model_incomplete");
+            final Selection empty = emptySelection(availableMana, 0);
+            return new Comparison(empty, empty);
+        }
+        PreparedCandidates prepared = null;
+        final EffectEvaluationBudget budget = EffectEvaluationBudget.fromTimeoutMillis(
+                actionSelectionTimeoutMillis(ai));
+        final IdentityHashMap<SpellAbility, Boolean> admissionResults = new IdentityHashMap<>();
+        final Predicate<SpellAbility> cachedCandidateFilter = ability -> {
+            if (admissionResults.containsKey(ability)) {
+                return admissionResults.get(ability);
+            }
+            final boolean admitted;
+            try {
+                admitted = candidateFilter == null || candidateFilter.test(ability);
+            } catch (final RuntimeException ignored) {
+                admissionResults.put(ability, false);
+                return false;
+            }
+            admissionResults.put(ability, admitted);
+            return admitted;
+        };
+        try {
+            if (requiredFirstAction == null) {
+                final Selection empty = emptySelection(availableMana, 0);
+                return new Comparison(empty, empty);
+            }
+            if (!hasAlternativeLegacyAction(abilities, requiredFirstAction, cachedCandidateFilter,
+                    budget)) {
+                logSkipped(snapshot, "no_alternative_admitted_action");
+                final Selection empty = emptySelection(availableMana, 0);
+                return new Comparison(empty, empty);
+            }
+            prepared = prepareCandidates(ai, abilities, skipCounter, snapshot,
+                    cachedCandidateFilter,
+                    budget);
+            final Selection proposed = selectPrepared(prepared, null, snapshot, budget);
+            final Selection legacy = selectPrepared(prepared, requiredFirstAction, snapshot, budget);
+            return new Comparison(proposed, legacy);
+        } catch (final EffectEvaluationBudget.Exceeded exceeded) {
+            final int timeoutMana = prepared == null ? availableMana : prepared.availableMana();
+            final int evaluated = prepared == null ? 0 : prepared.candidates().size();
+            final Selection timeout = timedOut(timeoutMana, evaluated);
+            return new Comparison(timeout, timeout);
+        } catch (final RuntimeException ignored) {
+            return new Comparison(emptySelection(availableMana, 0),
+                    emptySelection(availableMana, 0));
+        }
+    }
+
+    private static boolean hasAlternativeLegacyAction(final List<SpellAbility> abilities,
+            final SpellAbility requiredFirstAction,
+            final Predicate<SpellAbility> candidateFilter,
+            final EffectEvaluationBudget budget) {
+        if (abilities == null || requiredFirstAction == null
+                || requiredFirstAction.getHostCard() == null) {
+            return false;
+        }
+        for (final SpellAbility ability : abilities) {
+            budget.check();
+            if (ability == null || ability == requiredFirstAction || ability.getHostCard() == null
+                    || ability.getHostCard() == requiredFirstAction.getHostCard()) {
+                continue;
+            }
+            if (candidateFilter == null) {
+                return true;
+            }
+            try {
+                if (candidateFilter.test(ability)) {
+                    return true;
+                }
+            } catch (final RuntimeException ignored) {
+                // A failed legacy probe must not suppress the existing chooser.
+            }
+        }
+        return false;
+    }
+
     private static Selection select(final Player ai, final List<SpellAbility> abilities,
             final boolean skipCounter, final SpellAbility requiredFirstAction,
             final ActionDecisionSnapshot snapshot,
@@ -145,31 +239,46 @@ public final class ManaActionCombinationSelector {
         if (ai == null || abilities == null || abilities.isEmpty()) {
             return emptySelection(0, 0);
         }
+        if (snapshot != null && !snapshot.manaResourcesComplete()) {
+            logSkipped(snapshot, "mana_source_model_incomplete");
+            return emptySelection(snapshot.availableMana(), 0);
+        }
 
         final EffectEvaluationBudget budget = EffectEvaluationBudget.fromTimeoutMillis(
                 actionSelectionTimeoutMillis(ai));
-        final int availableMana;
         try {
-            budget.check();
-            availableMana = snapshot == null ? Math.max(0,
-                    ComputerUtilMana.getAvailableManaEstimate(ai, true))
-                    : snapshot.availableMana();
-            budget.check();
+            final PreparedCandidates prepared = prepareCandidates(ai, abilities, skipCounter,
+                    snapshot, candidateFilter, budget);
+            return selectPrepared(prepared, requiredFirstAction, snapshot, budget);
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
-            return timedOut(0, 0);
+            return timedOut(snapshot == null ? 0 : snapshot.availableMana(), 0);
         } catch (final RuntimeException ignored) {
             // The existing chooser remains the safe fallback if mana estimation is unavailable.
             return emptySelection(0, 0);
         }
+    }
+
+    private static PreparedCandidates prepareCandidates(final Player ai,
+            final List<SpellAbility> abilities, final boolean skipCounter,
+            final ActionDecisionSnapshot snapshot, final Predicate<SpellAbility> candidateFilter,
+            final EffectEvaluationBudget budget) {
+        if (ai == null || abilities == null || abilities.isEmpty()) {
+            return new PreparedCandidates(List.of(), new IdentityHashMap<>(), List.of(),
+                    manaSourceModel(snapshot), 0, 0, 0, 0);
+        }
+
+        budget.check();
+        final int availableMana = snapshot == null ? Math.max(0,
+                ComputerUtilMana.getAvailableManaEstimate(ai, true)) : snapshot.availableMana();
+        budget.check();
         final List<Candidate> candidates = new ArrayList<>();
+        final IdentityHashMap<SpellAbility, Candidate> candidatesByAbility =
+                new IdentityHashMap<>();
         for (final SpellAbility ability : abilities) {
-            try {
-                budget.check();
-            } catch (final EffectEvaluationBudget.Exceeded exceeded) {
-                return timedOut(availableMana, candidates.size());
-            }
+            budget.check();
             if (Thread.currentThread().isInterrupted()) {
-                return emptySelection(availableMana, candidates.size());
+                return new PreparedCandidates(List.of(), new IdentityHashMap<>(), List.of(),
+                        manaSourceModel(snapshot), availableMana, 0, 0, 0);
             }
             if (candidateFilter != null) {
                 try {
@@ -186,15 +295,13 @@ public final class ManaActionCombinationSelector {
                         budget);
                 if (candidate != null) {
                     candidates.add(candidate);
+                    candidatesByAbility.putIfAbsent(ability, candidate);
                 }
             } catch (final EffectEvaluationBudget.Exceeded exceeded) {
-                return timedOut(availableMana, candidates.size());
+                throw exceeded;
             } catch (final RuntimeException ignored) {
                 // One unusual card or ability must not suppress the legacy action chooser.
             }
-        }
-        if (candidates.isEmpty()) {
-            return emptySelection(availableMana, 0);
         }
 
         final int handOverflow = snapshot == null
@@ -203,65 +310,67 @@ public final class ManaActionCombinationSelector {
                 : snapshot.handOverflow();
         final int handPressureValue = handOverflow == 0 ? 0
                 : CardResourceValueEvaluator.evaluateNextCard(ai.getMaxHandSize());
-        try {
-            budget.check();
-        } catch (final EffectEvaluationBudget.Exceeded exceeded) {
-            return timedOut(availableMana, candidates.size());
-        }
-        final State best;
-        try {
-            final Candidate required = findCandidate(candidates, requiredFirstAction);
-            if (requiredFirstAction != null && required == null) {
-                return emptySelection(availableMana, candidates.size());
-            }
-            best = solve(candidates, required, availableMana, handOverflow, snapshot, budget);
-        } catch (final EffectEvaluationBudget.Exceeded exceeded) {
-            return timedOut(availableMana, candidates.size());
-        }
+        budget.check();
         final int fallbackCandidateCount = (int) candidates.stream()
                 .filter(Candidate::fallback).count();
-        if (best == null || best.actions().isEmpty()) {
-            return new Selection(null, List.of(), availableMana, 0, availableMana,
-                    -availableMana * UNUSED_MANA_PENALTY, 0, candidates.size(),
-                    fallbackCandidateCount, 0, 0, 0);
-        }
-
-        final int pressure = handPressureValue * Math.min(best.castCount(), handOverflow);
-        final int unusedMana = availableMana - best.usedMana();
-        final int score = saturatedAdd(best.value(), pressure,
-                -unusedMana * UNUSED_MANA_PENALTY);
-        final List<SpellAbility> actions = firstActionFirst(best.actions(), requiredFirstAction);
-        final SpellAbility firstAction = requiredFirstAction == null
-                ? actions.get(0) : requiredFirstAction;
-        final int fallbackActionCount = (int) actions.stream()
-                .filter(action -> candidates.stream()
-                        .anyMatch(candidate -> candidate.ability() == action && candidate.fallback()))
-                .count();
-        final int incompleteActionCount = (int) actions.stream()
-                .filter(action -> candidates.stream()
-                        .anyMatch(candidate -> candidate.ability() == action
-                                && !candidate.estimate().canEstablishOverride()))
-                .count();
-        final int uncertainActionCount = (int) actions.stream()
-                .filter(action -> candidates.stream()
-                        .anyMatch(candidate -> candidate.ability() == action
-                                && candidate.estimate().resources().uncertain()))
-                .count();
-        return new Selection(firstAction, actions, availableMana,
-                best.usedMana(), unusedMana, score, pressure, candidates.size(),
-                fallbackCandidateCount, fallbackActionCount, incompleteActionCount,
-                uncertainActionCount);
+        return new PreparedCandidates(candidates, candidatesByAbility,
+                groupCandidates(candidates), manaSourceModel(snapshot), availableMana,
+                handOverflow, handPressureValue, fallbackCandidateCount);
     }
 
-    private static Candidate findCandidate(final List<Candidate> candidates,
-            final SpellAbility requiredFirstAction) {
-        if (requiredFirstAction == null) {
-            return null;
+    private static Selection selectPrepared(final PreparedCandidates prepared,
+            final SpellAbility requiredFirstAction, final ActionDecisionSnapshot snapshot,
+            final EffectEvaluationBudget budget) {
+        final List<Candidate> candidates = prepared.candidates();
+        if (candidates.isEmpty()) {
+            return emptySelection(prepared.availableMana(), 0);
         }
-        return candidates.stream()
-                .filter(candidate -> candidate.ability() == requiredFirstAction)
-                .findFirst()
-                .orElse(null);
+
+        budget.check();
+        final State best;
+        final Candidate required = prepared.candidatesByAbility().get(requiredFirstAction);
+        if (requiredFirstAction != null && required == null) {
+            return emptySelection(prepared.availableMana(), candidates.size());
+        }
+        best = solve(prepared.groups(), required,
+                prepared.availableMana(), prepared.handOverflow(), snapshot,
+                prepared.manaSourceModel(), budget);
+        if (best == null || best.actionCount() == 0) {
+            return new Selection(null, List.of(), prepared.availableMana(), 0,
+                    prepared.availableMana(), -prepared.availableMana() * UNUSED_MANA_PENALTY,
+                    0, candidates.size(), prepared.fallbackCandidateCount(), 0, 0, 0);
+        }
+
+        final int pressure = prepared.handPressureValue()
+                * Math.min(best.castCount(), prepared.handOverflow());
+        final int unusedMana = prepared.availableMana() - best.usedMana();
+        final int score = saturatedAdd(best.value(), pressure,
+                -unusedMana * UNUSED_MANA_PENALTY);
+        final List<SpellAbility> actions = firstActionFirst(best.toActions(), requiredFirstAction);
+        final SpellAbility firstAction = requiredFirstAction == null
+                ? actions.get(0) : requiredFirstAction;
+        int fallbackActionCount = 0;
+        int incompleteActionCount = 0;
+        int uncertainActionCount = 0;
+        for (final SpellAbility action : actions) {
+            final Candidate candidate = prepared.candidatesByAbility().get(action);
+            if (candidate == null) {
+                continue;
+            }
+            if (candidate.fallback()) {
+                fallbackActionCount++;
+            }
+            if (!candidate.estimate().canEstablishOverride()) {
+                incompleteActionCount++;
+            }
+            if (candidate.estimate().resources().uncertain()) {
+                uncertainActionCount++;
+            }
+        }
+        return new Selection(firstAction, actions, prepared.availableMana(),
+                best.usedMana(), unusedMana, score, pressure, candidates.size(),
+                prepared.fallbackCandidateCount(), fallbackActionCount, incompleteActionCount,
+                uncertainActionCount);
     }
 
     private static List<SpellAbility> firstActionFirst(final List<SpellAbility> actions,
@@ -445,15 +554,20 @@ public final class ManaActionCombinationSelector {
                 .anyMatch(key -> key.startsWith("Condition"));
     }
 
-    private static State solve(final List<Candidate> candidates, final Candidate required,
+    private static State solve(final List<List<Candidate>> groups, final Candidate required,
             final int availableMana, final int handOverflow,
-            final ActionDecisionSnapshot snapshot, final EffectEvaluationBudget budget) {
+            final ActionDecisionSnapshot snapshot, final ManaSourceModel manaSourceModel,
+            final EffectEvaluationBudget budget) {
         State[][] states = new State[availableMana + 1][handOverflow + 1];
-        states[0][0] = new State(0, 0, 0, List.of());
+        states[0][0] = new State(0, 0, 0, null, null, 0);
 
-        for (final List<Candidate> group : groupCandidates(candidates)) {
+        for (final List<Candidate> group : groups) {
             budget.check();
             final boolean containsRequired = required != null && group.contains(required);
+            if (!containsRequired && group.size() == 1) {
+                applyCandidateInPlace(states, group.get(0), availableMana, handOverflow, budget);
+                continue;
+            }
             final State[][] nextStates = containsRequired
                     ? new State[availableMana + 1][handOverflow + 1] : copyStates(states);
             for (final Candidate candidate : group) {
@@ -489,22 +603,46 @@ public final class ManaActionCombinationSelector {
             states = nextStates;
         }
 
+        if (snapshot != null) {
+            final List<State> finalStates = new ArrayList<>();
+            for (int mana = 0; mana <= availableMana; mana++) {
+                budget.check();
+                for (int casts = 0; casts <= handOverflow; casts++) {
+                    final State state = states[mana][casts];
+                    if (state != null && state.actionCount() > 0) {
+                        finalStates.add(state);
+                    }
+                }
+            }
+            finalStates.sort((first, second) -> {
+                final int scoreOrder = Integer.compare(finalStateScore(second, availableMana),
+                        finalStateScore(first, availableMana));
+                if (scoreOrder != 0) {
+                    return scoreOrder;
+                }
+                final int manaOrder = Integer.compare(second.usedMana(), first.usedMana());
+                return manaOrder != 0 ? manaOrder
+                        : Integer.compare(first.castCount(), second.castCount());
+            });
+            for (final State state : finalStates) {
+                budget.check();
+                if (isManaFeasible(state, snapshot, manaSourceModel)) {
+                    return state;
+                }
+            }
+            return null;
+        }
+
         State best = null;
         int bestScore = Integer.MIN_VALUE;
         for (int mana = 0; mana <= availableMana; mana++) {
             budget.check();
             for (int casts = 0; casts <= handOverflow; casts++) {
                 final State state = states[mana][casts];
-                if (state == null || state.actions().isEmpty()) {
+                if (state == null || state.actionCount() == 0) {
                     continue;
                 }
-                if (snapshot != null && !isManaFeasible(state.actions(), candidates, snapshot)) {
-                    // Total mana is only an upper bound.  Do not allow a combination that cannot
-                    // be paid by distinct colored sources to establish an override.
-                    continue;
-                }
-                final int score = saturatedAdd(state.value(),
-                        -((availableMana - mana) * UNUSED_MANA_PENALTY));
+                final int score = finalStateScore(state, availableMana);
                 if (best == null || score > bestScore
                         || score == bestScore && mana > best.usedMana()) {
                     best = state;
@@ -513,6 +651,76 @@ public final class ManaActionCombinationSelector {
             }
         }
         return best;
+    }
+
+    private static int finalStateScore(final State state, final int availableMana) {
+        return saturatedAdd(state.value(),
+                -((availableMana - state.usedMana()) * UNUSED_MANA_PENALTY));
+    }
+
+    /**
+     * Most candidates have no mutually exclusive resource footprint and form singleton groups.
+     * Apply those to the existing table in reverse coordinate order so the new state for an
+     * action cannot be consumed again during the same pass.
+     */
+    private static void applyCandidateInPlace(final State[][] states,
+            final Candidate candidate, final int availableMana, final int handOverflow,
+            final EffectEvaluationBudget budget) {
+        final int uses = Math.min(candidate.maxUses(), candidate.manaCost() == 0
+                ? 1 : availableMana / candidate.manaCost());
+        for (int mana = availableMana; mana >= 0; mana--) {
+            budget.check();
+            for (int casts = handOverflow; casts >= 0; casts--) {
+                final State current = states[mana][casts];
+                if (current == null) {
+                    continue;
+                }
+                State repeated = current;
+                for (int use = 1; use <= uses; use++) {
+                    final int newMana = mana + use * candidate.manaCost();
+                    if (newMana > availableMana) {
+                        break;
+                    }
+                    final int newCasts = Math.min(handOverflow,
+                            casts + (candidate.cast() ? 1 : 0));
+                    repeated = repeated.add(candidate, newCasts, use);
+                    if (isBetterInPlace(repeated, states[newMana][newCasts], candidate,
+                            current, use)) {
+                        states[newMana][newCasts] = repeated;
+                    }
+                }
+            }
+        }
+    }
+
+    /** Preserve the former ascending-transition tie order while processing the table in place. */
+    private static boolean isBetterInPlace(final State candidateState, final State existing,
+            final Candidate candidate, final State source, final int useNumber) {
+        if (existing == null || candidateState.value() > existing.value()) {
+            return true;
+        }
+        if (candidateState.value() < existing.value()
+                || existing.candidate() != candidate || existing.parent() == null) {
+            // Before the refactor, untouched states were copied into the next table first, so an
+            // equal-valued transition never displaced the best plan that was already there.
+            return false;
+        }
+        State existingSource = existing;
+        int existingUse = 0;
+        while (existingSource != null && existingSource.candidate() == candidate) {
+            existingUse++;
+            existingSource = existingSource.parent();
+        }
+        if (existingSource == null) {
+            return false;
+        }
+        if (source.usedMana() != existingSource.usedMana()) {
+            return source.usedMana() < existingSource.usedMana();
+        }
+        if (source.castCount() != existingSource.castCount()) {
+            return source.castCount() < existingSource.castCount();
+        }
+        return useNumber < existingUse;
     }
 
     /**
@@ -603,6 +811,18 @@ public final class ManaActionCombinationSelector {
         Logger.warn("[AI Effect Analysis] Mana action combination timed out after evaluating {} candidates; "
                 + "preserving legacy action ordering.", evaluated);
         return emptySelection(availableMana, evaluated);
+    }
+
+    /** Logs a cheap skip when the conservative resource gate makes analysis impossible. */
+    public static void logSkipped(final ActionDecisionSnapshot snapshot, final String reason) {
+        if (!Boolean.parseBoolean(System.getProperty(EffectAnalysisTrace.ENABLE_PROPERTY, "true"))) {
+            return;
+        }
+        Logger.info("[AI Effect Analysis] Mana action combination skipped: reason={}, "
+                        + "availableMana={}, manaSources={}, manaResourcesComplete={}",
+                reason, snapshot == null ? "UNKNOWN" : snapshot.availableMana(),
+                snapshot == null ? "UNKNOWN" : snapshot.manaSources().size(),
+                snapshot != null && snapshot.manaResourcesComplete());
     }
 
     /** Logs a non-mutating comparison between the legacy first action and the global proposal. */
@@ -748,8 +968,8 @@ public final class ManaActionCombinationSelector {
                 selection.firstAction().getHostCard().getName(), actions);
     }
 
-    private static boolean isManaFeasible(final List<SpellAbility> actions,
-            final List<Candidate> candidates, final ActionDecisionSnapshot snapshot) {
+    private static boolean isManaFeasible(final State state,
+            final ActionDecisionSnapshot snapshot, final ManaSourceModel manaSourceModel) {
         if (!snapshot.manaResourcesComplete()) {
             return false;
         }
@@ -757,14 +977,14 @@ public final class ManaActionCombinationSelector {
         final List<ActionResourceRequirement> resourceRequirements = new ArrayList<>();
         final IdentityHashMap<Card, Boolean> fixedUnavailableResources = new IdentityHashMap<>();
         final IdentityHashMap<Card, Boolean> unavailableManaSources = new IdentityHashMap<>();
-        for (final SpellAbility action : actions) {
-            final Candidate candidate = candidates.stream()
-                    .filter(item -> item.ability() == action)
-                    .findFirst()
-                    .orElse(null);
-            if (candidate == null) {
-                return false;
-            }
+        final List<State> actionsInOrder = new ArrayList<>(state.actionCount());
+        for (State action = state; action != null && action.candidate() != null;
+                action = action.parent()) {
+            actionsInOrder.add(action);
+        }
+        Collections.reverse(actionsInOrder);
+        for (final State action : actionsInOrder) {
+            final Candidate candidate = action.candidate();
             final List<Integer> actionRequirements = manaRequirements(candidate.manaCostDetails(),
                     candidate.xValue());
             if (actionRequirements == null) {
@@ -801,12 +1021,138 @@ public final class ManaActionCombinationSelector {
         // generic requirements so a source that produces only one color is not consumed too soon.
         Collections.sort(requirements, (first, second) -> Boolean.compare(
                 isGenericRequirement(first), isGenericRequirement(second)));
-        final boolean[][] usedOutputs = new boolean[snapshot.manaSources().size()][];
-        for (int i = 0; i < snapshot.manaSources().size(); i++) {
-            usedOutputs[i] = new boolean[snapshot.manaSources().get(i).outputMasks().size()];
+        if (manaSourceModel.independentSingleOutputSources()) {
+            return assignWithBipartiteMatching(requirements, manaSourceModel.sources(),
+                    unavailableManaSources);
         }
-        return assignManaRequirements(0, requirements, snapshot.manaSources(), usedOutputs,
-                new IdentityHashMap<>(), unavailableManaSources, new SearchBudget());
+        final boolean[][] usedOutputs = new boolean[manaSourceModel.sources().size()][];
+        for (int i = 0; i < manaSourceModel.sources().size(); i++) {
+            usedOutputs[i] = new boolean[manaSourceModel.sources().get(i).outputMasks().size()];
+        }
+        final int[][] lastTriedAtFrame = new int[requirements.size()]
+                [manaSourceModel.symmetryGroups().count()];
+        return assignManaRequirements(0, requirements, manaSourceModel.sources(), usedOutputs,
+                new IdentityHashMap<>(), unavailableManaSources,
+                manaSourceModel.symmetryGroups().bySource(),
+                lastTriedAtFrame, new SearchBudget());
+    }
+
+    private static ManaSourceModel manaSourceModel(final ActionDecisionSnapshot snapshot) {
+        final List<ActionManaSource> sources = snapshot == null
+                ? List.of() : snapshot.manaSources();
+        final boolean independentSingleOutputSources =
+                hasIndependentSingleOutputSources(sources);
+        final SourceSymmetryGroups symmetryGroups = independentSingleOutputSources
+                ? new SourceSymmetryGroups(new int[sources.size()], 0)
+                : sourceSymmetryGroups(sources);
+        return new ManaSourceModel(sources, independentSingleOutputSources, symmetryGroups);
+    }
+
+    /**
+     * Ordinary one-output sources form a bipartite assignment problem. Detect that common case so
+     * the checker can use polynomial matching instead of exploring source permutations.
+     */
+    private static boolean hasIndependentSingleOutputSources(
+            final List<ActionManaSource> sources) {
+        final IdentityHashMap<Card, Integer> sourceCounts = new IdentityHashMap<>();
+        for (final ActionManaSource source : sources) {
+            if (!source.uncertain() && source.source() != null) {
+                sourceCounts.put(source.source(), sourceCounts.getOrDefault(source.source(), 0) + 1);
+            }
+        }
+        for (final ActionManaSource source : sources) {
+            if (source.uncertain() || source.outputMasks().isEmpty()) {
+                continue;
+            }
+            if (source.outputMasks().size() != 1
+                    || source.source() != null && sourceCounts.get(source.source()) != 1) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean assignWithBipartiteMatching(
+            final List<Integer> requirements, final List<ActionManaSource> sources,
+            final IdentityHashMap<Card, Boolean> unavailableManaSources) {
+        final int[] matchedRequirementBySource = new int[sources.size()];
+        java.util.Arrays.fill(matchedRequirementBySource, -1);
+        final SearchBudget searchBudget = new SearchBudget();
+        for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
+            final boolean[] visitedSources = new boolean[sources.size()];
+            if (!assignRequirement(requirementIndex, requirements, sources,
+                    unavailableManaSources, matchedRequirementBySource, visitedSources,
+                    searchBudget)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean assignRequirement(final int requirementIndex,
+            final List<Integer> requirements, final List<ActionManaSource> sources,
+            final IdentityHashMap<Card, Boolean> unavailableManaSources,
+            final int[] matchedRequirementBySource, final boolean[] visitedSources,
+            final SearchBudget searchBudget) {
+        for (int sourceIndex = 0; sourceIndex < sources.size(); sourceIndex++) {
+            if (!searchBudget.visit()) {
+                return false;
+            }
+            final ActionManaSource source = sources.get(sourceIndex);
+            if (visitedSources[sourceIndex] || source.uncertain()
+                    || source.outputMasks().isEmpty()
+                    || source.source() != null
+                            && unavailableManaSources.containsKey(source.source())
+                    || !canPayRequirement(source.outputMasks().get(0),
+                            requirements.get(requirementIndex))) {
+                continue;
+            }
+            visitedSources[sourceIndex] = true;
+            final int previousRequirement = matchedRequirementBySource[sourceIndex];
+            if (previousRequirement < 0 || assignRequirement(previousRequirement, requirements,
+                    sources, unavailableManaSources, matchedRequirementBySource, visitedSources,
+                    searchBudget)) {
+                matchedRequirementBySource[sourceIndex] = requirementIndex;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Identifies independent, single-output sources that are interchangeable for this check.
+     * Sources with multiple abilities on one card are deliberately excluded because choosing one
+     * activation prevents choosing another activation of that same permanent.
+     */
+    private static SourceSymmetryGroups sourceSymmetryGroups(
+            final List<ActionManaSource> sources) {
+        final IdentityHashMap<Card, Integer> sourceCounts = new IdentityHashMap<>();
+        for (final ActionManaSource source : sources) {
+            if (source.source() != null) {
+                sourceCounts.put(source.source(), sourceCounts.getOrDefault(source.source(), 0) + 1);
+            }
+        }
+
+        final int[] bySource = new int[sources.size()];
+        java.util.Arrays.fill(bySource, -1);
+        final Map<Integer, Integer> groupsByOutput = new HashMap<>();
+        int nextGroup = 0;
+        for (int i = 0; i < sources.size(); i++) {
+            final ActionManaSource source = sources.get(i);
+            if (source.uncertain() || source.outputMasks().size() != 1
+                    || source.outputMasks().get(0) == 0
+                    || source.source() != null && sourceCounts.get(source.source()) != 1) {
+                continue;
+            }
+            final int output = source.outputMasks().get(0);
+            Integer group = groupsByOutput.get(output);
+            if (group == null) {
+                group = nextGroup++;
+                groupsByOutput.put(output, group);
+            }
+            bySource[i] = group;
+        }
+        return new SourceSymmetryGroups(bySource, nextGroup);
     }
 
     private static boolean resourceRequirementsFeasible(
@@ -926,6 +1272,7 @@ public final class ManaActionCombinationSelector {
             final List<Integer> requirements, final List<ActionManaSource> sources,
             final boolean[][] usedOutputs, final IdentityHashMap<Card, Integer> chosenSources,
             final IdentityHashMap<Card, Boolean> unavailableManaSources,
+            final int[] symmetryGroupBySource, final int[][] lastTriedAtFrame,
             final SearchBudget searchBudget) {
         if (requirementIndex >= requirements.size()) {
             return true;
@@ -933,6 +1280,7 @@ public final class ManaActionCombinationSelector {
         if (!searchBudget.visit()) {
             return false;
         }
+        final int frame = searchBudget.nextFrame();
         final int requirement = requirements.get(requirementIndex);
         for (int sourceIndex = 0; sourceIndex < sources.size(); sourceIndex++) {
             final ActionManaSource source = sources.get(sourceIndex);
@@ -947,6 +1295,25 @@ public final class ManaActionCombinationSelector {
             if (chosenSource != null && chosenSource != sourceIndex) {
                 continue;
             }
+            final int symmetryGroup = symmetryGroupBySource[sourceIndex];
+            if (symmetryGroup >= 0
+                    && lastTriedAtFrame[requirementIndex][symmetryGroup] == frame) {
+                continue;
+            }
+            boolean canUseOutput = false;
+            for (int outputIndex = 0; outputIndex < source.outputMasks().size(); outputIndex++) {
+                if (!usedOutputs[sourceIndex][outputIndex]
+                        && canPayRequirement(source.outputMasks().get(outputIndex), requirement)) {
+                    canUseOutput = true;
+                    break;
+                }
+            }
+            if (!canUseOutput) {
+                continue;
+            }
+            if (symmetryGroup >= 0) {
+                lastTriedAtFrame[requirementIndex][symmetryGroup] = frame;
+            }
             final boolean newlyChosen = sourceCard != null && chosenSource == null;
             if (newlyChosen) {
                 chosenSources.put(sourceCard, sourceIndex);
@@ -958,7 +1325,8 @@ public final class ManaActionCombinationSelector {
                 }
                 usedOutputs[sourceIndex][outputIndex] = true;
                 if (assignManaRequirements(requirementIndex + 1, requirements, sources,
-                        usedOutputs, chosenSources, unavailableManaSources, searchBudget)) {
+                        usedOutputs, chosenSources, unavailableManaSources, symmetryGroupBySource,
+                        lastTriedAtFrame, searchBudget)) {
                     return true;
                 }
                 usedOutputs[sourceIndex][outputIndex] = false;
@@ -985,10 +1353,29 @@ public final class ManaActionCombinationSelector {
 
     private static final class SearchBudget {
         private int nodes;
+        private int frames;
 
         private boolean visit() {
             return ++nodes <= MAX_MANA_SEARCH_NODES;
         }
+
+        private int nextFrame() {
+            return ++frames;
+        }
+    }
+
+    private record SourceSymmetryGroups(int[] bySource, int count) {
+    }
+
+    private record PreparedCandidates(List<Candidate> candidates,
+            IdentityHashMap<SpellAbility, Candidate> candidatesByAbility,
+            List<List<Candidate>> groups, ManaSourceModel manaSourceModel,
+            int availableMana, int handOverflow,
+            int handPressureValue, int fallbackCandidateCount) {
+    }
+
+    private record ManaSourceModel(List<ActionManaSource> sources,
+            boolean independentSingleOutputSources, SourceSymmetryGroups symmetryGroups) {
     }
 
     private record Candidate(SpellAbility ability, int manaCost, ManaCost manaCostDetails,
@@ -1014,13 +1401,24 @@ public final class ManaActionCombinationSelector {
         }
     }
 
-    private record State(int value, int usedMana, int castCount, List<SpellAbility> actions) {
+    private record State(int value, int usedMana, int castCount, State parent,
+            Candidate candidate, int actionCount) {
         private State add(final Candidate candidate, final int newCastCount,
-                final int useNumber) {
-            final List<SpellAbility> nextActions = new ArrayList<>(actions);
-            nextActions.add(candidate.ability());
+            final int useNumber) {
             return new State(saturatedAdd(value, candidate.valueForUse(useNumber)),
-                    usedMana + candidate.manaCost(), newCastCount, nextActions);
+                    usedMana + candidate.manaCost(), newCastCount, this, candidate,
+                    actionCount + 1);
+        }
+
+        private List<SpellAbility> toActions() {
+            final List<SpellAbility> actions = new ArrayList<>(actionCount);
+            State current = this;
+            while (current != null && current.candidate() != null) {
+                actions.add(current.candidate().ability());
+                current = current.parent();
+            }
+            Collections.reverse(actions);
+            return actions;
         }
     }
 }

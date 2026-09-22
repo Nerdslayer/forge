@@ -1626,14 +1626,23 @@ public class AiController {
                     && !useLivingEnd ? ActionDecisionSnapshot.capture(player) : null;
             final boolean actionCombinationWindow = actionDecisionSnapshot != null
                     && actionDecisionSnapshot.allowsProactiveCombination();
+            final boolean actionCombinationResourcesComplete = actionDecisionSnapshot != null
+                    && actionDecisionSnapshot.manaResourcesComplete();
             final boolean actionCombinationEnabled =
                     getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
-                            && !useLivingEnd && actionCombinationWindow;
+                            && !useLivingEnd && actionCombinationWindow
+                            && actionCombinationResourcesComplete;
             final boolean useActionCombinationShadow =
                     getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
-                            && !useLivingEnd && actionCombinationWindow;
+                            && !useLivingEnd && actionCombinationWindow
+                            && actionCombinationResourcesComplete;
             final boolean analyzeActionCombination = actionCombinationEnabled
                     || useActionCombinationShadow;
+            if (actionCombinationConfigured && actionCombinationWindow
+                    && !actionCombinationResourcesComplete) {
+                ManaActionCombinationSelector.logSkipped(actionDecisionSnapshot,
+                        "mana_source_model_incomplete");
+            }
             final Map<SpellAbility, LegacyActionAssessment> legacyAssessments =
                     new IdentityHashMap<>();
             final Predicate<SpellAbility> legacyCandidateFilter =
@@ -1641,20 +1650,28 @@ public class AiController {
                             this::assessLegacyAction).willingNow();
             final SpellAbility legacyFirstAction = analyzeActionCombination
                     ? findLegacyFirstAction(playableAbilities, skipCounter, legacyCandidateFilter) : null;
+            final LegacyActionAssessment legacyFirstAssessment = legacyFirstAction == null
+                    ? null : legacyAssessments.get(legacyFirstAction);
+            // An incomplete legacy assessment already forbids an active override. Keep shadow
+            // mode analyzing for diagnostics, but avoid candidate valuation when it can only
+            // produce the existing legacy choice.
+            final boolean skipUnsafeActiveCombinationAnalysis = actionCombinationEnabled
+                    && !useActionCombinationShadow && legacyFirstAssessment != null
+                    && !legacyFirstAssessment.assessmentComplete();
             final ManaActionCombinationSelector.Selection combinationSelection;
             final ManaActionCombinationSelector.Selection legacyPlan;
             boolean actionCombinationOverride = false;
             String actionCombinationOverrideReason = "not_analyzed";
-            if (analyzeActionCombination) {
+            if (analyzeActionCombination && !skipUnsafeActiveCombinationAnalysis) {
                 // The combination selector is advisory. Admit only actions that the complete
                 // legacy chooser is already willing to play, so an unsupported valuation cannot
                 // bypass card-specific timing, drawback, or safety logic.
-                combinationSelection = ManaActionCombinationSelector.select(player,
-                        playableAbilities, skipCounter,
-                        actionDecisionSnapshot, legacyCandidateFilter);
-                legacyPlan = ManaActionCombinationSelector.selectWithFirstAction(player,
-                        playableAbilities, skipCounter, legacyFirstAction,
-                        actionDecisionSnapshot, legacyCandidateFilter);
+                final ManaActionCombinationSelector.Comparison comparison =
+                        ManaActionCombinationSelector.compare(player, playableAbilities,
+                                skipCounter, legacyFirstAction, actionDecisionSnapshot,
+                                legacyCandidateFilter);
+                combinationSelection = comparison.proposed();
+                legacyPlan = comparison.legacy();
                 final boolean legacyTimingConstraint = legacyAssessments.values().stream()
                         .anyMatch(LegacyActionAssessment::blocksCombination);
                 final boolean legacyAssessmentIncomplete = legacyAssessments.values().stream()
@@ -1674,6 +1691,11 @@ public class AiController {
             } else {
                 combinationSelection = null;
                 legacyPlan = null;
+                if (skipUnsafeActiveCombinationAnalysis) {
+                    actionCombinationOverrideReason = "legacy_assessment_incomplete";
+                    ManaActionCombinationSelector.logSkipped(actionDecisionSnapshot,
+                            actionCombinationOverrideReason);
+                }
             }
             boolean shadowLogged = false;
             for (final SpellAbility sa : playableAbilities) {
