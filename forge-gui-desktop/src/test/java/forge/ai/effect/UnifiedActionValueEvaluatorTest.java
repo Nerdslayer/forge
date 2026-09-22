@@ -110,6 +110,59 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void sourceBoundSacrificeActivationIncludesTheSourceResource() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card source = addCard("Grizzly Bears", ai);
+        addCard("Forest", ai);
+        final SpellAbility sacrificeForLife = AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ 1 Sac<1/CARDNAME> | Defined$ You | LifeAmount$ 20", source);
+        sacrificeForLife.setActivatingPlayer(ai);
+
+        final CardValueBreakdown result = UnifiedActionValueEvaluator.evaluate(
+                new ActivateValuationAction(source, sacrificeForLife),
+                ValuationContext.forActivation(ai, true));
+
+        Assert.assertTrue(result.isComplete(), result.toString());
+        Assert.assertTrue(result.transitionValue() > 0, result.toString());
+    }
+
+    @Test
+    public void manaCombinationSelectorBoundsRepeatableNonTapActivations() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card source = addCard("Grizzly Bears", ai);
+        for (int i = 0; i < 4; i++) {
+            addCard("Forest", ai);
+        }
+        final SpellAbility gainLife = AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ 1 | Defined$ You | LifeAmount$ 2", source);
+        gainLife.setActivatingPlayer(ai);
+
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.select(ai, List.of(gainLife), true);
+
+        Assert.assertTrue(selection.hasAction(), selection.toString());
+        Assert.assertEquals(selection.usedMana(), 4, selection.toString());
+        Assert.assertEquals(selection.actions().size(), 4, selection.toString());
+    }
+
+    @Test
+    public void manaCombinationSelectorDoesNotUseASacrificedManaSourceToPayItsOwnCost() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card source = addCard("Llanowar Elves", ai);
+        final SpellAbility sacrificeForLife = AbilityFactory.getAbility(
+                "AB$ GainLife | Cost$ 1 Sac<1/CARDNAME> | Defined$ You | LifeAmount$ 20", source);
+        sacrificeForLife.setActivatingPlayer(ai);
+
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.select(ai, List.of(sacrificeForLife), true);
+
+        Assert.assertFalse(selection.hasAction(), selection.toString());
+    }
+
+    @Test
     public void activationTieBreakerUsesSharedValueOnlyForAnExactLegacyTie() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -223,6 +276,53 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void manaCombinationSelectorCanAnchorAPlanToTheLegacyFirstAction() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        for (int i = 0; i < 6; i++) {
+            addCard("Forest", ai);
+        }
+        addCardToZone("Savannah Lions", ai, ZoneType.Hand);
+        final Card colossalDreadmaw = addCardToZone("Colossal Dreadmaw", ai, ZoneType.Hand);
+
+        final List<SpellAbility> abilities = ComputerUtilAbility.getSpellAbilities(
+                new CardCollection(ai.getCardsIn(ZoneType.Hand)), ai);
+        final SpellAbility legacyFirst = abilities.stream()
+                .filter(ability -> ability.getHostCard() == colossalDreadmaw)
+                .findFirst()
+                .orElseThrow();
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.selectWithFirstAction(ai, abilities, true,
+                        legacyFirst);
+
+        Assert.assertTrue(selection.hasAction(), selection.toString());
+        Assert.assertSame(selection.firstAction(), legacyFirst);
+        Assert.assertTrue(selection.actions().contains(legacyFirst), selection.toString());
+    }
+
+    @Test
+    public void manaCombinationSelectorRejectsAnUnpayableColoredCombination() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        addCard("Plains", ai);
+        addCard("Plains", ai);
+        addCardToZone("Savannah Lions", ai, ZoneType.Hand);
+        addCardToZone("Llanowar Elves", ai, ZoneType.Hand);
+
+        final List<SpellAbility> abilities = ComputerUtilAbility.getSpellAbilities(
+                new CardCollection(ai.getCardsIn(ZoneType.Hand)), ai);
+        final ActionDecisionSnapshot snapshot = ActionDecisionSnapshot.capture(ai);
+        final ManaActionCombinationSelector.Selection selection =
+                ManaActionCombinationSelector.select(ai, abilities, true, snapshot, null);
+
+        Assert.assertTrue(selection.hasAction(), selection.toString());
+        Assert.assertEquals(selection.actions().size(), 1, selection.toString());
+        Assert.assertTrue(selection.firstAction().getHostCard().getName().equals("Savannah Lions")
+                || selection.firstAction().getHostCard().getName().equals("Llanowar Elves"),
+                selection.toString());
+    }
+
+    @Test
     public void manaCombinationSelectorUsesGrossValueForAHighCostPermanent() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -266,6 +366,7 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
         Assert.assertTrue(selection.hasAction(), selection.toString());
         Assert.assertSame(selection.firstAction(), unsupported);
         Assert.assertEquals(selection.fallbackCandidateCount(), 1);
+        Assert.assertEquals(selection.fallbackActionCount(), 1);
     }
 
     @Test

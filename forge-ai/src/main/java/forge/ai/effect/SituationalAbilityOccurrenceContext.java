@@ -9,9 +9,15 @@ import forge.ai.ComputerUtilMana;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.card.Card;
 import forge.game.cost.Cost;
+import forge.game.cost.CostDamage;
+import forge.game.cost.CostDiscard;
+import forge.game.cost.CostExile;
 import forge.game.cost.CostPayLife;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostPartMana;
+import forge.game.cost.CostRemoveAnyCounter;
+import forge.game.cost.CostRemoveCounter;
+import forge.game.cost.CostSacrifice;
 import forge.game.cost.CostTap;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
@@ -69,7 +75,7 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
             return ActivationOccurrenceRequest.unsupported("Not an active activated ability");
         }
         final Cost cost = ability.getPayCosts();
-        final Optional<SupportedActivationCost> supportedCost = supportedActivationCost(cost);
+        final Optional<SupportedActivationCost> supportedCost = supportedActivationCost(cost, ability);
         if (supportedCost.isEmpty()) {
             return ActivationOccurrenceRequest.unsupported("Unsupported activation cost");
         }
@@ -111,12 +117,33 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
     }
 
     static Optional<SupportedActivationCost> supportedActivationCost(final Cost cost) {
-        if (cost == null || cost.getTotalMana().countX() > 0) {
+        return supportedActivationCost(cost, null);
+    }
+
+    /**
+     * Returns the narrow activation-cost model shared by occurrence and action valuation.
+     *
+     * <p>Source-bound sacrifice and exile are safe to represent because the source card is known
+     * and can be included in the action resource footprint. Costs that choose another permanent,
+     * a card from hand, or a counter remain unsupported until that chosen resource can be carried
+     * through a combination. X and alternative costs are also intentionally rejected here.</p>
+     */
+    static Optional<SupportedActivationCost> supportedActivationCost(final Cost cost,
+            final SpellAbility ability) {
+        if (cost == null) {
+            return Optional.empty();
+        }
+        final int xCount = cost.getTotalMana().countX();
+        final Integer xPaid = ability == null ? null : ability.getXManaCostPaid();
+        if (xCount > 0 && (xPaid == null || xPaid < 0)) {
+            // An X cost is supported only after the caller has made the same announcement that
+            // the live payment path will use.
             return Optional.empty();
         }
         int lifeCost = 0;
+        boolean consumesSource = false;
         for (final CostPart part : cost.getCostParts()) {
-            if (part instanceof CostPayLife) {
+            if (part instanceof CostPayLife || part instanceof CostDamage) {
                 if (!part.getAmount().matches("\\d+")) {
                     return Optional.empty();
                 }
@@ -125,15 +152,30 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
                 } catch (final ArithmeticException | NumberFormatException invalidAmount) {
                     return Optional.empty();
                 }
-            } else if (!(part instanceof CostPartMana) && !(part instanceof CostTap)) {
+            } else if (part instanceof CostPartMana || part instanceof CostTap) {
+                continue;
+            } else if (part instanceof CostSacrifice || part instanceof CostExile
+                    || part instanceof CostDiscard || part instanceof CostRemoveCounter
+                    || part instanceof CostRemoveAnyCounter) {
+                if (!part.getAmount().matches("\\d+")) {
+                    return Optional.empty();
+                }
+                if (ability != null && part.payCostFromSource()
+                        && (part instanceof CostSacrifice || part instanceof CostExile)
+                        && "1".equals(part.getAmount())) {
+                    consumesSource = true;
+                }
+            } else {
                 return Optional.empty();
             }
         }
-        return Optional.of(new SupportedActivationCost(cost.getTotalMana().getCMC(), lifeCost,
-                cost.hasTapCost()));
+        final int manaCost = cost.getTotalMana().getCMC() + (xPaid == null ? 0 : xPaid * xCount);
+        return Optional.of(new SupportedActivationCost(manaCost, lifeCost,
+                cost.hasTapCost(), consumesSource));
     }
 
-    record SupportedActivationCost(int manaCost, int lifeCost, boolean hasTapCost) {
+    record SupportedActivationCost(int manaCost, int lifeCost, boolean hasTapCost,
+            boolean consumesSource) {
     }
 
     /** Estimates whether the controller will choose the activation in the current position. */

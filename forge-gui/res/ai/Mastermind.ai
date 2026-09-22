@@ -343,6 +343,10 @@ ENABLE_CAST_VALUE_TIEBREAK=true
 # Use complete immediate activation value only to break exact legacy ties when choosing an ability.
 ENABLE_ACTIVATION_VALUE_TIEBREAK=true
 # Compare independent combinations of currently payable casts and activations within available mana.
-ENABLE_ACTION_COMBINATION_VALUE_SELECTION=false
+ENABLE_ACTION_COMBINATION_VALUE_SELECTION=true
+# Log the proposed combination against the legacy first action without changing behavior.
+ENABLE_ACTION_COMBINATION_VALUE_SHADOW=true
+# Require this much score improvement before replacing the legacy first action.
+ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE=20
 # Abandon action-combination analysis and preserve legacy ordering after this many milliseconds.
 ACTION_COMBINATION_VALUE_SELECTION_TIMEOUT_MS=100

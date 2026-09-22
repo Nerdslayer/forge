@@ -24,6 +24,7 @@ import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ChangeZoneAi;
 import forge.ai.ability.LearnAi;
 import forge.ai.effect.ActivateAbilityValueTieBreaker;
+import forge.ai.effect.ActionDecisionSnapshot;
 import forge.ai.effect.CastCardValueTieBreaker;
 import forge.ai.effect.ManaActionCombinationSelector;
 import forge.ai.simulation.GameStateEvaluator;
@@ -1618,9 +1619,63 @@ public class AiController {
             final List<SpellAbility> playableAbilities =
                     ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player);
             playableAbilities.removeIf(this::isFailedActionSuppressed);
-            if (getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)) {
-                ManaActionCombinationSelector.apply(player, playableAbilities, skipCounter);
+            final boolean actionCombinationConfigured =
+                    getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
+                            || getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW);
+            final ActionDecisionSnapshot actionDecisionSnapshot = actionCombinationConfigured
+                    && !useLivingEnd ? ActionDecisionSnapshot.capture(player) : null;
+            final boolean actionCombinationWindow = actionDecisionSnapshot != null
+                    && actionDecisionSnapshot.allowsProactiveCombination();
+            final boolean actionCombinationEnabled =
+                    getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
+                            && !useLivingEnd && actionCombinationWindow;
+            final boolean useActionCombinationShadow =
+                    getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
+                            && !useLivingEnd && actionCombinationWindow;
+            final boolean analyzeActionCombination = actionCombinationEnabled
+                    || useActionCombinationShadow;
+            final Map<SpellAbility, LegacyActionAssessment> legacyAssessments =
+                    new IdentityHashMap<>();
+            final Predicate<SpellAbility> legacyCandidateFilter =
+                    ability -> legacyAssessments.computeIfAbsent(ability,
+                            this::assessLegacyAction).willingNow();
+            final SpellAbility legacyFirstAction = analyzeActionCombination
+                    ? findLegacyFirstAction(playableAbilities, skipCounter, legacyCandidateFilter) : null;
+            final ManaActionCombinationSelector.Selection combinationSelection;
+            final ManaActionCombinationSelector.Selection legacyPlan;
+            boolean actionCombinationOverride = false;
+            String actionCombinationOverrideReason = "not_analyzed";
+            if (analyzeActionCombination) {
+                // The combination selector is advisory. Admit only actions that the complete
+                // legacy chooser is already willing to play, so an unsupported valuation cannot
+                // bypass card-specific timing, drawback, or safety logic.
+                combinationSelection = ManaActionCombinationSelector.select(player,
+                        playableAbilities, skipCounter,
+                        actionDecisionSnapshot, legacyCandidateFilter);
+                legacyPlan = ManaActionCombinationSelector.selectWithFirstAction(player,
+                        playableAbilities, skipCounter, legacyFirstAction,
+                        actionDecisionSnapshot, legacyCandidateFilter);
+                final boolean legacyTimingConstraint = legacyAssessments.values().stream()
+                        .anyMatch(LegacyActionAssessment::blocksCombination);
+                final boolean legacyAssessmentIncomplete = legacyAssessments.values().stream()
+                        .anyMatch(assessment -> !assessment.assessmentComplete());
+                actionCombinationOverrideReason = actionCombinationOverrideReason(
+                        legacyFirstAction, legacyPlan, combinationSelection,
+                        actionDecisionSnapshot, legacyTimingConstraint, legacyAssessmentIncomplete);
+                actionCombinationOverride = actionCombinationEnabled
+                        && "advantage_exceeds_threshold".equals(actionCombinationOverrideReason);
+                if (actionCombinationOverride) {
+                    ManaActionCombinationSelector.reorder(playableAbilities,
+                            combinationSelection);
+                }
+                if (actionCombinationEnabled && !useActionCombinationShadow) {
+                    ManaActionCombinationSelector.logSelection(combinationSelection);
+                }
+            } else {
+                combinationSelection = null;
+                legacyPlan = null;
             }
+            boolean shadowLogged = false;
             for (final SpellAbility sa : playableAbilities) {
                 if (Thread.currentThread().isInterrupted()) {
                     break;
@@ -1693,6 +1748,17 @@ public class AiController {
 
                 if (opinion != AiPlayDecision.WillPlay) {
                     continue;
+                }
+
+                if (useActionCombinationShadow && !shadowLogged) {
+                    ManaActionCombinationSelector.logShadowComparison(legacyFirstAction,
+                            legacyPlan, combinationSelection, actionCombinationOverride,
+                            legacyFirstAction == null ? "NONE"
+                                    : legacyAssessments.get(legacyFirstAction).timingDisposition().name(),
+                            Math.max(0, getIntProperty(
+                                    AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE)),
+                            actionDecisionSnapshot, actionCombinationOverrideReason);
+                    shadowLogged = true;
                 }
 
                 // TODO could continue to try find another with higher rating (weighted by priority ordering)
@@ -2324,6 +2390,128 @@ public class AiController {
     private boolean isFailedActionSuppressed(final SpellAbility ability) {
         return player.getController() instanceof PlayerControllerAi controller
                 && controller.isFailedActionSuppressed(ability);
+    }
+
+    private SpellAbility findLegacyFirstAction(final List<SpellAbility> abilities,
+            final boolean skipCounter, final Predicate<SpellAbility> candidateFilter) {
+        if (abilities == null) {
+            return null;
+        }
+        for (final SpellAbility ability : abilities) {
+            if (skipCounter && ability.getApi() == ApiType.Counter) {
+                continue;
+            }
+            if (candidateFilter.test(ability)) {
+                return ability;
+            }
+        }
+        return null;
+    }
+
+    private String actionCombinationOverrideReason(final SpellAbility legacyFirstAction,
+            final ManaActionCombinationSelector.Selection legacyPlan,
+            final ManaActionCombinationSelector.Selection proposedPlan,
+            final ActionDecisionSnapshot snapshot, final boolean legacyTimingConstraint,
+            final boolean legacyAssessmentIncomplete) {
+        if (legacyFirstAction == null) {
+            return "legacy_pass_or_no_admitted_action";
+        }
+        if (snapshot != null && !snapshot.manaResourcesComplete()) {
+            return "mana_source_model_incomplete";
+        }
+        if (legacyAssessmentIncomplete) {
+            return "legacy_assessment_incomplete";
+        }
+        if (legacyTimingConstraint) {
+            return "legacy_timing_constraint";
+        }
+        if (legacyPlan == null || !legacyPlan.hasAction()
+                || proposedPlan == null || !proposedPlan.hasAction()) {
+            return "no_complete_comparison_plan";
+        }
+        if (hasProtectedLegacyPriority(legacyFirstAction)) {
+            return "legacy_priority_protected";
+        }
+        if (legacyPlan.fallbackActionCount() > 0 || proposedPlan.fallbackActionCount() > 0) {
+            return "fallback_action_in_comparison_plan";
+        }
+        if (legacyPlan.incompleteActionCount() > 0 || proposedPlan.incompleteActionCount() > 0
+                || legacyPlan.uncertainActionCount() > 0
+                || proposedPlan.uncertainActionCount() > 0) {
+            return "incomplete_or_uncertain_action_in_comparison_plan";
+        }
+        if (proposedPlan.firstAction() == legacyFirstAction
+                // Alternative-cost and modal SpellAbilities for the same card can be distinct
+                // objects. Keep the legacy mode choice until the action model can compare modes
+                // with the same target/X preparation as the live chooser.
+                || proposedPlan.firstAction().getHostCard() == legacyFirstAction.getHostCard()) {
+            return "legacy_first_card_preserved";
+        }
+        final int minimumAdvantage = Math.max(0, getIntProperty(
+                AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE));
+        final long advantage = (long) proposedPlan.score() - legacyPlan.score();
+        return advantage >= minimumAdvantage ? "advantage_exceeds_threshold"
+                : "insufficient_advantage";
+    }
+
+    private boolean hasProtectedLegacyPriority(final SpellAbility ability) {
+        if (ability == null || ability.isMandatory() || ability.getHostCard() == null) {
+            return ability != null && ability.isMandatory();
+        }
+        final Card source = ability.getHostCard();
+        if (source.hasSVar("FreeSpellAI")) {
+            return true;
+        }
+        if (!source.hasSVar("AIPriorityModifier")) {
+            return false;
+        }
+        try {
+            return Integer.parseInt(source.getSVar("AIPriorityModifier")) != 0;
+        } catch (final NumberFormatException ignored) {
+            // Preserve the legacy action if its explicit priority marker is malformed.
+            return true;
+        }
+    }
+
+    private LegacyActionAssessment assessLegacyAction(final SpellAbility ability) {
+        if (ability == null || ability.getHostCard() == null) {
+            return new LegacyActionAssessment(ability, AiPlayDecision.CantPlaySa,
+                    LegacyActionAssessment.TimingDisposition.REJECTED);
+        }
+        if (ability.getHostCard().hasKeyword(Keyword.STORM) && ability.getApi() != ApiType.Counter
+                && player.getCardsIn(ZoneType.Hand).stream()
+                        .anyMatch(card -> !card.isLand() && !card.hasKeyword(Keyword.STORM))
+                && game.getView().getStormCount()
+                        < getIntProperty(AiProps.MIN_COUNT_FOR_STORM_SPELLS)) {
+            return new LegacyActionAssessment(ability, AiPlayDecision.AnotherTime,
+                    LegacyActionAssessment.TimingDisposition.ANOTHER_TIME);
+        }
+
+        final Card host = ability.getHostCard();
+        SpellAbility probe = null;
+        try {
+            probe = ability.isSpell() ? ability.copy(host, player, false) : ability.copy(host, false);
+            probe.setActivatingPlayer(player);
+            SpellAbility root = probe.getRootAbility();
+            if (root.isSpell() || root.isTrigger() || root.isReplacementAbility()) {
+                probe.setLastStateBattlefield(game.getLastStateBattlefield());
+                probe.setLastStateGraveyard(game.getLastStateGraveyard());
+            }
+            final AiPlayDecision decision = canPlayAndPayFor(probe);
+            return new LegacyActionAssessment(ability, decision,
+                    LegacyActionAssessment.classify(decision));
+        } catch (final RuntimeException ignored) {
+            // A failed probe must not become evidence for an experimental reorder. The normal
+            // live chooser will still assess the original ability through its existing path.
+            return new LegacyActionAssessment(ability, AiPlayDecision.CantPlaySa,
+                    LegacyActionAssessment.TimingDisposition.REJECTED, false);
+        } finally {
+            // The probe is deliberately discarded. The real ability is checked again immediately
+            // before execution so target and X-value setup remains owned by the legacy chooser.
+            if (probe != null) {
+                probe.clearLastState();
+            }
+        }
     }
 
     public CardCollectionView chooseSacrificeType(String type, SpellAbility ability, boolean effect, int amount, final CardCollectionView exclude) {

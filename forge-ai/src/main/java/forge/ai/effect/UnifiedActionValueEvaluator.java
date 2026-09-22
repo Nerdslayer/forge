@@ -118,8 +118,13 @@ public final class UnifiedActionValueEvaluator {
         if (!ability.isActivatedAbility()) {
             return CardValueBreakdown.unsupported("The action is not an activated ability.");
         }
+        final ActionCostAnalysis costAnalysis = ActionCostSupport.analyze(ability, ai);
+        if (!costAnalysis.supported()) {
+            return CardValueBreakdown.unsupported("Activation cost is unsupported: "
+                    + String.join(", ", costAnalysis.reasons()));
+        }
         final SituationalAbilityOccurrenceContext.SupportedActivationCost activationCost =
-                SituationalAbilityOccurrenceContext.supportedActivationCost(ability.getPayCosts())
+                SituationalAbilityOccurrenceContext.supportedActivationCost(ability.getPayCosts(), ability)
                         .orElse(null);
         if (activationCost == null) {
             return CardValueBreakdown.unsupported("Activation cost is not modeled.");
@@ -151,9 +156,11 @@ public final class UnifiedActionValueEvaluator {
         reasons.add("Activation consumes " + manaCost + " mana"
                 + (activationCost.hasTapCost() ? " and taps the source" : "")
                 + (activationCost.lifeCost() == 0 ? "." : " and " + activationCost.lifeCost() + " life."));
+        reasons.addAll(costAnalysis.reasons());
         reasons.add("Immediate outcome benefit: " + outcomeValue);
         return new CardValueBreakdown(0, 0, outcomeValue,
-                EffectMath.add(CardResourceValueEvaluator.evaluateMana(manaCost), lifeCostValue), 0,
+                EffectMath.add(CardResourceValueEvaluator.evaluateMana(manaCost),
+                        EffectMath.add(lifeCostValue, costAnalysis.explicitValue())), 0,
                 planCompleteness(plan), reasons);
     }
 
@@ -170,12 +177,17 @@ public final class UnifiedActionValueEvaluator {
         if (!ability.isSpell()) {
             return CardValueBreakdown.unsupported("The action is not a spell cast.");
         }
+        final ActionCostAnalysis costAnalysis = ActionCostSupport.analyze(ability, ai);
+        if (!costAnalysis.supported()) {
+            return CardValueBreakdown.unsupported("Cast cost is unsupported: "
+                    + String.join(", ", costAnalysis.reasons()));
+        }
 
-        final int manaCost = ability.getPayCosts() == null || ability.getPayCosts().getTotalMana() == null
-                ? card.getCMC() : ability.getPayCosts().getTotalMana().getCMC();
+        final int manaCost = announcedManaCost(ability, card.getCMC());
         final int accessCost = EffectMath.add(
                 CardResourceValueEvaluator.evaluateCardOpportunityCost(),
-                CardResourceValueEvaluator.evaluateManaInvestment(manaCost));
+                EffectMath.add(CardResourceValueEvaluator.evaluateManaInvestment(manaCost),
+                        costAnalysis.explicitValue()));
         if (budget != null) {
             budget.check();
         }
@@ -246,6 +258,18 @@ public final class UnifiedActionValueEvaluator {
         case UNAVAILABLE -> ValuationCompleteness.UNAVAILABLE;
         case UNSUPPORTED -> ValuationCompleteness.UNSUPPORTED;
         };
+    }
+
+    /** Uses the same announced X value that will be paid when the spell resolves. */
+    private static int announcedManaCost(final SpellAbility ability, final int fallback) {
+        if (ability == null || ability.getPayCosts() == null
+                || ability.getPayCosts().getTotalMana() == null) {
+            return fallback;
+        }
+        final int base = ability.getPayCosts().getTotalMana().getCMC();
+        final Integer xPaid = ability.getXManaCostPaid();
+        final int xCount = ability.getPayCosts().getTotalMana().countX();
+        return base + (xPaid == null ? 0 : xPaid * xCount);
     }
 
     private static int safeScore(final double value) {
