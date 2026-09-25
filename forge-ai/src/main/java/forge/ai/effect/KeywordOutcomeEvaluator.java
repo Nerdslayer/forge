@@ -12,11 +12,13 @@ import forge.game.spellability.SpellAbility;
 /** Values fixed keyword changes and detain through creature evaluation. */
 final class KeywordOutcomeEvaluator implements OutcomeEvaluator {
     static final KeywordOutcomeEvaluator INSTANCE = new KeywordOutcomeEvaluator();
+    private static final double TEMPORARY_KEYWORD_VALUE_WEIGHT = 0.35;
 
-    // TODO(effect analysis): Add duration-aware weighting, dynamic/chosen/shared/random keywords,
-    // player and non-battlefield recipients, multiple targets, distribution, broader detained
-    // permanents, and subability chains. Only restrictions already observed by CreatureEvaluator
-    // receive value; other successfully applied keywords naturally produce a zero delta.
+    // TODO(effect analysis): Calibrate the coarse temporary-keyword discount against combat and
+    // expiration timing; add dynamic/chosen/shared/random keywords, player and non-battlefield
+    // recipients, multiple targets, distribution, broader detained permanents, and subability
+    // chains. Only restrictions already observed by CreatureEvaluator receive value; other
+    // successfully applied keywords naturally produce a zero delta.
 
     private KeywordOutcomeEvaluator() {
     }
@@ -41,12 +43,24 @@ final class KeywordOutcomeEvaluator implements OutcomeEvaluator {
         try {
             final AffectedCardResolver.Resolution resolution = resolveAffectedCards(
                     outcome, context);
-            return CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
+            final int value = CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
                     affected -> evaluateCardDelta(outcome, affected, context));
+            return isTemporaryKeywordChange(outcome)
+                    ? (int) Math.round(value * TEMPORARY_KEYWORD_VALUE_WEIGHT) : value;
         } catch (final RuntimeException ignored) {
             // Dynamic or malformed script forms contribute no outcome value.
             return context.unsupported();
         }
+    }
+
+    private static boolean isTemporaryKeywordChange(final SpellAbility outcome) {
+        if (outcome.getApi() != ApiType.Pump && outcome.getApi() != ApiType.PumpAll
+                && outcome.getApi() != ApiType.Debuff) {
+            return false;
+        }
+        final String duration = outcome.getParam("Duration");
+        return !"Permanent".equalsIgnoreCase(duration)
+                && !"Perpetual".equalsIgnoreCase(duration);
     }
 
     private static AffectedCardResolver.Resolution resolveAffectedCards(

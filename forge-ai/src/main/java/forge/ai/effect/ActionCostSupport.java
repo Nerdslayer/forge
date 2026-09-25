@@ -27,6 +27,7 @@ import forge.game.cost.CostExile;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostPartMana;
 import forge.game.cost.CostPayLife;
+import forge.game.cost.CostPutCounter;
 import forge.game.cost.CostRemoveAnyCounter;
 import forge.game.cost.CostRemoveCounter;
 import forge.game.cost.CostSacrifice;
@@ -145,6 +146,18 @@ final class ActionCostSupport {
                 }
                 continue;
             }
+            if (part instanceof CostPutCounter put) {
+                final int amount = numericAmountOrZero(put);
+                if (amount < 0 || put.getCounter() == null
+                        || !put.getCounter().is(forge.game.card.CounterEnumType.LOYALTY)
+                        || !put.payCostFromSource() || source == null || !source.isPlaneswalker()) {
+                    return unsupported("Only fixed loyalty additions to the planeswalker source are modeled");
+                }
+                explicitValue = add(explicitValue,
+                        -PlaneswalkerLoyaltyValue.change(payer, source, amount));
+                reasons.add("Adds " + amount + " loyalty counter resource(s)");
+                continue;
+            }
             if (part instanceof CostRemoveCounter remove) {
                 final int amount = numericAmountOrZero(remove);
                 if (amount < 0 || amount == 0) {
@@ -163,7 +176,12 @@ final class ActionCostSupport {
                         true, "counter removal")) {
                     return unsupported("Counter-removal resources are not representable");
                 }
-                explicitValue = add(explicitValue, counterCostValue(remove.counter, amount));
+                final int counterValue = remove.counter != null
+                        && remove.counter.is(forge.game.card.CounterEnumType.LOYALTY)
+                        && remove.payCostFromSource() && source != null && source.isPlaneswalker()
+                                ? -PlaneswalkerLoyaltyValue.change(payer, source, -amount)
+                                : counterCostValue(remove.counter, amount);
+                explicitValue = add(explicitValue, counterValue);
                 reasons.add("Removes " + amount + " counter resource(s)");
                 continue;
             }

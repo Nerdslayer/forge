@@ -13,6 +13,7 @@ import forge.game.cost.CostDamage;
 import forge.game.cost.CostDiscard;
 import forge.game.cost.CostExile;
 import forge.game.cost.CostPayLife;
+import forge.game.cost.CostPutCounter;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostPartMana;
 import forge.game.cost.CostRemoveAnyCounter;
@@ -154,6 +155,13 @@ final class SituationalAbilityOccurrenceContext implements AbilityOccurrenceCont
                 }
             } else if (part instanceof CostPartMana || part instanceof CostTap) {
                 continue;
+            } else if (part instanceof CostPutCounter addCounter) {
+                if (ability == null || !ability.getHostCard().isPlaneswalker()
+                        || !addCounter.payCostFromSource() || addCounter.getCounter() == null
+                        || !addCounter.getCounter().is(forge.game.card.CounterEnumType.LOYALTY)
+                        || !part.getAmount().matches("\\d+")) {
+                    return Optional.empty();
+                }
             } else if (part instanceof CostSacrifice || part instanceof CostExile
                     || part instanceof CostDiscard || part instanceof CostRemoveCounter
                     || part instanceof CostRemoveAnyCounter) {

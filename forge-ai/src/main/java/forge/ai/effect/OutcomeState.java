@@ -21,6 +21,9 @@ public final class OutcomeState {
     final Map<Player, Integer> life = new HashMap<>();
     final java.util.Set<Card> damageAffected = new java.util.HashSet<>();
     final Map<String, List<Card>> sacrifices = new HashMap<>();
+    final java.util.Set<SpellAbility> rememberedSacrifices =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    final List<Card> createdPermanents = new java.util.ArrayList<>();
     int lastLifeLost;
     long timestampOffset;
     boolean unsupported;
@@ -39,6 +42,8 @@ public final class OutcomeState {
         result.life.putAll(life);
         result.damageAffected.addAll(damageAffected);
         result.sacrifices.putAll(sacrifices);
+        result.rememberedSacrifices.addAll(rememberedSacrifices);
+        result.createdPermanents.addAll(createdPermanents);
         result.lastLifeLost = lastLifeLost;
         result.timestampOffset = timestampOffset;
         result.unsupported = unsupported;
@@ -58,6 +63,10 @@ public final class OutcomeState {
             final Card projected = card(original);
             if (projected != null) { result.add(projected); }
         }
+        for (final Card permanent : createdPermanents) {
+            final Card projected = card(permanent);
+            if (projected != null) { result.add(projected); }
+        }
         return result;
     }
 
@@ -74,6 +83,30 @@ public final class OutcomeState {
         token.setZone(prototype.getController().getZone(ZoneType.Battlefield));
         token.setTapped(prototype.isTapped());
         createdTokens.add(token);
+    }
+
+    void addPermanent(final Card prototype, final Player controller) {
+        // TODO(effect analysis): Project relevant entry triggers and current-board relationships
+        // for this permanent; the current adapter values its base permanent state only.
+        if (createdPermanents.size() >= 128) {
+            throw new IllegalArgumentException("Projected permanent limit exceeded");
+        }
+        final Card permanent = new forge.game.card.CardCopyService(prototype)
+                .getLKICopyWithId(Integer.MIN_VALUE + 4096 + createdPermanents.size());
+        permanent.setController(controller, 0);
+        permanent.setLastKnownZone(controller.getZone(ZoneType.Battlefield));
+        permanent.setZone(controller.getZone(ZoneType.Battlefield));
+        createdPermanents.add(permanent);
+    }
+
+    boolean hasRememberedSacrifice(final SpellAbility ability) {
+        SpellAbility current = ability;
+        while (current != null) {
+            if (rememberedSacrifices.contains(current)) { return true; }
+            current = current instanceof forge.game.spellability.AbilitySub sub
+                    ? sub.getParent() : null;
+        }
+        return false;
     }
     int hand(final Player player) { return hands.getOrDefault(player, player.getCardsIn(ZoneType.Hand).size()); }
     int library(final Player player) { return libraries.getOrDefault(player, player.getCardsIn(ZoneType.Library).size()); }

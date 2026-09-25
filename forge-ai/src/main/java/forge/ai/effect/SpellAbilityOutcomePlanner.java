@@ -7,6 +7,8 @@ import java.util.Set;
 import forge.game.GameEntity;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
+import forge.game.card.Card;
+import forge.game.card.CardLists;
 import forge.game.player.Player;
 import forge.game.spellability.AbilitySub;
 import forge.game.spellability.SpellAbility;
@@ -25,11 +27,19 @@ public final class SpellAbilityOutcomePlanner {
             "TargetsWithDifferentCMC", "TargetsWithDifferentNames", "TargetsWithEqualToughness",
             "TargetsWithSameCreatureType", "TargetsWithoutSameCreatureType", "TargetsWithSameCardType",
             "MaxTotalTargetCMC", "MaxTotalTargetPower");
+    private static final Set<String> SUPPORTED_CONDITIONS = Set.of(
+            "ConditionDefined", "ConditionPresent", "ConditionCompare");
 
     // TODO(effect analysis): Adapt cost-bearing/restricted modes, secret/simultaneous choices,
     // divided targets, stack/hidden-zone targets and cross-mode targeting restrictions. The core
     // supports explicit binding constraints and weighted randomness; these script forms require
     // adapters that preserve their timing and probability rules. No live AI decisions are mutated.
+    // TODO(effect analysis): Add adapters for library search/mill and hidden-card selection,
+    // graveyard deployment/characteristic changes, emblem/static-permission creation,
+    // repeat/variable-count modes, divided allocation, pile choices, clone/exchange and temporary
+    // control/prevention effects, and remembered-card/player-dependent branches. These remain
+    // unsupported until their hidden information, target binding, and persistent-state semantics
+    // are modeled.
     private SpellAbilityOutcomePlanner() { }
 
     public static OutcomePlan<OutcomeState> evaluate(final SpellAbility ability,
@@ -86,6 +96,19 @@ public final class SpellAbilityOutcomePlanner {
             budget.check();
         }
         if (ability == null || depth > 24 || ability.getActivatingPlayer() == null) { return false; }
+        if (ability.getApi() == ApiType.ImmediateTrigger
+                && !supportsRememberedImmediateExecute(ability, depth, budget)) {
+            return false;
+        }
+        if (ability.getApi() == ApiType.Cleanup
+                && !Set.of("DB", "ClearRemembered", "SpellDescription", "StackDescription")
+                        .containsAll(ability.getMapParams().keySet())) {
+            return false;
+        }
+        if (handToBattlefield(ability) && !supportsHandDeployment(ability)) {
+            return false;
+        }
+        if (!supportedConditionParams(ability)) { return false; }
         // TODO: Hoist every announcement-time target across stochastic modal/subability chains.
         // Until then, reject ambiguous timing instead of letting a target see future randomness.
         if (ability.getSubAbility() != null && contains(ability, true, 0) && contains(ability, false, 0)) {
@@ -93,7 +116,10 @@ public final class SpellAbilityOutcomePlanner {
         }
         if (ability.usesTargeting() && (!simpleTargets(ability)
                 || ability.hasParam("TargetsAtRandom"))) { return false; }
-        if (modal(ability)) {
+        if (ability.getApi() == ApiType.ImmediateTrigger
+                || ability.getApi() == ApiType.Cleanup || handToBattlefield(ability)) {
+            // These bounded control forms are adapted by part() below.
+        } else if (modal(ability)) {
             if (!MODAL_PARAMS.containsAll(ability.getMapParams().keySet())
                     || (ability.hasParam("Random") && !"True".equalsIgnoreCase(ability.getParam("Random")))
                     || (ability.hasParam("AtRandom") && !"True".equalsIgnoreCase(ability.getParam("AtRandom")))
@@ -113,15 +139,89 @@ public final class SpellAbilityOutcomePlanner {
                     && options.stream().anyMatch(o -> contains(o, false, 0))) { return false; }
         } else if (counterChoice(ability)) {
             for (final String type : ability.getParam("CounterType").split(",")) {
-                final SpellAbility part = leaf(ability);
+                final SpellAbility part = evaluatorLeaf(ability);
                 part.putParam("CounterType", type.trim());
                 if (OutcomeEvaluatorRegistry.findAtomic(part) == null) { return false; }
             }
-        } else if (OutcomeEvaluatorRegistry.findAtomic(leaf(ability)) == null) {
+        } else if (OutcomeEvaluatorRegistry.findAtomic(evaluatorLeaf(ability)) == null) {
             return false;
         }
         return ability.getSubAbility() == null
                 || supports(ability.getSubAbility(), depth + 1, budget);
+    }
+
+    private static boolean supportedConditionParams(final SpellAbility ability) {
+        final boolean hasConditions = ability.getMapParams().keySet().stream()
+                .anyMatch(param -> param.startsWith("Condition"));
+        if (!hasConditions) {
+            return true;
+        }
+        if (ability.getConditions() == null || ability.getMapParams().keySet().stream()
+                .filter(param -> param.startsWith("Condition"))
+                .anyMatch(param -> !SUPPORTED_CONDITIONS.contains(param))) {
+            return false;
+        }
+        // The first Sorin +1 checks the selected creature's Vampire type. Its optional
+        // sacrifice mode checks a remembered creature in the generated immediate trigger.
+        return "GE1".equals(ability.getParam("ConditionCompare"))
+                && ("Targeted".equals(ability.getParam("ConditionDefined"))
+                        && "Card.Vampire".equals(ability.getParam("ConditionPresent"))
+                    || "RememberedLKI".equals(ability.getParam("ConditionDefined"))
+                        && "Creature".equals(ability.getParam("ConditionPresent")));
+    }
+
+    private static boolean supportedRememberedImmediate(final SpellAbility ability) {
+        // TODO(planeswalker activation): Generalize beyond a remembered creature sacrifice and
+        // the fixed follow-up forms described by Sorin, Imperious Bloodlord.
+        final Set<String> allowed = Set.of("DB", "Execute", "SubAbility", "ConditionDefined",
+                "ConditionPresent", "ConditionCompare", "SpellDescription", "StackDescription",
+                "TriggerDescription");
+        return allowed.containsAll(ability.getMapParams().keySet())
+                && "RememberedLKI".equals(ability.getParam("ConditionDefined"))
+                && (!ability.hasParam("ConditionPresent")
+                        || "Creature".equals(ability.getParam("ConditionPresent")))
+                && (!ability.hasParam("ConditionCompare")
+                        || "GE1".equals(ability.getParam("ConditionCompare")))
+                && ability.getMapParams().keySet().stream()
+                        .filter(param -> param.startsWith("Condition"))
+                        .allMatch(SUPPORTED_CONDITIONS::contains);
+    }
+
+    private static boolean supportsRememberedImmediateExecute(final SpellAbility ability,
+            final int depth, final EffectEvaluationBudget budget) {
+        if (!supportedRememberedImmediate(ability)) { return false; }
+        final SpellAbility execute = ability.getAdditionalAbility("Execute");
+        if (execute == null) { return false; }
+        final SpellAbility copy = execute.copy(execute.getHostCard(), false);
+        copy.setActivatingPlayer(ability.getActivatingPlayer());
+        return supports(copy, depth + 1, budget);
+    }
+
+    private static SpellAbility evaluatorLeaf(final SpellAbility ability) {
+        final SpellAbility result = leaf(ability);
+        result.getMapParams().keySet().stream()
+                .filter(param -> param.startsWith("Condition") || "Optional".equals(param))
+                .toList().forEach(result::removeParam);
+        return result;
+    }
+
+    private static boolean handToBattlefield(final SpellAbility ability) {
+        return ability != null && ability.getApi() == ApiType.ChangeZone
+                && "Hand".equals(ability.getParam("Origin"))
+                && "Battlefield".equals(ability.getParam("Destination"));
+    }
+
+    private static boolean supportsHandDeployment(final SpellAbility ability) {
+        // TODO(planeswalker activation): Support other origins, multiple deployments, and
+        // announcement targets only after their value and information boundaries are modeled.
+        // These additional fields describe the activated loyalty mode/cost rather than its
+        // ChangeZone outcome. The live engine remains responsible for paying and validating them.
+        final Set<String> allowed = Set.of("DB", "AB", "SP", "Cost", "Ultimate", "Planeswalker",
+                "Origin", "Destination", "ChangeType", "ChangeNum", "Optional",
+                "SpellDescription", "StackDescription");
+        return allowed.containsAll(ability.getMapParams().keySet())
+                && !ability.usesTargeting() && ability.hasParam("ChangeType")
+                && "1".equals(ability.getParamOrDefault("ChangeNum", "1"));
     }
 
     private static boolean crossModeReference(final SpellAbility ability, final int depth) {
@@ -210,6 +310,34 @@ public final class SpellAbilityOutcomePlanner {
 
     private static Outcome<OutcomeState> part(final SpellAbility ability, final Player ai,
             final EffectEvent event, final int depth) {
+        if (ability.getApi() == ApiType.Cleanup) {
+            return noEffect();
+        }
+        if (ability.getApi() == ApiType.ImmediateTrigger) {
+            return new Outcome.Deferred<>(state -> {
+                if (!state.hasRememberedSacrifice(ability)) {
+                    return noEffect();
+                }
+                final SpellAbility execute = ability.getAdditionalAbility("Execute");
+                final SpellAbility copy = execute.copy(execute.getHostCard(), false);
+                copy.setActivatingPlayer(ai);
+                return compile(copy, ai, event, depth + 1);
+            });
+        }
+        if (handToBattlefield(ability)) {
+            return handDeployment(ability, ai);
+        }
+        if ("True".equalsIgnoreCase(ability.getParam("Optional"))) {
+            final Outcome<OutcomeState> effect = partCore(ability, ai, event, depth);
+            return new Outcome.Choice<>("optional:" + ability.getId(),
+                    List.of(noEffect(), effect), 0, 1, false,
+                    ability.getActivatingPlayer().isOpponentOf(ai));
+        }
+        return partCore(ability, ai, event, depth);
+    }
+
+    private static Outcome<OutcomeState> partCore(final SpellAbility ability, final Player ai,
+            final EffectEvent event, final int depth) {
         if (ability.getApi() == ApiType.Sacrifice
                 && !"Self".equals(ability.getParamOrDefault("SacValid", "Self"))) {
             return new Outcome.Deferred<>(state -> knownDependencies(ability, state)
@@ -225,6 +353,42 @@ public final class SpellAbilityOutcomePlanner {
                     false, ability.getActivatingPlayer().isOpponentOf(ai));
         }
         return atomic(ability, ai, event, null);
+    }
+
+    private static Outcome<OutcomeState> noEffect() {
+        return new Outcome.Atomic<>(state -> new Outcome.Transition<>(0, state));
+    }
+
+    private static Outcome<OutcomeState> handDeployment(final SpellAbility ability,
+            final Player ai) {
+        final Player controller = ability.getActivatingPlayer();
+        if (controller != ai) {
+            return new Outcome.Unresolved<>("An opponent's hidden hand is not evaluated");
+        }
+        final List<Card> candidates = CardLists.getValidCards(
+                controller.getCardsIn(ZoneType.Hand), ability.getParam("ChangeType").split(";"),
+                controller, ability.getHostCard(), ability);
+        final List<Outcome<OutcomeState>> choices = new ArrayList<>();
+        choices.add(noEffect());
+        for (final Card card : candidates) {
+            choices.add(new Outcome.Atomic<>("Deploy " + card.getName(), state -> {
+                if (!card.getTriggers().isEmpty()) {
+                    // TODO(planeswalker activation): Distinguish ETB triggers from unrelated
+                    // triggers and include supported entry outcomes. Until then, any scripted
+                    // trigger makes this branch incomplete rather than under-valuing the card.
+                    return null;
+                }
+                final OutcomeState next = state.copy();
+                next.addPermanent(card, controller);
+                final Card permanent = next.createdPermanents.get(
+                        next.createdPermanents.size() - 1);
+                final int value = CardStateDeltaEvaluator.evaluateEntry(
+                        new OutcomeEvaluationContext(ai, null, next), permanent);
+                return new Outcome.Transition<>((double) value, next, permanent);
+            }));
+        }
+        return new Outcome.Choice<>("hand-deployment:" + ability.getId(), choices,
+                1, 1, false, controller.isOpponentOf(ai));
     }
 
     private static Outcome<OutcomeState> sacrifice(final SpellAbility ability, final Player ai,
@@ -263,6 +427,10 @@ public final class SpellAbilityOutcomePlanner {
                     state -> SacrificeOutcomeEvaluator.choices(bound, player, state), (state, selected) -> {
                         final OutcomeState next = state.copy();
                         next.sacrifices.put(slot, selected);
+                        if (selected.stream().anyMatch(Card::isCreature)
+                                && ability.hasParam("RememberSacrificed")) {
+                            next.rememberedSacrifices.add(ability);
+                        }
                         return next;
                     }, result, player.isOpponentOf(ai));
         }
@@ -281,6 +449,15 @@ public final class SpellAbilityOutcomePlanner {
             if (projectedSource != null) { copy.setHostCard(projectedSource); }
             normalize(copy);
             if (counterType != null) { copy.putParam("CounterType", counterType); }
+            if (hasConditionParams(copy)) {
+                if (copy.getConditions() == null || !copy.getConditions().areMet(copy)) {
+                    return new Outcome.Transition<>(0, next, copy);
+                }
+                copy.getMapParams().keySet().stream()
+                        .filter(param -> param.startsWith("Condition"))
+                        .toList().forEach(copy::removeParam);
+            }
+            copy.removeParam("Optional");
             final OutcomeEvaluator evaluator = OutcomeEvaluatorRegistry.findAtomic(copy);
             if (evaluator == null) { return null; }
             final int value = evaluator.evaluateOutcome(copy, new OutcomeEvaluationContext(ai, event, next));
@@ -292,12 +469,19 @@ public final class SpellAbilityOutcomePlanner {
         });
     }
 
+    private static boolean hasConditionParams(final SpellAbility ability) {
+        return ability.getMapParams().keySet().stream()
+                .anyMatch(param -> param.startsWith("Condition"));
+    }
+
     private static boolean knownDependencies(final SpellAbility ability, final OutcomeState state) {
         // TODO: Project remembered/imprinted objects and evaluate dynamic expressions against
         // the overlay. Never silently read their stale live-game values after earlier effects.
         if (state.unprojectedBindings && ability.getMapParams().values().stream().anyMatch(v ->
                 v.contains("Remembered") || v.contains("Imprinted") || v.contains("Chosen"))) { return false; }
-        if (state.cards.isEmpty() && state.createdTokens.isEmpty() && state.life.isEmpty() && state.hands.isEmpty() && !state.unprojectedBoard) {
+        if (state.cards.isEmpty() && state.createdTokens.isEmpty()
+                && state.createdPermanents.isEmpty() && state.life.isEmpty()
+                && state.hands.isEmpty() && !state.unprojectedBoard) {
             return true;
         }
         for (final String name : List.of("NumCards", "LifeAmount", "NumDmg", "CounterNum", "NumAtt", "NumDef", "Amount",
@@ -321,6 +505,13 @@ public final class SpellAbilityOutcomePlanner {
 
     private static void normalize(final SpellAbility copy) {
         copy.removeParam("SubAbility");
+        // These are activation/AI metadata, not resolving-effect semantics. Keeping them in the
+        // analysis copy makes otherwise-supported outcomes from real card scripts fail the
+        // API-specific parameter allowlists.
+        for (final String param : List.of("Planeswalker", "Ultimate", "AILogic",
+                "AINoRecursiveCheck")) {
+            copy.removeParam(param);
+        }
         if (copy.usesTargeting()) {
             // Group cardinality is enforced once by the planner. Atomic evaluators receive the
             // complete bound group and never select recipients themselves in a planned context.

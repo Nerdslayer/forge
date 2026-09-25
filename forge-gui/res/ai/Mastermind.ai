@@ -346,6 +346,8 @@ ENABLE_ACTIVATION_VALUE_TIEBREAK=true
 ENABLE_ACTION_COMBINATION_VALUE_SELECTION=true
 # Log the proposed combination against the legacy first action without changing behavior.
 ENABLE_ACTION_COMBINATION_VALUE_SHADOW=true
+# Let complete, engine-legal loyalty ability evaluations compete with legacy planeswalker choices.
+ENABLE_PLANESWALKER_LOYALTY_ACTION_SELECTION=true
 # Require this much score improvement before replacing the legacy first action.
 ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE=20
 # Abandon action-combination analysis and preserve legacy ordering after this many milliseconds.

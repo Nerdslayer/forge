@@ -27,6 +27,7 @@ import forge.ai.effect.ActivateAbilityValueTieBreaker;
 import forge.ai.effect.ActionDecisionSnapshot;
 import forge.ai.effect.CastCardValueTieBreaker;
 import forge.ai.effect.ManaActionCombinationSelector;
+import forge.ai.effect.PlaneswalkerActivationSupport;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.ai.simulation.OnePlaySafetyChecker;
 import forge.ai.simulation.SpellAbilityPicker;
@@ -818,6 +819,11 @@ public class AiController {
     }
 
     private AiPlayDecision canPlayAndPayFor(final SpellAbility sa) {
+        return canPlayAndPayFor(sa, false);
+    }
+
+    private AiPlayDecision canPlayAndPayFor(final SpellAbility sa,
+            final boolean allowValuedLoyaltyActivation) {
         final Card host = sa.getHostCard();
 
         if (sa instanceof Spell sp) {
@@ -835,7 +841,7 @@ public class AiController {
         }
 
         try {
-            return canPlayAndPayForFace(sa);
+            return canPlayAndPayForFace(sa, allowValuedLoyaltyActivation);
         } finally {
             // in addition to engine some AI api can also switch host
             if (sa.getHostCard() != host) {
@@ -849,6 +855,11 @@ public class AiController {
 
     // This is for playing spells regularly (no Cascade/Ripple etc.)
     private AiPlayDecision canPlayAndPayForFace(final SpellAbility sa) {
+        return canPlayAndPayForFace(sa, false);
+    }
+
+    private AiPlayDecision canPlayAndPayForFace(final SpellAbility sa,
+            final boolean allowValuedLoyaltyActivation) {
         final Card host = sa.getHostCard();
 
         if (sa.hasParam("AICheckSVar") && !aiShouldRun(sa, sa, host, null)) {
@@ -856,7 +867,7 @@ public class AiController {
         }
 
         // this is the "heaviest" check, which also sets up targets, defines X, etc.
-        AiPlayDecision canPlay = canPlaySa(sa);
+        AiPlayDecision canPlay = canPlaySa(sa, allowValuedLoyaltyActivation);
 
         if (canPlay != AiPlayDecision.WillPlay) {
             return canPlay;
@@ -879,11 +890,17 @@ public class AiController {
     }
 
     public AiPlayDecision canPlaySa(SpellAbility sa) {
+        return canPlaySa(sa, false);
+    }
+
+    private AiPlayDecision canPlaySa(final SpellAbility sa,
+            final boolean allowValuedLoyaltyActivation) {
         if (!checkAiSpecificRestrictions(sa)) {
             return AiPlayDecision.CantPlayAi;
         }
         if (sa instanceof WrappedAbility) {
-            return canPlaySa(((WrappedAbility) sa).getWrappedAbility());
+            return canPlaySa(((WrappedAbility) sa).getWrappedAbility(),
+                    allowValuedLoyaltyActivation);
         }
 
         if (!sa.canCastTiming(player)) {
@@ -910,7 +927,10 @@ public class AiController {
             Sentry.setExtra("Card", card.getName());
             Sentry.setExtra("SA", sa.toString());
 
-            boolean canPlay = SpellApiToAi.Converter.get(sa).canPlayWithSubs(player, sa).willingToPlay();
+            final boolean valuedLoyaltyActivation = allowValuedLoyaltyActivation
+                    && PlaneswalkerActivationSupport.isLoyaltyAction(sa);
+            boolean canPlay = valuedLoyaltyActivation
+                    || SpellApiToAi.Converter.get(sa).canPlayWithSubs(player, sa).willingToPlay();
 
             // remove added extra
             Sentry.removeExtra("Card");
@@ -1621,7 +1641,8 @@ public class AiController {
             playableAbilities.removeIf(this::isFailedActionSuppressed);
             final boolean actionCombinationConfigured =
                     getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
-                            || getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW);
+                            || getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
+                            || getBoolProperty(AiProps.ENABLE_PLANESWALKER_LOYALTY_ACTION_SELECTION);
             final ActionDecisionSnapshot actionDecisionSnapshot = actionCombinationConfigured
                     && !useLivingEnd ? ActionDecisionSnapshot.capture(player) : null;
             final boolean actionCombinationWindow = actionDecisionSnapshot != null
@@ -1632,6 +1653,9 @@ public class AiController {
                     getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
                             && !useLivingEnd && actionCombinationWindow
                             && actionCombinationResourcesComplete;
+            final boolean planeswalkerLoyaltySelectionEnabled =
+                    getBoolProperty(AiProps.ENABLE_PLANESWALKER_LOYALTY_ACTION_SELECTION)
+                            && actionCombinationEnabled;
             final boolean useActionCombinationShadow =
                     getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
                             && !useLivingEnd && actionCombinationWindow
@@ -1648,6 +1672,10 @@ public class AiController {
             final Predicate<SpellAbility> legacyCandidateFilter =
                     ability -> legacyAssessments.computeIfAbsent(ability,
                             this::assessLegacyAction).willingNow();
+            final Predicate<SpellAbility> combinationCandidateFilter =
+                    ability -> legacyCandidateFilter.test(ability)
+                            || planeswalkerLoyaltySelectionEnabled
+                                    && PlaneswalkerActivationSupport.isLoyaltyAction(ability);
             final SpellAbility legacyFirstAction = analyzeActionCombination
                     ? findLegacyFirstAction(playableAbilities, skipCounter, legacyCandidateFilter) : null;
             final LegacyActionAssessment legacyFirstAssessment = legacyFirstAction == null
@@ -1657,24 +1685,27 @@ public class AiController {
             // produce the existing legacy choice.
             final boolean skipUnsafeActiveCombinationAnalysis = actionCombinationEnabled
                     && !useActionCombinationShadow && legacyFirstAssessment != null
-                    && !legacyFirstAssessment.assessmentComplete();
+                    && !legacyFirstAssessment.assessmentComplete()
+                    && !PlaneswalkerActivationSupport.isLoyaltyAction(legacyFirstAction);
             final ManaActionCombinationSelector.Selection combinationSelection;
             final ManaActionCombinationSelector.Selection legacyPlan;
             boolean actionCombinationOverride = false;
+            SpellAbility valuedLoyaltyOverride = null;
             String actionCombinationOverrideReason = "not_analyzed";
             if (analyzeActionCombination && !skipUnsafeActiveCombinationAnalysis) {
-                // The combination selector is advisory. Admit only actions that the complete
-                // legacy chooser is already willing to play, so an unsupported valuation cannot
-                // bypass card-specific timing, drawback, or safety logic.
+                // The loyalty parameter admits only fully supported planeswalker candidates in
+                // the selector. All other actions still need complete legacy willingness.
                 final ManaActionCombinationSelector.Comparison comparison =
                         ManaActionCombinationSelector.compare(player, playableAbilities,
                                 skipCounter, legacyFirstAction, actionDecisionSnapshot,
-                                legacyCandidateFilter);
+                                combinationCandidateFilter);
                 combinationSelection = comparison.proposed();
                 legacyPlan = comparison.legacy();
                 final boolean legacyTimingConstraint = legacyAssessments.values().stream()
                         .anyMatch(LegacyActionAssessment::blocksCombination);
                 final boolean legacyAssessmentIncomplete = legacyAssessments.values().stream()
+                        .filter(assessment -> !PlaneswalkerActivationSupport.isLoyaltyAction(
+                                assessment.original()))
                         .anyMatch(assessment -> !assessment.assessmentComplete());
                 actionCombinationOverrideReason = actionCombinationOverrideReason(
                         legacyFirstAction, legacyPlan, combinationSelection,
@@ -1684,6 +1715,11 @@ public class AiController {
                 if (actionCombinationOverride) {
                     ManaActionCombinationSelector.reorder(playableAbilities,
                             combinationSelection);
+                    if (planeswalkerLoyaltySelectionEnabled
+                            && PlaneswalkerActivationSupport.isLoyaltyAction(
+                                    combinationSelection.firstAction())) {
+                        valuedLoyaltyOverride = combinationSelection.firstAction();
+                    }
                 }
                 if (actionCombinationEnabled && !useActionCombinationShadow) {
                     ManaActionCombinationSelector.logSelection(combinationSelection);
@@ -1761,7 +1797,14 @@ public class AiController {
                     sa.setLastStateGraveyard(game.getLastStateGraveyard());
                 }
                 //override decision for living end player
-                AiPlayDecision opinion = useLivingEnd && AiPlayDecision.WillPlay.equals(aiPlayDecision) ? aiPlayDecision : canPlayAndPayFor(sa);
+                AiPlayDecision opinion;
+                if (sa == valuedLoyaltyOverride
+                        && PlaneswalkerActivationSupport.prepareAnnouncementTargets(sa, player)) {
+                    opinion = canPlayAndPayFor(sa, true);
+                } else {
+                    opinion = useLivingEnd && AiPlayDecision.WillPlay.equals(aiPlayDecision)
+                            ? aiPlayDecision : canPlayAndPayFor(sa);
+                }
 
                 // reset LastStateBattlefield
                 sa.clearLastState();
@@ -2435,7 +2478,9 @@ public class AiController {
             final ManaActionCombinationSelector.Selection proposedPlan,
             final ActionDecisionSnapshot snapshot, final boolean legacyTimingConstraint,
             final boolean legacyAssessmentIncomplete) {
-        if (legacyFirstAction == null) {
+        final boolean loyaltyAlternative = proposedPlan != null && proposedPlan.hasAction()
+                && PlaneswalkerActivationSupport.isLoyaltyAction(proposedPlan.firstAction());
+        if (legacyFirstAction == null && !loyaltyAlternative) {
             return "legacy_pass_or_no_admitted_action";
         }
         if (snapshot != null && !snapshot.manaResourcesComplete()) {
@@ -2447,11 +2492,11 @@ public class AiController {
         if (legacyTimingConstraint) {
             return "legacy_timing_constraint";
         }
-        if (legacyPlan == null || !legacyPlan.hasAction()
-                || proposedPlan == null || !proposedPlan.hasAction()) {
+        if (legacyPlan == null || proposedPlan == null || !proposedPlan.hasAction()
+                || legacyFirstAction != null && !legacyPlan.hasAction()) {
             return "no_complete_comparison_plan";
         }
-        if (hasProtectedLegacyPriority(legacyFirstAction)) {
+        if (legacyFirstAction != null && hasProtectedLegacyPriority(legacyFirstAction)) {
             return "legacy_priority_protected";
         }
         if (legacyPlan.fallbackActionCount() > 0 || proposedPlan.fallbackActionCount() > 0) {
@@ -2462,11 +2507,15 @@ public class AiController {
                 || proposedPlan.uncertainActionCount() > 0) {
             return "incomplete_or_uncertain_action_in_comparison_plan";
         }
-        if (proposedPlan.firstAction() == legacyFirstAction
-                // Alternative-cost and modal SpellAbilities for the same card can be distinct
-                // objects. Keep the legacy mode choice until the action model can compare modes
-                // with the same target/X preparation as the live chooser.
-                || proposedPlan.firstAction().getHostCard() == legacyFirstAction.getHostCard()) {
+        if (proposedPlan.firstAction() == legacyFirstAction) {
+            return "legacy_first_card_preserved";
+        }
+        if (legacyFirstAction != null
+                && proposedPlan.firstAction().getHostCard() == legacyFirstAction.getHostCard()
+                && !(loyaltyAlternative
+                        && PlaneswalkerActivationSupport.isLoyaltyAction(legacyFirstAction))) {
+            // Only a complete comparison between two loyalty modes may change the legacy
+            // same-planeswalker preference. Other same-card alternatives stay with the old AI.
             return "legacy_first_card_preserved";
         }
         final int minimumAdvantage = Math.max(0, getIntProperty(

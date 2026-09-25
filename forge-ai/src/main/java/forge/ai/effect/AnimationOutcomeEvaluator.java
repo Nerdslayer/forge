@@ -8,10 +8,11 @@ import forge.game.spellability.SpellAbility;
 /** Values persistent animation and characteristic-changing outcomes. */
 final class AnimationOutcomeEvaluator implements OutcomeEvaluator {
     static final AnimationOutcomeEvaluator INSTANCE = new AnimationOutcomeEvaluator();
+    private static final double TEMPORARY_ANIMATION_VALUE_WEIGHT = 0.35;
 
-    // TODO(effect analysis): Add duration-aware weighting for temporary animations, multiple
-    // targets, non-battlefield recipients, optional/control-flow forms, subability chains, and
-    // animation parameters whose dynamic choices cannot yet be reproduced reliably for analysis.
+    // TODO(effect analysis): Calibrate temporary-animation weighting against timing and combat;
+    // add multiple targets, non-battlefield recipients, optional/control-flow forms, subability
+    // chains, and animation parameters whose dynamic choices cannot yet be reproduced reliably.
 
     private AnimationOutcomeEvaluator() {
     }
@@ -20,8 +21,6 @@ final class AnimationOutcomeEvaluator implements OutcomeEvaluator {
     public boolean supports(final SpellAbility outcome) {
         if (outcome == null || !isSupportedApi(outcome.getApi())
                 || outcome.getSubAbility() != null
-                || (!"Permanent".equals(outcome.getParam("Duration"))
-                        && !"Perpetual".equals(outcome.getParam("Duration")))
                 || EffectAbilityUtils.hasUnsupportedControlFlow(outcome)
                 || !AffectedCardResolver.affectsOnlyBattlefield(outcome, "Zone")) {
             return false;
@@ -45,8 +44,10 @@ final class AnimationOutcomeEvaluator implements OutcomeEvaluator {
             } else {
                 resolution = AffectedCardResolver.defined(outcome, context, card -> true);
             }
-            return CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
+            final int value = CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
                     affected -> evaluateCardDelta(outcome, affected, context));
+            return isTemporary(outcome)
+                    ? (int) Math.round(value * TEMPORARY_ANIMATION_VALUE_WEIGHT) : value;
         } catch (final RuntimeException ignored) {
             // Dynamic or malformed script forms contribute no outcome value.
             return context.unsupported();
@@ -61,5 +62,11 @@ final class AnimationOutcomeEvaluator implements OutcomeEvaluator {
 
     private static boolean isSupportedApi(final ApiType api) {
         return api == ApiType.Animate || api == ApiType.AnimateAll;
+    }
+
+    private static boolean isTemporary(final SpellAbility outcome) {
+        final String duration = outcome.getParam("Duration");
+        return !"Permanent".equalsIgnoreCase(duration)
+                && !"Perpetual".equalsIgnoreCase(duration);
     }
 }

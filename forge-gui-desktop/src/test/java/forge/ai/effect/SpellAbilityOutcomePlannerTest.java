@@ -6,6 +6,7 @@ import org.testng.annotations.Test;
 import forge.ai.AITest;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.Game;
+import forge.game.ability.ApiType;
 import forge.game.ability.AbilityFactory;
 import forge.game.card.Card;
 import forge.game.card.CounterEnumType;
@@ -319,4 +320,123 @@ public class SpellAbilityOutcomePlannerTest extends AITest {
         Assert.assertFalse(source.hasKeyword(forge.game.keyword.Keyword.DEATHTOUCH));
         Assert.assertEquals(victim.getDamage(), 0);
     }
+
+    @Test
+    public void evaluatesTemporaryPlaneswalkerPowerChanges() {
+        final Card source = source();
+        final SpellAbility pump = ability(source,
+                "DB$ Pump | ValidTgts$ Creature.YouCtrl | NumAtt$ 3 | Duration$ UntilEndOfTurn");
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
+                pump, source.getController());
+
+        Assert.assertTrue(plan.complete(), plan.reason());
+        Assert.assertTrue(plan.value() < 0);
+        Assert.assertTrue(plan.value() > -forge.ai.ComputerUtilCard.evaluatePermanent(
+                source.getController(), source.getController().getCreaturesInPlay().get(0)));
+    }
+
+    @Test
+    public void evaluatesChosenKeywordCounterAlongsideFixedCounter() {
+        final Card source = source();
+        final Card creature = source.getController().getCreaturesInPlay().get(0);
+        final SpellAbility putCounters = ability(source,
+                "DB$ PutCounter | ValidTgts$ Creature.YouCtrl | CounterTypes$ P1P1,ChosenFromList"
+                        + " | TypeList$ Flying,First Strike,Lifelink,Vigilance");
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
+                putCounters, source.getController());
+
+        Assert.assertTrue(plan.complete(), plan.reason());
+        Assert.assertEquals(plan.state().card(creature).getCounters(CounterEnumType.P1P1), 1);
+        Assert.assertTrue(plan.state().card(creature).getCounters().elementSet().stream()
+                .anyMatch(forge.game.card.CounterType::isKeywordCounter));
+        Assert.assertTrue(plan.value() < 0);
+    }
+
+    @Test
+    public void valuesNoncreatureTokensAsPermanents() {
+        final Card source = source();
+        final SpellAbility food = ability(source,
+                "DB$ Token | TokenScript$ c_a_food_sac | TokenOwner$ You");
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
+                food, source.getController());
+
+        Assert.assertTrue(plan.complete(), plan.reason());
+        Assert.assertEquals(plan.state().createdTokens.size(), 1);
+        Assert.assertFalse(plan.state().createdTokens.get(0).isCreature());
+        Assert.assertTrue(plan.value() < 0);
+    }
+
+    @Test
+    public void evaluatesPlaneswalkerMassRemovalAsOneBoardChange() {
+        final Card source = source();
+        final Player opponent = source.getController().getOpponents().get(0);
+        final Card largeCreature = addCard("Air Elemental", opponent);
+        final Card smallCreature = opponent.getCreaturesInPlay().get(0);
+        final SpellAbility destroyLargeCreatures = ability(source,
+                "DB$ DestroyAll | ValidCards$ Creature.powerGE4");
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
+                destroyLargeCreatures, source.getController());
+
+        Assert.assertTrue(plan.complete(), plan.reason());
+        Assert.assertNull(plan.state().card(largeCreature));
+        Assert.assertSame(plan.state().card(smallCreature), smallCreature);
+        Assert.assertTrue(plan.value() < 0);
+    }
+
+    @Test
+    public void evaluatesRealPlaneswalkerScriptAfterRemovingActivationMetadata() {
+        final Card source = source();
+        final Player ai = source.getController();
+        final Card chandra = addCard("Chandra, Torch of Defiance", ai);
+        final SpellAbility addMana = chandra.getSpellAbilities().stream()
+                .filter(SpellAbility::isPwAbility)
+                .filter(ability -> ability.getApi() == ApiType.Mana)
+                .findFirst().orElseThrow();
+        addMana.setActivatingPlayer(ai);
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(addMana, ai);
+
+        Assert.assertTrue(plan.complete(), addMana.getApi() + " " + addMana.getMapParams()
+                + " | " + plan.reason());
+    }
+
+    @Test
+    public void evaluatesTemporaryPermanentAnimation() {
+        final Card source = source();
+        final SpellAbility animate = ability(source,
+                "DB$ Animate | ValidTgts$ Artifact.YouCtrl | Power$ 3 | Toughness$ 3"
+                        + " | Types$ Creature,Elk | Duration$ UntilEndOfTurn");
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
+                animate, source.getController());
+
+        Assert.assertTrue(plan.complete(), plan.reason());
+        Assert.assertTrue(plan.value() < 0);
+    }
+
+    @Test
+    public void evaluatesTeferiBounceAndDrawSequence() {
+        final Card source = source();
+        final Player ai = source.getController();
+        addCard("Air Elemental", ai.getOpponents().get(0));
+        final Card teferi = addCard("Teferi, Time Raveler", ai);
+        final SpellAbility bounceAndDraw = teferi.getSpellAbilities().stream()
+                .filter(SpellAbility::isPwAbility)
+                .filter(ability -> ability.getApi() == ApiType.ChangeZone
+                        && "Hand".equals(ability.getParam("Destination")))
+                .findFirst().orElseThrow();
+        bounceAndDraw.setActivatingPlayer(ai);
+
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
+                bounceAndDraw, ai);
+
+        Assert.assertTrue(plan.complete(), plan.reason());
+        Assert.assertTrue(plan.decisions().stream()
+                .anyMatch(decision -> decision.kind() == OutcomePlan.DecisionKind.TARGET));
+    }
+
 }

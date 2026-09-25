@@ -178,11 +178,13 @@ public final class ManaActionCombinationSelector {
         };
         try {
             if (requiredFirstAction == null) {
-                final Selection empty = emptySelection(availableMana, 0);
-                return new Comparison(empty, empty);
+                prepared = prepareCandidates(ai, abilities, skipCounter, snapshot,
+                        cachedCandidateFilter, budget);
+                final Selection proposed = selectPrepared(prepared, null, snapshot, budget);
+                return new Comparison(proposed, emptySelection(availableMana, 0));
             }
-            if (!hasAlternativeLegacyAction(abilities, requiredFirstAction, cachedCandidateFilter,
-                    budget)) {
+            if (!hasAlternativeLegacyAction(abilities, requiredFirstAction,
+                    cachedCandidateFilter, budget)) {
                 logSkipped(snapshot, "no_alternative_admitted_action");
                 final Selection empty = emptySelection(availableMana, 0);
                 return new Comparison(empty, empty);
@@ -215,7 +217,10 @@ public final class ManaActionCombinationSelector {
         for (final SpellAbility ability : abilities) {
             budget.check();
             if (ability == null || ability == requiredFirstAction || ability.getHostCard() == null
-                    || ability.getHostCard() == requiredFirstAction.getHostCard()) {
+                    || ability.getHostCard() == requiredFirstAction.getHostCard()
+                            && !(PlaneswalkerActivationSupport.isLoyaltyAction(ability)
+                                    && PlaneswalkerActivationSupport.isLoyaltyAction(
+                                            requiredFirstAction))) {
                 continue;
             }
             if (candidateFilter == null) {
@@ -442,16 +447,36 @@ public final class ManaActionCombinationSelector {
             if (ability.getPayCosts().getTotalMana().countX() > 0 && xValue < 0) {
                 return null;
             }
+            if (ability.isPwAbility() && host.isPlaneswalker()
+                    && !probe.canPlay()) {
+                traceLoyaltyCandidate(ability, ai, "unavailable", "engine legality rejected");
+                return null;
+            }
+            if (ability.isPwAbility() && host.isPlaneswalker()
+                    && !probe.canCastTiming(ai)) {
+                traceLoyaltyCandidate(ability, ai, "unavailable", "loyalty timing is not legal");
+                return null;
+            }
             activationCost = SituationalAbilityOccurrenceContext.supportedActivationCost(
                     probe.getPayCosts(), probe).orElse(null);
             if (activationCost == null) {
+                if (ability.isPwAbility() && host.isPlaneswalker()) {
+                    traceLoyaltyCandidate(ability, ai, "unsupported",
+                            "activation cost is not modeled");
+                }
                 return null;
             }
             manaCost = activationCost.manaCost();
             if (manaCost > availableMana) {
+                if (ability.isPwAbility() && host.isPlaneswalker()) {
+                    traceLoyaltyCandidate(ability, ai, "unavailable", "not enough available mana");
+                }
                 return null;
             }
             if (!ComputerUtilCost.canPayCost(probe, ai, false)) {
+                if (ability.isPwAbility() && host.isPlaneswalker()) {
+                    traceLoyaltyCandidate(ability, ai, "unavailable", "activation cost cannot be paid");
+                }
                 return null;
             }
             action = new ActivateValuationAction(host, probe);
@@ -463,10 +488,24 @@ public final class ManaActionCombinationSelector {
         }
 
         final ActionCostAnalysis costAnalysis = ActionCostSupport.analyze(costAbility, ai);
+        if (!cast && ability.isPwAbility() && host.isPlaneswalker()
+                && !costAnalysis.supported()) {
+            traceLoyaltyCandidate(ability, ai, "unsupported",
+                    String.join(", ", costAnalysis.reasons()));
+            return null;
+        }
         budget.check();
         final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(action, context,
                 EffectAnalysisTrace.disabled(), budget);
         budget.check();
+        if (!cast && ability.isPwAbility() && host.isPlaneswalker()
+                && !value.isComplete()) {
+            // Unsupported loyalty abilities remain with the legacy chooser; their generic
+            // activation fallback must never displace a known planeswalker mode.
+            traceLoyaltyCandidate(ability, ai, value.completeness().name(),
+                    String.join(", ", value.reasons()));
+            return null;
+        }
         final ActionValueFallbackEvaluator.Estimate fallback;
         if (value.isComplete()) {
             fallback = null;
@@ -482,15 +521,28 @@ public final class ManaActionCombinationSelector {
         }
         final int maxUses = maximumUses(ability, activationCost, cast, manaCost, availableMana);
         final int explicitNonManaCost = fallback == null ? costAnalysis.explicitValue() : 0;
-        final ActionResourceFootprint resources = costAnalysis.supported()
+        ActionResourceFootprint resources = costAnalysis.supported()
                 ? costAnalysis.resources()
                 : uncertainResources(host, cast);
+        if (!cast && ability.isPwAbility() && host.isPlaneswalker()) {
+            resources = resources.withLoyaltyActivationSource(host);
+        }
         final ActionSelectionEstimate estimate = new ActionSelectionEstimate(
                 fallback == null ? value.grossValue() : fallback.value(), explicitNonManaCost,
                 resources, fallback == null ? value.completeness() : ValuationCompleteness.PARTIAL,
                 fallback != null, fallback == null ? value.reasons()
                         : List.of(fallback.reason(), "Additional cost model: "
                                 + String.join(", ", costAnalysis.reasons())));
+        if (!cast && ability.isPwAbility() && host.isPlaneswalker()) {
+            if (estimate.netBenefit() <= 0) {
+                traceLoyaltyCandidate(ability, ai, "rejected",
+                        "nonpositive net value=" + estimate.netBenefit());
+                return null;
+            }
+            traceLoyaltyCandidate(ability, ai, "complete",
+                    "outcome and costs are supported; selector benefit="
+                            + estimate.netBenefit());
+        }
         return new Candidate(ability, manaCost, ability.getPayCosts().getTotalMana(), xValue, cast,
                 maxUses, estimate);
     }
@@ -534,7 +586,7 @@ public final class ManaActionCombinationSelector {
     private static int maximumUses(final SpellAbility ability,
             final SituationalAbilityOccurrenceContext.SupportedActivationCost activationCost,
             final boolean cast, final int manaCost, final int availableMana) {
-        if (cast || activationCost == null || activationCost.hasTapCost()
+        if (cast || ability.isPwAbility() || activationCost == null || activationCost.hasTapCost()
                 || activationCost.consumesSource() || manaCost <= 0
                 || ability.getPayCosts() == null || !ability.getPayCosts().isReusuableResource()
                 || ability.getRestrictions().getLimitToCheck() != null
@@ -731,22 +783,31 @@ public final class ManaActionCombinationSelector {
     private static List<List<Candidate>> groupCandidates(final List<Candidate> candidates) {
         final IdentityHashMap<Card, List<Candidate>> exclusiveResourceGroups =
                 new IdentityHashMap<>();
+        final IdentityHashMap<Card, List<Candidate>> loyaltyActivationGroups =
+                new IdentityHashMap<>();
         final List<List<Candidate>> groups = new ArrayList<>();
         for (final Candidate candidate : candidates) {
             final ActionResourceFootprint resources = candidate.estimate().resources();
             final List<Card> exclusiveResources = new ArrayList<>(resources.consumedCards());
             exclusiveResources.addAll(resources.tappedSources());
-            if (exclusiveResources.isEmpty()) {
+            final List<Card> loyaltySources = resources.loyaltyActivationSources();
+            if (exclusiveResources.isEmpty() && loyaltySources.isEmpty()) {
                 groups.add(List.of(candidate));
                 continue;
             }
 
-            // A cast consumes its card, while a tap activation consumes the source's untapped
-            // state. Merge groups when one action has more than one fixed resource so alternative
-            // modes cannot be split across separate optimizer groups.
+            // A cast consumes its card, a tap activation consumes the source's untapped state,
+            // and a planeswalker can use only one loyalty ability each turn. Track loyalty use
+            // separately so a non-loyalty tap ability on that planeswalker can still coexist.
             final List<List<Candidate>> linkedGroups = new ArrayList<>();
             for (final Card exclusiveResource : exclusiveResources) {
                 final List<Candidate> group = exclusiveResourceGroups.get(exclusiveResource);
+                if (group != null && !linkedGroups.contains(group)) {
+                    linkedGroups.add(group);
+                }
+            }
+            for (final Card loyaltySource : loyaltySources) {
+                final List<Candidate> group = loyaltyActivationGroups.get(loyaltySource);
                 if (group != null && !linkedGroups.contains(group)) {
                     linkedGroups.add(group);
                 }
@@ -761,19 +822,28 @@ public final class ManaActionCombinationSelector {
                     final List<Candidate> merged = linkedGroups.get(i);
                     group.addAll(merged);
                     groups.remove(merged);
-                    for (final Card resource : exclusiveResources) {
-                        if (exclusiveResourceGroups.get(resource) == merged) {
-                            exclusiveResourceGroups.put(resource, group);
-                        }
-                    }
+                    replaceGroup(exclusiveResourceGroups, merged, group);
+                    replaceGroup(loyaltyActivationGroups, merged, group);
                 }
             }
             group.add(candidate);
             for (final Card exclusiveResource : exclusiveResources) {
                 exclusiveResourceGroups.put(exclusiveResource, group);
             }
+            for (final Card loyaltySource : loyaltySources) {
+                loyaltyActivationGroups.put(loyaltySource, group);
+            }
         }
         return groups;
+    }
+
+    private static void replaceGroup(final IdentityHashMap<Card, List<Candidate>> groups,
+            final List<Candidate> oldGroup, final List<Candidate> newGroup) {
+        for (final Card key : new ArrayList<>(groups.keySet())) {
+            if (groups.get(key) == oldGroup) {
+                groups.put(key, newGroup);
+            }
+        }
     }
 
     private static State[][] copyStates(final State[][] states) {
@@ -920,8 +990,13 @@ public final class ManaActionCombinationSelector {
     }
 
     private static String actionName(final SpellAbility ability) {
-        return ability == null || ability.getHostCard() == null ? "none"
-                : ability.getHostCard().getName() + "(" + ability.getApi() + ")";
+        if (ability == null || ability.getHostCard() == null) {
+            return "none";
+        }
+        final String mode = PlaneswalkerActivationSupport.isLoyaltyAction(ability)
+                ? ", mode=" + ability.getParamOrDefault("SpellDescription", ability.getApi().name())
+                : "";
+        return ability.getHostCard().getName() + "(" + ability.getApi() + mode + ")";
     }
 
     private static boolean sameHost(final SpellAbility first, final SpellAbility second) {
@@ -966,6 +1041,23 @@ public final class ManaActionCombinationSelector {
                 selection.fallbackCandidateCount(), selection.fallbackActionCount(),
                 selection.incompleteActionCount(), selection.uncertainActionCount(),
                 selection.firstAction().getHostCard().getName(), actions);
+    }
+
+    private static void traceLoyaltyCandidate(final SpellAbility ability, final Player ai,
+            final String status, final String reason) {
+        if (!Boolean.parseBoolean(System.getProperty(EffectAnalysisTrace.ENABLE_PROPERTY, "true"))) {
+            return;
+        }
+        final ActionCostAnalysis cost = ActionCostSupport.analyze(ability, ai);
+        final int loyaltyValue = PlaneswalkerLoyaltyValue.abilityBenefit(ai, ability);
+        final String abilityCost = ability.getPayCosts() == null
+                ? "NONE" : ability.getPayCosts().toString();
+        Logger.info("[AI Effect Analysis] Planeswalker loyalty candidate: source={}, mode={}, "
+                        + "cost={}, status={}, loyaltyValue={}, signedExplicitCost={}, reason={}",
+                ability.getHostCard().getName(),
+                ability.getParamOrDefault("SpellDescription", ability.getApi().name()),
+                abilityCost, status, loyaltyValue,
+                cost.explicitValue(), reason);
     }
 
     private static boolean isManaFeasible(final State state,

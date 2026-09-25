@@ -12,9 +12,11 @@ import forge.game.spellability.SpellAbility;
 /** Values persistent power/toughness changes to battlefield cards. */
 final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
     static final PermanentPtOutcomeEvaluator INSTANCE = new PermanentPtOutcomeEvaluator();
+    private static final double TEMPORARY_PT_VALUE_WEIGHT = 0.35;
 
-    // TODO(effect analysis): Value temporary changes with duration/context, P/T switches, other
-    // P/T-changing APIs, unsupported control flow, non-battlefield recipients, and subability chains.
+    // TODO(effect analysis): Calibrate the temporary-effect discount against timing and combat;
+    // support P/T switches, other P/T-changing APIs, non-battlefield recipients, and subability
+    // chains. Temporary value is intentionally a coarse estimate, not a combat simulation.
 
     private PermanentPtOutcomeEvaluator() {
     }
@@ -22,8 +24,6 @@ final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
     @Override
     public boolean supports(final SpellAbility outcome) {
         if (outcome == null || !isSupportedApi(outcome.getApi())
-                || (!"Permanent".equals(outcome.getParam("Duration"))
-                        && !"Perpetual".equals(outcome.getParam("Duration")))
                 || !changesPowerOrToughness(outcome)
                 || EffectAbilityUtils.hasUnsupportedControlFlow(outcome)
                 || !affectsBattlefield(outcome)) {
@@ -41,8 +41,10 @@ final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
     public int evaluateOutcome(final SpellAbility outcome, final OutcomeEvaluationContext context) {
         try {
             final AffectedCardResolver.Resolution resolution = resolveAffectedCards(outcome, context);
-            return CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
+            final int value = CardStateDeltaEvaluator.evaluate(outcome, context, resolution,
                     affected -> evaluateCardDelta(outcome, affected, context));
+            return isTemporaryChange(outcome)
+                    ? (int) Math.round(value * TEMPORARY_PT_VALUE_WEIGHT) : value;
         } catch (final RuntimeException ignored) {
             // Dynamic or malformed script forms contribute no outcome value.
             return context.unsupported();
@@ -105,6 +107,12 @@ final class PermanentPtOutcomeEvaluator implements OutcomeEvaluator {
 
     private static boolean changesPowerOrToughness(final SpellAbility outcome) {
         return outcome.hasParam("NumAtt") || outcome.hasParam("NumDef");
+    }
+
+    private static boolean isTemporaryChange(final SpellAbility outcome) {
+        final String duration = outcome.getParam("Duration");
+        return !"Permanent".equalsIgnoreCase(duration)
+                && !"Perpetual".equalsIgnoreCase(duration);
     }
 
 }

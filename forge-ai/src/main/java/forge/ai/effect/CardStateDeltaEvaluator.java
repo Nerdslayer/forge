@@ -50,6 +50,15 @@ final class CardStateDeltaEvaluator {
         return applyPerspective(context, projected, EffectMath.negate(value));
     }
 
+    static int evaluateEntry(final OutcomeEvaluationContext context, final Card permanent) {
+        if (permanent == null) {
+            return 0;
+        }
+        final int value = permanentValue(context, permanent);
+        return permanent.getController().isOpponentOf(context.evaluatingAi())
+                ? value : EffectMath.negate(value);
+    }
+
     static int evaluateControlChange(final OutcomeEvaluationContext context,
             final Card original, final Player newController) {
         if (original.getController() == newController) {

@@ -1,7 +1,7 @@
 # Effect Synergy and Removal Benchmark Pool
 
 This pool concentrates cards that exercise AI effect-relationship scoring and cards that must choose
-among several removal targets. At multiplier 1, its 25 decks schedule 1,250 games.
+among several removal targets. At multiplier 1, its 27 decks schedule 1,458 games.
 
 Most lists are unchanged copies of existing Forge decks:
 
@@ -34,6 +34,8 @@ The expanded existing-deck coverage is intentional:
   discard, card draw, graveyard/zone movement, and resource consequences.
 - `GAP_23_21_Jeskai Superfriends Colors Generated Deck_3_16.dck` — planeswalker loyalty, control,
   sweepers, and broad target selection.
+- `Planeswalker Deck - ELD Walkers.dck` and `Planeswalker Deck - Bant Superfriends.dck` add dense,
+  multi-color planeswalker coverage for loyalty-mode selection and outcome evaluation.
 - `GAS_16_92_Boros Equipment White Generated Deck_918_19.dck` — Aura/Equipment attachment and
   combat-oriented creatures.
 - `GAM_18_Tovolar, Dire Overlord based deck_23_0.dck` — transforming/state-changing permanents,

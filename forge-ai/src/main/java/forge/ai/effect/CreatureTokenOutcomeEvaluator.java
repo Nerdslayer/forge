@@ -10,13 +10,15 @@ import forge.game.card.Card;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 
-/** Values immediate creature-token creation using the resulting token prototypes. */
+/** Values immediate token-permanent creation using the resulting token prototypes. */
 final class CreatureTokenOutcomeEvaluator implements OutcomeEvaluator {
     static final CreatureTokenOutcomeEvaluator INSTANCE = new CreatureTokenOutcomeEvaluator();
 
-    // TODO(effect analysis): Value noncreature, temporary, attached, conditional,
-    // replacement-modified, targeted-owner, and other dynamic-owner token outcomes. Projected
-    // tokens do not simulate ETB triggers or recompute board-wide static effects.
+    // TODO(effect analysis): Account for activated abilities on noncreature tokens (for example,
+    // Food), temporary, attached, conditional, replacement-modified, and more dynamic-owner token
+    // outcomes. Projected tokens do not simulate ETB/death triggers or recompute board-wide static
+    // effects; attacking/blocking tokens currently receive ordinary permanent value without a
+    // combat adjustment.
 
     private static final Set<String> SUPPORTED_PARAMS = Set.of(
             "DB", "TokenScript", "TokenOwner", "TokenAmount", "TokenPower",
@@ -58,7 +60,7 @@ final class CreatureTokenOutcomeEvaluator implements OutcomeEvaluator {
             int value = 0;
             for (final Player owner : owners) {
                 final List<Card> tokens = EffectTokenUtils.createPrototypes(outcome, owner);
-                if (tokens.isEmpty() || tokens.stream().anyMatch(token -> !token.isCreature())) {
+                if (tokens.isEmpty()) {
                     return context.unsupported();
                 }
                 for (final Card token : tokens) {
