@@ -40,11 +40,13 @@ import forge.util.Localizer;
  * </p>
  * <ul>
  * <li>Static state is no longer isolated per test class, so {@link #releaseMocks()} closes
- * every static mock and clears the {@link Localizer} singleton after each method.</li>
+ * every static mock and restores the {@link Localizer} singleton after each method.</li>
  * <li>{@link PaperCard} caches its {@code hasImage} answer, and the cards come from a
  * process-wide {@link StaticData}. A test class that needs a different answer, or a
  * differently loaded database, must build its own via
  * {@link CardDatabaseHelper#createStaticData(boolean)} rather than share the cached one.</li>
+ * <li>{@link StaticData#instance()} is a separate process-wide pointer. It is aligned with
+ * the database mocked by {@code FModel.getMagicDb()} during each test and restored afterward.</li>
  * </ul>
  */
 public class CardMockTestCase {
@@ -53,6 +55,8 @@ public class CardMockTestCase {
 
     protected MockedStatic<FModel> fModelMock;
     protected MockedStatic<ImageKeys> imageKeysMock;
+    private StaticData staticDataBeforeTest;
+    private boolean staticDataStateCaptured;
 
     /**
      * The {@link Localizer} that was installed when this class last replaced it with a mock,
@@ -73,10 +77,16 @@ public class CardMockTestCase {
         // BaseGameSimulationTest.runGame() calls this again part-way through a test, and
         // Mockito refuses to open a second static mock for a class that already has one.
         releaseMocks();
+        staticDataBeforeTest = StaticData.instance();
+        staticDataStateCaptured = true;
         initForgeSingletons();
         initCardImageMocks();
         initForgePreferences();
         initializeStaticData();
+        // StaticData.instance() is a process-wide singleton independent of FModel. Tests
+        // may use isolated databases (for example, a lazily loaded one), so keep the two
+        // access paths pointed at the same database for this test.
+        setStaticDataInstance(FModel.getMagicDb());
     }
 
     @AfterMethod(alwaysRun = true)
@@ -88,6 +98,11 @@ public class CardMockTestCase {
         if (fModelMock != null) {
             fModelMock.close();
             fModelMock = null;
+        }
+        if (staticDataStateCaptured) {
+            setStaticDataInstance(staticDataBeforeTest);
+            staticDataBeforeTest = null;
+            staticDataStateCaptured = false;
         }
         // Undo our own mock and nothing else. Leaving the mock in place, or clearing the
         // singleton outright, breaks every AITest-based class that runs later in this JVM.
@@ -140,6 +155,16 @@ public class CardMockTestCase {
             Field instance = Localizer.class.getDeclaredField("instance");
             instance.setAccessible(true);
             instance.set(null, mock);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void setStaticDataInstance(StaticData data) {
+        try {
+            Field instance = StaticData.class.getDeclaredField("lastInstance");
+            instance.setAccessible(true);
+            instance.set(null, data);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
