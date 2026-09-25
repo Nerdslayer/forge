@@ -1563,7 +1563,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
-    public void testTemporaryPtConsequenceIsNotTreatedAsPermanentValue() {
+    public void testTemporaryPtConsequenceReceivesValue() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
         final Player opponent = game.getPlayers().get(0);
@@ -1576,7 +1576,8 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertTrue(values.isEmpty());
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
     @Test
@@ -2719,7 +2720,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
     }
 
     @Test
-    public void testTemporaryAndNoncreatureTokenOutcomesRemainUnsupported() {
+    public void testTemporaryTokenOutcomeRemainsUnsupported() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
         final Player opponent = game.getPlayers().get(0);
@@ -2729,13 +2730,29 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 "Sol Ring", opponent, "CHARGE", 1, "Self");
         final Card temporaryConsequence = addCounterTokenConsequence(
                 "Grizzly Bears", opponent, 1, "w_1_1_soldier", " | AtEOT$ Exile");
-        final Card noncreatureConsequence = addCounterTokenConsequence(
+        final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
+                ai, List.of(producer, temporaryConsequence));
+
+        Assert.assertTrue(values.isEmpty());
+    }
+
+    @Test
+    public void testNoncreatureTokenUsesGenericPermanentValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+
+        final Card producer = addPhaseCounterProducer(
+                "Sol Ring", opponent, "CHARGE", 1, "Self");
+        final Card consequence = addCounterTokenConsequence(
                 "Runeclaw Bear", opponent, 1, "c_a_treasure_sac");
 
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
-                ai, List.of(producer, temporaryConsequence, noncreatureConsequence));
+                ai, List.of(producer, consequence));
 
-        Assert.assertTrue(values.isEmpty());
+        Assert.assertTrue(values.getOrDefault(producer, 0) > 0, values.toString());
+        Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
     @Test
@@ -3343,7 +3360,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 31, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
@@ -3361,7 +3378,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 31, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
