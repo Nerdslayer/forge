@@ -14,12 +14,13 @@ Most lists are unchanged copies of existing Forge decks:
 - `GAS_21_8_Esper Control Dance Generated Deck_940_19.dck`
 
 `Riddler 3.dck` is adapted from the existing Quest duel of that name by retaining its main deck in
-ordinary constructed-deck format. `Rosie Jet Tokens.dck` is purpose-built to repeatedly exercise the
-token-created and +1/+1-counter relationship between Rosie Cotton of South Lane and Royal Talon
-Fighter Jet. `Effect Analysis Counters and Tokens.dck` is a small purpose-built green-white list for
-counter choices, counter transfer, token creation, and the Rosie/Jet engine.
+ordinary constructed-deck format. `Effect Analysis Counters and Tokens.dck` is a purpose-built
+green-white list for counter choices, counter transfer, token creation, and the Rosie/Jet engine.
 `Effect Analysis Dinosaurs.dck` is purpose-built around enrage damage and copied Polyraptor tokens,
 using ordinary damage spells instead of an automatic infinite-damage engine.
+`Bounce Tempo.dck` concentrates on returning opposing creatures to hand while also playing
+re-castable ETB creatures and token makers. Its mirror match can present token targets alongside
+creatures whose ETB value makes bouncing them less attractive.
 
 The expanded existing-deck coverage is intentional:
 
@@ -50,10 +51,10 @@ The expanded existing-deck coverage is intentional:
   `Genesis Chamber` alongside life-gain and token-recipient interactions.
 
 The original pool remains represented by the Soul Sisters, Saproling, Affinity, Merfolk, Red Aggro,
-Mono Black, Esper Control, Riddler, and Rosie/Jet lists above. Together the pool covers the common
-implemented production families (`TOKEN_CREATED`, `COUNTER_ADDED`, `LIFE_GAINED`, `LIFE_LOST`,
-`CARD_DRAWN`, `CARD_DISCARDED`, `DAMAGE_DEALT`, `ATTACKED_OR_BLOCKED`, `TAPPED_OR_UNTAPPED`,
-`SACRIFICED`, and `ZONE_CHANGED`) and exercises the implemented outcome adapters for counters,
+Mono Black, Esper Control, Riddler, and counters/tokens Rosie-Jet list above. Together, the pool
+covers the common implemented production families (`TOKEN_CREATED`, `COUNTER_ADDED`, `LIFE_GAINED`,
+`LIFE_LOST`, `CARD_DRAWN`, `CARD_DISCARDED`, `DAMAGE_DEALT`, `ATTACKED_OR_BLOCKED`,
+`TAPPED_OR_UNTAPPED`, `SACRIFICED`, and `ZONE_CHANGED`) and exercises the implemented outcome adapters for counters,
 permanent evaluation, tokens, life, mana/discard/draw, damage, sacrifice, control, copying,
 attachments, animation/state changes, and combat restrictions where the selected cards expose them.
 
