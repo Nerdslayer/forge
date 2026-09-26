@@ -24,6 +24,7 @@ import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ChangeZoneAi;
 import forge.ai.ability.LearnAi;
 import forge.ai.effect.ActivateAbilityValueTieBreaker;
+import forge.ai.effect.ActionCombinationOverrideGate;
 import forge.ai.effect.ActionDecisionSnapshot;
 import forge.ai.effect.CastCardValueTieBreaker;
 import forge.ai.effect.ManaActionCombinationSelector;
@@ -1692,26 +1693,37 @@ public class AiController {
             boolean actionCombinationOverride = false;
             SpellAbility valuedLoyaltyOverride = null;
             String actionCombinationOverrideReason = "not_analyzed";
+            String actionCombinationDiagnostics = "not available";
             if (analyzeActionCombination && !skipUnsafeActiveCombinationAnalysis) {
                 // The loyalty parameter admits only fully supported planeswalker candidates in
                 // the selector. All other actions still need complete legacy willingness.
                 final ManaActionCombinationSelector.Comparison comparison =
                         ManaActionCombinationSelector.compare(player, playableAbilities,
                                 skipCounter, legacyFirstAction, actionDecisionSnapshot,
-                                combinationCandidateFilter);
+                                combinationCandidateFilter,
+                                ability -> legacyAssessmentReason(
+                                        legacyAssessments.get(ability)));
                 combinationSelection = comparison.proposed();
                 legacyPlan = comparison.legacy();
+                actionCombinationDiagnostics = comparison.diagnosticSummary();
                 final boolean legacyTimingConstraint = legacyAssessments.values().stream()
                         .anyMatch(LegacyActionAssessment::blocksCombination);
                 final boolean legacyAssessmentIncomplete = legacyAssessments.values().stream()
                         .filter(assessment -> !PlaneswalkerActivationSupport.isLoyaltyAction(
                                 assessment.original()))
                         .anyMatch(assessment -> !assessment.assessmentComplete());
-                actionCombinationOverrideReason = actionCombinationOverrideReason(
-                        legacyFirstAction, legacyPlan, combinationSelection,
-                        actionDecisionSnapshot, legacyTimingConstraint, legacyAssessmentIncomplete);
+                final int minimumAdvantage = Math.max(0, getIntProperty(
+                        AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE));
+                final ActionCombinationOverrideGate.Decision gate =
+                        ActionCombinationOverrideGate.evaluate(legacyFirstAction, legacyPlan,
+                                combinationSelection,
+                                actionDecisionSnapshot != null
+                                        && actionDecisionSnapshot.manaResourcesComplete(),
+                                legacyAssessmentIncomplete, legacyTimingConstraint,
+                                hasProtectedLegacyPriority(legacyFirstAction), minimumAdvantage);
+                actionCombinationOverrideReason = gate.reason();
                 actionCombinationOverride = actionCombinationEnabled
-                        && "advantage_exceeds_threshold".equals(actionCombinationOverrideReason);
+                        && gate.shouldOverride();
                 if (actionCombinationOverride) {
                     ManaActionCombinationSelector.reorder(playableAbilities,
                             combinationSelection);
@@ -1729,6 +1741,7 @@ public class AiController {
                 legacyPlan = null;
                 if (skipUnsafeActiveCombinationAnalysis) {
                     actionCombinationOverrideReason = "legacy_assessment_incomplete";
+                    actionCombinationDiagnostics = legacyAssessmentReason(legacyFirstAssessment);
                     ManaActionCombinationSelector.logSkipped(actionDecisionSnapshot,
                             actionCombinationOverrideReason);
                 }
@@ -1822,7 +1835,8 @@ public class AiController {
                                     : legacyAssessments.get(legacyFirstAction).timingDisposition().name(),
                             Math.max(0, getIntProperty(
                                     AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE)),
-                            actionDecisionSnapshot, actionCombinationOverrideReason);
+                            actionDecisionSnapshot, actionCombinationOverrideReason,
+                            actionCombinationDiagnostics);
                     shadowLogged = true;
                 }
 
@@ -2473,56 +2487,13 @@ public class AiController {
         return null;
     }
 
-    private String actionCombinationOverrideReason(final SpellAbility legacyFirstAction,
-            final ManaActionCombinationSelector.Selection legacyPlan,
-            final ManaActionCombinationSelector.Selection proposedPlan,
-            final ActionDecisionSnapshot snapshot, final boolean legacyTimingConstraint,
-            final boolean legacyAssessmentIncomplete) {
-        final boolean loyaltyAlternative = proposedPlan != null && proposedPlan.hasAction()
-                && PlaneswalkerActivationSupport.isLoyaltyAction(proposedPlan.firstAction());
-        if (legacyFirstAction == null && !loyaltyAlternative) {
-            return "legacy_pass_or_no_admitted_action";
+    private String legacyAssessmentReason(final LegacyActionAssessment assessment) {
+        if (assessment == null) {
+            return "legacy admission assessment unavailable";
         }
-        if (snapshot != null && !snapshot.manaResourcesComplete()) {
-            return "mana_source_model_incomplete";
-        }
-        if (legacyAssessmentIncomplete) {
-            return "legacy_assessment_incomplete";
-        }
-        if (legacyTimingConstraint) {
-            return "legacy_timing_constraint";
-        }
-        if (legacyPlan == null || proposedPlan == null || !proposedPlan.hasAction()
-                || legacyFirstAction != null && !legacyPlan.hasAction()) {
-            return "no_complete_comparison_plan";
-        }
-        if (legacyFirstAction != null && hasProtectedLegacyPriority(legacyFirstAction)) {
-            return "legacy_priority_protected";
-        }
-        if (legacyPlan.fallbackActionCount() > 0 || proposedPlan.fallbackActionCount() > 0) {
-            return "fallback_action_in_comparison_plan";
-        }
-        if (legacyPlan.incompleteActionCount() > 0 || proposedPlan.incompleteActionCount() > 0
-                || legacyPlan.uncertainActionCount() > 0
-                || proposedPlan.uncertainActionCount() > 0) {
-            return "incomplete_or_uncertain_action_in_comparison_plan";
-        }
-        if (proposedPlan.firstAction() == legacyFirstAction) {
-            return "legacy_first_card_preserved";
-        }
-        if (legacyFirstAction != null
-                && proposedPlan.firstAction().getHostCard() == legacyFirstAction.getHostCard()
-                && !(loyaltyAlternative
-                        && PlaneswalkerActivationSupport.isLoyaltyAction(legacyFirstAction))) {
-            // Only a complete comparison between two loyalty modes may change the legacy
-            // same-planeswalker preference. Other same-card alternatives stay with the old AI.
-            return "legacy_first_card_preserved";
-        }
-        final int minimumAdvantage = Math.max(0, getIntProperty(
-                AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE));
-        final long advantage = (long) proposedPlan.score() - legacyPlan.score();
-        return advantage >= minimumAdvantage ? "advantage_exceeds_threshold"
-                : "insufficient_advantage";
+        return "legacyDecision=" + assessment.decision() + ", timing="
+                + assessment.timingDisposition() + ", assessmentComplete="
+                + assessment.assessmentComplete();
     }
 
     private boolean hasProtectedLegacyPriority(final SpellAbility ability) {

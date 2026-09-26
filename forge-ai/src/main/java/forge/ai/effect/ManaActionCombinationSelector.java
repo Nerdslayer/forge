@@ -7,6 +7,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.tinylog.Logger;
@@ -42,6 +43,7 @@ public final class ManaActionCombinationSelector {
     private static final int UNUSED_MANA_PENALTY = Math.max(1,
             CardResourceValueEvaluator.MANA_VALUE / 5);
     private static final int MAX_REPEATABLE_ACTIVATION_USES = 4;
+    private static final int MAX_DIAGNOSTIC_DETAILS = 4;
 
     private ManaActionCombinationSelector() {
     }
@@ -50,9 +52,12 @@ public final class ManaActionCombinationSelector {
     public record Selection(SpellAbility firstAction, List<SpellAbility> actions,
             int availableMana, int usedMana, int unusedMana, int score,
             int handPressureBonus, int evaluatedCandidateCount, int fallbackCandidateCount,
-            int fallbackActionCount, int incompleteActionCount, int uncertainActionCount) {
+            int fallbackActionCount, int incompleteActionCount, int uncertainActionCount,
+            List<String> actionDiagnostics) {
         public Selection {
             actions = actions == null ? List.of() : List.copyOf(actions);
+            actionDiagnostics = actionDiagnostics == null
+                    ? List.of() : List.copyOf(actionDiagnostics);
         }
 
         public boolean hasAction() {
@@ -61,7 +66,16 @@ public final class ManaActionCombinationSelector {
     }
 
     /** Results of comparing one proposed plan with the plan anchored to the legacy first action. */
-    public record Comparison(Selection proposed, Selection legacy) {
+    public record Comparison(Selection proposed, Selection legacy, String status,
+            List<String> diagnostics) {
+        public Comparison {
+            status = status == null ? "unknown" : status;
+            diagnostics = diagnostics == null ? List.of() : List.copyOf(diagnostics);
+        }
+
+        public String diagnosticSummary() {
+            return summarizeDiagnostics(status, diagnostics);
+        }
     }
 
     /**
@@ -152,11 +166,21 @@ public final class ManaActionCombinationSelector {
             final boolean skipCounter, final SpellAbility requiredFirstAction,
             final ActionDecisionSnapshot snapshot,
             final Predicate<SpellAbility> candidateFilter) {
+        return compare(ai, abilities, skipCounter, requiredFirstAction, snapshot,
+                candidateFilter, ignored -> "legacy candidate filter rejected this action");
+    }
+
+    /** Comparison variant that explains why a caller's legacy admission filter rejects actions. */
+    public static Comparison compare(final Player ai, final List<SpellAbility> abilities,
+            final boolean skipCounter, final SpellAbility requiredFirstAction,
+            final ActionDecisionSnapshot snapshot,
+            final Predicate<SpellAbility> candidateFilter,
+            final Function<SpellAbility, String> candidateFilterReason) {
         final int availableMana = snapshot == null ? 0 : snapshot.availableMana();
         if (snapshot != null && !snapshot.manaResourcesComplete()) {
             logSkipped(snapshot, "mana_source_model_incomplete");
             final Selection empty = emptySelection(availableMana, 0);
-            return new Comparison(empty, empty);
+            return comparison(empty, empty, "mana_source_model_incomplete", List.of());
         }
         PreparedCandidates prepared = null;
         final EffectEvaluationBudget budget = EffectEvaluationBudget.fromTimeoutMillis(
@@ -179,62 +203,97 @@ public final class ManaActionCombinationSelector {
         try {
             if (requiredFirstAction == null) {
                 prepared = prepareCandidates(ai, abilities, skipCounter, snapshot,
-                        cachedCandidateFilter, budget);
+                        cachedCandidateFilter, candidateFilterReason, budget);
                 final Selection proposed = selectPrepared(prepared, null, snapshot, budget);
-                return new Comparison(proposed, emptySelection(availableMana, 0));
+                final List<String> diagnostics = new ArrayList<>(prepared.candidateDiagnostics());
+                diagnostics.addAll(proposed.actionDiagnostics());
+                return comparison(proposed, emptySelection(availableMana, 0),
+                        proposed.hasAction() ? "proposal_against_legacy_pass"
+                                : "no_valued_action", diagnostics);
             }
-            if (!hasAlternativeLegacyAction(abilities, requiredFirstAction,
-                    cachedCandidateFilter, budget)) {
-                logSkipped(snapshot, "no_alternative_admitted_action");
+            final AlternativeAdmission alternatives = inspectAlternativeActions(abilities,
+                    requiredFirstAction, skipCounter, cachedCandidateFilter,
+                    candidateFilterReason, budget);
+            if (alternatives.alternativeCount() == 0) {
+                logSkipped(snapshot, "no_distinct_alternative_action");
                 final Selection empty = emptySelection(availableMana, 0);
-                return new Comparison(empty, empty);
+                return comparison(empty, empty, "no_distinct_alternative_action",
+                        alternatives.diagnostics());
+            }
+            if (alternatives.admittedCount() == 0) {
+                logSkipped(snapshot, "alternatives_rejected_by_legacy_filter");
+                final Selection empty = emptySelection(availableMana, 0);
+                return comparison(empty, empty, "alternatives_rejected_by_legacy_filter",
+                        alternatives.diagnostics());
             }
             prepared = prepareCandidates(ai, abilities, skipCounter, snapshot,
-                    cachedCandidateFilter,
+                    cachedCandidateFilter, candidateFilterReason,
                     budget);
             final Selection proposed = selectPrepared(prepared, null, snapshot, budget);
             final Selection legacy = selectPrepared(prepared, requiredFirstAction, snapshot, budget);
-            return new Comparison(proposed, legacy);
+            final List<String> diagnostics = new ArrayList<>(alternatives.diagnostics());
+            diagnostics.addAll(prepared.candidateDiagnostics());
+            diagnostics.addAll(proposed.actionDiagnostics());
+            diagnostics.addAll(legacy.actionDiagnostics());
+            final String status = proposed.hasAction() && legacy.hasAction()
+                    ? "plans_compared" : proposed.hasAction()
+                            ? "legacy_action_not_valued" : "alternative_actions_not_valued";
+            return comparison(proposed, legacy, status, diagnostics);
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
             final int timeoutMana = prepared == null ? availableMana : prepared.availableMana();
             final int evaluated = prepared == null ? 0 : prepared.candidates().size();
             final Selection timeout = timedOut(timeoutMana, evaluated);
-            return new Comparison(timeout, timeout);
-        } catch (final RuntimeException ignored) {
-            return new Comparison(emptySelection(availableMana, 0),
-                    emptySelection(availableMana, 0));
+            return comparison(timeout, timeout, "evaluation_timeout",
+                    List.of("analysis budget exceeded after " + evaluated + " candidate(s)"));
+        } catch (final RuntimeException exception) {
+            final Selection empty = emptySelection(availableMana, 0);
+            return comparison(empty, empty, "evaluation_error",
+                    List.of("comparison failed with " + exception.getClass().getSimpleName()));
         }
     }
 
-    private static boolean hasAlternativeLegacyAction(final List<SpellAbility> abilities,
+    private static AlternativeAdmission inspectAlternativeActions(
+            final List<SpellAbility> abilities,
             final SpellAbility requiredFirstAction,
+            final boolean skipCounter,
             final Predicate<SpellAbility> candidateFilter,
+            final Function<SpellAbility, String> candidateFilterReason,
             final EffectEvaluationBudget budget) {
         if (abilities == null || requiredFirstAction == null
                 || requiredFirstAction.getHostCard() == null) {
-            return false;
+            return new AlternativeAdmission(0, 0, List.of());
         }
+        int alternativeCount = 0;
+        int admittedCount = 0;
+        final List<String> rejected = new ArrayList<>();
         for (final SpellAbility ability : abilities) {
             budget.check();
             if (ability == null || ability == requiredFirstAction || ability.getHostCard() == null
+                    || skipCounter && ability.getApi() == ApiType.Counter
                     || ability.getHostCard() == requiredFirstAction.getHostCard()
                             && !(PlaneswalkerActivationSupport.isLoyaltyAction(ability)
                                     && PlaneswalkerActivationSupport.isLoyaltyAction(
                                             requiredFirstAction))) {
                 continue;
             }
+            alternativeCount++;
             if (candidateFilter == null) {
-                return true;
+                return new AlternativeAdmission(alternativeCount, admittedCount + 1, rejected);
             }
             try {
                 if (candidateFilter.test(ability)) {
-                    return true;
+                    return new AlternativeAdmission(alternativeCount, admittedCount + 1,
+                            rejected);
                 }
-            } catch (final RuntimeException ignored) {
-                // A failed legacy probe must not suppress the existing chooser.
+                addDiagnostic(rejected, actionName(ability) + ": "
+                        + safeFilterReason(ability, candidateFilterReason));
+            } catch (final RuntimeException exception) {
+                addDiagnostic(rejected, actionName(ability)
+                        + ": legacy admission check failed ("
+                        + exception.getClass().getSimpleName() + ")");
             }
         }
-        return false;
+        return new AlternativeAdmission(alternativeCount, admittedCount, rejected);
     }
 
     private static Selection select(final Player ai, final List<SpellAbility> abilities,
@@ -253,7 +312,8 @@ public final class ManaActionCombinationSelector {
                 actionSelectionTimeoutMillis(ai));
         try {
             final PreparedCandidates prepared = prepareCandidates(ai, abilities, skipCounter,
-                    snapshot, candidateFilter, budget);
+                    snapshot, candidateFilter, ignored -> "legacy candidate filter rejected action",
+                    budget);
             return selectPrepared(prepared, requiredFirstAction, snapshot, budget);
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
             return timedOut(snapshot == null ? 0 : snapshot.availableMana(), 0);
@@ -266,10 +326,11 @@ public final class ManaActionCombinationSelector {
     private static PreparedCandidates prepareCandidates(final Player ai,
             final List<SpellAbility> abilities, final boolean skipCounter,
             final ActionDecisionSnapshot snapshot, final Predicate<SpellAbility> candidateFilter,
+            final Function<SpellAbility, String> candidateFilterReason,
             final EffectEvaluationBudget budget) {
         if (ai == null || abilities == null || abilities.isEmpty()) {
             return new PreparedCandidates(List.of(), new IdentityHashMap<>(), List.of(),
-                    manaSourceModel(snapshot), 0, 0, 0, 0);
+                    manaSourceModel(snapshot), 0, 0, 0, 0, List.of());
         }
 
         budget.check();
@@ -279,33 +340,44 @@ public final class ManaActionCombinationSelector {
         final List<Candidate> candidates = new ArrayList<>();
         final IdentityHashMap<SpellAbility, Candidate> candidatesByAbility =
                 new IdentityHashMap<>();
+        final List<String> candidateDiagnostics = new ArrayList<>();
         for (final SpellAbility ability : abilities) {
             budget.check();
             if (Thread.currentThread().isInterrupted()) {
                 return new PreparedCandidates(List.of(), new IdentityHashMap<>(), List.of(),
-                        manaSourceModel(snapshot), availableMana, 0, 0, 0);
+                        manaSourceModel(snapshot), availableMana, 0, 0, 0,
+                        List.of("candidate scan interrupted"));
             }
             if (candidateFilter != null) {
                 try {
                     if (!candidateFilter.test(ability)) {
+                        addDiagnostic(candidateDiagnostics, actionName(ability) + ": "
+                                + safeFilterReason(ability, candidateFilterReason));
                         continue;
                     }
-                } catch (final RuntimeException ignored) {
-                    // A failed legacy probe must not suppress the existing chooser.
+                } catch (final RuntimeException exception) {
+                    addDiagnostic(candidateDiagnostics, actionName(ability)
+                            + ": legacy admission check failed ("
+                            + exception.getClass().getSimpleName() + ")");
                     continue;
                 }
             }
             try {
-                final Candidate candidate = createCandidate(ai, ability, availableMana, skipCounter,
-                        budget);
+                final CandidateBuildResult result = createCandidate(ai, ability, availableMana,
+                        skipCounter, budget);
+                final Candidate candidate = result.candidate();
                 if (candidate != null) {
                     candidates.add(candidate);
                     candidatesByAbility.putIfAbsent(ability, candidate);
+                } else if (result.rejectionReason() != null) {
+                    addDiagnostic(candidateDiagnostics, actionName(ability) + ": "
+                            + result.rejectionReason());
                 }
             } catch (final EffectEvaluationBudget.Exceeded exceeded) {
                 throw exceeded;
-            } catch (final RuntimeException ignored) {
-                // One unusual card or ability must not suppress the legacy action chooser.
+            } catch (final RuntimeException exception) {
+                addDiagnostic(candidateDiagnostics, actionName(ability)
+                        + ": valuation failed (" + exception.getClass().getSimpleName() + ")");
             }
         }
 
@@ -320,7 +392,8 @@ public final class ManaActionCombinationSelector {
                 .filter(Candidate::fallback).count();
         return new PreparedCandidates(candidates, candidatesByAbility,
                 groupCandidates(candidates), manaSourceModel(snapshot), availableMana,
-                handOverflow, handPressureValue, fallbackCandidateCount);
+                handOverflow, handPressureValue, fallbackCandidateCount,
+                candidateDiagnostics);
     }
 
     private static Selection selectPrepared(final PreparedCandidates prepared,
@@ -328,14 +401,18 @@ public final class ManaActionCombinationSelector {
             final EffectEvaluationBudget budget) {
         final List<Candidate> candidates = prepared.candidates();
         if (candidates.isEmpty()) {
-            return emptySelection(prepared.availableMana(), 0);
+            return emptySelection(prepared.availableMana(), 0,
+                    prepared.candidateDiagnostics());
         }
 
         budget.check();
         final State best;
         final Candidate required = prepared.candidatesByAbility().get(requiredFirstAction);
         if (requiredFirstAction != null && required == null) {
-            return emptySelection(prepared.availableMana(), candidates.size());
+            final List<String> diagnostics = new ArrayList<>(prepared.candidateDiagnostics());
+            addDiagnostic(diagnostics, "required legacy action " + actionName(requiredFirstAction)
+                    + " has no valued candidate");
+            return emptySelection(prepared.availableMana(), candidates.size(), diagnostics);
         }
         best = solve(prepared.groups(), required,
                 prepared.availableMana(), prepared.handOverflow(), snapshot,
@@ -343,7 +420,8 @@ public final class ManaActionCombinationSelector {
         if (best == null || best.actionCount() == 0) {
             return new Selection(null, List.of(), prepared.availableMana(), 0,
                     prepared.availableMana(), -prepared.availableMana() * UNUSED_MANA_PENALTY,
-                    0, candidates.size(), prepared.fallbackCandidateCount(), 0, 0, 0);
+                    0, candidates.size(), prepared.fallbackCandidateCount(), 0, 0, 0,
+                    prepared.candidateDiagnostics());
         }
 
         final int pressure = prepared.handPressureValue()
@@ -357,25 +435,36 @@ public final class ManaActionCombinationSelector {
         int fallbackActionCount = 0;
         int incompleteActionCount = 0;
         int uncertainActionCount = 0;
+        final List<String> actionDiagnostics = new ArrayList<>();
         for (final SpellAbility action : actions) {
             final Candidate candidate = prepared.candidatesByAbility().get(action);
             if (candidate == null) {
                 continue;
             }
-            if (candidate.fallback()) {
+            final boolean fallbackAction = candidate.fallback();
+            final boolean incompleteAction = !candidate.estimate().canEstablishOverride();
+            final boolean uncertainAction = candidate.estimate().resources().uncertain();
+            if (fallbackAction) {
                 fallbackActionCount++;
             }
-            if (!candidate.estimate().canEstablishOverride()) {
+            if (incompleteAction) {
                 incompleteActionCount++;
             }
-            if (candidate.estimate().resources().uncertain()) {
+            if (uncertainAction) {
                 uncertainActionCount++;
+            }
+            if (fallbackAction || incompleteAction || uncertainAction) {
+                addDiagnostic(actionDiagnostics, actionName(action) + " [fallback="
+                        + fallbackAction + ", completeness="
+                        + candidate.estimate().completeness() + ", uncertainResources="
+                        + uncertainAction + "]: "
+                        + String.join(", ", candidate.estimate().limitations()));
             }
         }
         return new Selection(firstAction, actions, prepared.availableMana(),
                 best.usedMana(), unusedMana, score, pressure, candidates.size(),
                 prepared.fallbackCandidateCount(), fallbackActionCount, incompleteActionCount,
-                uncertainActionCount);
+                uncertainActionCount, actionDiagnostics);
     }
 
     private static List<SpellAbility> firstActionFirst(final List<SpellAbility> actions,
@@ -397,14 +486,16 @@ public final class ManaActionCombinationSelector {
         return reordered;
     }
 
-    private static Candidate createCandidate(final Player ai, final SpellAbility ability,
+    private static CandidateBuildResult createCandidate(final Player ai,
+            final SpellAbility ability,
             final int availableMana, final boolean skipCounter,
             final EffectEvaluationBudget budget) {
         if (ability == null || ability.getHostCard() == null || ability.getPayCosts() == null
                 || ability.getPayCosts().getTotalMana() == null
                 || skipCounter && ability.getApi() == ApiType.Counter
                 || ability.isLandAbility() || ability.isManaAbility()) {
-            return null;
+            return CandidateBuildResult.rejected(
+                    "not a supported mana-paying cast or activation candidate");
         }
         final Card host = ability.getHostCard();
 
@@ -422,15 +513,21 @@ public final class ManaActionCombinationSelector {
             costAbility = probe;
             xValue = announcedXValue(probe, ai);
             if (ability.getPayCosts().getTotalMana().countX() > 0 && xValue < 0) {
-                return null;
+                return CandidateBuildResult.rejected("announced X value is not supported");
             }
             manaCost = announcedManaCost(probe);
             if (manaCost > availableMana) {
-                return null;
+                return CandidateBuildResult.rejected("requires " + manaCost
+                        + " mana; only " + availableMana + " is available");
             }
-            if (host.isLand() || !probe.canCastTiming(ai)
-                    || !ComputerUtilCost.canPayCost(probe, ai, probe.isTrigger())) {
-                return null;
+            if (host.isLand()) {
+                return CandidateBuildResult.rejected("land play is not a spell-value candidate");
+            }
+            if (!probe.canCastTiming(ai)) {
+                return CandidateBuildResult.rejected("cast timing is not currently legal");
+            }
+            if (!ComputerUtilCost.canPayCost(probe, ai, probe.isTrigger())) {
+                return CandidateBuildResult.rejected("spell cost cannot currently be paid");
             }
             action = new CastValuationAction(probe);
             context = ValuationContext.forCast(ai, true);
@@ -445,17 +542,17 @@ public final class ManaActionCombinationSelector {
             probe.setActivatingPlayer(ai);
             xValue = announcedXValue(probe, ai);
             if (ability.getPayCosts().getTotalMana().countX() > 0 && xValue < 0) {
-                return null;
+                return CandidateBuildResult.rejected("announced X value is not supported");
             }
             if (ability.isPwAbility() && host.isPlaneswalker()
                     && !probe.canPlay()) {
                 traceLoyaltyCandidate(ability, ai, "unavailable", "engine legality rejected");
-                return null;
+                return CandidateBuildResult.rejected("engine rejected current ability legality");
             }
             if (ability.isPwAbility() && host.isPlaneswalker()
                     && !probe.canCastTiming(ai)) {
                 traceLoyaltyCandidate(ability, ai, "unavailable", "loyalty timing is not legal");
-                return null;
+                return CandidateBuildResult.rejected("loyalty timing is not currently legal");
             }
             activationCost = SituationalAbilityOccurrenceContext.supportedActivationCost(
                     probe.getPayCosts(), probe).orElse(null);
@@ -464,27 +561,29 @@ public final class ManaActionCombinationSelector {
                     traceLoyaltyCandidate(ability, ai, "unsupported",
                             "activation cost is not modeled");
                 }
-                return null;
+                return CandidateBuildResult.rejected("activation cost is not modeled");
             }
             manaCost = activationCost.manaCost();
             if (manaCost > availableMana) {
                 if (ability.isPwAbility() && host.isPlaneswalker()) {
                     traceLoyaltyCandidate(ability, ai, "unavailable", "not enough available mana");
                 }
-                return null;
+                return CandidateBuildResult.rejected("requires " + manaCost
+                        + " mana; only " + availableMana + " is available");
             }
             if (!ComputerUtilCost.canPayCost(probe, ai, false)) {
                 if (ability.isPwAbility() && host.isPlaneswalker()) {
                     traceLoyaltyCandidate(ability, ai, "unavailable", "activation cost cannot be paid");
                 }
-                return null;
+                return CandidateBuildResult.rejected("activation cost cannot currently be paid");
             }
             action = new ActivateValuationAction(host, probe);
             context = ValuationContext.forActivation(ai, true);
             cast = false;
             costAbility = probe;
         } else {
-            return null;
+            return CandidateBuildResult.rejected(
+                    "not a cast from hand or an activation of an AI-controlled permanent");
         }
 
         final ActionCostAnalysis costAnalysis = ActionCostSupport.analyze(costAbility, ai);
@@ -492,7 +591,8 @@ public final class ManaActionCombinationSelector {
                 && !costAnalysis.supported()) {
             traceLoyaltyCandidate(ability, ai, "unsupported",
                     String.join(", ", costAnalysis.reasons()));
-            return null;
+            return CandidateBuildResult.rejected("additional cost is unsupported: "
+                    + String.join(", ", costAnalysis.reasons()));
         }
         budget.check();
         final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(action, context,
@@ -504,7 +604,9 @@ public final class ManaActionCombinationSelector {
             // activation fallback must never displace a known planeswalker mode.
             traceLoyaltyCandidate(ability, ai, value.completeness().name(),
                     String.join(", ", value.reasons()));
-            return null;
+            return CandidateBuildResult.rejected("planeswalker outcome is "
+                    + value.completeness().name().toLowerCase() + ": "
+                    + String.join(", ", value.reasons()));
         }
         final ActionValueFallbackEvaluator.Estimate fallback;
         if (value.isComplete()) {
@@ -512,7 +614,8 @@ public final class ManaActionCombinationSelector {
         } else if (value.completeness() == ValuationCompleteness.UNAVAILABLE) {
             // A legal-looking action can still be unavailable because its current target or
             // state-dependent outcome cannot occur. Do not turn that into a generic action.
-            return null;
+            return CandidateBuildResult.rejected("outcome unavailable: "
+                    + String.join(", ", value.reasons()));
         } else if (cast) {
             fallback = ActionValueFallbackEvaluator.cast(manaCost);
         } else {
@@ -537,14 +640,15 @@ public final class ManaActionCombinationSelector {
             if (estimate.netBenefit() <= 0) {
                 traceLoyaltyCandidate(ability, ai, "rejected",
                         "nonpositive net value=" + estimate.netBenefit());
-                return null;
+                return CandidateBuildResult.rejected("evaluated net value is nonpositive ("
+                        + estimate.netBenefit() + ")");
             }
             traceLoyaltyCandidate(ability, ai, "complete",
                     "outcome and costs are supported; selector benefit="
                             + estimate.netBenefit());
         }
-        return new Candidate(ability, manaCost, ability.getPayCosts().getTotalMana(), xValue, cast,
-                maxUses, estimate);
+        return CandidateBuildResult.accepted(new Candidate(ability, manaCost,
+                ability.getPayCosts().getTotalMana(), xValue, cast, maxUses, estimate));
     }
 
     private static ActionResourceFootprint uncertainResources(final Card host, final boolean cast) {
@@ -873,8 +977,69 @@ public final class ManaActionCombinationSelector {
     }
 
     private static Selection emptySelection(final int availableMana, final int evaluated) {
+        return emptySelection(availableMana, evaluated, List.of());
+    }
+
+    private static Selection emptySelection(final int availableMana, final int evaluated,
+            final List<String> diagnostics) {
         return new Selection(null, List.of(), availableMana, 0, availableMana,
-                -availableMana * UNUSED_MANA_PENALTY, 0, evaluated, 0, 0, 0, 0);
+                -availableMana * UNUSED_MANA_PENALTY, 0, evaluated, 0, 0, 0, 0,
+                diagnostics);
+    }
+
+    private static Comparison comparison(final Selection proposed, final Selection legacy,
+            final String status, final List<String> diagnostics) {
+        final List<String> bounded = diagnostics == null ? List.of()
+                : List.copyOf(diagnostics);
+        final Comparison result = new Comparison(proposed, legacy, status, bounded);
+        if (!"plans_compared".equals(status) && !"proposal_against_legacy_pass".equals(status)) {
+            logComparisonDiagnostic(result);
+        }
+        return result;
+    }
+
+    private static void logComparisonDiagnostic(final Comparison comparison) {
+        if (!Boolean.parseBoolean(System.getProperty(EffectAnalysisTrace.ENABLE_PROPERTY, "true"))) {
+            return;
+        }
+        Logger.info("[AI Effect Analysis] Action comparison assessment: status={}, details={}",
+                comparison.status(), comparison.diagnosticSummary());
+    }
+
+    private static String summarizeDiagnostics(final String status,
+            final List<String> diagnostics) {
+        final StringJoiner summary = new StringJoiner("; ");
+        if (diagnostics != null) {
+            for (int i = 0; i < Math.min(diagnostics.size(), MAX_DIAGNOSTIC_DETAILS); i++) {
+                summary.add(diagnostics.get(i));
+            }
+            if (diagnostics.size() > MAX_DIAGNOSTIC_DETAILS) {
+                summary.add("... and " + (diagnostics.size() - MAX_DIAGNOSTIC_DETAILS)
+                        + " more detail(s)");
+            }
+        }
+        return summary.length() == 0 ? status : status + ": " + summary;
+    }
+
+    private static void addDiagnostic(final List<String> diagnostics, final String detail) {
+        if (detail != null && !detail.isBlank()) {
+            diagnostics.add(detail);
+        }
+    }
+
+    private static String safeFilterReason(final SpellAbility ability,
+            final Function<SpellAbility, String> candidateFilterReason) {
+        if (candidateFilterReason == null) {
+            return "legacy admission filter rejected action";
+        }
+        try {
+            final String reason = candidateFilterReason.apply(ability);
+            return reason == null || reason.isBlank()
+                    ? "legacy admission filter rejected action" : reason;
+        } catch (final RuntimeException exception) {
+            return "legacy admission reason unavailable ("
+                    + exception.getClass().getSimpleName() + ")";
+        }
     }
 
     private static Selection timedOut(final int availableMana, final int evaluated) {
@@ -925,6 +1090,16 @@ public final class ManaActionCombinationSelector {
             final boolean overrideApplied, final String legacyTiming,
             final int minimumAdvantage, final ActionDecisionSnapshot snapshot,
             final String explicitReason) {
+        logShadowComparison(legacyFirstAction, legacyPlan, proposedPlan, overrideApplied,
+                legacyTiming, minimumAdvantage, snapshot, explicitReason, "not available");
+    }
+
+    /** Logs the action-level explanation collected while preparing both comparison plans. */
+    public static void logShadowComparison(final SpellAbility legacyFirstAction,
+            final Selection legacyPlan, final Selection proposedPlan,
+            final boolean overrideApplied, final String legacyTiming,
+            final int minimumAdvantage, final ActionDecisionSnapshot snapshot,
+            final String explicitReason, final String comparisonDetails) {
         if (!Boolean.parseBoolean(System.getProperty(EffectAnalysisTrace.ENABLE_PROPERTY, "true"))) {
             return;
         }
@@ -940,7 +1115,8 @@ public final class ManaActionCombinationSelector {
                         + "proposedActions={}, proposedCandidates={}, proposedFallbacks={}, "
                         + "proposedFallbackActions={}, proposedIncompleteActions={}, "
                         + "proposedUncertainActions={}, advantage={}, minimumAdvantage={}, "
-                        + "overrideApplied={}, reason={}",
+                        + "overrideApplied={}, reason={}, comparisonDetails={}, "
+                        + "legacyActionIssues={}, proposedActionIssues={}",
                 actionName(legacyFirstAction), score(legacyPlan), actionNames(legacyPlan),
                 actionName(proposedPlan == null ? null : proposedPlan.firstAction()),
                 score(proposedPlan), legacyTiming,
@@ -956,7 +1132,14 @@ public final class ManaActionCombinationSelector {
                 proposedPlan == null ? 0 : proposedPlan.fallbackActionCount(),
                 proposedPlan == null ? 0 : proposedPlan.incompleteActionCount(),
                 proposedPlan == null ? 0 : proposedPlan.uncertainActionCount(),
-                advantage, minimumAdvantage, overrideApplied, reason);
+                advantage, minimumAdvantage, overrideApplied, reason,
+                comparisonDetails == null ? "not available" : comparisonDetails,
+                planActionDiagnostics(legacyPlan), planActionDiagnostics(proposedPlan));
+    }
+
+    private static String planActionDiagnostics(final Selection selection) {
+        return selection == null ? "not available"
+                : summarizeDiagnostics("none", selection.actionDiagnostics());
     }
 
     private static String inferredReason(final SpellAbility legacyFirstAction,
@@ -1035,12 +1218,13 @@ public final class ManaActionCombinationSelector {
         Logger.info("[AI Effect Analysis] Mana action combination: availableMana={}, usedMana={}, "
                         + "unusedMana={}, score={}, handPressure={}, candidates={}, "
                         + "fallbackCandidates={}, fallbackActions={}, incompleteActions={}, "
-                        + "uncertainActions={}, first={}, actions={}",
+                        + "uncertainActions={}, first={}, actions={}, actionIssues={}",
                 selection.availableMana(), selection.usedMana(), selection.unusedMana(),
                 selection.score(), selection.handPressureBonus(), selection.evaluatedCandidateCount(),
                 selection.fallbackCandidateCount(), selection.fallbackActionCount(),
                 selection.incompleteActionCount(), selection.uncertainActionCount(),
-                selection.firstAction().getHostCard().getName(), actions);
+                selection.firstAction().getHostCard().getName(), actions,
+                planActionDiagnostics(selection));
     }
 
     private static void traceLoyaltyCandidate(final SpellAbility ability, final Player ai,
@@ -1463,7 +1647,22 @@ public final class ManaActionCombinationSelector {
             IdentityHashMap<SpellAbility, Candidate> candidatesByAbility,
             List<List<Candidate>> groups, ManaSourceModel manaSourceModel,
             int availableMana, int handOverflow,
-            int handPressureValue, int fallbackCandidateCount) {
+            int handPressureValue, int fallbackCandidateCount,
+            List<String> candidateDiagnostics) {
+    }
+
+    private record CandidateBuildResult(Candidate candidate, String rejectionReason) {
+        private static CandidateBuildResult accepted(final Candidate candidate) {
+            return new CandidateBuildResult(candidate, null);
+        }
+
+        private static CandidateBuildResult rejected(final String reason) {
+            return new CandidateBuildResult(null, reason);
+        }
+    }
+
+    private record AlternativeAdmission(int alternativeCount, int admittedCount,
+            List<String> diagnostics) {
     }
 
     private record ManaSourceModel(List<ActionManaSource> sources,

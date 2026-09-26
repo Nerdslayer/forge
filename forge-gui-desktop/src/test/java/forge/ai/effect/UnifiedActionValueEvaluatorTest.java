@@ -302,6 +302,98 @@ public class UnifiedActionValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void actionCombinationGatePreservesLegacyOrderingForFallbackOrIncompletePlans() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card legacyCard = addCardToZone("Savannah Lions", ai, ZoneType.Hand);
+        final Card alternativeCard = addCardToZone("Grizzly Bears", ai, ZoneType.Hand);
+        final SpellAbility legacyAction = legacyCard.getSpellAbilities().get(0);
+        final SpellAbility alternativeAction = alternativeCard.getSpellAbilities().get(0);
+        final List<SpellAbility> abilities = new ArrayList<>(
+                List.of(legacyAction, alternativeAction));
+        final ManaActionCombinationSelector.Selection legacyPlan = selection(legacyAction,
+                100, 0, 0, 0);
+
+        for (final ManaActionCombinationSelector.Selection incompletePlan : List.of(
+                selection(alternativeAction, 200, 1, 0, 0),
+                selection(alternativeAction, 200, 0, 1, 0),
+                selection(alternativeAction, 200, 0, 0, 1))) {
+            final ActionCombinationOverrideGate.Decision decision =
+                    ActionCombinationOverrideGate.evaluate(legacyAction,
+                    legacyPlan, incompletePlan, true, false, false, false, 20);
+
+            Assert.assertFalse(decision.shouldOverride(), decision.toString());
+            ManaActionCombinationSelector.reorder(abilities,
+                    decision.shouldOverride() ? incompletePlan : null);
+            Assert.assertSame(abilities.get(0), legacyAction);
+        }
+    }
+
+    @Test
+    public void actionCombinationGateReordersOnlyForACompletePlanAboveThreshold() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Card legacyCard = addCardToZone("Savannah Lions", ai, ZoneType.Hand);
+        final Card alternativeCard = addCardToZone("Grizzly Bears", ai, ZoneType.Hand);
+        final SpellAbility legacyAction = legacyCard.getSpellAbilities().get(0);
+        final SpellAbility alternativeAction = alternativeCard.getSpellAbilities().get(0);
+        final List<SpellAbility> abilities = new ArrayList<>(
+                List.of(legacyAction, alternativeAction));
+        final ManaActionCombinationSelector.Selection legacyPlan = selection(legacyAction,
+                100, 0, 0, 0);
+        final ManaActionCombinationSelector.Selection proposedPlan = selection(alternativeAction,
+                120, 0, 0, 0);
+
+        final ActionCombinationOverrideGate.Decision decision =
+                ActionCombinationOverrideGate.evaluate(legacyAction,
+                legacyPlan, proposedPlan, true, false, false, false, 20);
+        if (decision.shouldOverride()) {
+            ManaActionCombinationSelector.reorder(abilities, proposedPlan);
+        }
+
+        Assert.assertTrue(decision.shouldOverride(), decision.toString());
+        Assert.assertSame(abilities.get(0), alternativeAction);
+    }
+
+    @Test
+    public void comparisonDistinguishesNoAlternativeFromLegacyRejectedAlternative() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        addCard("Forest", ai);
+        final Card legacyCard = addCardToZone("Savannah Lions", ai, ZoneType.Hand);
+        final Card alternativeCard = addCardToZone("Grizzly Bears", ai, ZoneType.Hand);
+        final SpellAbility legacyAction = legacyCard.getSpellAbilities().get(0);
+        final SpellAbility alternativeAction = alternativeCard.getSpellAbilities().get(0);
+        final ActionDecisionSnapshot snapshot = ActionDecisionSnapshot.capture(ai);
+
+        final ManaActionCombinationSelector.Comparison noAlternative =
+                ManaActionCombinationSelector.compare(ai, List.of(legacyAction), true,
+                        legacyAction, snapshot, ignored -> true);
+        final ManaActionCombinationSelector.Comparison rejectedAlternative =
+                ManaActionCombinationSelector.compare(ai,
+                        List.of(legacyAction, alternativeAction), true, legacyAction, snapshot,
+                        ability -> ability == legacyAction,
+                        ability -> "legacy timing=" + (ability == alternativeAction
+                                ? "WAIT_FOR_COMBAT" : "PLAY_NOW"));
+
+        Assert.assertEquals(noAlternative.status(), "no_distinct_alternative_action");
+        Assert.assertEquals(rejectedAlternative.status(),
+                "alternatives_rejected_by_legacy_filter");
+        Assert.assertTrue(rejectedAlternative.diagnosticSummary()
+                .contains("Grizzly Bears"), rejectedAlternative.diagnosticSummary());
+        Assert.assertTrue(rejectedAlternative.diagnosticSummary()
+                .contains("WAIT_FOR_COMBAT"), rejectedAlternative.diagnosticSummary());
+    }
+
+    private static ManaActionCombinationSelector.Selection selection(
+            final SpellAbility firstAction, final int score, final int fallbackActions,
+            final int incompleteActions, final int uncertainActions) {
+        return new ManaActionCombinationSelector.Selection(firstAction, List.of(firstAction),
+                3, 1, 2, score, 0, 1, fallbackActions, fallbackActions,
+                incompleteActions, uncertainActions, List.of());
+    }
+
+    @Test
     public void manaCombinationSelectorRejectsAnUnpayableColoredCombination() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
