@@ -6,7 +6,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import forge.ai.AITest;
-import forge.ai.ComputerUtilCard;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.Game;
 import forge.game.ability.AbilityFactory;
@@ -38,7 +37,7 @@ public class RemovalActionEvaluatorTest extends AITest {
 
         final CardValueBreakdown emptyHand = RemovalActionEvaluator.evaluate(target, baseValue(),
                 RemovalActionKind.BOUNCE);
-        Assert.assertEquals(emptyHand.transitionValue(), -80);
+        Assert.assertEquals(emptyHand.transitionValue(), -60);
 
         addCardToZone("Forest", opponent, forge.game.zone.ZoneType.Hand);
         addCardToZone("Forest", opponent, forge.game.zone.ZoneType.Hand);
@@ -109,9 +108,9 @@ public class RemovalActionEvaluatorTest extends AITest {
                 ValuationContext.forRemoval(ai, 0, 0));
 
         Assert.assertTrue(result.isComplete());
-        Assert.assertEquals(result.currentPresenceValue(),
-                ComputerUtilCard.evaluatePermanent(ai, target));
+        Assert.assertEquals(result.currentPresenceValue(), 110);
         Assert.assertEquals(result.futurePotentialValue(), 0);
+        Assert.assertEquals(result.contextAdjustment(), 0);
     }
 
     @Test

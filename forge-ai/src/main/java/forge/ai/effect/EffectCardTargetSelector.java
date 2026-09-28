@@ -2,7 +2,6 @@ package forge.ai.effect;
 
 import java.util.function.Predicate;
 
-import forge.ai.ComputerUtilCard;
 import forge.ai.ability.FightAi;
 import forge.game.card.Card;
 import forge.game.player.Player;
@@ -37,7 +36,7 @@ final class EffectCardTargetSelector {
             if (!targetCheck.canTarget(candidate) || !additionalFilter.test(candidate)) {
                 continue;
             }
-            final int permanentValue = ComputerUtilCard.evaluatePermanent(activator, candidate);
+            final int permanentValue = UnifiedPermanentValueEvaluator.evaluate(activator, candidate);
             final int departureValue = candidate.getController().isOpponentOf(activator)
                     ? permanentValue : EffectMath.negate(permanentValue);
             if (best == null || departureValue > bestValue) {
@@ -69,7 +68,7 @@ final class EffectCardTargetSelector {
             if (!targetCheck.canTarget(candidate) || !additionalFilter.test(candidate)) {
                 continue;
             }
-            final int permanentValue = ComputerUtilCard.evaluatePermanent(activator, candidate);
+            final int permanentValue = UnifiedPermanentValueEvaluator.evaluate(activator, candidate);
             final int changeValue = candidate.getController() == newController
                     ? 0 : candidate.getController().isOpponentOf(newController)
                             ? permanentValue : EffectMath.negate(permanentValue);
@@ -104,7 +103,7 @@ final class EffectCardTargetSelector {
             if (!targetCheck.canTarget(candidate)) {
                 continue;
             }
-            final int candidateValue = ComputerUtilCard.evaluatePermanent(activator, candidate);
+            final int candidateValue = UnifiedPermanentValueEvaluator.evaluate(activator, candidate);
             int fightValue = candidate.getController().isOpponentOf(activator)
                     ? candidateValue : EffectMath.negate(candidateValue);
             if (FightAi.canKill(fighter, candidate, 0)) {

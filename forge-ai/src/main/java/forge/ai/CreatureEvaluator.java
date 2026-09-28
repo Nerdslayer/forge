@@ -18,6 +18,20 @@ import java.util.List;
 import java.util.function.Function;
 
 public class CreatureEvaluator implements Function<Card, Integer> {
+    public enum ValuationScale {
+        LEGACY, UNIFIED
+    }
+
+    private final ValuationScale scale;
+
+    public CreatureEvaluator() {
+        this(ValuationScale.LEGACY);
+    }
+
+    public CreatureEvaluator(final ValuationScale scale) {
+        this.scale = scale;
+    }
+
     @Override
     public Integer apply(Card c) {
         return evaluateCreature(c);
@@ -30,8 +44,9 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         //Card shouldn't be null and AI shouldn't crash since this is just score
         if (c == null)
             return 0;
-        int value = 80;
-        if (!c.isToken()) {
+        final boolean unified = scale == ValuationScale.UNIFIED;
+        int value = unified ? 0 : 80;
+        if (!unified && !c.isToken()) {
             value += addValue(20, "non-token"); // tokens should be worth less than actual cards
         }
         int power = c.getNetCombatDamage();
@@ -48,16 +63,17 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         }
 
         if (considerPT) {
-            value += addValue(power * 15, "power");
+            value += addValue(unified ? CreatureBodyValue.power(power) : power * 15, "power");
             // TODO factor in marked damage - but probably not always?
-            value += addValue(toughness * 10, "toughness: " + toughness);
+            value += addValue(unified ? CreatureBodyValue.toughness(toughness) : toughness * 10,
+                    "toughness: " + toughness);
 
             // because backside is always stronger the potential makes it better than a single faced card
             if (c.hasKeyword(Keyword.DAYBOUND) && c.isDoubleFaced()) {
                 value += addValue(power * 10, "transforming");
             }
         }
-        if (considerCMC) {
+        if (considerCMC && !unified) {
             value += addValue(c.getCMC() * 5, "cmc");
         }
 
@@ -143,7 +159,7 @@ public class CreatureEvaluator implements Function<Card, Integer> {
 
         // Protection
         if (c.hasKeyword(Keyword.INDESTRUCTIBLE)) {
-            value += addValue(70, "darksteel");
+            value += addValue(unified ? CreatureBodyValue.indestructible(c.getNetPower()) : 70, "darksteel");
         } else {
             value += addValue(20 * c.getCounters(CounterEnumType.SHIELD), "shielded");
         }
@@ -183,9 +199,11 @@ public class CreatureEvaluator implements Function<Card, Integer> {
             value -= subValue(40, "sac-end");
         }
         if (c.isDetained()) {
-            value = addValue(50 + (c.getCMC() * 5), "detained"); // reset everything - useless
+            value = addValue(unified ? CreatureBodyValue.body(power, toughness) / 2
+                    : 50 + (c.getCMC() * 5), "detained"); // reset everything - useless
         } else if (c.hasKeyword("CARDNAME can't attack or block.")) {
-            value = addValue(50 + (c.getCMC() * 5), "useless"); // reset everything - useless
+            value = addValue(unified ? CreatureBodyValue.body(power, toughness) / 2
+                    : 50 + (c.getCMC() * 5), "useless"); // reset everything - useless
         } else if (c.hasKeyword("CARDNAME can't block.")) {
             value -= subValue(10, "cant-block");
         } else if (c.isGoaded()) {
@@ -209,13 +227,14 @@ public class CreatureEvaluator implements Function<Card, Integer> {
             value -= subValue(25, "dies");
         }
 
-        if (c.isUntapped()) {
+        if (c.isUntapped() && !unified) {
             value += addValue(1, "untapped");
         }
 
         if (!c.canUntap(c.getController(), true)) {
             if (c.isTapped()) {
-                value = addValue(50 + (c.getCMC() * 5), "tapped-useless"); // reset everything - useless
+                value = addValue(unified ? CreatureBodyValue.body(power, toughness) / 2
+                        : 50 + (c.getCMC() * 5), "tapped-useless"); // reset everything - useless
             } else {
                 value -= subValue(50, "doesnt-untap");
             }

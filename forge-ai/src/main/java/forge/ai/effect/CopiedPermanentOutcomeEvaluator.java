@@ -3,7 +3,6 @@ package forge.ai.effect;
 import java.util.List;
 import java.util.Set;
 
-import forge.ai.ComputerUtilCard;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
@@ -76,7 +75,7 @@ final class CopiedPermanentOutcomeEvaluator implements OutcomeEvaluator {
                     if (context.state() != null) {
                         for (int i = 0; i < amount; i++) { context.state().addToken(token); }
                     }
-                    final int tokenValue = ComputerUtilCard.evaluatePermanent(
+                    final int tokenValue = UnifiedPermanentValueEvaluator.evaluate(
                             context.evaluatingAi(), token);
                     value = EffectMath.add(value,
                             controller.isOpponentOf(context.evaluatingAi())

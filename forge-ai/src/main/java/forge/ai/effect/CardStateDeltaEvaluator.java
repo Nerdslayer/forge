@@ -3,7 +3,6 @@ package forge.ai.effect;
 import java.util.Map;
 import java.util.function.ToIntFunction;
 
-import forge.ai.ComputerUtilCard;
 import forge.game.card.Card;
 import forge.game.card.CardCopyService;
 import forge.game.player.Player;
@@ -122,7 +121,7 @@ final class CardStateDeltaEvaluator {
                 return 0;
             }
         }
-        return ComputerUtilCard.evaluatePermanent(context.evaluatingAi(), card);
+        return UnifiedPermanentValueEvaluator.evaluate(context.evaluatingAi(), card);
     }
 
     private static int chooseBest(final SpellAbility outcome,

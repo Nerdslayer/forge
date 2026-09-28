@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import forge.ai.ComputerUtilCard;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
@@ -176,7 +175,7 @@ final class SacrificeProductionExtractor implements EffectProductionExtractor {
             }
         }
         choices.sort(Comparator.comparingInt(card ->
-                ComputerUtilCard.evaluatePermanent(player, card)));
+                UnifiedPermanentValueEvaluator.evaluate(player, card)));
         return choices;
     }
 }

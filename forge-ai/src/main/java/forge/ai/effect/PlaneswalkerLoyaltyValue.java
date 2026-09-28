@@ -1,6 +1,5 @@
 package forge.ai.effect;
 
-import forge.ai.ComputerUtilCard;
 import forge.game.card.Card;
 import forge.game.card.CardCopyService;
 import forge.game.card.CounterEnumType;
@@ -25,7 +24,7 @@ final class PlaneswalkerLoyaltyValue {
         if (evaluatingAi == null || source == null || !source.isPlaneswalker()) {
             return 0;
         }
-        final int before = ComputerUtilCard.evaluatePermanent(evaluatingAi, source);
+        final int before = UnifiedPermanentValueEvaluator.evaluate(evaluatingAi, source);
         final Card changed = CardCopyService.getLKICopy(source);
         if (source.getZone() != null) {
             changed.setZone(source.getZone());
@@ -33,7 +32,7 @@ final class PlaneswalkerLoyaltyValue {
         final int loyalty = Math.max(0, source.getCounters(CounterEnumType.LOYALTY) + amount);
         changed.setCounters(CounterEnumType.LOYALTY, loyalty);
         final int after = loyalty == 0 ? 0
-                : ComputerUtilCard.evaluatePermanent(evaluatingAi, changed);
+                : UnifiedPermanentValueEvaluator.evaluate(evaluatingAi, changed);
         return after - before;
     }
 

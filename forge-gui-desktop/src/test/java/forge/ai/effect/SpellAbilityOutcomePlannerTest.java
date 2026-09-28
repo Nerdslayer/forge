@@ -315,7 +315,7 @@ public class SpellAbilityOutcomePlannerTest extends AITest {
                 "DB$ Pump | Defined$ Self | KW$ Deathtouch | Duration$ Permanent | SubAbility$ Hit");
         final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(combo, ai);
         Assert.assertTrue(plan.supported(), plan.reason());
-        Assert.assertTrue(plan.value() < -forge.ai.ComputerUtilCard.evaluatePermanent(ai, victim));
+        Assert.assertTrue(plan.value() < -UnifiedPermanentValueEvaluator.evaluate(ai, victim));
         Assert.assertTrue(plan.state().card(victim).hasBeenDealtDeathtouchDamage());
         Assert.assertFalse(source.hasKeyword(forge.game.keyword.Keyword.DEATHTOUCH));
         Assert.assertEquals(victim.getDamage(), 0);

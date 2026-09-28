@@ -14,7 +14,8 @@ import forge.game.zone.ZoneType;
 
 /**
  * Combines live relationship analysis with the small, conservative intrinsic ability slice used
- * for removal decisions. The base permanent score remains owned by {@code ComputerUtilCard}.
+ * for removal decisions. The base permanent score remains owned by
+ * {@link UnifiedPermanentValueEvaluator}.
  */
 public final class PermanentAbilityValueEvaluator {
     private static final double FUTURE_EVENT_ALLOWANCE = .50;

@@ -55,7 +55,7 @@ public class AbilityTraversalTest extends AITest {
 
         Assert.assertEquals(result.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
         Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
-        Assert.assertEquals(result.contribution().value(), 50.0);
+        Assert.assertEquals(result.contribution().value(), 70.0);
     }
 
     @Test
@@ -74,7 +74,7 @@ public class AbilityTraversalTest extends AITest {
                         EntryTiming.NORMAL_SPEED).get(0);
 
         Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
-        Assert.assertEquals(result.contribution().value(), 20.0);
+        Assert.assertEquals(result.contribution().value(), 50.0);
     }
 
     @Test
@@ -112,7 +112,7 @@ public class AbilityTraversalTest extends AITest {
                         EntryTiming.NORMAL_SPEED).get(0);
 
         Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
-        Assert.assertEquals(result.contribution().value(), 100.0);
+        Assert.assertEquals(result.contribution().value(), 140.0);
     }
 
     @Test

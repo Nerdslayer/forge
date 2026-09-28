@@ -108,7 +108,6 @@ public final class CardDefinitionValueEvaluator {
             warnings.add("Only single-faced cards are fully evaluated.");
         }
 
-        add(contributions, "Battlefield", "Base creature", 80);
         final String powerText = face.getPower();
         final String toughnessText = face.getToughness();
         final boolean integerPower = powerText != null && powerText.matches("\\d+");
@@ -118,8 +117,8 @@ public final class CardDefinitionValueEvaluator {
         } else {
             final int power = face.getIntPower();
             final int toughness = face.getIntToughness();
-            add(contributions, "Battlefield", "Power", power * 15);
-            add(contributions, "Battlefield", "Toughness", toughness * 10);
+            add(contributions, "Battlefield", "Power", CreatureBodyValue.power(power));
+            add(contributions, "Battlefield", "Toughness", CreatureBodyValue.toughness(toughness));
             addKeywordContributions(contributions, warnings, face, power, toughness);
         }
 
@@ -398,8 +397,9 @@ public final class CardDefinitionValueEvaluator {
         if (hasSimpleKeyword(face, "menace") && power > 0) add(contributions, "Keyword", "Menace", power * 4);
         if (hasSimpleKeyword(face, "fear") && power > 0) add(contributions, "Keyword", "Fear", power * 6);
         if (hasSimpleKeyword(face, "intimidate") && power > 0) add(contributions, "Keyword", "Intimidate", power * 6);
-        if (hasSimpleKeyword(face, "indestructible")) add(contributions, "Keyword", "Indestructible", 70);
-        else if (hasSimpleKeyword(face, "hexproof")) add(contributions, "Keyword", "Hexproof", 35);
+        if (hasSimpleKeyword(face, "indestructible")) add(contributions, "Keyword", "Indestructible",
+                CreatureBodyValue.indestructible(power));
+        if (hasSimpleKeyword(face, "hexproof")) add(contributions, "Keyword", "Hexproof", 35);
         else if (hasSimpleKeyword(face, "shroud")) add(contributions, "Keyword", "Shroud", 30);
         if (hasSimpleKeyword(face, "defender")) add(contributions, "Keyword", "Defender", -((power * 9) + 40));
 

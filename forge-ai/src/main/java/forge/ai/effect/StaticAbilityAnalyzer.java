@@ -10,7 +10,6 @@ import java.util.Set;
 
 import com.google.common.collect.Iterables;
 
-import forge.ai.ComputerUtilCard;
 import forge.game.StaticEffect;
 import forge.game.ability.AbilityUtils;
 import forge.game.card.Card;
@@ -114,14 +113,14 @@ final class StaticAbilityAnalyzer {
 
     private static int evaluateAutomaticDelta(final Player evaluatingAi, final Card affected,
             final StaticEffect effect, final StaticAbility ability) {
-        final int withEffect = ComputerUtilCard.evaluatePermanent(evaluatingAi, affected);
+        final int withEffect = UnifiedPermanentValueEvaluator.evaluate(evaluatingAi, affected);
         final Card withoutEffect = CardCopyService.getLKICopy(affected);
         if (affected.getZone() != null) {
             withoutEffect.setZone(affected.getZone());
         }
         removeTrackedChanges(withoutEffect, effect, ability);
         return EffectMath.subtract(withEffect,
-                ComputerUtilCard.evaluatePermanent(evaluatingAi, withoutEffect));
+                UnifiedPermanentValueEvaluator.evaluate(evaluatingAi, withoutEffect));
     }
 
     static void removeTrackedChanges(final Card card, final StaticEffect effect,

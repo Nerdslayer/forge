@@ -13,7 +13,6 @@ import java.util.Comparator;
 import java.util.List;
 
 import forge.ai.CardResourceValueEvaluator;
-import forge.ai.ComputerUtilCard;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
@@ -373,7 +372,7 @@ final class ActionCostSupport {
             return 0;
         }
         if (card.isInZone(ZoneType.Battlefield)) {
-            return Math.max(0, ComputerUtilCard.evaluatePermanent(payer, card));
+            return Math.max(0, UnifiedPermanentValueEvaluator.evaluate(payer, card));
         }
         if (card.isInZone(ZoneType.Hand)) {
             final CardValueBreakdown handValue = UnifiedCardValueEvaluator.evaluateCard(card,

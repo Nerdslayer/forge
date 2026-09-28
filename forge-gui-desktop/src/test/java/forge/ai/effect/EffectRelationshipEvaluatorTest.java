@@ -10,6 +10,7 @@ import forge.ai.AITest;
 import forge.ai.AiProfileUtil;
 import forge.ai.AiProps;
 import forge.ai.ComputerUtilCard;
+import forge.ai.CreatureBodyValue;
 import forge.ai.LobbyPlayerAi;
 import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.Game;
@@ -560,8 +561,10 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(oneTokenProducer, threeTokenProducer, consequence));
 
         Assert.assertTrue(values.getOrDefault(oneTokenProducer, 0) > 0, values.toString());
+        // Three counters are applied in one batch, but the body-value tiers make the third
+        // counter worth less than the first.
         Assert.assertEquals(values.get(threeTokenProducer).intValue(),
-                values.get(oneTokenProducer) * 3);
+                CreatureBodyValue.body(5, 5) - CreatureBodyValue.body(2, 2));
     }
 
     @Test
@@ -1001,7 +1004,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 35, values.toString());
         Assert.assertEquals(values.get(producer), values.get(consequence));
     }
 
@@ -1042,7 +1045,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 35, values.toString());
         Assert.assertEquals(values.get(producer), values.get(consequence));
     }
 
@@ -1775,7 +1778,8 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(consequence).intValue(), ComputerUtilCard.evaluatePermanent(ai, cheaper));
+        Assert.assertEquals(values.get(consequence).intValue(),
+                UnifiedPermanentValueEvaluator.evaluate(ai, cheaper));
     }
 
     @Test
@@ -2156,7 +2160,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        final int targetValue = ComputerUtilCard.evaluatePermanent(ai, target);
+        final int targetValue = UnifiedPermanentValueEvaluator.evaluate(ai, target);
         Assert.assertEquals(values.get(consequence).intValue(), targetValue * 2);
         Assert.assertEquals(values.get(producer), values.get(consequence));
     }
@@ -2362,7 +2366,9 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(multiProducer, consequence));
 
-        Assert.assertEquals(values.get(multiProducer).intValue(), singleValue * 2);
+        // Both scripts produce an event. The second counter has a smaller marginal body value.
+        Assert.assertEquals(values.get(multiProducer).intValue(), 90);
+        Assert.assertTrue(values.get(multiProducer) > singleValue);
     }
 
     @Test
@@ -3240,7 +3246,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 50, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 70, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
@@ -3265,7 +3271,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 25, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 35, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
@@ -3429,7 +3435,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 75, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 105, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 

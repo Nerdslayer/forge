@@ -27,9 +27,9 @@ public class HandCardValueEvaluatorTest extends AITest {
         Assert.assertEquals(context.unknownCardCount(), 2);
         Assert.assertTrue(result.isComplete());
         Assert.assertEquals(result.currentPresenceValue(), 0);
-        Assert.assertEquals(result.futurePotentialValue(), 130);
+        Assert.assertEquals(result.futurePotentialValue(), 110);
         Assert.assertEquals(result.accessCost(), 50);
-        Assert.assertEquals(result.netValue(), 80);
+        Assert.assertEquals(result.netValue(), 60);
     }
 
     @Test

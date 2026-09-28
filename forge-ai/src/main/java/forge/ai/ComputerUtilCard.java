@@ -603,10 +603,6 @@ public class ComputerUtilCard {
         final int synergyWeight = Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.EFFECT_SYNERGY_WEIGHT));
         final int intrinsicWeight = AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_INTRINSIC_REMOVAL_ANALYSIS)
                 ? Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.INTRINSIC_REMOVAL_WEIGHT)) : 0;
-        if (synergyWeight == 0 && intrinsicWeight == 0) {
-            return Aggregates.itemWithMax(list, c -> evaluateRemovalTargetPriority(ai, c));
-        }
-
         final List<Card> candidates = Lists.newArrayList(list);
         final EffectAnalysisTrace trace = EffectAnalysisTrace.create(ai, removalAbility);
         trace.context(candidates.size());
@@ -650,7 +646,16 @@ public class ComputerUtilCard {
     }
 
     private static int evaluateRemovalTargetPriority(final Player ai, final Card c) {
-        return UnifiedCardValueEvaluator.evaluateRemovalTargetPriority(ai, c);
+        if (ai == null || c == null) {
+            return 0;
+        }
+        // Legacy priority belongs only to profiles without effect analysis. Unified valuation
+        // scores the target itself, without this whole-board or token-wide adjustment.
+        int value = addSaturated(evaluatePermanent(ai, c), c.isToken() ? 30 : 0);
+        if (c.getController() != null && c.getController().isOpponentOf(ai)) {
+            value = addSaturated(value, ComputerUtil.evaluateBoardPosition(ai, c.getController()) / 4);
+        }
+        return value;
     }
 
     /**

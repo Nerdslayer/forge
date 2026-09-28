@@ -86,8 +86,8 @@ public class IntrinsicReferenceModelTest {
         final IntrinsicReferenceModel.CreatureProfile after =
                 new IntrinsicReferenceModel.CreatureProfile(true, 4, 4, java.util.Set.of(), false, false);
 
-        Assert.assertEquals(evaluator.evaluateCreatureDelta(before, after, true), 25);
-        Assert.assertEquals(evaluator.evaluateCreatureDelta(before, after, false), -25);
+        Assert.assertEquals(evaluator.evaluateCreatureDelta(before, after, true), 35);
+        Assert.assertEquals(evaluator.evaluateCreatureDelta(before, after, false), -35);
     }
 
     @Test

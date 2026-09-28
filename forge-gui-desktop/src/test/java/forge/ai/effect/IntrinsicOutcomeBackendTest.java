@@ -172,7 +172,7 @@ public class IntrinsicOutcomeBackendTest {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> result = evaluate(sequence(self, self), initial);
         Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(result.value(), 50.0);
+        Assert.assertEquals(result.value(), 70.0);
         Assert.assertEquals(result.state().sourcePermanent().power(), 4);
         Assert.assertEquals(result.state().sourcePermanent().toughness(), 4);
         Assert.assertEquals(result.state().controllerCreature(), CREATURE);
@@ -185,20 +185,20 @@ public class IntrinsicOutcomeBackendTest {
         final OutcomePlan<State> friendly = evaluate(leaf("PutCounterAll", Map.of(
                 "ValidCards", "Creature.YouCtrl", "CounterType", "P1P1")), initial);
         Assert.assertEquals(friendly.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(friendly.value(), 50.0);
+        Assert.assertEquals(friendly.value(), 70.0);
         Assert.assertEquals(friendly.state().controllerCreature().power(), 3);
         Assert.assertEquals(friendly.state().sourcePermanent().power(), 3);
 
         final OutcomePlan<State> opposing = evaluate(leaf("PutCounterAll", Map.of(
                 "ValidCards", "Creature.OppCtrl", "CounterType", "P1P1")), initial);
         Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(opposing.value(), -25.0);
+        Assert.assertEquals(opposing.value(), -35.0);
         Assert.assertEquals(opposing.state().opponentCreature().power(), 3);
 
         final OutcomePlan<State> other = evaluate(leaf("PutCounterAll", Map.of(
                 "ValidCards", "Creature.YouCtrl+StrictlyOther", "CounterType", "P1P1")), initial);
         Assert.assertEquals(other.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(other.value(), 25.0);
+        Assert.assertEquals(other.value(), 35.0);
         Assert.assertEquals(other.state().sourcePermanent(), SOURCE);
     }
 
@@ -208,7 +208,7 @@ public class IntrinsicOutcomeBackendTest {
         final OutcomePlan<State> self = evaluate(leaf("Pump", Map.of(
                 "Defined", "Self", "NumAtt", "+1", "NumDef", "+2", "Duration", "Permanent")), initial);
         Assert.assertEquals(self.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(self.value(), 35.0);
+        Assert.assertEquals(self.value(), 50.0);
         Assert.assertEquals(self.state().sourcePermanent().power(), 3);
         Assert.assertEquals(self.state().sourcePermanent().toughness(), 4);
 
@@ -216,7 +216,7 @@ public class IntrinsicOutcomeBackendTest {
                 "ValidCards", "Creature.YouCtrl", "NumAtt", "+1", "NumDef", "+1",
                 "Duration", "Perpetual")), initial);
         Assert.assertEquals(group.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(group.value(), 50.0);
+        Assert.assertEquals(group.value(), 70.0);
         Assert.assertEquals(group.state().controllerCreature().power(), 3);
         Assert.assertEquals(group.state().sourcePermanent().power(), 3);
 
@@ -306,7 +306,7 @@ public class IntrinsicOutcomeBackendTest {
         final State initial = state(CREATURE, CREATURE, SOURCE);
         final OutcomePlan<State> friendly = evaluate(counter("Creature.YouCtrl+Other"), initial);
         Assert.assertEquals(friendly.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(friendly.value(), 25.0);
+        Assert.assertEquals(friendly.value(), 35.0);
         Assert.assertEquals(friendly.state().controllerCreature().power(), 3);
         Assert.assertEquals(friendly.state().sourcePermanent(), SOURCE);
         Assert.assertNull(friendly.state().target());
@@ -314,7 +314,7 @@ public class IntrinsicOutcomeBackendTest {
 
         final OutcomePlan<State> opposing = evaluate(counter("Creature.OppCtrl"), initial);
         Assert.assertEquals(opposing.completeness(), Completeness.COMPLETE);
-        Assert.assertEquals(opposing.value(), -25.0);
+        Assert.assertEquals(opposing.value(), -35.0);
         Assert.assertEquals(opposing.state().opponentCreature().power(), 3);
         Assert.assertEquals(opposing.state().controllerCreature(), CREATURE);
 
@@ -323,7 +323,7 @@ public class IntrinsicOutcomeBackendTest {
         final OutcomePlan<State> selfTarget = evaluate(counter("Creature.YouCtrl"), alone);
         Assert.assertEquals(selfTarget.completeness(), Completeness.COMPLETE);
         Assert.assertEquals(selfTarget.state().sourcePermanent().power(), 3);
-        Assert.assertEquals(evaluate(counter("Creature"), alone).value(), 25.0);
+        Assert.assertEquals(evaluate(counter("Creature"), alone).value(), 35.0);
     }
 
     @Test
@@ -339,7 +339,7 @@ public class IntrinsicOutcomeBackendTest {
 
         final OutcomePlan<State> friendly = evaluate(leaf("PutCounter", Map.of(
                 "ValidTgts", "Creature.YouCtrl", "CounterType", "M1M1")), initial);
-        Assert.assertEquals(friendly.value(), -25.0);
+        Assert.assertEquals(friendly.value(), -55.0);
     }
 
     @Test
@@ -442,7 +442,7 @@ public class IntrinsicOutcomeBackendTest {
                 "ValidTgts", "Creature.YouCtrl", "CounterType", "Indestructible")), initial);
         Assert.assertEquals(indestructible.completeness(), Completeness.COMPLETE);
         Assert.assertTrue(indestructible.state().controllerCreature().keywords().contains("Indestructible"));
-        Assert.assertEquals(indestructible.value(), 70.0);
+        Assert.assertEquals(indestructible.value(), 80.0);
     }
 
     @Test
@@ -453,7 +453,7 @@ public class IntrinsicOutcomeBackendTest {
         Assert.assertEquals(result.completeness(), Completeness.COMPLETE);
         Assert.assertEquals(result.state().sourcePermanent().power(), 3);
         Assert.assertEquals(result.state().sourcePermanent().toughness(), 3);
-        Assert.assertEquals(result.value(), 25.0);
+        Assert.assertEquals(result.value(), 35.0);
     }
 
     @Test
@@ -461,7 +461,7 @@ public class IntrinsicOutcomeBackendTest {
         final CreatureProfile protectedCreature = new CreatureProfile(true, 2, 2, Set.of(), true, true);
         final State initial = state(protectedCreature, protectedCreature, PermanentProfile.absent());
         final OutcomePlan<State> friendly = evaluate(counter("Creature.YouCtrl"), initial);
-        Assert.assertEquals(friendly.value(), 25.0);
+        Assert.assertEquals(friendly.value(), 45.0);
         Assert.assertTrue(friendly.state().controllerCreature().hexproof());
         Assert.assertTrue(friendly.state().controllerCreature().indestructible());
         Assert.assertEquals(evaluate(counter("Creature.OppCtrl"), initial).completeness(), Completeness.UNAVAILABLE);
@@ -764,7 +764,7 @@ public class IntrinsicOutcomeBackendTest {
                     Map.of("Mode", "Attacks", "ValidCard", filter));
             Assert.assertTrue(result.contribution().complete(), result.toString());
             Assert.assertEquals(result.expectedOccurrences(), expected, .0000001);
-            Assert.assertEquals(result.contribution().value(), expected * 25, .0000001);
+            Assert.assertEquals(result.contribution().value(), expected * 35, .0000001);
         }
         final double expectedBlocks = IntrinsicEventTriggerEstimator.estimate(
                 IntrinsicEventTriggerAdapter.describe(Map.of("Mode", "Blocks", "ValidCard", "Card.Self")).orElseThrow(),
@@ -773,7 +773,7 @@ public class IntrinsicOutcomeBackendTest {
                 Map.of("Mode", "Blocks", "ValidCard", "Card.Self"));
         Assert.assertTrue(block.contribution().complete(), block.toString());
         Assert.assertEquals(block.expectedOccurrences(), expectedBlocks, .0000001);
-        Assert.assertEquals(block.contribution().value(), expectedBlocks * 25, .0000001);
+        Assert.assertEquals(block.contribution().value(), expectedBlocks * 35, .0000001);
 
         for (final Map<String, String> trigger : List.of(
                 Map.of("Mode", "Attacks", "ValidCard", "Creature.YouCtrl"),
@@ -796,7 +796,7 @@ public class IntrinsicOutcomeBackendTest {
                 Map.of("Mode", "Taps", "ValidCard", "Card.Self"));
         Assert.assertTrue(result.contribution().complete(), result.toString());
         Assert.assertEquals(result.expectedOccurrences(), tapped, .0000001);
-        Assert.assertEquals(result.contribution().value(), tapped * 25, .0000001);
+        Assert.assertEquals(result.contribution().value(), tapped * 35, .0000001);
 
         final Map<String, String> attackerTap = Map.of("Mode", "Taps", "ValidCard", "Card.Self",
                 "Attacker", "True", "FirstTime", "True");

@@ -2,6 +2,7 @@ package forge.ai.effect;
 
 import java.util.Locale;
 
+import forge.ai.CreatureBodyValue;
 import forge.ai.PlayerResourceValueEvaluator;
 
 /**
@@ -174,11 +175,11 @@ public final class IntrinsicOutcomeEvaluator {
         if (!creature.present()) {
             return 0;
         }
-        int value = 100; // CreatureEvaluator's base plus the non-token card component.
+        int value = 0;
         final int power = creature.power();
         final int toughness = creature.toughness();
-        value = addSaturated(value, power * 15);
-        value = addSaturated(value, toughness * 10);
+        value = addSaturated(value, CreatureBodyValue.power(power));
+        value = addSaturated(value, CreatureBodyValue.toughness(toughness));
 
         if (hasKeyword(creature, "flying")) {
             value = addSaturated(value, power * 10);
@@ -213,7 +214,7 @@ public final class IntrinsicOutcomeEvaluator {
             value = addSaturated(value, power * 5 + toughness * 5);
         }
         if (creature.indestructible()) {
-            value = addSaturated(value, 70);
+            value = addSaturated(value, CreatureBodyValue.indestructible(power));
         }
         if (hasKeyword(creature, "shield")) {
             value = addSaturated(value, 45);

@@ -6,8 +6,6 @@ import java.util.List;
 import java.util.Map;
 
 import forge.ai.CardDefinitionValueEvaluator;
-import forge.ai.ComputerUtil;
-import forge.ai.ComputerUtilCard;
 import forge.card.CardEdition;
 import forge.card.CardRules;
 import forge.game.card.Card;
@@ -19,10 +17,9 @@ import forge.item.IPaperCard;
 /**
  * Shared entry point for situational card valuation.
  *
- * <p>The initial implementation adapts the existing removal evaluators. It deliberately keeps
- * the current relationship and intrinsic calculations intact while placing their result beside
- * the card's current presence value. Casting, hand, and combat actions can add their own
- * transition and access components through this same breakdown later.</p>
+ * <p>The live adapter keeps relationship and intrinsic calculations alongside a calibrated
+ * permanent-presence value. Casting, hand, and combat actions can add their own transition and
+ * access components through the same breakdown.</p>
  */
 public final class UnifiedCardValueEvaluator {
     private static final CardDefinitionValueEvaluator DEFINITION_EVALUATOR =
@@ -132,9 +129,11 @@ public final class UnifiedCardValueEvaluator {
         final EffectAnalysisTrace effectiveTrace = trace == null
                 ? EffectAnalysisTrace.disabled() : trace;
         final Map<Card, PermanentAbilityValueEvaluator.Breakdown> abilityValues =
-                PermanentAbilityValueEvaluator.evaluateRemovalAbilities(context.evaluatingAi(),
-                        List.of(candidate), effectiveTrace, context.intrinsicWeightPercent() > 0,
-                        context.relationshipWeightPercent() > 0);
+                context.intrinsicWeightPercent() == 0 && context.relationshipWeightPercent() == 0
+                        ? Map.of() : PermanentAbilityValueEvaluator.evaluateRemovalAbilities(
+                                context.evaluatingAi(), List.of(candidate), effectiveTrace,
+                                context.intrinsicWeightPercent() > 0,
+                                context.relationshipWeightPercent() > 0);
         return buildPermanentBreakdown(context.evaluatingAi(), candidate, context,
                 abilityValues.get(candidate));
     }
@@ -167,10 +166,8 @@ public final class UnifiedCardValueEvaluator {
     /**
      * Evaluates removal candidates using the shared card-value breakdown.
      *
-     * <p>The score is intentionally equivalent to the previous removal calculation:
-     * permanent value plus removal-priority adjustment plus the configured weighted relationship
-     * and intrinsic values. The new context and breakdown make those components reusable without
-     * changing their calibration.</p>
+     * <p>Presence uses the unified permanent scale, with configured relationship and intrinsic
+     * values added separately. Legacy removal priority remains available only to the default AI.</p>
      */
     public static Map<Card, RemovalCandidateEvaluation> evaluateRemovalCandidates(final Player ai,
             final Iterable<Card> candidates, final ValuationContext context,
@@ -209,9 +206,11 @@ public final class UnifiedCardValueEvaluator {
             }
         });
         final Map<Card, PermanentAbilityValueEvaluator.Breakdown> abilityValues =
-                PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, candidateList, trace,
-                        removalAbility, context.intrinsicWeightPercent() > 0,
-                        context.relationshipWeightPercent() > 0);
+                context.intrinsicWeightPercent() == 0 && context.relationshipWeightPercent() == 0
+                        ? Map.of() : PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai,
+                                candidateList, trace, removalAbility,
+                                context.intrinsicWeightPercent() > 0,
+                                context.relationshipWeightPercent() > 0);
         final Map<Card, RemovalCandidateEvaluation> result = new HashMap<>();
         for (final Card candidate : candidateList) {
             final PermanentAbilityValueEvaluator.Breakdown abilityValue = abilityValues.get(candidate);
@@ -239,25 +238,8 @@ public final class UnifiedCardValueEvaluator {
                 ? List.of() : abilityValue.reasons();
         final ValuationCompleteness completeness = weightedFuture == 0 && reasons.isEmpty()
                 ? ValuationCompleteness.COMPLETE : ValuationCompleteness.PARTIAL;
-        return new CardValueBreakdown(ComputerUtilCard.evaluatePermanent(ai, candidate), weightedFuture,
-                0, 0, removalContextAdjustment(ai, candidate), completeness, reasons);
-    }
-
-    /** Preserves the existing base removal priority for callers that do not enable analysis. */
-    public static int evaluateRemovalTargetPriority(final Player ai, final Card candidate) {
-        if (ai == null || candidate == null) {
-            return 0;
-        }
-        return add(ComputerUtilCard.evaluatePermanent(ai, candidate),
-                removalContextAdjustment(ai, candidate));
-    }
-
-    private static int removalContextAdjustment(final Player ai, final Card candidate) {
-        int value = candidate.isToken() ? 30 : 0;
-        if (candidate.getController() != null && candidate.getController().isOpponentOf(ai)) {
-            value = add(value, ComputerUtil.evaluateBoardPosition(ai, candidate.getController()) / 4);
-        }
-        return value;
+        return new CardValueBreakdown(UnifiedPermanentValueEvaluator.evaluate(ai, candidate), weightedFuture,
+                0, 0, 0, completeness, reasons);
     }
 
     private static int applyWeight(final int value, final int percentage) {
