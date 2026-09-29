@@ -73,7 +73,8 @@ public class CreatureEvaluator implements Function<Card, Integer> {
                 if (toughness > 0) {
                     final boolean participatesInCombat = canAttack || canBlock;
                     value += addValue(CreatureBodyValue.base(toughness), "creature-base");
-                    value += addValue(CreatureBodyValue.power(power, canAttack), "player-damage-pressure");
+                    value += addValue(CreatureBodyValue.attackPotential(power, canAttack),
+                            "player-damage-pressure-and-attack-option");
                     value += addValue(CreatureBodyValue.creatureKilling(power,
                             c.hasKeyword(Keyword.DEATHTOUCH), participatesInCombat), "combat-killing");
                     value += addValue(CreatureBodyValue.combatSurvival(toughness,

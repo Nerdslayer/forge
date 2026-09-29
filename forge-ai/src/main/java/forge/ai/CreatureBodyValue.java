@@ -7,6 +7,7 @@ package forge.ai;
  */
 public final class CreatureBodyValue {
     private static final int CREATURE_EXISTENCE_VALUE = 10;
+    private static final int ATTACK_OPTION_VALUE = 5;
     private static final int BLOCKING_VALUE = 20;
     private static final int FLYING_BLOCK_VALUE = 8;
     private static final int POINTS_PER_POWER = 10;
@@ -29,6 +30,14 @@ public final class CreatureBodyValue {
 
     public static int power(final int power, final boolean canAttack) {
         return canAttack ? saturatedMultiply(Math.max(0, power), POINTS_PER_POWER) : 0;
+    }
+
+    /**
+     * Values attack potential, including a small option value when an attackable creature has no
+     * power-based damage pressure yet.
+     */
+    public static int attackPotential(final int power, final boolean canAttack) {
+        return canAttack ? Math.max(ATTACK_OPTION_VALUE, power(power)) : 0;
     }
 
     /** Gives each point of toughness a continuing value beyond the sampled combat thresholds. */
@@ -87,7 +96,7 @@ public final class CreatureBodyValue {
         }
         final boolean participatesInCombat = canAttack || canBlock;
         int value = base(toughness);
-        value = saturatedAdd(value, power(power, canAttack));
+        value = saturatedAdd(value, attackPotential(power, canAttack));
         value = saturatedAdd(value, toughness(toughness));
         value = saturatedAdd(value, creatureKilling(power, deathtouch, participatesInCombat));
         value = saturatedAdd(value, combatSurvival(toughness, participatesInCombat));

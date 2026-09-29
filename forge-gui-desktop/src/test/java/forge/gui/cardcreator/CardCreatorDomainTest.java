@@ -154,7 +154,7 @@ public class CardCreatorDomainTest {
                 "Name:Test Creature", "ManaCost:2 G", "Types:Creature Elf", "PT:3/3", "K:Flying"));
         final CardDefinitionValueEvaluator.Evaluation evaluation = new CardDefinitionValueEvaluator().evaluate(rules);
 
-        assertEquals(evaluation.battlefieldValue(), 80 + 65 + 30);
+        assertEquals(evaluation.battlefieldValue(), 180);
         assertEquals(evaluation.grossPointValue(), evaluation.battlefieldValue());
         assertEquals(evaluation.manaInvestment(), 75);
         assertEquals(evaluation.netRate(), evaluation.battlefieldValue()

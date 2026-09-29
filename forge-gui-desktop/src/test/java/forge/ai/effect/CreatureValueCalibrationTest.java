@@ -25,7 +25,7 @@ public class CreatureValueCalibrationTest extends AITest {
     @Test
     public void sharedBodyScaleMatchesTheAgreedSizeAnchors() {
         Assert.assertEquals(CreatureBodyValue.body(1, 1), 55);
-        Assert.assertEquals(CreatureBodyValue.body(0, 1), 36);
+        Assert.assertEquals(CreatureBodyValue.body(0, 1), 41);
         Assert.assertEquals(CreatureBodyValue.body(2, 2), 96);
         Assert.assertEquals(CreatureBodyValue.body(3, 3), 142);
         Assert.assertEquals(CreatureBodyValue.body(4, 4), 178);
@@ -37,21 +37,36 @@ public class CreatureValueCalibrationTest extends AITest {
     }
 
     @Test
+    public void attackAccessHasAFivePointFloorOnlyWhenPowerAddsNoPressure() {
+        final int zeroPowerDefender = CreatureBodyValue.body(
+                0, 3, false, true, false, false, false, false);
+        final int zeroPowerAttacker = CreatureBodyValue.body(
+                0, 3, true, true, false, false, false, false);
+        Assert.assertEquals(zeroPowerAttacker - zeroPowerDefender, 5);
+
+        final int onePowerDefender = CreatureBodyValue.body(
+                1, 3, false, true, false, false, false, false);
+        final int onePowerAttacker = CreatureBodyValue.body(
+                1, 3, true, true, false, false, false, false);
+        Assert.assertEquals(onePowerAttacker - onePowerDefender, 10);
+    }
+
+    @Test
     public void survivingZeroPowerCreatureKeepsMostOfOneOneBodyValue() {
         final CardRules zeroOne = rules("Test Zero One", 0, 1);
         final CardRules oneOne = rules("Test One One", 1, 1);
         final CardDefinitionValueEvaluator definitions = new CardDefinitionValueEvaluator();
-        Assert.assertEquals(definitions.evaluate(zeroOne).battlefieldValue(), 36);
+        Assert.assertEquals(definitions.evaluate(zeroOne).battlefieldValue(), 41);
         Assert.assertEquals(definitions.evaluate(oneOne).battlefieldValue(), 55);
 
         final IntrinsicOutcomeEvaluator reference = new IntrinsicOutcomeEvaluator();
         Assert.assertEquals(reference.evaluateCreature(new IntrinsicReferenceModel.CreatureProfile(
-                true, 0, 1, Set.of(), false, false)), 36);
+                true, 0, 1, Set.of(), false, false)), 41);
 
         final Game game = initAndCreateGame();
         final Player owner = game.getPlayers().get(0);
         final CreatureEvaluator unified = new CreatureEvaluator(CreatureEvaluator.ValuationScale.UNIFIED);
-        Assert.assertEquals(unified.evaluateCreature(addDefinition(zeroOne, owner)), 37);
+        Assert.assertEquals(unified.evaluateCreature(addDefinition(zeroOne, owner)), 42);
         Assert.assertEquals(unified.evaluateCreature(addDefinition(oneOne, owner)), 56);
     }
 

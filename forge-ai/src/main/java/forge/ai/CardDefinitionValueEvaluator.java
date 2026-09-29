@@ -131,7 +131,7 @@ public final class CardDefinitionValueEvaluator {
             final boolean indestructible = hasSimpleKeyword(face, "indestructible");
             add(contributions, "Battlefield", "Creature base", CreatureBodyValue.base(toughness));
             add(contributions, "Battlefield", "Player combat damage",
-                    CreatureBodyValue.power(power, canAttack));
+                    CreatureBodyValue.attackPotential(power, canAttack));
             add(contributions, "Battlefield", "Creature killing",
                     CreatureBodyValue.creatureKilling(power, deathtouch, canAttack || canBlock));
             add(contributions, "Battlefield", "Combat survival",

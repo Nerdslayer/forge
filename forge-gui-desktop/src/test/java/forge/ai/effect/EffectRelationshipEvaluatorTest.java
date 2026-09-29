@@ -1004,7 +1004,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 35, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 46, values.toString());
         Assert.assertEquals(values.get(producer), values.get(consequence));
     }
 
@@ -1045,7 +1045,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 35, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 46, values.toString());
         Assert.assertEquals(values.get(producer), values.get(consequence));
     }
 
@@ -2367,7 +2367,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
                 ai, List.of(multiProducer, consequence));
 
         // Both scripts produce an event. The second counter has a smaller marginal body value.
-        Assert.assertEquals(values.get(multiProducer).intValue(), 90);
+        Assert.assertEquals(values.get(multiProducer).intValue(), 92);
         Assert.assertTrue(values.get(multiProducer) > singleValue);
     }
 
@@ -3246,7 +3246,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 70, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 92, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
@@ -3271,7 +3271,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 35, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 46, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 
@@ -3435,7 +3435,7 @@ public class EffectRelationshipEvaluatorTest extends AITest {
         final Map<Card, Integer> values = EffectRelationshipEvaluator.evaluateRemovalRelationships(
                 ai, List.of(producer, consequence));
 
-        Assert.assertEquals(values.get(producer).intValue(), 105, values.toString());
+        Assert.assertEquals(values.get(producer).intValue(), 138, values.toString());
         Assert.assertEquals(values.get(consequence), values.get(producer));
     }
 

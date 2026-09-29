@@ -37,7 +37,7 @@ public class RemovalActionEvaluatorTest extends AITest {
 
         final CardValueBreakdown emptyHand = RemovalActionEvaluator.evaluate(target, baseValue(),
                 RemovalActionKind.BOUNCE);
-        Assert.assertEquals(emptyHand.transitionValue(), -60);
+        Assert.assertEquals(emptyHand.transitionValue(), -46);
 
         addCardToZone("Forest", opponent, forge.game.zone.ZoneType.Hand);
         addCardToZone("Forest", opponent, forge.game.zone.ZoneType.Hand);
@@ -108,7 +108,7 @@ public class RemovalActionEvaluatorTest extends AITest {
                 ValuationContext.forRemoval(ai, 0, 0));
 
         Assert.assertTrue(result.isComplete());
-        Assert.assertEquals(result.currentPresenceValue(), 111);
+        Assert.assertEquals(result.currentPresenceValue(), 97);
         Assert.assertEquals(result.futurePotentialValue(), 0);
         Assert.assertEquals(result.contextAdjustment(), 0);
     }
