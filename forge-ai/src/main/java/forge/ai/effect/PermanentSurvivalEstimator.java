@@ -61,6 +61,23 @@ public final class PermanentSurvivalEstimator {
         return estimate(source, DEFAULT_AURA_HOST, entryTiming);
     }
 
+    /** Extends the same constant-hazard model beyond the named survival checkpoints. */
+    public double probabilityAtTurnStart(final PermanentProfile source,
+            final EntryTiming entryTiming, final int relativeTurn) {
+        if (entryTiming == null || relativeTurn < 1) {
+            throw new IllegalArgumentException("A valid entry timing and relative turn are required");
+        }
+        if (source == null || !source.present()) {
+            return 0;
+        }
+        if (relativeTurn == 1) {
+            return 1;
+        }
+        final double survivalPerFullTurn = 1 - hazardForSource(source, DEFAULT_AURA_HOST);
+        return clamp(Math.pow(survivalPerFullTurn,
+                entryTiming.firstTurnExposure() + relativeTurn - 2));
+    }
+
     /**
      * Estimates source survival. Auras include the survival of their attached host; when the host
      * is not known, a vanilla 3/3 is used. TODO(effect analysis): Apply the Aura's granted static

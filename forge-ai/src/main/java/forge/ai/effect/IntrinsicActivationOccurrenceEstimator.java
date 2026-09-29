@@ -8,7 +8,7 @@ import forge.ai.effect.IntrinsicReferenceModel.PermanentKind;
  *
  * <p>This deliberately models only generic mana, a source tap, and fixed life payments. It uses
  * the reference resource distributions for the current and future turns and the shared survival
- * checkpoints for future uses. It is not a simulation and does not infer target availability,
+ * hazard for future uses. It is not a simulation and does not infer target availability,
  * optional choices, or cumulative resource depletion.</p>
  */
 public final class IntrinsicActivationOccurrenceEstimator {
@@ -51,28 +51,20 @@ public final class IntrinsicActivationOccurrenceEstimator {
                 ? 0 : usesPerTurn;
         double expected = currentUses;
         int futureTurns = 0;
-        final PermanentSurvivalEstimate survival = new PermanentSurvivalEstimator(model)
-                .estimate(source, entryTiming);
-        final int maximumTurns = settings.recurringTriggerResolutions();
-        for (final SurvivalCheckpoint checkpoint : SurvivalCheckpoint.values()) {
-            if (!checkpoint.isTurnStart()) {
-                continue;
-            }
-            // Tap abilities are intentionally valued only on the source controller's turns. This
-            // keeps the bounded intrinsic horizon at one current opportunity plus the next two
-            // controller turns instead of counting both players' turns in each round.
-            if (hasTapCost && !checkpoint.isControllerTurn(entryTiming)) {
-                continue;
-            }
-            final int controllerTurn = checkpoint.controllerTurnNumber(entryTiming);
-            final boolean currentOpportunity = entryTiming == EntryTiming.NORMAL_SPEED
-                    && controllerTurn == 1;
-            if (currentOpportunity || controllerTurn < 1 || controllerTurn > maximumTurns) {
-                continue;
-            }
+        final PermanentSurvivalEstimator survival = new PermanentSurvivalEstimator(model);
+        // Count the source controller's next six turns, never alternating controller/opponent
+        // turns. Flash entry starts on the opponent's turn, so its first controller turn is
+        // still a future opportunity. TODO: Model optional opponent-turn uses of non-tap abilities
+        // separately without counting the same mana or outcome twice.
+        for (int opportunity = 1;
+                opportunity <= settings.futureActivationControllerTurns(); opportunity++) {
+            final int controllerTurn = entryTiming.firstTurnIsControllerTurn()
+                    ? opportunity + 1 : opportunity;
+            final int relativeTurn = entryTiming.firstTurnIsControllerTurn()
+                    ? 2 * controllerTurn - 1 : 2 * controllerTurn;
             futureTurns++;
             final double futureContribution = usesPerTurn
-                    * survival.probability(checkpoint)
+                    * survival.probabilityAtTurnStart(source, entryTiming, relativeTurn)
                     * AbilityOccurrenceEstimator.turnDiscount(controllerTurn);
             expected = Math.min(settings.maximumExpectedOccurrencesPerAbility(),
                     expected + futureContribution);

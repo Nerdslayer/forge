@@ -5,6 +5,7 @@ import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CounterEnumType;
+import forge.game.combat.CombatUtil;
 import forge.game.cost.CostPayEnergy;
 import forge.game.keyword.Keyword;
 import forge.game.spellability.SpellAbility;
@@ -51,6 +52,11 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         }
         int power = c.getNetCombatDamage();
         final int toughness = c.getNetToughness();
+        final boolean canAttack = !c.hasKeyword(Keyword.DEFENDER)
+                && !c.hasKeyword("CARDNAME can't attack.")
+                && !c.hasKeyword("CARDNAME can't attack or block.");
+        final boolean canBlock = unified && CombatUtil.canBlock(c, true);
+        final boolean indestructible = c.hasKeyword(Keyword.INDESTRUCTIBLE);
 
         // TODO getKeyCards
 
@@ -63,10 +69,28 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         }
 
         if (considerPT) {
-            value += addValue(unified ? CreatureBodyValue.power(power) : power * 15, "power");
-            // TODO factor in marked damage - but probably not always?
-            value += addValue(unified ? CreatureBodyValue.toughness(toughness) : toughness * 10,
-                    "toughness: " + toughness);
+            if (unified) {
+                if (toughness > 0) {
+                    final boolean participatesInCombat = canAttack || canBlock;
+                    value += addValue(CreatureBodyValue.base(toughness), "creature-base");
+                    value += addValue(CreatureBodyValue.power(power, canAttack), "player-damage-pressure");
+                    value += addValue(CreatureBodyValue.creatureKilling(power,
+                            c.hasKeyword(Keyword.DEATHTOUCH), participatesInCombat), "combat-killing");
+                    value += addValue(CreatureBodyValue.combatSurvival(toughness,
+                            participatesInCombat), "combat-survival");
+                    value += addValue(CreatureBodyValue.blocking(canBlock,
+                            c.hasKeyword(Keyword.FLYING) || c.hasKeyword(Keyword.REACH)), "blocking");
+                    value += addValue(CreatureBodyValue.damageRemovalSurvival(toughness,
+                            indestructible || c.hasKeyword("Prevent all damage that would be dealt to CARDNAME.")
+                                    || c.hasKeyword("Prevent all damage that would be dealt to and dealt by CARDNAME.")),
+                            "damage-removal-survival");
+                    value += addValue(CreatureBodyValue.toughness(toughness), "toughness: " + toughness);
+                }
+            } else {
+                value += addValue(power * 15, "power");
+                // TODO factor in marked damage - but probably not always?
+                value += addValue(toughness * 10, "toughness: " + toughness);
+            }
 
             // because backside is always stronger the potential makes it better than a single faced card
             if (c.hasKeyword(Keyword.DAYBOUND) && c.isDoubleFaced()) {
@@ -78,62 +102,69 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         }
 
         // Evasion keywords
-        if (c.hasKeyword(Keyword.FLYING)) {
+        if (c.hasKeyword(Keyword.FLYING) && (!unified || canAttack)) {
             value += addValue(power * 10, "flying");
         }
-        if (c.hasKeyword(Keyword.HORSEMANSHIP)) {
+        if (c.hasKeyword(Keyword.HORSEMANSHIP) && (!unified || canAttack)) {
             value += addValue(power * 10, "horses");
         }
 
-        if (StaticAbilityCantAttackBlock.cantBlockBy(c, null)) {
+        if (StaticAbilityCantAttackBlock.cantBlockBy(c, null) && (!unified || canAttack)) {
             value += addValue(power * 10, "unblockable");
         } else {
-            if (StaticAbilityAssignCombatDamageAsUnblocked.assignCombatDamageAsUnblocked(c)
-                    || StaticAbilityAssignCombatDamageAsUnblocked.assignCombatDamageAsUnblocked(c, false)) {
+            if ((!unified || canAttack)
+                    && (StaticAbilityAssignCombatDamageAsUnblocked.assignCombatDamageAsUnblocked(c)
+                    || StaticAbilityAssignCombatDamageAsUnblocked.assignCombatDamageAsUnblocked(c, false))) {
                 value += addValue(power * 6, "thorns");
             }
-            if (c.hasKeyword(Keyword.FEAR)) {
+            if (c.hasKeyword(Keyword.FEAR) && (!unified || canAttack)) {
                 value += addValue(power * 6, "fear");
             }
-            if (c.hasKeyword(Keyword.INTIMIDATE)) {
+            if (c.hasKeyword(Keyword.INTIMIDATE) && (!unified || canAttack)) {
                 value += addValue(power * 6, "intimidate");
             }
-            if (c.hasKeyword(Keyword.MENACE)) {
+            if (c.hasKeyword(Keyword.MENACE) && (!unified || canAttack)) {
                 value += addValue(power * 4, "menace");
             }
-            if (c.hasKeyword(Keyword.SKULK)) {
+            if (c.hasKeyword(Keyword.SKULK) && (!unified || canAttack)) {
                 value += addValue(power * 3, "skulk");
             }
         }
 
         // Other good keywords
         if (power > 0) {
-            if (c.hasKeyword(Keyword.DOUBLE_STRIKE)) {
+            final boolean participatesInCombat = !unified || canAttack || canBlock;
+            if (c.hasKeyword(Keyword.DOUBLE_STRIKE) && participatesInCombat) {
                 value += addValue(10 + (power * 15), "ds");
-            } else if (c.hasKeyword(Keyword.FIRST_STRIKE)) {
+            } else if (c.hasKeyword(Keyword.FIRST_STRIKE) && participatesInCombat) {
                 value += addValue(10 + (power * 5), "fs");
             }
             if (c.hasKeyword(Keyword.DEATHTOUCH)) {
-                value += addValue(25, "dt");
+                if (!unified) {
+                    value += addValue(25, "dt");
+                }
             }
-            if (c.hasKeyword(Keyword.LIFELINK)) {
+            if (c.hasKeyword(Keyword.LIFELINK) && participatesInCombat) {
                 value += addValue(power * 10, "lifelink");
             }
-            if (power > 1 && c.hasKeyword(Keyword.TRAMPLE)) {
+            if (power > 1 && c.hasKeyword(Keyword.TRAMPLE) && (!unified || canAttack)) {
                 value += addValue((power - 1) * 5, "trample");
             }
-            if (c.hasKeyword(Keyword.VIGILANCE)) {
+            if (c.hasKeyword(Keyword.VIGILANCE)
+                    && (!unified || canAttack && canBlock)) {
                 value += addValue((power * 5) + (toughness * 5), "vigilance");
             }
-            if (c.hasKeyword(Keyword.INFECT)) {
+            if (c.hasKeyword(Keyword.INFECT) && participatesInCombat) {
                 value += addValue(power * 15, "infect");
             }
-            else if (c.hasKeyword(Keyword.WITHER)) {
+            else if (c.hasKeyword(Keyword.WITHER) && participatesInCombat) {
                 value += addValue(power * 10, "wither");
             }
-            value += addValue(c.getKeywordMagnitude(Keyword.TOXIC) * 5, "toxic");
-            value += addValue(c.getKeywordMagnitude(Keyword.AFFLICT) * 5, "afflict");
-            value += addValue(c.getKeywordMagnitude(Keyword.RAMPAGE), "rampage");
+            if (!unified || canAttack) {
+                value += addValue(c.getKeywordMagnitude(Keyword.TOXIC) * 5, "toxic");
+                value += addValue(c.getKeywordMagnitude(Keyword.AFFLICT) * 5, "afflict");
+                value += addValue(c.getKeywordMagnitude(Keyword.RAMPAGE), "rampage");
+            }
         }
 
         value += addValue(c.getKeywordMagnitude(Keyword.ANNIHILATOR) * 50, "eldrazi");
@@ -150,7 +181,7 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         value += addValue(c.getAmountOfKeyword(Keyword.PROWESS) * 5, "prowess");
 
         // Defensive Keywords
-        if (c.hasKeyword(Keyword.REACH) && !c.hasKeyword(Keyword.FLYING)) {
+        if (!unified && c.hasKeyword(Keyword.REACH) && !c.hasKeyword(Keyword.FLYING)) {
             value += addValue(5, "reach");
         }
         if (c.hasKeyword("CARDNAME can block creatures with shadow as though they didn't have shadow.")) {
@@ -193,18 +224,20 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         }
 
         // Bad keywords
-        if (c.hasKeyword(Keyword.DEFENDER) || c.hasKeyword("CARDNAME can't attack.")) {
+        if (!unified && (c.hasKeyword(Keyword.DEFENDER) || c.hasKeyword("CARDNAME can't attack."))) {
             value -= subValue((power * 9) + 40, "defender");
         } else if (c.getSVar("SacrificeEndCombat").equals("True")) {
             value -= subValue(40, "sac-end");
         }
         if (c.isDetained()) {
-            value = addValue(unified ? CreatureBodyValue.body(power, toughness) / 2
+            value = addValue(unified ? CreatureBodyValue.body(power, toughness, false, false,
+                    false, false, c.hasKeyword(Keyword.DEATHTOUCH), indestructible) / 2
                     : 50 + (c.getCMC() * 5), "detained"); // reset everything - useless
         } else if (c.hasKeyword("CARDNAME can't attack or block.")) {
-            value = addValue(unified ? CreatureBodyValue.body(power, toughness) / 2
+            value = addValue(unified ? CreatureBodyValue.body(power, toughness, false, false,
+                    false, false, c.hasKeyword(Keyword.DEATHTOUCH), indestructible) / 2
                     : 50 + (c.getCMC() * 5), "useless"); // reset everything - useless
-        } else if (c.hasKeyword("CARDNAME can't block.")) {
+        } else if (!unified && c.hasKeyword("CARDNAME can't block.")) {
             value -= subValue(10, "cant-block");
         } else if (c.isGoaded()) {
             value -= subValue(5, "goaded");
@@ -227,13 +260,14 @@ public class CreatureEvaluator implements Function<Card, Integer> {
             value -= subValue(25, "dies");
         }
 
-        if (c.isUntapped() && !unified) {
+        if (c.isUntapped()) {
             value += addValue(1, "untapped");
         }
 
         if (!c.canUntap(c.getController(), true)) {
             if (c.isTapped()) {
-                value = addValue(unified ? CreatureBodyValue.body(power, toughness) / 2
+                value = addValue(unified ? CreatureBodyValue.body(power, toughness, false, false,
+                        false, false, c.hasKeyword(Keyword.DEATHTOUCH), indestructible) / 2
                         : 50 + (c.getCMC() * 5), "tapped-useless"); // reset everything - useless
             } else {
                 value -= subValue(50, "doesnt-untap");

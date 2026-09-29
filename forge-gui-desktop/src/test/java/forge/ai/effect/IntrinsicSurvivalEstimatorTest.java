@@ -49,6 +49,25 @@ public class IntrinsicSurvivalEstimatorTest extends AITest {
     }
 
     @Test
+    public void extendedTurnProjectionMatchesExistingCheckpoints() {
+        final PermanentProfile creature = new PermanentProfile(true, PermanentKind.CREATURE,
+                true, 0, 1, Set.of());
+        final PermanentSurvivalEstimator estimator = new PermanentSurvivalEstimator();
+        for (final EntryTiming timing : EntryTiming.values()) {
+            final PermanentSurvivalEstimate checkpoints = estimator.estimate(creature, timing);
+            for (final SurvivalCheckpoint checkpoint : SurvivalCheckpoint.values()) {
+                if (checkpoint.isTurnStart()) {
+                    Assert.assertEquals(estimator.probabilityAtTurnStart(creature, timing,
+                            checkpoint.turnNumber()), checkpoints.probability(checkpoint),
+                            .0000001, timing + " " + checkpoint);
+                }
+            }
+            Assert.assertTrue(estimator.probabilityAtTurnStart(creature, timing, 13)
+                    < estimator.probabilityAtTurnStart(creature, timing, 6));
+        }
+    }
+
+    @Test
     public void protectionAndBasicLandImproveSurvival() {
         final PermanentProfile exposed = new PermanentProfile(true, PermanentKind.CREATURE,
                 true, 2, 2, Set.of());
@@ -134,8 +153,8 @@ public class IntrinsicSurvivalEstimatorTest extends AITest {
                 SurvivalCheckpoint.START_OF_THIRD_TURN);
         Assert.assertEquals(estimate.opportunities().get(1).checkpoint(),
                 SurvivalCheckpoint.START_OF_FIFTH_TURN);
-        Assert.assertEquals(estimate.opportunities().get(0).horizonDiscount(), .85, .0000001);
-        Assert.assertEquals(estimate.opportunities().get(1).horizonDiscount(), .85 * .85, .0000001);
+        Assert.assertEquals(estimate.opportunities().get(0).horizonDiscount(), .90, .0000001);
+        Assert.assertEquals(estimate.opportunities().get(1).horizonDiscount(), .90 * .90, .0000001);
 
         final double expected = estimate.opportunities().stream()
                 .mapToDouble(IntrinsicScheduledTriggerEstimate.Opportunity::expectedContribution)

@@ -178,39 +178,42 @@ public final class IntrinsicOutcomeEvaluator {
         int value = 0;
         final int power = creature.power();
         final int toughness = creature.toughness();
-        value = addSaturated(value, CreatureBodyValue.power(power));
-        value = addSaturated(value, CreatureBodyValue.toughness(toughness));
+        final boolean canAttack = !hasKeyword(creature, "defender")
+                && !hasKeyword(creature, "can't attack") && !hasKeyword(creature, "cantattack")
+                && !hasKeyword(creature, "can't attack or block");
+        final boolean canBlock = !hasKeyword(creature, "can't block")
+                && !hasKeyword(creature, "cantblock") && !hasKeyword(creature, "can't attack or block");
+        final boolean participatesInCombat = canAttack || canBlock;
+        final boolean flying = hasKeyword(creature, "flying");
+        final boolean reach = hasKeyword(creature, "reach");
+        final boolean deathtouch = hasKeyword(creature, "deathtouch");
+        value = addSaturated(value, CreatureBodyValue.body(power, toughness, canAttack, canBlock,
+                flying, reach, deathtouch, creature.indestructible()));
 
-        if (hasKeyword(creature, "flying")) {
+        if (flying && canAttack) {
             value = addSaturated(value, power * 10);
         }
-        if (hasKeyword(creature, "reach") && !hasKeyword(creature, "flying")) {
-            value = addSaturated(value, 5);
-        }
-        if (hasKeyword(creature, "double strike") && power > 0) {
+        if (hasKeyword(creature, "double strike") && power > 0 && participatesInCombat) {
             value = addSaturated(value, 10 + power * 15);
-        } else if (hasKeyword(creature, "first strike") && power > 0) {
+        } else if (hasKeyword(creature, "first strike") && power > 0 && participatesInCombat) {
             value = addSaturated(value, 10 + power * 5);
         }
-        if (hasKeyword(creature, "menace") && power > 0) {
+        if (hasKeyword(creature, "menace") && canAttack && power > 0) {
             value = addSaturated(value, power * 4);
         }
-        if (hasKeyword(creature, "fear") && power > 0) {
+        if (hasKeyword(creature, "fear") && canAttack && power > 0) {
             value = addSaturated(value, power * 6);
         }
-        if (hasKeyword(creature, "intimidate") && power > 0) {
+        if (hasKeyword(creature, "intimidate") && canAttack && power > 0) {
             value = addSaturated(value, power * 6);
         }
-        if (hasKeyword(creature, "deathtouch") && power > 0) {
-            value = addSaturated(value, 25);
-        }
-        if (hasKeyword(creature, "lifelink") && power > 0) {
+        if (hasKeyword(creature, "lifelink") && power > 0 && participatesInCombat) {
             value = addSaturated(value, power * 10);
         }
-        if (hasKeyword(creature, "trample") && power > 1) {
+        if (hasKeyword(creature, "trample") && canAttack && power > 1) {
             value = addSaturated(value, (power - 1) * 5);
         }
-        if (hasKeyword(creature, "vigilance")) {
+        if (hasKeyword(creature, "vigilance") && canAttack && canBlock) {
             value = addSaturated(value, power * 5 + toughness * 5);
         }
         if (creature.indestructible()) {
@@ -221,13 +224,6 @@ public final class IntrinsicOutcomeEvaluator {
         }
         if (hasKeyword(creature, "stun")) {
             value = addSaturated(value, -20);
-        }
-        if (hasKeyword(creature, "defender") || hasKeyword(creature, "can't attack")
-                || hasKeyword(creature, "cantattack")) {
-            value = addSaturated(value, -power * 10);
-        }
-        if (hasKeyword(creature, "can't block") || hasKeyword(creature, "cantblock")) {
-            value = addSaturated(value, -toughness * 5);
         }
         if (hasKeyword(creature, "detain") || hasKeyword(creature, "can't untap")
                 || hasKeyword(creature, "cantuntap")) {

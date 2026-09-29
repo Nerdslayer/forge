@@ -235,10 +235,22 @@ public final class UnifiedCardValueEvaluator {
                 applyWeight(relationshipValue, context.relationshipWeightPercent()),
                 applyWeight(intrinsicValue, context.intrinsicWeightPercent()));
         final List<String> reasons = abilityValue == null
-                ? List.of() : abilityValue.reasons();
+                ? new ArrayList<>() : new ArrayList<>(abilityValue.reasons());
+        // TODO: Replace this coarse mana-value fallback when unsupported abilities receive
+        // complete intrinsic valuation. This currently covers active printed intrinsic abilities,
+        // not unavailable card definitions or every unsupported static/replacement ability.
+        // Apply it once per creature, not once per ability.
+        final int unevaluatedAbilityBonus = candidate.isCreature() && abilityValue != null
+                && abilityValue.hasUnevaluatedAbility()
+                ? EffectMath.multiply(Math.max(0, candidate.getCMC()), 5) : 0;
+        if (unevaluatedAbilityBonus > 0) {
+            reasons.add("Unevaluated ability fallback: mana value x 5 = "
+                    + unevaluatedAbilityBonus);
+        }
         final ValuationCompleteness completeness = weightedFuture == 0 && reasons.isEmpty()
                 ? ValuationCompleteness.COMPLETE : ValuationCompleteness.PARTIAL;
-        return new CardValueBreakdown(UnifiedPermanentValueEvaluator.evaluate(ai, candidate), weightedFuture,
+        return new CardValueBreakdown(add(UnifiedPermanentValueEvaluator.evaluate(ai, candidate),
+                unevaluatedAbilityBonus), weightedFuture,
                 0, 0, 0, completeness, reasons);
     }
 

@@ -22,16 +22,14 @@ public class IntrinsicActivationOccurrenceEstimatorTest {
                         EntryTiming.NORMAL_SPEED);
         final PermanentSurvivalEstimate survival = new PermanentSurvivalEstimator(model)
                 .estimate(land, EntryTiming.NORMAL_SPEED);
-        final double expected = 1
-                + survival.probability(SurvivalCheckpoint.START_OF_THIRD_TURN)
-                        * AbilityOccurrenceEstimator.turnDiscount(2)
-                + survival.probability(SurvivalCheckpoint.START_OF_FIFTH_TURN)
-                        * AbilityOccurrenceEstimator.turnDiscount(3);
+        final double expected = 1 + futureControllerUses(survival,
+                SurvivalCheckpoint.START_OF_THIRD_TURN,
+                SurvivalCheckpoint.START_OF_FIFTH_TURN, 2, settings.futureActivationControllerTurns());
 
-        Assert.assertEquals(result.futureTurnsEvaluated(), 2);
+        Assert.assertEquals(result.futureTurnsEvaluated(), 6);
         Assert.assertEquals(result.currentTurnUses(), 1.0);
         Assert.assertEquals(result.expectedOccurrences(), expected, .0000001);
-        Assert.assertTrue(result.expectedOccurrences() < 3);
+        Assert.assertTrue(result.expectedOccurrences() < 7);
     }
 
     @Test
@@ -46,13 +44,12 @@ public class IntrinsicActivationOccurrenceEstimatorTest {
                         EntryTiming.NORMAL_SPEED);
         final PermanentSurvivalEstimate survival = new PermanentSurvivalEstimator(model)
                 .estimate(creature, EntryTiming.NORMAL_SPEED);
-        final double expected = survival.probability(SurvivalCheckpoint.START_OF_THIRD_TURN)
-                * AbilityOccurrenceEstimator.turnDiscount(2)
-                + survival.probability(SurvivalCheckpoint.START_OF_FIFTH_TURN)
-                        * AbilityOccurrenceEstimator.turnDiscount(3);
+        final double expected = futureControllerUses(survival,
+                SurvivalCheckpoint.START_OF_THIRD_TURN,
+                SurvivalCheckpoint.START_OF_FIFTH_TURN, 2, settings.futureActivationControllerTurns());
 
         Assert.assertEquals(result.currentTurnUses(), 0.0);
-        Assert.assertEquals(result.futureTurnsEvaluated(), 2);
+        Assert.assertEquals(result.futureTurnsEvaluated(), 6);
         Assert.assertEquals(result.expectedOccurrences(), expected, .0000001);
     }
 
@@ -68,7 +65,26 @@ public class IntrinsicActivationOccurrenceEstimatorTest {
                         EntryTiming.FLASH_LATE_TURN);
 
         Assert.assertEquals(result.currentTurnUses(), 0.0);
-        Assert.assertEquals(result.futureTurnsEvaluated(), 3);
-        Assert.assertTrue(result.expectedOccurrences() <= 3);
+        final PermanentSurvivalEstimate survival = new PermanentSurvivalEstimator(model)
+                .estimate(land, EntryTiming.FLASH_LATE_TURN);
+        final double expected = futureControllerUses(survival,
+                SurvivalCheckpoint.START_OF_SECOND_TURN,
+                SurvivalCheckpoint.START_OF_FOURTH_TURN, 1, settings.futureActivationControllerTurns());
+        Assert.assertEquals(result.futureTurnsEvaluated(), 6);
+        Assert.assertEquals(result.expectedOccurrences(), expected, .0000001);
+        Assert.assertTrue(result.expectedOccurrences() <= 6);
+    }
+
+    private static double futureControllerUses(final PermanentSurvivalEstimate survival,
+            final SurvivalCheckpoint first, final SurvivalCheckpoint second,
+            final int firstControllerTurn, final int futureTurns) {
+        final double firstSurvival = survival.probability(first);
+        final double survivalPerControllerTurn = survival.probability(second) / firstSurvival;
+        double expected = 0;
+        for (int i = 0; i < futureTurns; i++) {
+            expected += firstSurvival * Math.pow(survivalPerControllerTurn, i)
+                    * Math.pow(.90, firstControllerTurn + i - 1);
+        }
+        return expected;
     }
 }

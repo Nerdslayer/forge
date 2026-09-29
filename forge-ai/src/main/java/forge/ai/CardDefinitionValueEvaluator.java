@@ -38,7 +38,8 @@ public final class CardDefinitionValueEvaluator {
     private static final Set<String> SUPPORTED_SIMPLE_KEYWORDS = Set.of(
             "flying", "vigilance", "trample", "lifelink", "deathtouch", "reach", "first strike",
             "double strike", "defender", "menace", "fear", "intimidate", "hexproof", "shroud",
-            "indestructible");
+            "indestructible", "cardname can't attack.", "cardname can't block.",
+            "cardname can't attack or block.");
     private static final IntrinsicAbilityEvaluator INTRINSIC_EVALUATOR = new IntrinsicAbilityEvaluator(
             IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
     private static final IntrinsicOutcomeEvaluator PERMANENT_EVALUATOR = new IntrinsicOutcomeEvaluator(
@@ -117,9 +118,31 @@ public final class CardDefinitionValueEvaluator {
         } else {
             final int power = face.getIntPower();
             final int toughness = face.getIntToughness();
-            add(contributions, "Battlefield", "Power", CreatureBodyValue.power(power));
+            final boolean canAttack = toughness > 0 && !hasSimpleKeyword(face, "defender")
+                    && !hasSimpleKeyword(face, "CARDNAME can't attack.")
+                    && !hasSimpleKeyword(face, "CARDNAME can't attack or block.");
+            final boolean canBlock = toughness > 0 && !hasSimpleKeyword(face, "CARDNAME can't block.")
+                    && !hasSimpleKeyword(face, "CARDNAME can't attack or block.");
+            // TODO: Estimate blocking restrictions that require another creature or depend on
+            // dynamic static abilities; this card-only evaluator currently recognizes hard limits.
+            final boolean flying = hasSimpleKeyword(face, "flying");
+            final boolean reach = hasSimpleKeyword(face, "reach");
+            final boolean deathtouch = hasSimpleKeyword(face, "deathtouch");
+            final boolean indestructible = hasSimpleKeyword(face, "indestructible");
+            add(contributions, "Battlefield", "Creature base", CreatureBodyValue.base(toughness));
+            add(contributions, "Battlefield", "Player combat damage",
+                    CreatureBodyValue.power(power, canAttack));
+            add(contributions, "Battlefield", "Creature killing",
+                    CreatureBodyValue.creatureKilling(power, deathtouch, canAttack || canBlock));
+            add(contributions, "Battlefield", "Combat survival",
+                    CreatureBodyValue.combatSurvival(toughness, canAttack || canBlock));
+            add(contributions, "Battlefield", "Blocking",
+                    CreatureBodyValue.blocking(canBlock, flying || reach));
+            add(contributions, "Battlefield", "Damage-removal survival",
+                    CreatureBodyValue.damageRemovalSurvival(toughness, indestructible));
             add(contributions, "Battlefield", "Toughness", CreatureBodyValue.toughness(toughness));
-            addKeywordContributions(contributions, warnings, face, power, toughness);
+            addKeywordContributions(contributions, warnings, face, power, toughness, canAttack,
+                    canBlock);
         }
 
         for (final String keyword : face.getKeywords()) {
@@ -385,24 +408,22 @@ public final class CardDefinitionValueEvaluator {
     }
 
     private void addKeywordContributions(final List<Contribution> contributions, final List<String> warnings,
-            final ICardFace face, final int power, final int toughness) {
-        if (hasSimpleKeyword(face, "flying")) add(contributions, "Keyword", "Flying", power * 10);
-        if (hasSimpleKeyword(face, "vigilance")) add(contributions, "Keyword", "Vigilance", power * 5 + toughness * 5);
-        if (hasSimpleKeyword(face, "trample") && power > 1) add(contributions, "Keyword", "Trample", (power - 1) * 5);
-        if (hasSimpleKeyword(face, "lifelink") && power > 0) add(contributions, "Keyword", "Lifelink", power * 10);
-        if (hasSimpleKeyword(face, "deathtouch") && power > 0) add(contributions, "Keyword", "Deathtouch", 25);
-        if (hasSimpleKeyword(face, "reach") && !hasSimpleKeyword(face, "flying")) add(contributions, "Keyword", "Reach", 5);
-        if (hasSimpleKeyword(face, "double strike") && power > 0) add(contributions, "Keyword", "Double strike", 10 + power * 15);
-        else if (hasSimpleKeyword(face, "first strike") && power > 0) add(contributions, "Keyword", "First strike", 10 + power * 5);
-        if (hasSimpleKeyword(face, "menace") && power > 0) add(contributions, "Keyword", "Menace", power * 4);
-        if (hasSimpleKeyword(face, "fear") && power > 0) add(contributions, "Keyword", "Fear", power * 6);
-        if (hasSimpleKeyword(face, "intimidate") && power > 0) add(contributions, "Keyword", "Intimidate", power * 6);
+            final ICardFace face, final int power, final int toughness, final boolean canAttack,
+            final boolean canBlock) {
+        final boolean canParticipateInCombat = canAttack || canBlock;
+        if (hasSimpleKeyword(face, "flying") && canAttack) add(contributions, "Keyword", "Flying", power * 10);
+        if (hasSimpleKeyword(face, "vigilance") && canAttack && canBlock) add(contributions, "Keyword", "Vigilance", power * 5 + toughness * 5);
+        if (hasSimpleKeyword(face, "trample") && canAttack && power > 1) add(contributions, "Keyword", "Trample", (power - 1) * 5);
+        if (hasSimpleKeyword(face, "lifelink") && canParticipateInCombat && power > 0) add(contributions, "Keyword", "Lifelink", power * 10);
+        if (hasSimpleKeyword(face, "double strike") && power > 0 && canParticipateInCombat) add(contributions, "Keyword", "Double strike", 10 + power * 15);
+        else if (hasSimpleKeyword(face, "first strike") && power > 0 && canParticipateInCombat) add(contributions, "Keyword", "First strike", 10 + power * 5);
+        if (hasSimpleKeyword(face, "menace") && canAttack && power > 0) add(contributions, "Keyword", "Menace", power * 4);
+        if (hasSimpleKeyword(face, "fear") && canAttack && power > 0) add(contributions, "Keyword", "Fear", power * 6);
+        if (hasSimpleKeyword(face, "intimidate") && canAttack && power > 0) add(contributions, "Keyword", "Intimidate", power * 6);
         if (hasSimpleKeyword(face, "indestructible")) add(contributions, "Keyword", "Indestructible",
                 CreatureBodyValue.indestructible(power));
         if (hasSimpleKeyword(face, "hexproof")) add(contributions, "Keyword", "Hexproof", 35);
         else if (hasSimpleKeyword(face, "shroud")) add(contributions, "Keyword", "Shroud", 30);
-        if (hasSimpleKeyword(face, "defender")) add(contributions, "Keyword", "Defender", -((power * 9) + 40));
-
         // These are editable in the basic form but do not yet have an agreed vacuum formula.
         if (hasSimpleKeyword(face, "haste")) warnings.add("Keyword not evaluated yet: Haste");
         if (hasSimpleKeyword(face, "flash")) warnings.add("Keyword not evaluated yet: Flash");

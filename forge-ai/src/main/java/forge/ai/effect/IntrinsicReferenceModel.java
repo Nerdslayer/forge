@@ -275,13 +275,7 @@ public final class IntrinsicReferenceModel {
                 integerDistribution(0, .10, 1, .15, 2, .20, 3, .20, 4, .15, 5, .10, 6, .05, 7, .05),
                 integerDistribution(0, .20, 1, .25, 2, .25, 3, .15, 4, .10, 5, .05),
                 integerDistribution(0, .20, 1, .25, 2, .25, 3, .15, 4, .10, 5, .05),
-                WeightedDistribution.of(
-                        new WeightedValue<>(CreatureProfile.absent(), .20),
-                        new WeightedValue<>(new CreatureProfile(true, 1, 1, Set.of(), false, false), .20),
-                        new WeightedValue<>(new CreatureProfile(true, 2, 2, Set.of(), false, false), .25),
-                        new WeightedValue<>(new CreatureProfile(true, 3, 3, Set.of(), false, false), .20),
-                        new WeightedValue<>(new CreatureProfile(true, 4, 4, Set.of(), false, false), .10),
-                        new WeightedValue<>(new CreatureProfile(true, 6, 6, Set.of(), true, false), .05)),
+                CreatureReferenceDistribution.profiles(),
                 WeightedDistribution.of(
                         new WeightedValue<>(PermanentProfile.absent(), .15),
                         new WeightedValue<>(new PermanentProfile(true, PermanentKind.CREATURE,
@@ -320,6 +314,10 @@ public final class IntrinsicReferenceModel {
 
     public WeightedDistribution<CreatureProfile> creatureProfiles() {
         return creatureProfiles;
+    }
+
+    boolean usesGeneratedCreatureProfiles() {
+        return creatureProfiles == CreatureReferenceDistribution.profiles();
     }
 
     public WeightedDistribution<PermanentProfile> permanentProfiles() {

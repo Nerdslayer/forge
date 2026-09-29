@@ -7,6 +7,9 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import forge.ai.AITest;
+import forge.card.CardEdition;
+import forge.card.CardRarity;
+import forge.card.CardRules;
 import forge.card.CardStateName;
 import forge.game.Game;
 import forge.game.card.Card;
@@ -15,6 +18,8 @@ import forge.game.player.Player;
 import forge.game.trigger.Trigger;
 import forge.game.trigger.TriggerHandler;
 import forge.game.trigger.TriggerType;
+import forge.game.zone.ZoneType;
+import forge.item.PaperCard;
 
 /** Semantic regressions for combined relationship and intrinsic removal value. */
 public class PermanentAbilityValueEvaluatorTest extends AITest {
@@ -132,6 +137,119 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
         Assert.assertTrue(value.reasons().stream()
                 .anyMatch(reason -> reason.contains("activated DealDamage ability")),
                 value.toString());
+        final IntrinsicAbilityEvaluator.AbilityValue activation = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                        .evaluateDefinition(pinger.getPaperCard(), CardStateName.Original).stream()
+                        .filter(ability -> ability.path().contains("/ability:"))
+                        .findFirst().orElseThrow();
+        final SituationalFutureOutcomeEvaluator.Evaluation live =
+                SituationalFutureOutcomeEvaluator.evaluateActivatedAbility(ai, pinger,
+                        activation.path());
+        Assert.assertTrue(live.supported(), live.reason());
+        Assert.assertEquals(value.intrinsicValue(), (int) Math.round(live.value()
+                * (activation.expectedOccurrences() - activation.currentTurnUses())),
+                "Future activation value should no longer receive a blanket 50% reduction");
+    }
+
+    @Test
+    public void readyTapActivationAddsOneImmediateUseWithoutChangingFutureAllowance() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        final Card pinger = addCard("Prodigal Sorcerer", opponent);
+
+        final PermanentAbilityValueEvaluator.Breakdown sick = evaluate(ai, List.of(pinger))
+                .get(pinger);
+        pinger.setSickness(false);
+        final PermanentAbilityValueEvaluator.Breakdown ready = evaluate(ai, List.of(pinger))
+                .get(pinger);
+        pinger.setTapped(true);
+        final PermanentAbilityValueEvaluator.Breakdown tapped = evaluate(ai, List.of(pinger))
+                .get(pinger);
+
+        Assert.assertTrue(ready.intrinsicValue() > sick.intrinsicValue(),
+                "A ready pinger should get immediate credit: sick=" + sick + ", ready=" + ready);
+        Assert.assertTrue(ready.reasons().stream()
+                .anyMatch(reason -> reason.contains("One legal immediate activation")),
+                ready.toString());
+        Assert.assertFalse(sick.reasons().stream()
+                .anyMatch(reason -> reason.contains("One legal immediate activation")),
+                sick.toString());
+        Assert.assertEquals(tapped.intrinsicValue(), sick.intrinsicValue(),
+                "Tapping should remove only the immediate use, not future opportunity value");
+    }
+
+    @Test
+    public void readyActivationRequiresALegalBeneficialTarget() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Test Counter Mentor", "ManaCost:W", "Types:Creature Human Soldier", "PT:0/1",
+                "A:AB$ PutCounter | Cost$ T | ValidTgts$ Creature.YouCtrl+Other"
+                        + " | CounterType$ P1P1 | CounterNum$ 1"
+                        + " | SpellDescription$ Put a +1/+1 counter on another creature you control."));
+        final Card mentor = Card.fromPaperCard(
+                new PaperCard(rules, CardEdition.UNKNOWN_CODE, CardRarity.Special), opponent);
+        mentor.setGameTimestamp(game.getNextTimestamp());
+        opponent.getZone(ZoneType.Battlefield).add(mentor);
+        mentor.setSickness(false);
+
+        final PermanentAbilityValueEvaluator.Breakdown alone = evaluate(ai, List.of(mentor))
+                .get(mentor);
+        addCard("Grizzly Bears", opponent);
+        final PermanentAbilityValueEvaluator.Breakdown withTarget = evaluate(ai, List.of(mentor))
+                .get(mentor);
+
+        Assert.assertFalse(alone.reasons().stream()
+                .anyMatch(reason -> reason.contains("One legal immediate activation")),
+                alone.toString());
+        Assert.assertTrue(withTarget.reasons().stream()
+                .anyMatch(reason -> reason.contains("One legal immediate activation")),
+                withTarget.toString());
+        Assert.assertTrue(withTarget.intrinsicValue() > alone.intrinsicValue(),
+                "The legal current use should add value: alone=" + alone
+                        + ", with target=" + withTarget);
+    }
+
+    @Test
+    public void harmfulOnlyLiveActivationCanBeDeclined() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opponent);
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Test Optional Counter Mentor", "ManaCost:W",
+                "Types:Creature Human Soldier", "PT:0/1",
+                "A:AB$ PutCounter | Cost$ T | ValidTgts$ Creature.Other"
+                        + " | CounterType$ P1P1 | CounterNum$ 1"
+                        + " | SpellDescription$ Put a +1/+1 counter on another creature."));
+        final Card mentor = Card.fromPaperCard(
+                new PaperCard(rules, CardEdition.UNKNOWN_CODE, CardRarity.Special), opponent);
+        mentor.setGameTimestamp(game.getNextTimestamp());
+        opponent.getZone(ZoneType.Battlefield).add(mentor);
+        mentor.setSickness(false);
+        addCard("Grizzly Bears", ai);
+
+        final String activationPath = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                        .evaluateDefinition(mentor.getPaperCard(), CardStateName.Original).stream()
+                        .filter(ability -> ability.path().contains("/ability:"))
+                        .findFirst().orElseThrow().path();
+        final SituationalFutureOutcomeEvaluator.Evaluation live =
+                SituationalFutureOutcomeEvaluator.evaluateActivatedAbility(ai, mentor,
+                        activationPath);
+        Assert.assertTrue(live.supported(), live.reason());
+        Assert.assertEquals(live.value(), 0,
+                "The controller may choose not to buff the only legal opposing target");
+        final PermanentAbilityValueEvaluator.Breakdown value = evaluate(ai, List.of(mentor))
+                .get(mentor);
+        Assert.assertEquals(value.intrinsicValue(), 0, value.toString());
     }
 
     @Test
@@ -197,6 +315,14 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
         Assert.assertTrue(value.reasons().stream()
                 .anyMatch(reason -> reason.contains("Independent future-support allowance")),
                 value.toString());
+        final IntrinsicAbilityEvaluator.AbilityValue trigger = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                        .evaluateDefinition(spellEngine.getPaperCard(), CardStateName.Original).stream()
+                        .filter(ability -> ability.path().contains("/trigger:"))
+                        .findFirst().orElseThrow();
+        Assert.assertEquals(value.intrinsicValue(), (int) Math.round(
+                trigger.contribution().value() / trigger.expectedOccurrences()),
+                "The fixed future event opportunity should equal one full reference resolution");
     }
 
     @Test

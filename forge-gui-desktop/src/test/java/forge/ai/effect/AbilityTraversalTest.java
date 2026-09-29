@@ -39,6 +39,31 @@ public class AbilityTraversalTest extends AITest {
     }
 
     @Test
+    public void definitionEvaluationIsCachedButCardEditsInvalidateTheEntry() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final forge.card.CardRules firstRules = forge.card.CardRules.fromScript(List.of(
+                "Name:Cache Probe", "ManaCost:1", "Types:Creature", "PT:1/1"));
+        final forge.item.PaperCard firstCard = new forge.item.PaperCard(firstRules,
+                forge.card.CardEdition.UNKNOWN_CODE, forge.card.CardRarity.Special);
+
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation first = evaluator.evaluateDefinitionDetails(
+                firstCard, CardStateName.Original);
+        final forge.item.PaperCard sameDefinition = new forge.item.PaperCard(firstRules,
+                forge.card.CardEdition.UNKNOWN_CODE, forge.card.CardRarity.Special);
+        Assert.assertSame(evaluator.evaluateDefinitionDetails(sameDefinition, CardStateName.Original), first);
+
+        // A card creator can replace the rules for an existing card name. Content-based keys must
+        // not reuse a cached result just because name and edition still match.
+        final forge.card.CardRules editedRules = forge.card.CardRules.fromScript(List.of(
+                "Name:Cache Probe", "ManaCost:1", "Types:Creature", "PT:2/2"));
+        final forge.item.PaperCard editedCard = new forge.item.PaperCard(editedRules,
+                forge.card.CardEdition.UNKNOWN_CODE, forge.card.CardRarity.Special);
+        Assert.assertNotSame(evaluator.evaluateDefinitionDetails(editedCard, CardStateName.Original), first);
+    }
+
+    @Test
     public void intrinsicStaticPAndTValueUsesSharedCreatureDelta() {
         final CardAbilityTraversal.AbilityDescription anthem =
                 new CardAbilityTraversal.AbilityDescription("Original/static:0",
@@ -55,7 +80,7 @@ public class AbilityTraversalTest extends AITest {
 
         Assert.assertEquals(result.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
         Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
-        Assert.assertEquals(result.contribution().value(), 70.0);
+        Assert.assertEquals(result.contribution().value(), 80.0);
     }
 
     @Test
@@ -74,7 +99,7 @@ public class AbilityTraversalTest extends AITest {
                         EntryTiming.NORMAL_SPEED).get(0);
 
         Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
-        Assert.assertEquals(result.contribution().value(), 50.0);
+        Assert.assertEquals(result.contribution().value(), 68.0);
     }
 
     @Test
@@ -93,7 +118,7 @@ public class AbilityTraversalTest extends AITest {
                         EntryTiming.NORMAL_SPEED).get(0);
 
         Assert.assertEquals(result.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
-        Assert.assertEquals(result.contribution().value(), 80.0);
+        Assert.assertEquals(result.contribution().value(), 94.0);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package forge.ai.effect;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.function.Function;
 import forge.card.CardStateName;
+import forge.card.ICardFace;
 import forge.game.cost.Cost;
 import forge.game.cost.CostPayLife;
 import forge.game.cost.CostPart;
@@ -23,12 +25,48 @@ import forge.ai.effect.IntrinsicDrawOutcomeBackend.State;
 /** Evaluates prepared definition descriptions without constructing or querying a live game. */
 public final class IntrinsicAbilityEvaluator {
     private static final int MAX_REFERENCE_CASES = 4096;
+    // Allows the complete 199-profile paired-creature sample while bounding richer Cartesian cases.
+    private static final int MAX_GENERATED_CREATURE_CASES = 50_000;
+    private static final int MAX_CACHED_DEFINITIONS = 256;
     private final IntrinsicReferenceModel model;
     private final IntrinsicEvaluationSettings settings;
+    /**
+     * Definition ability evaluation is independent of the live game state, so retain its first
+     * result for repeated card valuations. Keep this bounded because card-creator previews can
+     * generate a fresh definition after every edit.
+     */
+    private final Map<DefinitionCacheKey, DefinitionEvaluation> definitionCache =
+            new LinkedHashMap<>(32, .75f, true) {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                protected boolean removeEldestEntry(final Map.Entry<DefinitionCacheKey,
+                        DefinitionEvaluation> eldest) {
+                    return size() > MAX_CACHED_DEFINITIONS;
+                }
+            };
+
+    private record DefinitionCacheKey(String name, String edition, String functionalVariant,
+            String splitType, CardStateName face, List<FaceCacheKey> faces) {
+    }
+
+    /** Structural snapshot prevents stale hits if a custom card's CardRules is reinitialized. */
+    private record FaceCacheKey(String name, String type, String manaCost, String color,
+            String power, String toughness, String loyalty, String defense, String oracleText,
+            List<String> keywords, List<String> deckRules, List<String> abilities,
+            List<String> staticAbilities, List<String> triggers, List<String> replacements,
+            List<String> draftActions, List<String> variables, String nonAbilityText) {
+    }
     public enum SupportStatus { SUPPORTED, PARTIAL, UNSUPPORTED, NOT_EVALUATED }
     public record AbilityValue(String path, double expectedOccurrences,
             IntrinsicReferenceAggregate contribution, SupportStatus triggerStatus,
-            SupportStatus outcomeStatus) { }
+            SupportStatus outcomeStatus, double currentTurnUses) {
+        public AbilityValue(final String path, final double expectedOccurrences,
+                final IntrinsicReferenceAggregate contribution, final SupportStatus triggerStatus,
+                final SupportStatus outcomeStatus) {
+            this(path, expectedOccurrences, contribution, triggerStatus, outcomeStatus, 0);
+        }
+    }
     public record DefinitionEvaluation(List<AbilityDescription> descriptions,
             List<AbilityValue> values) {
         public DefinitionEvaluation {
@@ -54,6 +92,27 @@ public final class IntrinsicAbilityEvaluator {
      */
     public DefinitionEvaluation evaluateDefinitionDetails(final IPaperCard definition,
             final CardStateName face) {
+        final DefinitionCacheKey cacheKey = cacheKey(definition, face);
+        synchronized (definitionCache) {
+            final DefinitionEvaluation cached = definitionCache.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        final DefinitionEvaluation result = evaluateDefinitionUncached(definition, face);
+        synchronized (definitionCache) {
+            final DefinitionEvaluation existing = definitionCache.get(cacheKey);
+            if (existing != null) {
+                return existing;
+            }
+            definitionCache.put(cacheKey, result);
+        }
+        return result;
+    }
+
+    private DefinitionEvaluation evaluateDefinitionUncached(final IPaperCard definition,
+            final CardStateName face) {
         final CardState state = CardAbilityTraversal.definitionState(definition, face);
         final forge.card.CardTypeView type = state.getType();
         final PermanentKind kind = type.isAura() ? PermanentKind.AURA : type.isCreature() ? PermanentKind.CREATURE
@@ -77,6 +136,37 @@ public final class IntrinsicAbilityEvaluator {
         return new DefinitionEvaluation(descriptions, values);
     }
 
+    private static DefinitionCacheKey cacheKey(final IPaperCard definition,
+            final CardStateName face) {
+        final List<FaceCacheKey> faces = definition.getAllFaces().stream()
+                .map(IntrinsicAbilityEvaluator::faceCacheKey).toList();
+        return new DefinitionCacheKey(definition.getName(), definition.getEdition(),
+                definition.getFunctionalVariant(), definition.getRules().getSplitType().name(),
+                face, faces);
+    }
+
+    private static FaceCacheKey faceCacheKey(final ICardFace face) {
+        final List<String> variables = new ArrayList<>();
+        face.getVariables().forEach(entry -> variables.add(entry.getKey() + "=" + entry.getValue()));
+        variables.sort(String::compareTo);
+        return new FaceCacheKey(face.getName(), face.getType().toString(),
+                face.getManaCost().toString(), String.valueOf(face.getColor()), face.getPower(),
+                face.getToughness(), face.getInitialLoyalty(), face.getDefense(), face.getOracleText(),
+                iterableSnapshot(face.getKeywords()), iterableSnapshot(face.getDeckRules()),
+                iterableSnapshot(face.getAbilities()), iterableSnapshot(face.getStaticAbilities()),
+                iterableSnapshot(face.getTriggers()), iterableSnapshot(face.getReplacements()),
+                iterableSnapshot(face.getDraftActions()), List.copyOf(variables),
+                face.getNonAbilityText());
+    }
+
+    private static List<String> iterableSnapshot(final Iterable<String> values) {
+        final List<String> result = new ArrayList<>();
+        if (values != null) {
+            values.forEach(result::add);
+        }
+        return List.copyOf(result);
+    }
+
     /** Unsupported origins remain in results; callers must check aggregate completeness. */
     public List<AbilityValue> evaluate(final List<AbilityDescription> abilities,
             final IntrinsicReferenceModel.PermanentProfile source, final EntryTiming timing) {
@@ -98,7 +188,7 @@ public final class IntrinsicAbilityEvaluator {
                     SupportStatus.NOT_EVALUATED);
         }
         if (ability.origin() == CardAbilityTraversal.Origin.STATIC) {
-            return evaluateStatic(ability, source);
+            return evaluateStatic(ability, source, model);
         }
         if (ability.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
             return evaluateActivation(ability, source, timing, tokenProfileResolver);
@@ -108,7 +198,7 @@ public final class IntrinsicAbilityEvaluator {
             // activations still evaluates its targets, choices, sequences and partial branches.
             // TODO: Add alternative/additional costs, X values, timing, and cast-from-zone rules.
             return evaluateOutcome(ability, withoutExecutionMetadata(ability.outcome(), 0), source,
-                    1, tokenProfileResolver, SupportStatus.SUPPORTED);
+                    1, tokenProfileResolver, SupportStatus.SUPPORTED, false);
         }
         // TODO: Static, replacement, conditional and non-battlefield origins need dedicated
         // reference adapters. Delayed-trigger discovery and granted abilities are also deferred.
@@ -151,7 +241,7 @@ public final class IntrinsicAbilityEvaluator {
             occurrences = estimate.expectedOccurrences();
         }
         return evaluateOutcome(ability, ability.outcome(), source, occurrences, tokenProfileResolver,
-                SupportStatus.SUPPORTED);
+                SupportStatus.SUPPORTED, false);
     }
 
     private AbilityValue evaluateActivation(final AbilityDescription ability,
@@ -176,8 +266,11 @@ public final class IntrinsicAbilityEvaluator {
         // Cost/AB/SP are execution metadata, not outcomes. Removing them lets the same backend
         // evaluate an activation's already-supported outcome without treating its cost as free.
         final AbilityOutcomeDescription outcome = withoutExecutionMetadata(ability.outcome(), 0);
-        return evaluateOutcome(ability, outcome, source, occurrence.expectedOccurrences(),
-                tokenProfileResolver, SupportStatus.SUPPORTED);
+        final AbilityValue evaluated = evaluateOutcome(ability, outcome, source,
+                occurrence.expectedOccurrences(), tokenProfileResolver, SupportStatus.SUPPORTED, true);
+        return new AbilityValue(evaluated.path(), evaluated.expectedOccurrences(),
+                evaluated.contribution(), evaluated.triggerStatus(), evaluated.outcomeStatus(),
+                occurrence.currentTurnUses());
     }
 
     /**
@@ -196,9 +289,9 @@ public final class IntrinsicAbilityEvaluator {
     }
 
     private AbilityValue evaluateStatic(final AbilityDescription ability,
-            final PermanentProfile source) {
+            final PermanentProfile source, final IntrinsicReferenceModel referenceModel) {
         final IntrinsicStaticAbilityEvaluator.Evaluation evaluation =
-                IntrinsicStaticAbilityEvaluator.evaluate(ability, source);
+                IntrinsicStaticAbilityEvaluator.evaluate(ability, source, referenceModel);
         if (!evaluation.supported()) {
             return unsupported(ability, evaluation.reason(), SupportStatus.UNSUPPORTED,
                     SupportStatus.NOT_EVALUATED);
@@ -212,7 +305,7 @@ public final class IntrinsicAbilityEvaluator {
             final AbilityOutcomeDescription outcomeDescription, final PermanentProfile source,
             final double occurrences,
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver,
-            final SupportStatus triggerStatus) {
+            final SupportStatus triggerStatus, final boolean canDecline) {
         final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(settings,
                 source, tokenProfileResolver);
         if (outcomeDescription == null) {
@@ -224,11 +317,22 @@ public final class IntrinsicAbilityEvaluator {
         try {
             dimensions = referenceDimensions(backend, outcomeDescription);
             outcome = new OutcomeDescriptionCompiler<>(backend).compile(outcomeDescription);
-            if (referenceCaseCount(dimensions) > MAX_REFERENCE_CASES) {
+            List<ReferenceDimension> boundedDimensions = dimensions;
+            final boolean hasCreatureDimension = dimensions.stream().anyMatch(dimension ->
+                    IntrinsicDrawOutcomeBackend.CONTROLLER_CREATURE.equals(dimension.name())
+                            || IntrinsicDrawOutcomeBackend.OPPONENT_CREATURE.equals(dimension.name()));
+            final int caseLimit = model.usesGeneratedCreatureProfiles() && hasCreatureDimension
+                    ? MAX_GENERATED_CREATURE_CASES : MAX_REFERENCE_CASES;
+            if (caseLimit > MAX_REFERENCE_CASES && referenceCaseCount(boundedDimensions) > caseLimit) {
+                // TODO: Add a bounded high-resolution aggregation for multiple creature references.
+                // Until then, preserve the prior supported-outcome coverage with the coarse sample.
+                boundedDimensions = useCoarseCreatureProfiles(boundedDimensions);
+            }
+            if (referenceCaseCount(boundedDimensions) > caseLimit) {
                 return unsupported(ability, "intrinsic reference case limit exceeded", triggerStatus,
                         SupportStatus.UNSUPPORTED);
             }
-            cases = ReferenceCaseCombiner.combine(dimensions);
+            cases = ReferenceCaseCombiner.combine(boundedDimensions);
         } catch (final RuntimeException unsupported) {
             // A malformed or too-rich description must not turn a card definition into a
             // fabricated intrinsic value. The backend and compiler already retain safe reasons
@@ -240,8 +344,13 @@ public final class IntrinsicAbilityEvaluator {
             final State state = referenceState(reference, source);
             final OutcomePlan<State> plan = new OutcomePlanner<State>(settings.maximumOutcomeSearchBudget())
                     .evaluate(outcome, state);
+            // An activation is voluntary. A complete but harmful legal resolution is worth
+            // zero here: the controller can leave the ability unused in this reference case.
+            // Keep partial and unsupported results unchanged so their coverage stays visible.
+            final double resolutionValue = canDecline && plan.complete()
+                    ? Math.max(0, plan.value()) : plan.value();
             // Repeated uses share a per-resolution expectation, not projected later hand sizes.
-            return new OutcomePlan<>(plan.value() * occurrences, plan.state(), plan.decisions(), plan.branches(),
+            return new OutcomePlan<>(resolutionValue * occurrences, plan.state(), plan.decisions(), plan.branches(),
                     plan.supported(), plan.reason(), plan.completeness(), plan.unresolvedProbability(),
                     plan.unresolvedAlternatives());
         });
@@ -325,6 +434,18 @@ public final class IntrinsicAbilityEvaluator {
             count = Math.multiplyExact(count, dimension.distribution().entries().size());
         }
         return count;
+    }
+
+    private static List<ReferenceDimension> useCoarseCreatureProfiles(
+            final List<ReferenceDimension> dimensions) {
+        return dimensions.stream().map(dimension -> {
+            if (IntrinsicDrawOutcomeBackend.CONTROLLER_CREATURE.equals(dimension.name())
+                    || IntrinsicDrawOutcomeBackend.OPPONENT_CREATURE.equals(dimension.name())) {
+                return new ReferenceDimension(dimension.name(),
+                        CreatureReferenceDistribution.coarseProfiles());
+            }
+            return dimension;
+        }).toList();
     }
 
     private List<ReferenceDimension> referenceDimensions(final IntrinsicDrawOutcomeBackend backend,

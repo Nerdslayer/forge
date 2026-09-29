@@ -108,7 +108,7 @@ public class RemovalActionEvaluatorTest extends AITest {
                 ValuationContext.forRemoval(ai, 0, 0));
 
         Assert.assertTrue(result.isComplete());
-        Assert.assertEquals(result.currentPresenceValue(), 110);
+        Assert.assertEquals(result.currentPresenceValue(), 111);
         Assert.assertEquals(result.futurePotentialValue(), 0);
         Assert.assertEquals(result.contextAdjustment(), 0);
     }

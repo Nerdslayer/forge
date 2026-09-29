@@ -28,16 +28,12 @@ final class IntrinsicStaticAbilityEvaluator {
             "cantattack", "can't block", "cantblock", "can't untap", "cantuntap");
     private static final double FUTURE_RECIPIENTS = 2.0;
     private static final double TRIBAL_FUTURE_RECIPIENTS = 1.5;
-    private static final CreatureProfile DEFAULT_RECIPIENT =
-            new CreatureProfile(true, 2, 2, Set.of(), false, false);
-    private static final CreatureProfile DEFAULT_ATTACHED_CREATURE =
-            PermanentSurvivalEstimator.DEFAULT_AURA_HOST;
 
     private IntrinsicStaticAbilityEvaluator() {
     }
 
     static Evaluation evaluate(final CardAbilityTraversal.AbilityDescription ability,
-            final PermanentProfile source) {
+            final PermanentProfile source, final IntrinsicReferenceModel model) {
         if (ability == null || source == null
                 || ability.origin() != CardAbilityTraversal.Origin.STATIC) {
             return unsupported("not a static ability");
@@ -79,8 +75,8 @@ final class IntrinsicStaticAbilityEvaluator {
                 || (ability.parameters().containsKey("SetToughness") && setToughness <= 0)
                 || powerChange < -2 || toughnessChange <= -2
                 || powerChange > 20 || toughnessChange > 20) {
-            // Do not pretend a generic reference creature survives a static effect that can reduce
-            // toughness to zero. Conditional, dynamic and lethal changes need richer state.
+            // Large reductions remain outside this bounded adapter; the reference distribution
+            // separately models the common -1/-1 case killing small recipients.
             return unsupported("static P/T change is outside the safe intrinsic range");
         }
         if (hasAutomaticChange && scope != StaticAbilityScope.SELF
@@ -108,14 +104,8 @@ final class IntrinsicStaticAbilityEvaluator {
             recipientCount = 1;
         } else {
             if (hasAutomaticChange) {
-                final CreatureProfile before = scope == StaticAbilityScope.ATTACHED
-                        ? DEFAULT_ATTACHED_CREATURE : DEFAULT_RECIPIENT;
-                final CreatureProfile after = new CreatureProfile(true,
-                        applySetAndAdd(before.power(), setPower, powerChange),
-                        applySetAndAdd(before.toughness(), setToughness, toughnessChange),
-                        plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
-                        before.indestructible());
-                automaticPerRecipient = evaluator.evaluateCreatureDelta(before, after, true);
+                automaticPerRecipient = averageCreatureDelta(model, evaluator, setPower,
+                        setToughness, powerChange, toughnessChange, addedKeywords);
             } else {
                 automaticPerRecipient = 0;
             }
@@ -135,10 +125,40 @@ final class IntrinsicStaticAbilityEvaluator {
 
     private static PermanentProfile withPowerAndToughness(final PermanentProfile source,
             final int power, final int toughness, final Set<String> addedKeywords) {
+        if (toughness <= 0 && (source.kind() == PermanentKind.CREATURE
+                || source.kind() == PermanentKind.TOKEN)) {
+            return PermanentProfile.absent();
+        }
         final Set<String> keywords = plusKeywords(source.keywords(), addedKeywords);
         return new PermanentProfile(true, source.kind(), source.controlledByAi(),
                 Math.max(0, power), Math.max(0, toughness), keywords,
                 source.basicLand(), source.loyalty());
+    }
+
+    private static int averageCreatureDelta(final IntrinsicReferenceModel model,
+            final IntrinsicOutcomeEvaluator evaluator, final int setPower, final int setToughness,
+            final int powerChange, final int toughnessChange, final Set<String> addedKeywords) {
+        double presentProbability = 0;
+        double weightedValue = 0;
+        for (final WeightedValue<CreatureProfile> weighted : model.creatureProfiles().entries()) {
+            final CreatureProfile before = weighted.value();
+            if (!before.present()) {
+                continue;
+            }
+            presentProbability += weighted.weight();
+            final int power = Math.max(0, applySetAndAdd(before.power(), setPower, powerChange));
+            final int toughness = applySetAndAdd(before.toughness(), setToughness, toughnessChange);
+            final CreatureProfile after = toughness <= 0 ? CreatureProfile.absent()
+                    : new CreatureProfile(true, power, toughness,
+                            plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
+                            before.indestructible());
+            weightedValue += weighted.weight()
+                    * evaluator.evaluateCreatureDelta(before, after, true);
+        }
+        if (presentProbability <= 0) {
+            return 0;
+        }
+        return (int) Math.round(weightedValue / presentProbability);
     }
 
     /**
@@ -171,13 +191,8 @@ final class IntrinsicStaticAbilityEvaluator {
     /** Values a fixed set-and-add change on the generic creature used by future estimates. */
     static int evaluateGenericCreatureDelta(final int powerChange, final int toughnessChange,
             final int setPower, final int setToughness, final Set<String> addedKeywords) {
-        final CreatureProfile before = DEFAULT_RECIPIENT;
-        final CreatureProfile after = new CreatureProfile(true,
-                applySetAndAdd(before.power(), setPower, powerChange),
-                applySetAndAdd(before.toughness(), setToughness, toughnessChange),
-                plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
-                before.indestructible());
-        return new IntrinsicOutcomeEvaluator().evaluateCreatureDelta(before, after, true);
+        return averageCreatureDelta(IntrinsicReferenceModel.defaults(), new IntrinsicOutcomeEvaluator(),
+                setPower, setToughness, powerChange, toughnessChange, addedKeywords);
     }
 
     private static int applySetAndAdd(final int before, final int set, final int add) {

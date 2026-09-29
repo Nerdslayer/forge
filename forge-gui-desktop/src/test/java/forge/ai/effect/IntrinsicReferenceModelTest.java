@@ -91,6 +91,26 @@ public class IntrinsicReferenceModelTest {
     }
 
     @Test
+    public void creatureDistributionUsesFrequentBodiesAndSeparateKeywordSamples() {
+        final WeightedDistribution<IntrinsicReferenceModel.CreatureProfile> distribution =
+                IntrinsicReferenceModel.defaults().creatureProfiles();
+
+        Assert.assertEquals(distribution.entries().size(), 199);
+        Assert.assertEquals(distribution.entries().stream()
+                .filter(entry -> !entry.value().present())
+                .mapToDouble(WeightedValue::weight).sum(), .20, 0.000000001);
+        Assert.assertEquals(distribution.entries().stream()
+                .filter(entry -> entry.value().present())
+                .mapToDouble(WeightedValue::weight).sum(), .80, 0.000000001);
+        Assert.assertFalse(distribution.entries().stream().anyMatch(entry -> entry.value().present()
+                && entry.value().power() == 0 && entry.value().toughness() == 0));
+        Assert.assertTrue(distribution.entries().stream().filter(entry -> entry.value().present())
+                .allMatch(entry -> entry.value().keywords().size() <= 1));
+        Assert.assertEquals(distribution.entries().stream().filter(entry -> entry.value().present())
+                .map(entry -> entry.value().power() + "/" + entry.value().toughness()).distinct().count(), 18L);
+    }
+
+    @Test
     public void targetDistributionRetainsAbsentAndUnsuitableCases() {
         final IntrinsicTargetDistribution targets = new IntrinsicTargetDistribution(
                 IntrinsicReferenceModel.defaults());
@@ -98,10 +118,15 @@ public class IntrinsicReferenceModelTest {
                 IntrinsicReferenceModel.CreatureProfile>> distribution = targets.creatureTargets(
                         profile -> profile.toughness() >= 3);
 
-        Assert.assertEquals(distribution.entries().size(), 6);
-        Assert.assertEquals(distribution.entries().stream()
+        Assert.assertEquals(distribution.entries().size(), 199);
+        final double legalWeight = distribution.entries().stream()
                 .filter(entry -> entry.value().legal())
-                .mapToDouble(WeightedValue::weight).sum(), .35, 0.000000001);
+                .mapToDouble(WeightedValue::weight).sum();
+        Assert.assertTrue(legalWeight > 0);
+        Assert.assertTrue(legalWeight < .80);
+        Assert.assertEquals(distribution.entries().stream()
+                .filter(entry -> entry.value().present())
+                .mapToDouble(WeightedValue::weight).sum(), .80, 0.000000001);
         Assert.assertEquals(distribution.entries().stream()
                 .filter(entry -> !entry.value().present())
                 .mapToDouble(WeightedValue::weight).sum(), .20, 0.000000001);

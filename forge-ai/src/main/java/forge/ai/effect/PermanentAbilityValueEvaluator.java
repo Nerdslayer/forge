@@ -18,13 +18,16 @@ import forge.game.zone.ZoneType;
  * {@link UnifiedPermanentValueEvaluator}.
  */
 public final class PermanentAbilityValueEvaluator {
-    private static final double FUTURE_EVENT_ALLOWANCE = .50;
+    private static final IntrinsicAbilityEvaluator INTRINSIC_EVALUATOR =
+            new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                    IntrinsicEvaluationSettings.defaults());
 
     private PermanentAbilityValueEvaluator() {
     }
 
     /** Explainable removal adjustment for one candidate. Positive values prefer removal. */
-    public record Breakdown(int relationshipValue, int intrinsicValue, List<String> reasons) {
+    public record Breakdown(int relationshipValue, int intrinsicValue,
+            boolean hasUnevaluatedAbility, List<String> reasons) {
         public Breakdown {
             reasons = reasons == null ? List.of() : List.copyOf(reasons);
         }
@@ -86,12 +89,14 @@ public final class PermanentAbilityValueEvaluator {
             }
 
             int intrinsicValue = 0;
+            boolean hasUnevaluatedAbility = false;
             if (includeIntrinsic && candidate.getController() != null
                     && candidate.getController().isOpponentOf(ai)
                     && isInspectableBattlefieldPermanent(candidate)) {
                 final IntrinsicEvaluation intrinsic = intrinsicCache.computeIfAbsent(candidate,
                         card -> evaluateIntrinsic(ai, card,
                                 applyRelationshipCredit ? relationshipEntries : List.of(), effectiveTrace));
+                hasUnevaluatedAbility = intrinsic.hasUnevaluatedAbility();
                 reasons.addAll(intrinsic.reasons());
                 for (final AbilityValueContribution contribution : intrinsic.contributions()) {
                     if (contribution.counted()) {
@@ -103,13 +108,14 @@ public final class PermanentAbilityValueEvaluator {
                 reasons.add(candidate.getName() + ": intrinsic value skipped (not an eligible live "
                         + "battlefield permanent or is controlled by the AI)");
             }
-            result.put(candidate, new Breakdown(relationshipValue, intrinsicValue, reasons));
+            result.put(candidate, new Breakdown(relationshipValue, intrinsicValue,
+                    hasUnevaluatedAbility, reasons));
         }
         return result;
     }
 
     private record IntrinsicEvaluation(List<AbilityValueContribution> contributions,
-            List<String> reasons) {
+            boolean hasUnevaluatedAbility, List<String> reasons) {
         private IntrinsicEvaluation {
             contributions = List.copyOf(contributions);
             reasons = List.copyOf(reasons);
@@ -151,17 +157,18 @@ public final class PermanentAbilityValueEvaluator {
         final List<AbilityValueContribution> contributions = new ArrayList<>();
         final List<String> reasons = new ArrayList<>();
         collectStaticFutureAllowances(ai, candidate, contributions, reasons);
-        collectIntrinsicAbilities(ai, candidate, relationshipEntries, contributions, reasons, trace);
-        return new IntrinsicEvaluation(contributions, reasons);
+        final boolean hasUnevaluatedAbility = collectIntrinsicAbilities(ai, candidate,
+                relationshipEntries, contributions, reasons, trace);
+        return new IntrinsicEvaluation(contributions, hasUnevaluatedAbility, reasons);
     }
 
-    private static void collectIntrinsicAbilities(final Player ai, final Card candidate,
+    private static boolean collectIntrinsicAbilities(final Player ai, final Card candidate,
             final List<AbilityValueContribution> relationshipEntries,
             final List<AbilityValueContribution> destination, final List<String> reasons,
             final EffectAnalysisTrace trace) {
         if (candidate.getPaperCard() == null) {
             reasons.add(candidate.getName() + ": intrinsic value skipped (no public definition)");
-            return;
+            return false;
         }
         final List<CardAbilityTraversal.AbilityDescription> descriptions;
         final List<CardAbilityTraversal.AbilityDescription> liveDescriptions;
@@ -169,16 +176,15 @@ public final class PermanentAbilityValueEvaluator {
         try {
             final CardStateName face = candidate.getFaceupCardStateName();
             final IntrinsicAbilityEvaluator.DefinitionEvaluation definition =
-                    new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
-                            IntrinsicEvaluationSettings.defaults()).evaluateDefinitionDetails(
-                                    candidate.getPaperCard(), face);
+                    INTRINSIC_EVALUATOR.evaluateDefinitionDetails(candidate.getPaperCard(), face);
             descriptions = definition.descriptions();
             liveDescriptions = CardAbilityTraversal.inspect(candidate.getCurrentState());
             values = definition.values();
         } catch (final RuntimeException failure) {
             reasons.add(candidate.getName() + ": intrinsic value skipped (definition unavailable)");
-            return;
+            return false;
         }
+        boolean hasUnevaluatedAbility = false;
 
         final Map<String, CardAbilityTraversal.AbilityDescription> byPath = new HashMap<>();
         for (final CardAbilityTraversal.AbilityDescription description : descriptions) {
@@ -209,11 +215,13 @@ public final class PermanentAbilityValueEvaluator {
             trace.intrinsicAbility(candidate, value.path(), description.origin().name(),
                     value.expectedOccurrences(), value.triggerStatus(), value.outcomeStatus(), aggregate);
             if (!aggregate.complete() || aggregate.unresolvedRandomProbability() != 0) {
+                hasUnevaluatedAbility = true;
                 addSkipped(destination, candidate, value.path(), "intrinsic outcome is incomplete: "
                         + aggregate.unresolvedReasons());
                 continue;
             }
             if (!isSafeIntrinsicOutcome(description.outcome())) {
+                hasUnevaluatedAbility = true;
                 addSkipped(destination, candidate, value.path(), "outcome is outside safe intrinsic slice");
                 continue;
             }
@@ -231,27 +239,36 @@ public final class PermanentAbilityValueEvaluator {
                 continue;
             }
             if (description.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
-                // Intrinsic activation occurrence already accounts for reference mana, repeated
-                // uses and bounded source survival. Replace only the per-resolution outcome with
-                // the live estimate, and retain the conservative reference occurrence count.
-                // TODO: Refine occurrence itself with live/future mana, tap state and source
-                // survival without charging the same activation value twice.
+                // The reference estimate describes a newly played card. Remove its current-turn
+                // share before using it for later survival-weighted opportunities; an existing
+                // permanent gets a separate immediate use only if that use is legal now.
+                final double futureOccurrences = Math.max(0,
+                        value.expectedOccurrences() - value.currentTurnUses());
                 final SituationalFutureOutcomeEvaluator.Evaluation situational =
                         SituationalFutureOutcomeEvaluator.evaluateActivatedAbility(ai, candidate,
                                 value.path());
+                final SituationalFutureOutcomeEvaluator.Evaluation immediate =
+                        SituationalFutureOutcomeEvaluator.evaluateReadyActivatedAbility(ai,
+                                candidate, value.path(), situational);
+                if (immediate.supported()) {
+                    destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
+                            null, null, AbilityValueKind.INTRINSIC_IMMEDIATE, immediate.value(),
+                            value.path() + ":activation-immediate", immediate.reason()));
+                }
                 final int allowance;
                 final String contributionPath;
                 final String contributionReason;
                 if (situational.supported()) {
-                    allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE,
-                            toInt(situational.value() * value.expectedOccurrences()));
+                    allowance = toInt(situational.value() * futureOccurrences);
                     contributionPath = value.path() + ":activation-future-situational";
                     contributionReason = situational.reason();
                 } else {
-                    allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE, aggregateValue);
+                    allowance = value.expectedOccurrences() > 0
+                            ? toInt(aggregateValue * futureOccurrences
+                                    / value.expectedOccurrences()) : 0;
                     contributionPath = value.path() + ":activation-future-opportunity";
                     contributionReason = "Independent future-support allowance for activated " + api
-                            + " ability (reference uses are discounted; live refinement "
+                            + " ability (reference future uses; live refinement "
                             + situational.reason() + ")";
                 }
                 if (allowance != 0) {
@@ -299,6 +316,7 @@ public final class PermanentAbilityValueEvaluator {
                 // self-opportunity without double counting known relationships.
                 if (!IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(description.parameters())
                         || value.expectedOccurrences() <= 0) {
+                    hasUnevaluatedAbility = true;
                     addSkipped(destination, candidate, value.path(), "no future-support policy for this event");
                     continue;
                 }
@@ -307,17 +325,17 @@ public final class PermanentAbilityValueEvaluator {
                             "known relationship already represents this future tap opportunity"));
                     continue;
                 }
-                final int allowance = EffectMath.multiply(FUTURE_EVENT_ALLOWANCE,
-                        toInt(aggregate.value() / value.expectedOccurrences()));
+                final int allowance = toInt(aggregate.value() / value.expectedOccurrences());
                 if (allowance != 0) {
                     destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
                             null, null, AbilityValueKind.INTRINSIC_FUTURE_ALLOWANCE, allowance,
                             value.path() + ":future-opportunity",
-                            "Independent future-support allowance: 0.5 reference " + api
-                                    + " resolutions (current producers counted separately)"));
+                            "Independent future-support allowance: one reference " + api
+                                    + " resolution (current producers counted separately)"));
                 }
             }
         }
+        return hasUnevaluatedAbility;
     }
 
     private static boolean isSafeIntrinsicDescription(

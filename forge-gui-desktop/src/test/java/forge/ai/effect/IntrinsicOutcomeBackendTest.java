@@ -730,6 +730,40 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void voluntaryActivationDoesNotCreditHarmfulReferenceTargets() {
+        final AbilityDescription ability = new AbilityDescription("test",
+                CardAbilityTraversal.Origin.ACTIVATION,
+                CardAbilityTraversal.Provenance.PRINTED, Map.of("Cost", "T"),
+                counter("Creature.Other"));
+        final IntrinsicAbilityEvaluator.AbilityValue result = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                        .evaluate(List.of(ability), SOURCE, EntryTiming.NORMAL_SPEED).get(0);
+
+        Assert.assertTrue(result.contribution().complete(), result.toString());
+        // The controller can decline to activate in the 20% of cases without another friendly
+        // creature, even when a legal opposing creature would receive the counter instead.
+        final double friendlyCounterValue = IntrinsicReferenceModel.defaults()
+                .creatureProfiles().entries().stream()
+                .filter(entry -> entry.value().present())
+                .mapToDouble(entry -> {
+                    final CreatureProfile before = entry.value();
+                    final CreatureProfile after = new CreatureProfile(true,
+                            before.power() + 1, before.toughness() + 1,
+                            before.keywords(), before.hexproof(), before.indestructible());
+                    return entry.weight() * new IntrinsicOutcomeEvaluator()
+                            .evaluateCreatureDelta(before, after, true);
+                }).sum();
+        Assert.assertEquals(result.contribution().value(),
+                friendlyCounterValue * result.expectedOccurrences(), 0.000001);
+
+        final IntrinsicAbilityEvaluator.AbilityValue compulsory = evaluateAbility(
+                counter("Creature.OppCtrl"), Map.of("Mode", "Phase", "Phase", "Upkeep",
+                        "ValidPlayer", "You"));
+        Assert.assertTrue(compulsory.contribution().value() < 0,
+                "A compulsory harmful trigger must retain its negative value");
+    }
+
+    @Test
     public void choiceAndRandomUnknownLeavesRetainDifferentCompletenessInformation() {
         final List<AbilityOutcomeDescription> options = List.of(leaf("Draw", Map.of()),
                 leaf("Destroy", Map.of()));

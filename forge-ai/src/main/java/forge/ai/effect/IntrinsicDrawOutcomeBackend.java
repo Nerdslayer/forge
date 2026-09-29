@@ -88,7 +88,7 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> REMOVE_COUNTER_ALL_PARAMETERS = parameters("CounterType",
             "CounterNum", "ValidCards", "ValidZone");
     private static final Set<String> SIMPLE_CREATURE_KEYWORDS = Set.of("flying", "first strike", "double strike",
-            "haste", "reach", "menace", "fear", "intimidate", "vigilance", "trample", "deathtouch", "lifelink", "defender",
+            "haste", "flash", "reach", "menace", "fear", "intimidate", "vigilance", "trample", "deathtouch", "lifelink", "defender",
             "hexproof", "shroud", "indestructible", "shield", "stun", "ward", "detain",
             "can't attack", "cantattack", "can't block", "cantblock", "can't untap", "cantuntap");
     private static final Set<String> VALUED_KEYWORD_COUNTERS = Set.of("FLYING", "DEATHTOUCH", "LIFELINK",

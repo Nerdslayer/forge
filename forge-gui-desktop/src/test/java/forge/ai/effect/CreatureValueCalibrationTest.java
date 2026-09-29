@@ -25,12 +25,34 @@ public class CreatureValueCalibrationTest extends AITest {
     @Test
     public void sharedBodyScaleMatchesTheAgreedSizeAnchors() {
         Assert.assertEquals(CreatureBodyValue.body(1, 1), 55);
-        Assert.assertEquals(CreatureBodyValue.body(2, 2), 110);
-        Assert.assertEquals(CreatureBodyValue.body(3, 3), 145);
-        Assert.assertEquals(CreatureBodyValue.body(4, 4), 180);
-        Assert.assertEquals(CreatureBodyValue.body(5, 5), 205);
-        Assert.assertEquals(CreatureBodyValue.body(6, 6), 230);
+        Assert.assertEquals(CreatureBodyValue.body(0, 1), 36);
+        Assert.assertEquals(CreatureBodyValue.body(2, 2), 96);
+        Assert.assertEquals(CreatureBodyValue.body(3, 3), 142);
+        Assert.assertEquals(CreatureBodyValue.body(4, 4), 178);
+        Assert.assertEquals(CreatureBodyValue.body(5, 5), 201);
+        Assert.assertEquals(CreatureBodyValue.body(6, 6), 219);
+        Assert.assertEquals(CreatureBodyValue.body(7, 7), 235);
+        Assert.assertEquals(CreatureBodyValue.body(8, 8), 250);
         Assert.assertEquals(CreatureBodyValue.body(0, 0), 0);
+    }
+
+    @Test
+    public void survivingZeroPowerCreatureKeepsMostOfOneOneBodyValue() {
+        final CardRules zeroOne = rules("Test Zero One", 0, 1);
+        final CardRules oneOne = rules("Test One One", 1, 1);
+        final CardDefinitionValueEvaluator definitions = new CardDefinitionValueEvaluator();
+        Assert.assertEquals(definitions.evaluate(zeroOne).battlefieldValue(), 36);
+        Assert.assertEquals(definitions.evaluate(oneOne).battlefieldValue(), 55);
+
+        final IntrinsicOutcomeEvaluator reference = new IntrinsicOutcomeEvaluator();
+        Assert.assertEquals(reference.evaluateCreature(new IntrinsicReferenceModel.CreatureProfile(
+                true, 0, 1, Set.of(), false, false)), 36);
+
+        final Game game = initAndCreateGame();
+        final Player owner = game.getPlayers().get(0);
+        final CreatureEvaluator unified = new CreatureEvaluator(CreatureEvaluator.ValuationScale.UNIFIED);
+        Assert.assertEquals(unified.evaluateCreature(addDefinition(zeroOne, owner)), 37);
+        Assert.assertEquals(unified.evaluateCreature(addDefinition(oneOne, owner)), 56);
     }
 
     @Test
@@ -39,13 +61,13 @@ public class CreatureValueCalibrationTest extends AITest {
         final CardRules vanilla = rules("Test Vanilla", 2, 2);
         final CardDefinitionValueEvaluator definitions = new CardDefinitionValueEvaluator();
         Assert.assertEquals(definitions.evaluate(indestructible).battlefieldValue(), 125);
-        Assert.assertEquals(definitions.evaluate(vanilla).battlefieldValue(), 110);
+        Assert.assertEquals(definitions.evaluate(vanilla).battlefieldValue(), 96);
 
         final IntrinsicOutcomeEvaluator reference = new IntrinsicOutcomeEvaluator();
         Assert.assertEquals(reference.evaluateCreature(new IntrinsicReferenceModel.CreatureProfile(
                 true, 1, 1, Set.of(), false, true)), 125);
         Assert.assertEquals(reference.evaluateCreature(new IntrinsicReferenceModel.CreatureProfile(
-                true, 2, 2, Set.of(), false, false)), 110);
+                true, 2, 2, Set.of(), false, false)), 96);
 
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
@@ -53,10 +75,10 @@ public class CreatureValueCalibrationTest extends AITest {
         final Card protectedOneOne = addDefinition(indestructible, opponent);
         final Card plainTwoTwo = addDefinition(vanilla, opponent);
         final CreatureEvaluator unified = new CreatureEvaluator(CreatureEvaluator.ValuationScale.UNIFIED);
-        Assert.assertEquals(unified.evaluateCreature(protectedOneOne), 125);
-        Assert.assertEquals(unified.evaluateCreature(plainTwoTwo), 110);
+        Assert.assertEquals(unified.evaluateCreature(protectedOneOne), 126);
+        Assert.assertEquals(unified.evaluateCreature(plainTwoTwo), 97);
         Assert.assertEquals(UnifiedCardValueEvaluator.evaluatePermanent(protectedOneOne,
-                ValuationContext.forRemoval(ai, 0, 0)).currentPresenceValue(), 125);
+                ValuationContext.forRemoval(ai, 0, 0)).currentPresenceValue(), 126);
         Assert.assertEquals(UnifiedCardValueEvaluator.evaluatePermanent(plainTwoTwo,
                 ValuationContext.forRemoval(ai, 0, 0)).contextAdjustment(), 0);
     }
@@ -67,6 +89,8 @@ public class CreatureValueCalibrationTest extends AITest {
         final Player opponent = game.getPlayers().get(0);
         final Card oneOne = addDefinition(rules("Test One One", 1, 1), opponent);
 
+        Assert.assertEquals(UnifiedPermanentValueEvaluator.evaluate(opponent, oneOne), 56);
+        oneOne.setTapped(true);
         Assert.assertEquals(UnifiedPermanentValueEvaluator.evaluate(opponent, oneOne), 55);
         Assert.assertTrue(ComputerUtilCard.evaluateCreature(oneOne) > 55);
         Assert.assertEquals(ComputerUtilCard.evaluateCreature(oneOne),
@@ -85,10 +109,41 @@ public class CreatureValueCalibrationTest extends AITest {
                 ValuationContext.forRemoval(ai, 0, 0));
         final CardValueBreakdown printedValue = UnifiedCardValueEvaluator.evaluatePermanent(printed,
                 ValuationContext.forRemoval(ai, 0, 0));
-        Assert.assertEquals(tokenValue.currentPresenceValue(), 55);
-        Assert.assertEquals(printedValue.currentPresenceValue(), 55);
+        Assert.assertEquals(tokenValue.currentPresenceValue(), 56);
+        Assert.assertEquals(printedValue.currentPresenceValue(), 56);
         Assert.assertEquals(tokenValue.contextAdjustment(), 0);
         Assert.assertEquals(printedValue.contextAdjustment(), 0);
+    }
+
+    @Test
+    public void unsupportedTriggerGetsOneManaValueFallbackButVanillaDoesNot() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        ai.setTeam(0);
+        opponent.setTeam(1);
+        final Card token = addToken("w_1_1_soldier", opponent);
+        final Card vanilla = addDefinition(CardRules.fromScript(List.of(
+                "Name:Test Vanilla Human", "ManaCost:1 W", "Types:Creature Human Soldier", "PT:1/1")),
+                opponent);
+        final Card engine = addDefinition(CardRules.fromScript(List.of(
+                "Name:Test Human Engine", "ManaCost:1 W", "Types:Creature Human Soldier", "PT:1/1",
+                "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | "
+                        + "ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ TrigCounter",
+                "SVar:TrigCounter:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1",
+                "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | "
+                        + "ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ TrigCounterTwo",
+                "SVar:TrigCounterTwo:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1")), opponent);
+        final ValuationContext context = ValuationContext.forRemoval(ai, 100, 100);
+
+        Assert.assertEquals(UnifiedCardValueEvaluator.evaluatePermanent(token, context)
+                .currentPresenceValue(), 56);
+        Assert.assertEquals(UnifiedCardValueEvaluator.evaluatePermanent(vanilla, context)
+                .currentPresenceValue(), 56);
+        final CardValueBreakdown engineValue = UnifiedCardValueEvaluator.evaluatePermanent(engine, context);
+        Assert.assertEquals(engineValue.currentPresenceValue(), 66);
+        Assert.assertTrue(engineValue.reasons().stream()
+                .anyMatch(reason -> reason.contains("Unevaluated ability fallback")), engineValue.toString());
     }
 
     private static CardRules rules(final String name, final int power, final int toughness,

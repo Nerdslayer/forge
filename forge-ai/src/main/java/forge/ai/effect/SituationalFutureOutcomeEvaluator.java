@@ -72,8 +72,38 @@ final class SituationalFutureOutcomeEvaluator {
         if (!plan.complete()) {
             return Evaluation.unsupported("live activation outcome is incomplete: " + plan.reason());
         }
-        return Evaluation.supported(PlannedOutcomeEvaluator.score(plan),
+        // Activating is optional even when the effect itself has no "may" clause. If every
+        // legal resolution is harmful, the controller can simply decline to activate.
+        return Evaluation.supported(Math.max(0, PlannedOutcomeEvaluator.score(plan)),
                 "Live activated " + outcome.getApi().name()
                         + " ability outcome value (reference occurrence estimate retained)");
+    }
+
+    /** A current use needs actual playability, payment, and a complete legal outcome. */
+    static Evaluation evaluateReadyActivatedAbility(final Player evaluatingAi, final Card source,
+            final String path, final Evaluation liveOutcome) {
+        if (evaluatingAi == null || source == null) {
+            return Evaluation.unsupported("missing live evaluation context");
+        }
+        if (!liveOutcome.supported() || liveOutcome.value() <= 0) {
+            return Evaluation.unsupported("no complete beneficial immediate outcome");
+        }
+        final SpellAbility ability = EffectAbilityUtils.abilityAtPath(source, path);
+        if (ability == null) {
+            return Evaluation.unsupported("live ability could not be found");
+        }
+        try {
+            final SpellAbility ready = EffectAbilityUtils.copyPayableActivatedAbility(source, ability);
+            if (ready == null || !ready.canPlay()) {
+                return Evaluation.unsupported("activation is not currently playable and payable");
+            }
+        } catch (final RuntimeException unavailable) {
+            return Evaluation.unsupported("activation playability could not be established");
+        }
+        // The existing live plan used the same ability and legal targets. Its outcome value can
+        // be reused once current timing and payment have been checked on a separate copy.
+        // TODO(effect analysis): Estimate extra immediate uses for affordable non-tap abilities;
+        // this conservatively counts only one even when multiple payments are possible.
+        return Evaluation.supported(liveOutcome.value(), "One legal immediate activation");
     }
 }
