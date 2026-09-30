@@ -10,7 +10,7 @@ final class TriggeredConsequenceExtractor implements EffectConsequenceExtractor 
     static final TriggeredConsequenceExtractor INSTANCE = new TriggeredConsequenceExtractor();
 
     // TODO(effect analysis): Support the remaining trigger families and richer token/counter
-    // forms, including optional/limited triggers, broader player constraints,
+    // forms, including payment-dependent optional/limited triggers, broader player constraints,
     // conditions, intervening-if clauses, and triggers active outside the battlefield. Combat
     // support still excludes once-per-combat, attacked-alone, first-attack, poisoned-player,
     // complex blocker-count, and multi-defender conditions.

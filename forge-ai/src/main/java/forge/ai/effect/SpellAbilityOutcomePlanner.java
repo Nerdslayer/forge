@@ -60,6 +60,16 @@ public final class SpellAbilityOutcomePlanner {
     static OutcomePlan<OutcomeState> evaluate(final SpellAbility ability,
             final Player evaluatingAi, final EffectEvent event,
             final EffectEvaluationBudget budget) {
+        return evaluate(ability, evaluatingAi, event, budget, false);
+    }
+
+    static OutcomePlan<OutcomeState> evaluateVoluntary(final SpellAbility ability, final Player evaluatingAi) {
+        return evaluate(ability, evaluatingAi, null, null, true);
+    }
+
+    private static OutcomePlan<OutcomeState> evaluate(final SpellAbility ability,
+            final Player evaluatingAi, final EffectEvent event,
+            final EffectEvaluationBudget budget, final boolean voluntaryAction) {
         final OutcomeState state = new OutcomeState();
         try {
             if (budget != null) {
@@ -68,8 +78,30 @@ public final class SpellAbilityOutcomePlanner {
             if (!supports(ability, budget)) {
                 return OutcomePlan.unsupported(state, "Unsupported ability form");
             }
-            return new OutcomePlanner<OutcomeState>(4096, budget)
-                    .evaluate(compile(ability, evaluatingAi, event, 0), state);
+            Outcome<OutcomeState> outcome = compile(ability, evaluatingAi, event, 0);
+            if (ability.getTrigger() != null) {
+                final AbilityOptionality.Decision decision = AbilityOptionality.trigger(
+                        ability.getTrigger().getMapParams());
+                if (!decision.supported()) { return OutcomePlan.unsupported(state, decision.issue()); }
+                if (decision.opponent() && ability.getActivatingPlayer().getOpponents().size() != 1) {
+                    return OutcomePlan.unsupported(state, "Ambiguous multiplayer optional decider");
+                }
+                // TODO: Payment-trigger optionality needs projected costs and dependent continuations.
+                if (ability.hasParam("Cost") && !"0".equals(ability.getParam("Cost"))) {
+                    return OutcomePlan.unsupported(state, "Unmodeled trigger payment");
+                }
+                if (decision.optional()) {
+                    final Player chooser = decision.opponent()
+                            ? ability.getActivatingPlayer().getOpponents().get(0) : ability.getActivatingPlayer();
+                    outcome = OutcomeChoices.optional("optional:trigger", outcome, chooser.isOpponentOf(evaluatingAi));
+                }
+            }
+            if (voluntaryAction) {
+                // This boundary is before activation, not a free decline after costs are paid.
+                outcome = OutcomeChoices.optional("optional:activation", outcome,
+                        ability.getActivatingPlayer().isOpponentOf(evaluatingAi));
+            }
+            return new OutcomePlanner<OutcomeState>(4096, budget).evaluate(outcome, state);
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
             throw exceeded;
         } catch (final RuntimeException unsupported) {
@@ -96,6 +128,14 @@ public final class SpellAbilityOutcomePlanner {
             budget.check();
         }
         if (ability == null || depth > 24 || ability.getActivatingPlayer() == null) { return false; }
+        final AbilityOutcomeDescription optionalDescription = new AbilityOutcomeDescription(
+                "optional-validation", ability.getApi() == null ? "" : ability.getApi().name(),
+                ability.getMapParams(), List.of(), null, "");
+        final AbilityOptionality.Decision optionality = AbilityOptionality.effect(optionalDescription);
+        if (!optionality.supported()
+                || optionality.opponent() && ability.getActivatingPlayer().getOpponents().size() != 1) {
+            return false;
+        }
         if (ability.getApi() == ApiType.ImmediateTrigger
                 && !supportsRememberedImmediateExecute(ability, depth, budget)) {
             return false;
@@ -120,7 +160,7 @@ public final class SpellAbilityOutcomePlanner {
                 || ability.getApi() == ApiType.Cleanup || handToBattlefield(ability)) {
             // These bounded control forms are adapted by part() below.
         } else if (modal(ability)) {
-            if (!MODAL_PARAMS.containsAll(ability.getMapParams().keySet())
+            if (!MODAL_PARAMS.containsAll(AbilityOptionality.effectParameters(optionalDescription).parameters().keySet())
                     || (ability.hasParam("Random") && !"True".equalsIgnoreCase(ability.getParam("Random")))
                     || (ability.hasParam("AtRandom") && !"True".equalsIgnoreCase(ability.getParam("AtRandom")))
                     || !Set.of("You", "Opponent").contains(ability.getParamOrDefault("Defined", "You"))
@@ -200,7 +240,8 @@ public final class SpellAbilityOutcomePlanner {
     private static SpellAbility evaluatorLeaf(final SpellAbility ability) {
         final SpellAbility result = leaf(ability);
         result.getMapParams().keySet().stream()
-                .filter(param -> param.startsWith("Condition") || "Optional".equals(param))
+                .filter(param -> param.startsWith("Condition") || "Optional".equals(param)
+                        || "OptionalDecider".equals(param))
                 .toList().forEach(result::removeParam);
         return result;
     }
@@ -327,12 +368,6 @@ public final class SpellAbilityOutcomePlanner {
         if (handToBattlefield(ability)) {
             return handDeployment(ability, ai);
         }
-        if ("True".equalsIgnoreCase(ability.getParam("Optional"))) {
-            final Outcome<OutcomeState> effect = partCore(ability, ai, event, depth);
-            return new Outcome.Choice<>("optional:" + ability.getId(),
-                    List.of(noEffect(), effect), 0, 1, false,
-                    ability.getActivatingPlayer().isOpponentOf(ai));
-        }
         return partCore(ability, ai, event, depth);
     }
 
@@ -458,6 +493,7 @@ public final class SpellAbilityOutcomePlanner {
                         .toList().forEach(copy::removeParam);
             }
             copy.removeParam("Optional");
+            copy.removeParam("OptionalDecider");
             final OutcomeEvaluator evaluator = OutcomeEvaluatorRegistry.findAtomic(copy);
             if (evaluator == null) { return null; }
             final int value = evaluator.evaluateOutcome(copy, new OutcomeEvaluationContext(ai, event, next));

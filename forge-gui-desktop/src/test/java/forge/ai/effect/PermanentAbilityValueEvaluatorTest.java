@@ -23,6 +23,50 @@ import forge.item.PaperCard;
 
 /** Semantic regressions for combined relationship and intrinsic removal value. */
 public class PermanentAbilityValueEvaluatorTest extends AITest {
+    @Test
+    public void optionalEntryCounterIsValuedOnlyBeforeDeployment() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Optional Entry Counter Probe", "ManaCost:W", "Types:Creature Human Soldier", "PT:0/1",
+                "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self"
+                        + " | OptionalDecider$ You | Execute$ Counter",
+                "SVar:Counter:DB$ PutCounter | ValidTgts$ Creature.Other | CounterType$ P1P1 | CounterNum$ 1",
+                "A:AB$ PutCounter | Cost$ T | ValidTgts$ Creature.Other | CounterType$ P1P1 | CounterNum$ 1",
+                "Oracle:Optional entry counter and repeatable counter."));
+        final PaperCard definition = new PaperCard(rules, CardEdition.UNKNOWN_CODE, CardRarity.Special);
+        final IntrinsicAbilityEvaluator.DefinitionEvaluation intrinsic = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                .evaluateDefinitionDetails(definition, CardStateName.Original);
+        Assert.assertEquals(intrinsic.values().size(), 2);
+        Assert.assertTrue(intrinsic.values().stream().allMatch(v -> v.contribution().complete()), intrinsic.toString());
+        Assert.assertTrue(intrinsic.values().stream().filter(v -> v.path().contains("trigger"))
+                .allMatch(v -> v.expectedOccurrences() == 1 && v.contribution().value() > 0));
+        final Card card = Card.fromPaperCard(definition, opponent);
+        card.setGameTimestamp(game.getNextTimestamp());
+        opponent.getZone(ZoneType.Battlefield).add(card);
+        final PermanentAbilityValueEvaluator.Breakdown value = evaluate(ai, List.of(card)).get(card);
+        Assert.assertTrue(value.reasons().stream().anyMatch(reason ->
+                reason.contains("self-ETB benefit already realized")), value.toString());
+    }
+
+    @Test
+    public void selfEntryBenefitsDoNotBecomeFutureRemovalValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        for (final String name : List.of("Elvish Visionary", "Lone Missionary")) {
+            final Card card = addCard(name, opponent);
+            final PermanentAbilityValueEvaluator.Breakdown value = evaluate(ai, List.of(card)).get(card);
+            Assert.assertEquals(value.intrinsicValue(), 0, value.toString());
+            Assert.assertTrue(value.reasons().stream().anyMatch(reason ->
+                    reason.contains("self-ETB benefit already realized")), value.toString());
+        }
+    }
+
     private static void setOpposingTeams(final Player ai, final Player opponent) {
         ai.setTeam(0);
         opponent.setTeam(1);

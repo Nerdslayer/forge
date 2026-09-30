@@ -45,6 +45,14 @@ public final class OutcomeDescriptionCompiler<S> {
     }
 
     private Outcome<S> part(final AbilityOutcomeDescription node, final int depth, final int[] remaining) {
+        final AbilityOptionality.Decision optionality = AbilityOptionality.effect(node);
+        if (!optionality.supported()) { return unresolved(node.path() + ": " + optionality.issue()); }
+        final Outcome<S> effect = partCore(AbilityOptionality.effectParameters(node), depth, remaining);
+        return optionality.optional() ? OutcomeChoices.optional("optional:" + node.path(), effect,
+                backend.maximize(node, optionality.opponent())) : effect;
+    }
+
+    private Outcome<S> partCore(final AbilityOutcomeDescription node, final int depth, final int[] remaining) {
         if (!backend.acceptsNode(node)) { return unresolved(node.path() + ": unsupported backend semantics"); }
         if (!Set.of("Charm", "GenericChoice").contains(node.api())) { return backend.atomic(node); }
         // TODO: Targets across modes and stochastic chains, dynamic counts, optional costs and

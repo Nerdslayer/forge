@@ -32,6 +32,11 @@ final class OutcomeEvaluatorRegistry {
         if (SpellAbilityOutcomePlanner.supports(outcome)) {
             return PlannedOutcomeEvaluator.INSTANCE;
         }
+        // Never fall back to mandatory atomic value after failing optional semantics validation.
+        if (outcome.hasParam("Optional") || outcome.hasParam("OptionalDecider")
+                || outcome.getTrigger() != null && outcome.getTrigger().hasParam("OptionalDecider")) {
+            return null;
+        }
         return findAtomic(outcome);
     }
 

@@ -239,7 +239,8 @@ final class EventTriggerParser {
         if (mode == null) {
             return false;
         }
-        return hasSupportedParameters(mode, parameters);
+        return AbilityOptionality.trigger(parameters).supported()
+                && hasSupportedParameters(mode, AbilityOptionality.triggerParameters(parameters));
     }
 
     private static boolean hasSupportedParameters(final TriggerType mode,
@@ -491,7 +492,7 @@ final class EventTriggerParser {
     }
 
     static boolean hasSupportedParameters(final Trigger trigger) {
-        return hasSupportedParameters(trigger.getMode(), trigger.getMapParams());
+        return hasSupportedParameters(trigger.getMapParams());
     }
 
     static boolean isSecondMainTappedCheckpoint(final Map<String, String> parameters) {

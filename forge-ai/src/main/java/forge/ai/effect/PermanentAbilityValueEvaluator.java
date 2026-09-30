@@ -214,6 +214,12 @@ public final class PermanentAbilityValueEvaluator {
             final IntrinsicReferenceAggregate aggregate = value.contribution();
             trace.intrinsicAbility(candidate, value.path(), description.origin().name(),
                     value.expectedOccurrences(), value.triggerStatus(), value.outcomeStatus(), aggregate);
+            if (IntrinsicSelfEntryTriggerAdapter.isSelfEntry(description.parameters())) {
+                // Entry value belongs to card/deployment evaluation, not removal of a permanent
+                // already in play. TODO: Value future blink/re-entry through explicit actions.
+                addSkipped(destination, candidate, value.path(), "self-ETB benefit already realized");
+                continue;
+            }
             if (!aggregate.complete() || aggregate.unresolvedRandomProbability() != 0) {
                 hasUnevaluatedAbility = true;
                 addSkipped(destination, candidate, value.path(), "intrinsic outcome is incomplete: "

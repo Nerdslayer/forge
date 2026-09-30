@@ -67,14 +67,12 @@ final class SituationalFutureOutcomeEvaluator {
         if (outcome == null) {
             return Evaluation.unsupported("live activation could not be copied safely");
         }
-        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(outcome,
+        final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluateVoluntary(outcome,
                 evaluatingAi);
         if (!plan.complete()) {
             return Evaluation.unsupported("live activation outcome is incomplete: " + plan.reason());
         }
-        // Activating is optional even when the effect itself has no "may" clause. If every
-        // legal resolution is harmful, the controller can simply decline to activate.
-        return Evaluation.supported(Math.max(0, PlannedOutcomeEvaluator.score(plan)),
+        return Evaluation.supported(PlannedOutcomeEvaluator.score(plan),
                 "Live activated " + outcome.getApi().name()
                         + " ability outcome value (reference occurrence estimate retained)");
     }

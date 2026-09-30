@@ -206,7 +206,11 @@ public final class OutcomePlanner<S> {
     }
 
     private static <S> String reason(final OutcomePlan<S> plan) {
-        return plan.reason().isBlank() ? plan.completeness().name() : plan.reason();
+        final String reason = plan.reason().isBlank() ? plan.completeness().name() : plan.reason();
+        // Alternatives are not probabilities. Retain a random alternative's own unresolved
+        // mass in its diagnostic without treating that mass as probability of choosing it.
+        return plan.unresolvedProbability() > 0
+                ? reason + " (unresolved random probability=" + plan.unresolvedProbability() + ")" : reason;
     }
 
     private void checkTimeBudget() {

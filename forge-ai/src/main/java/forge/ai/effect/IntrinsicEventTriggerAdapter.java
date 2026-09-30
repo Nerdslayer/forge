@@ -20,6 +20,11 @@ public final class IntrinsicEventTriggerAdapter {
     }
 
     public static Optional<IntrinsicEventTrigger> describe(final Map<String, String> parameters) {
+        if (!AbilityOptionality.trigger(parameters).supported()) { return Optional.empty(); }
+        return describeEvent(AbilityOptionality.triggerParameters(parameters));
+    }
+
+    private static Optional<IntrinsicEventTrigger> describeEvent(final Map<String, String> parameters) {
         final Optional<IntrinsicEventTrigger> spellCast = IntrinsicSpellCastTriggerAdapter.describe(parameters);
         if (spellCast.isPresent()) {
             return spellCast;
@@ -131,6 +136,11 @@ public final class IntrinsicEventTriggerAdapter {
      * Event recognition is intentionally broader: this method is the intrinsic evaluation gate.
      */
     static boolean supportsIntrinsicParameters(final Map<String, String> parameters) {
+        return AbilityOptionality.trigger(parameters).supported()
+                && supportsEventParameters(AbilityOptionality.triggerParameters(parameters));
+    }
+
+    private static boolean supportsEventParameters(final Map<String, String> parameters) {
         if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
             return true;
         }

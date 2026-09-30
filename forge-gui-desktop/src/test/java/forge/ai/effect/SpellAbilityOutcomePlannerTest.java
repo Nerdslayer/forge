@@ -16,6 +16,29 @@ import forge.game.zone.ZoneType;
 
 public class SpellAbilityOutcomePlannerTest extends AITest {
     @Test
+    public void optionalTriggerAndLocalEffectUseDifferentBoundaries() {
+        final Card source = source();
+        final Player ai = source.getController();
+        source.setSVar("MandatoryDraw", "DB$ Draw | Defined$ You | NumCards$ 1");
+        final SpellAbility local = ability(source, "DB$ Discard | Defined$ You | Mode$ TgtChoose"
+                + " | NumCards$ 1 | Optional$ True | SubAbility$ MandatoryDraw");
+        final OutcomePlan<OutcomeState> localPlan = SpellAbilityOutcomePlanner.evaluate(local, ai);
+        Assert.assertTrue(localPlan.complete(), localPlan.toString());
+        Assert.assertEquals(localPlan.state().hand(ai), ai.getCardsIn(ZoneType.Hand).size() + 1);
+        final SpellAbility gain = ability(source, "DB$ GainLife | Defined$ You | LifeAmount$ 3");
+        final forge.game.trigger.Trigger trigger = forge.game.trigger.TriggerHandler.parseTrigger(
+                "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | OptionalDecider$ Opponent", source, true);
+        gain.setTrigger(trigger);
+        final OutcomePlan<OutcomeState> declined = SpellAbilityOutcomePlanner.evaluate(gain, ai);
+        Assert.assertTrue(declined.complete(), declined.toString());
+        Assert.assertEquals(declined.value(), 0.0);
+        Assert.assertTrue(declined.state().life.isEmpty());
+        trigger.removeParam("OptionalDecider");
+        Assert.assertTrue(SpellAbilityOutcomePlanner.evaluate(gain, ai).value() < 0,
+                "Live outcome scores are threat value, not AI utility");
+    }
+
+    @Test
     public void simultaneousSacrificeBindsAllPlayersInActivePlayerOrder() {
         final Card source = source();
         final Player ai = source.getController();

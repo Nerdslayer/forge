@@ -18,6 +18,152 @@ import forge.game.trigger.TriggerHandler;
 /** Semantic coverage for game-free interpretation, composition and live compiler parity. */
 public class AbilityTraversalTest extends AITest {
     @Test
+    public void optionalTriggersSharePolicyAcrossFamiliesAndRetainDescriptions() {
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final IntrinsicReferenceModel.PermanentProfile source = new IntrinsicReferenceModel.PermanentProfile(
+                true, IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of());
+        final List<Map<String, String>> families = List.of(
+                Map.of("Mode", "ChangesZone", "Origin", "Any", "Destination", "Battlefield", "ValidCard", "Card.Self"),
+                Map.of("Mode", "Phase", "Phase", "Upkeep", "ValidPlayer", "You"),
+                Map.of("Mode", "LifeGained", "ValidPlayer", "You"),
+                Map.of("Mode", "Attacks", "ValidCard", "Card.Self"));
+        for (final Map<String, String> event : families) {
+            final AbilityOutcomeDescription draw = description("Draw", Map.of("Defined", "You", "NumCards", "1"));
+            final CardAbilityTraversal.AbilityDescription mandatory = new CardAbilityTraversal.AbilityDescription(
+                    "trigger", CardAbilityTraversal.Origin.TRIGGER, CardAbilityTraversal.Provenance.PRINTED, event, draw);
+            final IntrinsicAbilityEvaluator.AbilityValue baseline = evaluator.evaluate(List.of(mandatory), source,
+                    EntryTiming.NORMAL_SPEED).get(0);
+            Assert.assertTrue(baseline.contribution().complete(), baseline.toString());
+            for (final String decider : List.of("You", "Opponent")) {
+                final Map<String, String> parameters = new java.util.HashMap<>(event);
+                parameters.put("OptionalDecider", decider);
+                final CardAbilityTraversal.AbilityDescription optional = new CardAbilityTraversal.AbilityDescription(
+                        "trigger", CardAbilityTraversal.Origin.TRIGGER, CardAbilityTraversal.Provenance.PRINTED,
+                        parameters, draw);
+                final IntrinsicAbilityEvaluator.AbilityValue value = evaluator.evaluate(List.of(optional), source,
+                        EntryTiming.NORMAL_SPEED).get(0);
+                Assert.assertTrue(value.contribution().complete(), value.toString());
+                Assert.assertEquals(value.expectedOccurrences(), baseline.expectedOccurrences());
+                Assert.assertEquals(value.contribution().value(), "You".equals(decider)
+                        ? baseline.contribution().value() : 0.0, 0.0000001);
+                Assert.assertEquals(optional.parameters().get("OptionalDecider"), decider);
+            }
+        }
+    }
+
+    @Test
+    public void optionalMetadataDoesNotAdmitUnknownEventsOrOutcomes() {
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final Map<String, String> event = Map.of("Mode", "Phase", "Phase", "Upkeep", "ValidPlayer", "You",
+                "OptionalDecider", "You");
+        final CardAbilityTraversal.AbilityDescription optional = new CardAbilityTraversal.AbilityDescription(
+                "trigger", CardAbilityTraversal.Origin.TRIGGER, CardAbilityTraversal.Provenance.PRINTED,
+                event, AbilityOutcomeDescription.unresolved("unknown", "Unknown outcome"));
+        final IntrinsicAbilityEvaluator.AbilityValue value = evaluator.evaluate(List.of(optional),
+                new IntrinsicReferenceModel.PermanentProfile(true, IntrinsicReferenceModel.PermanentKind.CREATURE,
+                        true, 2, 2, Set.of()), EntryTiming.NORMAL_SPEED).get(0);
+        Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+        Assert.assertFalse(value.contribution().complete());
+        Assert.assertTrue(value.contribution().partialCaseProbability() > 0);
+        final Map<String, String> conditional = new java.util.HashMap<>(event);
+        conditional.put("Condition", "Kicked");
+        Assert.assertTrue(ScheduledTriggerParser.parse(conditional).isEmpty());
+        conditional.remove("Condition");
+        conditional.put("OptionalDecider", "TargetedPlayer");
+        Assert.assertTrue(ScheduledTriggerParser.parse(conditional).isEmpty());
+    }
+
+    @Test
+    public void localOptionalEffectDoesNotCancelMandatoryFollowup() {
+        final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(IntrinsicEvaluationSettings.defaults());
+        final AbilityOutcomeDescription draw = description("Draw", Map.of("Defined", "You", "NumCards", "1"));
+        final AbilityOutcomeDescription optionalLoss = new AbilityOutcomeDescription("loss", "Discard",
+                Map.of("Defined", "You", "NumCards", "1", "Mode", "TgtChoose", "Optional", "True"),
+                List.of(), draw, "");
+        final IntrinsicDrawOutcomeBackend.State state = new IntrinsicDrawOutcomeBackend.State(3, 3);
+        final OutcomePlan<IntrinsicDrawOutcomeBackend.State> result = new OutcomePlanner<IntrinsicDrawOutcomeBackend.State>()
+                .evaluate(new OutcomeDescriptionCompiler<>(backend).compile(optionalLoss), state);
+        Assert.assertTrue(result.complete(), result.toString());
+        Assert.assertEquals(result.state().controllerHand(), 4);
+        Assert.assertEquals(result.value(), (double) PlayerResourceValueEvaluator.evaluateCardDraw(3, 1));
+        Assert.assertEquals(optionalLoss.parameters().get("Optional"), "True");
+    }
+
+    @Test
+    public void selfEntryDrawUsesExactlyOneResolutionForEveryEntryTiming() {
+        final IntrinsicReferenceModel model = IntrinsicReferenceModel.defaults();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(model,
+                IntrinsicEvaluationSettings.defaults());
+        final CardAbilityTraversal.AbilityDescription entry = new CardAbilityTraversal.AbilityDescription(
+                "Original/trigger:0", CardAbilityTraversal.Origin.TRIGGER,
+                CardAbilityTraversal.Provenance.PRINTED,
+                Map.of("Mode", "ChangesZone", "Origin", "Any", "Destination", "Battlefield",
+                        "ValidCard", "Card.Self"),
+                description("Draw", Map.of("Defined", "You", "NumCards", "1")));
+        final double expected = model.handSizes().entries().stream().mapToDouble(e ->
+                e.weight() * PlayerResourceValueEvaluator.evaluateCardDraw(e.value(), 1)).sum();
+        for (final EntryTiming timing : EntryTiming.values()) {
+            for (final IntrinsicReferenceModel.PermanentKind kind : List.of(
+                    IntrinsicReferenceModel.PermanentKind.CREATURE,
+                    IntrinsicReferenceModel.PermanentKind.ENCHANTMENT)) {
+                final IntrinsicAbilityEvaluator.AbilityValue value = evaluator.evaluate(List.of(entry),
+                        new IntrinsicReferenceModel.PermanentProfile(true, kind, true, 1, 1, Set.of()),
+                        timing).get(0);
+                Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+                Assert.assertTrue(value.contribution().complete(), value.toString());
+                Assert.assertEquals(value.expectedOccurrences(), 1.0);
+                Assert.assertEquals(value.contribution().value(), expected, 0.0000001);
+            }
+        }
+    }
+
+    @Test
+    public void selfEntryDefinitionTraversalReusesSupportedOutcomeFamilies() {
+        host();
+        final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        // Cover distinct backend paths, including resolution of a real token prototype.
+        for (final String name : List.of("Elvish Visionary", "Lone Missionary", "Blade Splicer")) {
+            final IntrinsicAbilityEvaluator.DefinitionEvaluation result = evaluator.evaluateDefinitionDetails(
+                    forge.StaticData.instance().getCommonCards().getCard(name), CardStateName.Original);
+            final String path = result.descriptions().stream().filter(d ->
+                    IntrinsicSelfEntryTriggerAdapter.supports(d.parameters())).findFirst().orElseThrow().path();
+            final IntrinsicAbilityEvaluator.AbilityValue entry = result.values().stream()
+                    .filter(v -> v.path().equals(path)).findFirst().orElseThrow();
+            Assert.assertEquals(entry.expectedOccurrences(), 1.0, name);
+            Assert.assertTrue(entry.contribution().complete(), name + ": " + entry);
+            Assert.assertTrue(entry.contribution().value() > 0, name + ": " + entry);
+        }
+    }
+
+    @Test
+    public void selfEntryRejectsUnsupportedFiltersAndRetainsUnresolvedOutcomes() {
+        final Map<String, String> base = Map.of("Mode", "ChangesZone", "Origin", "Any",
+                "Destination", "Battlefield", "ValidCard", "Card.Self");
+        for (final Map<String, String> change : List.of(
+                Map.of("ValidCard", "Creature.Other"), Map.of("Origin", "Graveyard"),
+                Map.of("Condition", "Kicked"), Map.of("OptionalDecider", "TargetedPlayer"),
+                Map.of("TriggerZones", "Graveyard"), Map.of("CheckSVar", "X"))) {
+            final Map<String, String> parameters = new java.util.HashMap<>(base);
+            parameters.putAll(change);
+            Assert.assertFalse(IntrinsicSelfEntryTriggerAdapter.supports(parameters), parameters.toString());
+        }
+        final CardAbilityTraversal.AbilityDescription unresolved = new CardAbilityTraversal.AbilityDescription(
+                "Original/trigger:0", CardAbilityTraversal.Origin.TRIGGER,
+                CardAbilityTraversal.Provenance.PRINTED, base,
+                AbilityOutcomeDescription.unresolved("entry", "Unknown outcome"));
+        final IntrinsicAbilityEvaluator.AbilityValue value = new IntrinsicAbilityEvaluator(
+                IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults()).evaluate(
+                        List.of(unresolved), new IntrinsicReferenceModel.PermanentProfile(true,
+                                IntrinsicReferenceModel.PermanentKind.CREATURE, true, 2, 2, Set.of()),
+                        EntryTiming.NORMAL_SPEED).get(0);
+        Assert.assertEquals(value.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED);
+        Assert.assertFalse(value.contribution().complete(), value.toString());
+    }
+
+    @Test
     public void definitionExecuteIsResolvedWithoutGameAndUnsupportedOriginsRemainVisible() {
         host(); // Initialize the script database only; the definition path does not use its game.
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(
@@ -1252,7 +1398,7 @@ public class AbilityTraversalTest extends AITest {
         Assert.assertEquals(noncombat.occurrenceMultiplier(), .75, 0.0000001);
         Assert.assertTrue(IntrinsicEventTriggerAdapter.describe(Map.of(
                 "Mode", "DamageAll", "ValidTarget", "Opponent", "OptionalDecider", "You"))
-                .isEmpty());
+                .isPresent(), "Optionality is handled independently of batch damage recognition");
 
         host();
         final IntrinsicAbilityEvaluator evaluator = new IntrinsicAbilityEvaluator(

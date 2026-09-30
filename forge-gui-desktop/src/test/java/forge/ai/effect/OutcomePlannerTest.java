@@ -9,6 +9,50 @@ import org.testng.annotations.Test;
 
 /** Algebra regressions independent of card scripts and live game mutation. */
 public class OutcomePlannerTest {
+    @Test
+    public void optionalDecisionPreservesStateAndUsesDecidersPerspective() {
+        final OutcomePlanner<Integer> planner = new OutcomePlanner<>();
+        final OutcomePlan<Integer> declined = planner.evaluate(OutcomeChoices.optional("decline", add(-5), true), 10);
+        Assert.assertEquals(declined.value(), 0.0);
+        Assert.assertEquals(declined.state(), Integer.valueOf(10));
+        Assert.assertEquals(declined.decisions().get(0).selections(), List.of(0));
+        Assert.assertEquals(planner.evaluate(OutcomeChoices.optional("take", add(5), true), 10).value(), 5.0);
+        Assert.assertEquals(planner.evaluate(OutcomeChoices.optional("opponent", add(5), false), 10).value(), 0.0);
+        Assert.assertEquals(planner.evaluate(OutcomeChoices.optional("opponent", add(-5), false), 10).value(), -5.0);
+        Assert.assertEquals(planner.evaluate(OutcomeChoices.optional("tie", add(0), true), 10)
+                .decisions().get(0).selections(), List.of(0));
+    }
+
+    @Test
+    public void optionalPackagesRespectContinuationAndUnknownAlternatives() {
+        final OutcomePlanner<Integer> planner = new OutcomePlanner<>();
+        final Outcome<Integer> packageEffect = new Outcome.Sequence<>(List.of(add(5), add(-10)));
+        Assert.assertEquals(planner.evaluate(OutcomeChoices.optional("package", packageEffect, true), 10).value(), 0.0);
+        final OutcomePlan<Integer> continuation = planner.evaluate(new Outcome.Sequence<>(List.of(
+                OutcomeChoices.optional("local", add(-5), true), add(3))), 10);
+        Assert.assertEquals(continuation.value(), 3.0);
+        Assert.assertEquals(continuation.state(), Integer.valueOf(13));
+        final Outcome<Integer> unavailable = new Outcome.Target<>("missing", s -> List.<Integer>of(),
+                (s, t) -> s, add(5), true);
+        Assert.assertTrue(planner.evaluate(OutcomeChoices.optional("missing", unavailable, true), 0).complete());
+        final OutcomePlan<Integer> unknown = planner.evaluate(OutcomeChoices.optional("unknown",
+                new Outcome.Unresolved<>("Unmodeled effect"), true), 10);
+        Assert.assertEquals(unknown.value(), 0.0);
+        Assert.assertTrue(unknown.partial());
+        Assert.assertFalse(unknown.unresolvedAlternatives().isEmpty());
+        final Outcome<Integer> random = new Outcome.Random<>("random", List.of(
+                new Outcome.Weighted<>(add(10), 1), new Outcome.Weighted<>(add(-20), 1)));
+        Assert.assertEquals(planner.evaluate(OutcomeChoices.optional("before-random", random, true), 0).value(), 0.0,
+                "Cannot choose to perform only after seeing the favorable random branch");
+        final Outcome<Integer> partialRandom = new Outcome.Random<>("partial-random", List.of(
+                new Outcome.Weighted<>(add(10), 1),
+                new Outcome.Weighted<>(new Outcome.Unresolved<>("Unknown random effect"), 1)));
+        final OutcomePlan<Integer> partial = planner.evaluate(OutcomeChoices.optional("unknown-random", partialRandom, true), 0);
+        Assert.assertTrue(partial.partial());
+        Assert.assertTrue(partial.unresolvedAlternatives().stream().anyMatch(reason -> reason.contains("0.5")));
+        Assert.assertEquals(partial.unresolvedProbability(), 0.0, "Choice options have no selection probabilities");
+    }
+
     private static Outcome<Integer> simultaneousAdds() {
         return new Outcome.Batch<Integer, Integer>("batch", List.of(s -> s, s -> s), (s, amounts) -> {
             final int delta = amounts.stream().mapToInt(Integer::intValue).sum();

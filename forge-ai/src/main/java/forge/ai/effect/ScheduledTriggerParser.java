@@ -16,6 +16,11 @@ public final class ScheduledTriggerParser {
     public enum PlayerScope { CONTROLLER, OPPONENT, EACH_PLAYER }
 
     public static Optional<Schedule> parse(final Map<String, String> parameters) {
+        if (!AbilityOptionality.trigger(parameters).supported()) { return Optional.empty(); }
+        return parseEvent(AbilityOptionality.triggerParameters(parameters));
+    }
+
+    private static Optional<Schedule> parseEvent(final Map<String, String> parameters) {
         // TODO: Conditional, delayed, limited and additional phase forms need explicit descriptors.
         if (!PARAMETERS.containsAll(parameters.keySet())) { return Optional.empty(); }
         final Timing timing;

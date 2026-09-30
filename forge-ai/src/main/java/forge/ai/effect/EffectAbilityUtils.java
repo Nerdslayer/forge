@@ -81,7 +81,10 @@ final class EffectAbilityUtils {
 
     static SpellAbility copyTriggerOutcome(final Card source, final Trigger trigger) {
         final SpellAbility outcome = resolveTriggerOutcome(source, trigger);
-        return outcome == null ? null : outcome.copy(source, false);
+        if (outcome == null) { return null; }
+        final SpellAbility copy = outcome.copy(source, false);
+        copy.setTrigger(trigger);
+        return copy;
     }
 
     /** Structural readers can inspect this root without copying or changing it. */

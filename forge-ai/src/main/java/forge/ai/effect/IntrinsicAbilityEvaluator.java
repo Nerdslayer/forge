@@ -182,7 +182,8 @@ public final class IntrinsicAbilityEvaluator {
     private AbilityValue evaluate(final AbilityDescription ability,
             final IntrinsicReferenceModel.PermanentProfile source, final EntryTiming timing,
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver) {
-        final ScheduledTriggerParser.Schedule schedule = ScheduledTriggerParser.parse(ability.parameters()).orElse(null);
+        final Map<String, String> triggerParameters = AbilityOptionality.triggerParameters(ability.parameters());
+        final ScheduledTriggerParser.Schedule schedule = ScheduledTriggerParser.parse(triggerParameters).orElse(null);
         if (ability.provenance() == CardAbilityTraversal.Provenance.GRANTED) {
             return unsupported(ability, "unsupported intrinsic origin", SupportStatus.UNSUPPORTED,
                     SupportStatus.NOT_EVALUATED);
@@ -206,9 +207,21 @@ public final class IntrinsicAbilityEvaluator {
             return unsupported(ability, "unsupported intrinsic origin", SupportStatus.UNSUPPORTED,
                     outcomeStatusBeforeEvaluation(ability));
         }
+        final AbilityOptionality.Decision optionality = AbilityOptionality.trigger(ability.parameters());
+        if (!optionality.supported()) {
+            return unsupported(ability, optionality.issue(), SupportStatus.UNSUPPORTED,
+                    outcomeStatusBeforeEvaluation(ability));
+        }
+        if (IntrinsicSelfEntryTriggerAdapter.supports(triggerParameters)) {
+            // The definition is valued at deployment: its own unconditional ETB happens once,
+            // without future survival or event-rate discounts. Battlefield callers must exclude
+            // this already-realized benefit rather than turning it into a future allowance.
+            return evaluateOutcome(ability, ability.outcome(), source, 1, tokenProfileResolver,
+                    SupportStatus.SUPPORTED, false);
+        }
         if (!"Battlefield".equalsIgnoreCase(
                 ability.parameters().getOrDefault("TriggerZones", "Battlefield"))
-                || !supportsTriggerParameters(ability.parameters(), schedule)) {
+                || !supportsTriggerParameters(triggerParameters, schedule)) {
             return unsupported(ability, "unsupported intrinsic trigger filters", SupportStatus.UNSUPPORTED,
                     outcomeStatusBeforeEvaluation(ability));
         }
@@ -227,7 +240,7 @@ public final class IntrinsicAbilityEvaluator {
                     .estimate(trigger, source, model, settings, timing).expectedOccurrences();
         } else {
             final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter
-                    .describe(ability.parameters()).orElse(null);
+                    .describe(triggerParameters).orElse(null);
             if (trigger == null) {
                 return unsupported(ability, "unsupported intrinsic trigger", SupportStatus.UNSUPPORTED,
                         outcomeStatusBeforeEvaluation(ability));
@@ -247,7 +260,11 @@ public final class IntrinsicAbilityEvaluator {
     private AbilityValue evaluateActivation(final AbilityDescription ability,
             final PermanentProfile source, final EntryTiming timing,
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver) {
-        if (!supportsIntrinsicActivationParameters(ability.parameters())) {
+        final AbilityOutcomeDescription activationParameters = new AbilityOutcomeDescription(
+                ability.path(), ability.outcome().api(), ability.parameters(), List.of(), null, "");
+        if (!AbilityOptionality.effect(activationParameters).supported()
+                || !supportsIntrinsicActivationParameters(
+                        AbilityOptionality.effectParameters(activationParameters).parameters())) {
             return unsupported(ability, "unsupported intrinsic activation restrictions",
                     SupportStatus.UNSUPPORTED, outcomeStatusBeforeEvaluation(ability));
         }
@@ -316,7 +333,13 @@ public final class IntrinsicAbilityEvaluator {
         final List<ReferenceCase> cases;
         try {
             dimensions = referenceDimensions(backend, outcomeDescription);
-            outcome = new OutcomeDescriptionCompiler<>(backend).compile(outcomeDescription);
+            final Outcome<State> compiled = new OutcomeDescriptionCompiler<>(backend).compile(outcomeDescription);
+            final AbilityOptionality.Decision optionality = ability.origin() == CardAbilityTraversal.Origin.TRIGGER
+                    ? AbilityOptionality.trigger(ability.parameters())
+                    : new AbilityOptionality.Decision(false, false, "");
+            outcome = canDecline || optionality.optional()
+                    ? OutcomeChoices.optional("optional:" + ability.path(), compiled, !optionality.opponent())
+                    : compiled;
             List<ReferenceDimension> boundedDimensions = dimensions;
             final boolean hasCreatureDimension = dimensions.stream().anyMatch(dimension ->
                     IntrinsicDrawOutcomeBackend.CONTROLLER_CREATURE.equals(dimension.name())
@@ -344,13 +367,8 @@ public final class IntrinsicAbilityEvaluator {
             final State state = referenceState(reference, source);
             final OutcomePlan<State> plan = new OutcomePlanner<State>(settings.maximumOutcomeSearchBudget())
                     .evaluate(outcome, state);
-            // An activation is voluntary. A complete but harmful legal resolution is worth
-            // zero here: the controller can leave the ability unused in this reference case.
-            // Keep partial and unsupported results unchanged so their coverage stays visible.
-            final double resolutionValue = canDecline && plan.complete()
-                    ? Math.max(0, plan.value()) : plan.value();
             // Repeated uses share a per-resolution expectation, not projected later hand sizes.
-            return new OutcomePlan<>(resolutionValue * occurrences, plan.state(), plan.decisions(), plan.branches(),
+            return new OutcomePlan<>(plan.value() * occurrences, plan.state(), plan.decisions(), plan.branches(),
                     plan.supported(), plan.reason(), plan.completeness(), plan.unresolvedProbability(),
                     plan.unresolvedAlternatives());
         });
