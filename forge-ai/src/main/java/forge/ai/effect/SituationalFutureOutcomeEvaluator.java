@@ -83,7 +83,10 @@ final class SituationalFutureOutcomeEvaluator {
         if (evaluatingAi == null || source == null) {
             return Evaluation.unsupported("missing live evaluation context");
         }
-        if (!liveOutcome.supported() || liveOutcome.value() <= 0) {
+        final boolean beneficial = source.getController() != null
+                && (source.getController().isOpponentOf(evaluatingAi)
+                        ? liveOutcome.value() > 0 : liveOutcome.value() < 0);
+        if (!liveOutcome.supported() || !beneficial) {
             return Evaluation.unsupported("no complete beneficial immediate outcome");
         }
         final SpellAbility ability = EffectAbilityUtils.abilityAtPath(source, path);

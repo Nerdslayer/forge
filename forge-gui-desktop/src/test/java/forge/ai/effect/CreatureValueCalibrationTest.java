@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.testng.Assert;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import forge.ai.AITest;
@@ -15,8 +16,12 @@ import forge.card.CardEdition;
 import forge.card.CardRarity;
 import forge.card.CardRules;
 import forge.game.Game;
+import forge.game.ability.AbilityFactory;
 import forge.game.card.Card;
 import forge.game.player.Player;
+import forge.game.spellability.SpellAbility;
+import forge.game.trigger.Trigger;
+import forge.game.trigger.TriggerHandler;
 import forge.game.zone.ZoneType;
 import forge.item.PaperCard;
 
@@ -130,17 +135,18 @@ public class CreatureValueCalibrationTest extends AITest {
         Assert.assertEquals(printedValue.contextAdjustment(), 0);
     }
 
-    @Test
-    public void unsupportedTriggerGetsOneManaValueFallbackButVanillaDoesNot() {
+    @Test(dataProvider = "grantedAbilityControllers")
+    public void unsupportedTriggerGetsOneManaValueFallbackButVanillaDoesNot(final boolean friendly) {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
         final Player opponent = game.getPlayers().get(0);
         ai.setTeam(0);
         opponent.setTeam(1);
-        final Card token = addToken("w_1_1_soldier", opponent);
+        final Player owner = friendly ? ai : opponent;
+        final Card token = addToken("w_1_1_soldier", owner);
         final Card vanilla = addDefinition(CardRules.fromScript(List.of(
                 "Name:Test Vanilla Human", "ManaCost:1 W", "Types:Creature Human Soldier", "PT:1/1")),
-                opponent);
+                owner);
         final Card engine = addDefinition(CardRules.fromScript(List.of(
                 "Name:Test Human Engine", "ManaCost:1 W", "Types:Creature Human Soldier", "PT:1/1",
                 "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | "
@@ -148,7 +154,7 @@ public class CreatureValueCalibrationTest extends AITest {
                 "SVar:TrigCounter:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1",
                 "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | "
                         + "ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ TrigCounterTwo",
-                "SVar:TrigCounterTwo:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1")), opponent);
+                "SVar:TrigCounterTwo:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1")), owner);
         final ValuationContext context = ValuationContext.forRemoval(ai, 100, 100);
 
         Assert.assertEquals(UnifiedCardValueEvaluator.evaluatePermanent(token, context)
@@ -159,6 +165,54 @@ public class CreatureValueCalibrationTest extends AITest {
         Assert.assertEquals(engineValue.currentPresenceValue(), 66);
         Assert.assertTrue(engineValue.reasons().stream()
                 .anyMatch(reason -> reason.contains("Unevaluated ability fallback")), engineValue.toString());
+    }
+
+    @DataProvider(name = "grantedAbilityControllers")
+    public Object[][] grantedAbilityControllers() {
+        return new Object[][] {{false}, {true}};
+    }
+
+    @Test(dataProvider = "grantedAbilityControllers")
+    public void grantedAbilitiesGetOneFallbackOnEitherSideWithoutCreditingMana(final boolean friendly) {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        ai.setTeam(0);
+        opponent.setTeam(1);
+        final Player owner = friendly ? ai : opponent;
+        final Card creature = addDefinition(CardRules.fromScript(List.of(
+                "Name:Test Granted Ability Recipient", "ManaCost:1 U", "Types:Creature Human", "PT:2/2")), owner);
+        final ValuationContext context = ValuationContext.forRemoval(ai, 0, 100);
+        final SpellAbility mana = AbilityFactory.getAbility("AB$ Mana | Cost$ T | Produced$ U | Amount$ 1", creature);
+        mana.setIntrinsic(false);
+        creature.addSpellAbility(mana);
+        Assert.assertFalse(PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, List.of(creature), true)
+                .get(creature).hasUnevaluatedAbility(), "Mana already has base evaluation credit");
+
+        final SpellAbility draw = AbilityFactory.getAbility("AB$ Draw | Cost$ 2 | Defined$ You | NumCards$ 1", creature);
+        draw.setIntrinsic(false);
+        final long grantTimestamp = game.getNextTimestamp();
+        creature.addChangedCardTraits(List.of(draw), null, null, null, null, grantTimestamp, 0);
+        Assert.assertTrue(PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, List.of(creature), true)
+                .get(creature).hasUnevaluatedAbility(), "A granted activation needs fallback credit");
+        final Trigger trigger = TriggerHandler.parseTrigger(
+                "Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Battlefield", creature, false);
+        trigger.setOverridingAbility(AbilityFactory.getAbility("DB$ Draw | Defined$ You | NumCards$ 1", creature));
+        creature.addTrigger(trigger);
+        final CardValueBreakdown value = UnifiedCardValueEvaluator.evaluatePermanent(creature, context);
+        Assert.assertTrue(PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, List.of(creature), true)
+                .get(creature).hasUnevaluatedAbility());
+        // Re-read the base score because granting mana may change existing CreatureEvaluator credit.
+        Assert.assertEquals(value.currentPresenceValue(), UnifiedPermanentValueEvaluator.evaluate(ai, creature) + 10);
+        Assert.assertEquals(UnifiedCardValueEvaluator.evaluatePermanent(creature,
+                ValuationContext.forRemoval(ai, 0, 0)).currentPresenceValue(),
+                UnifiedPermanentValueEvaluator.evaluate(ai, creature), "Disabled intrinsic analysis must not add a bonus");
+        creature.removeChangedCardTraits(grantTimestamp, 0);
+        Assert.assertTrue(PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, List.of(creature), true)
+                .get(creature).hasUnevaluatedAbility(), "A granted trigger needs fallback credit too");
+        trigger.setSuppressed(true);
+        Assert.assertFalse(PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, List.of(creature), true)
+                .get(creature).hasUnevaluatedAbility(), "Removed/suppressed grants are not valuable abilities");
     }
 
     private static CardRules rules(final String name, final int power, final int toughness,

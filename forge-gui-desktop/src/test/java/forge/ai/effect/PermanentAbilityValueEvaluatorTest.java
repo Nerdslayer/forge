@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.testng.Assert;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import forge.ai.AITest;
@@ -70,6 +71,79 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     private static void setOpposingTeams(final Player ai, final Player opponent) {
         ai.setTeam(0);
         opponent.setTeam(1);
+    }
+
+    @DataProvider(name = "friendlyAbilityKinds")
+    public Object[][] friendlyAbilityKinds() {
+        return new Object[][] {
+            {List.of("T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Battlefield"
+                    + " | Execute$ DrawCard", "SVar:DrawCard:DB$ Draw | Defined$ You | NumCards$ 1")},
+            {List.of("A:AB$ Draw | Cost$ T | Defined$ You | NumCards$ 1")},
+            {List.of("T:Mode$ Taps | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ AddCounter",
+                    "SVar:AddCounter:DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1")},
+            {List.of("S:Mode$ Continuous | Affected$ Creature.YouCtrl+Other | AddPower$ 1 | AddToughness$ 1")}
+        };
+    }
+
+    @Test(dataProvider = "friendlyAbilityKinds")
+    public void intrinsicBenefitsAreSignedForFriendlyAndHostilePermanents(final List<String> abilityLines) {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        final List<String> script = new java.util.ArrayList<>(List.of(
+                "Name:Test Friendly Ability Engine", "ManaCost:2 U", "Types:Creature Human", "PT:2/2"));
+        script.addAll(abilityLines);
+        final Card engine = Card.fromPaperCard(new PaperCard(CardRules.fromScript(script),
+                CardEdition.UNKNOWN_CODE, CardRarity.Special), ai);
+        engine.setGameTimestamp(game.getNextTimestamp());
+        ai.getZone(ZoneType.Battlefield).add(engine);
+        fillLibrary(ai, 5);
+        // Keep any self-tap production out of the relationship subtotal so this compares the
+        // independent intrinsic slice, including its reference fallback, from both perspectives.
+        final PermanentAbilityValueEvaluator.Breakdown friendly = PermanentAbilityValueEvaluator
+                .evaluateRemovalAbilities(ai, List.of(engine), EffectAnalysisTrace.disabled(), true, false)
+                .get(engine);
+        final PermanentAbilityValueEvaluator.Breakdown hostile = PermanentAbilityValueEvaluator
+                .evaluateRemovalAbilities(opponent, List.of(engine), EffectAnalysisTrace.disabled(), true, false)
+                .get(engine);
+
+        Assert.assertTrue(friendly.intrinsicValue() < 0, friendly.toString());
+        Assert.assertEquals(friendly.intrinsicValue(), -hostile.intrinsicValue(),
+                "Intrinsic ability benefits must not encourage removing our own engine");
+        opponent.setTeam(ai.getTeam());
+        final PermanentAbilityValueEvaluator.Breakdown allied = PermanentAbilityValueEvaluator
+                .evaluateRemovalAbilities(opponent, List.of(engine), EffectAnalysisTrace.disabled(), true, false)
+                .get(engine);
+        Assert.assertEquals(allied.intrinsicValue(), friendly.intrinsicValue());
+        Assert.assertEquals(PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, List.of(engine), false)
+                .get(engine).intrinsicValue(), 0, "The existing opt-in gate still applies");
+    }
+
+    @Test
+    public void friendlyReadyActivationAddsBeneficialImmediateUse() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, ai);
+        final CardRules rules = CardRules.fromScript(List.of(
+                "Name:Test Friendly Draw Engine", "ManaCost:2 U", "Types:Creature Human", "PT:2/2",
+                "A:AB$ Draw | Cost$ T | Defined$ You | NumCards$ 1"));
+        final Card engine = Card.fromPaperCard(new PaperCard(rules,
+                CardEdition.UNKNOWN_CODE, CardRarity.Special), ai);
+        engine.setGameTimestamp(game.getNextTimestamp());
+        ai.getZone(ZoneType.Battlefield).add(engine);
+        fillLibrary(ai, 5);
+        final int sickValue = evaluate(ai, List.of(engine)).get(engine).intrinsicValue();
+        engine.setSickness(false);
+        final PermanentAbilityValueEvaluator.Breakdown ready = evaluate(ai, List.of(engine)).get(engine);
+        engine.setTapped(true);
+        final int tappedValue = evaluate(ai, List.of(engine)).get(engine).intrinsicValue();
+
+        Assert.assertTrue(ready.intrinsicValue() < sickValue,
+                "A ready friendly engine should be more costly to lose: " + ready);
+        Assert.assertEquals(tappedValue, sickValue);
     }
 
     @Test

@@ -237,8 +237,10 @@ public final class UnifiedCardValueEvaluator {
         final List<String> reasons = abilityValue == null
                 ? new ArrayList<>() : new ArrayList<>(abilityValue.reasons());
         // TODO: Replace this coarse mana-value fallback when unsupported abilities receive
-        // complete intrinsic valuation. This currently covers active printed intrinsic abilities,
-        // not unavailable card definitions or every unsupported static/replacement ability.
+        // complete intrinsic valuation. This covers active printed intrinsic and granted
+        // triggers/activations on either side, not unavailable printed card definitions or
+        // every unsupported static/replacement ability. Mana value is only a proxy for an
+        // added ability's value; it does not measure that ability's strength or drawbacks.
         // Apply it once per creature, not once per ability.
         final int unevaluatedAbilityBonus = candidate.isCreature() && abilityValue != null
                 && abilityValue.hasUnevaluatedAbility()

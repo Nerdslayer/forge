@@ -91,7 +91,6 @@ public final class PermanentAbilityValueEvaluator {
             int intrinsicValue = 0;
             boolean hasUnevaluatedAbility = false;
             if (includeIntrinsic && candidate.getController() != null
-                    && candidate.getController().isOpponentOf(ai)
                     && isInspectableBattlefieldPermanent(candidate)) {
                 final IntrinsicEvaluation intrinsic = intrinsicCache.computeIfAbsent(candidate,
                         card -> evaluateIntrinsic(ai, card,
@@ -106,7 +105,7 @@ public final class PermanentAbilityValueEvaluator {
                 }
             } else if (includeIntrinsic) {
                 reasons.add(candidate.getName() + ": intrinsic value skipped (not an eligible live "
-                        + "battlefield permanent or is controlled by the AI)");
+                        + "battlefield permanent)");
             }
             result.put(candidate, new Breakdown(relationshipValue, intrinsicValue,
                     hasUnevaluatedAbility, reasons));
@@ -157,9 +156,50 @@ public final class PermanentAbilityValueEvaluator {
         final List<AbilityValueContribution> contributions = new ArrayList<>();
         final List<String> reasons = new ArrayList<>();
         collectStaticFutureAllowances(ai, candidate, contributions, reasons);
-        final boolean hasUnevaluatedAbility = collectIntrinsicAbilities(ai, candidate,
+        final boolean hasUnevaluatedPrintedAbility = collectIntrinsicAbilities(ai, candidate,
                 relationshipEntries, contributions, reasons, trace);
+        final boolean hasUnevaluatedGrantedAbility = hasUnevaluatedGrantedAbility(candidate,
+                relationshipEntries, reasons);
+        final boolean hasUnevaluatedAbility = hasUnevaluatedPrintedAbility || hasUnevaluatedGrantedAbility;
         return new IntrinsicEvaluation(contributions, hasUnevaluatedAbility, reasons);
+    }
+
+    private static boolean hasUnevaluatedGrantedAbility(final Card candidate,
+            final List<AbilityValueContribution> relationships, final List<String> reasons) {
+        // TODO: Value granted triggers/activations directly instead of using the coarse fallback.
+        // Unsupported static/replacement abilities still need their own coverage policy. Do not
+        // treat keyword expansion or mana production already scored by the body as unknown value.
+        final List<CardAbilityTraversal.AbilityDescription> liveDescriptions;
+        try {
+            liveDescriptions = CardAbilityTraversal.inspect(candidate.getCurrentState());
+        } catch (final RuntimeException unavailable) {
+            reasons.add(candidate.getName() + ": granted ability fallback skipped (live inventory unavailable)");
+            return false;
+        }
+        for (final CardAbilityTraversal.AbilityDescription description : liveDescriptions) {
+            if (description.provenance() != CardAbilityTraversal.Provenance.GRANTED
+                    || !isActiveLiveAbility(candidate, description, description.path())
+                    || overlapsKnownConsequence(candidate, description.path(), relationships)) {
+                continue;
+            }
+            if (description.origin() == CardAbilityTraversal.Origin.ACTIVATION) {
+                final SpellAbility ability = EffectAbilityUtils.abilityAtPath(candidate, description.path());
+                if (ability == null || ability.getKeyword() != null || ability.isManaAbility()) {
+                    continue;
+                }
+            } else if (description.origin() == CardAbilityTraversal.Origin.TRIGGER) {
+                final Trigger trigger = EffectAbilityUtils.triggerAtPath(candidate, description.path());
+                if (trigger == null || trigger.getKeyword() != null
+                        || description.parameters().getOrDefault("TriggerDescription", "").startsWith("Landfall")) {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+            reasons.add(description.path() + ": active granted ability has no intrinsic valuation");
+            return true;
+        }
+        return false;
     }
 
     private static boolean collectIntrinsicAbilities(final Player ai, final Card candidate,
@@ -232,7 +272,12 @@ public final class PermanentAbilityValueEvaluator {
                 continue;
             }
 
-            final int aggregateValue = toInt(aggregate.value());
+            // Reference values describe the controller's benefit. Live outcome and static
+            // evaluators already return signed removal value; only reference fallbacks need
+            // conversion here. Losing a friendly benefit must not look like removing a threat.
+            final double signedReferenceValue = aggregate.value()
+                    * (candidate.getController().isOpponentOf(ai) ? 1 : -1);
+            final int aggregateValue = toInt(signedReferenceValue);
             final AbilityIdentity identity = new AbilityIdentity(value.path(), true);
             final String api = description.outcome().api();
             final boolean scheduled = ScheduledTriggerParser.parse(description.parameters()).isPresent();
@@ -331,7 +376,7 @@ public final class PermanentAbilityValueEvaluator {
                             "known relationship already represents this future tap opportunity"));
                     continue;
                 }
-                final int allowance = toInt(aggregate.value() / value.expectedOccurrences());
+                final int allowance = toInt(signedReferenceValue / value.expectedOccurrences());
                 if (allowance != 0) {
                     destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
                             null, null, AbilityValueKind.INTRINSIC_FUTURE_ALLOWANCE, allowance,
