@@ -19,6 +19,11 @@ import java.util.List;
 import java.util.function.Function;
 
 public class CreatureEvaluator implements Function<Card, Integer> {
+    /** Shared by live creature valuation and frozen combat survivor transitions. */
+    public static int shieldCounterValue(final int count, final boolean indestructible) {
+        return indestructible ? 0 : 20 * count;
+    }
+
     public enum ValuationScale {
         LEGACY, UNIFIED
     }
@@ -193,7 +198,7 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         if (c.hasKeyword(Keyword.INDESTRUCTIBLE)) {
             value += addValue(unified ? CreatureBodyValue.indestructible(c.getNetPower()) : 70, "darksteel");
         } else {
-            value += addValue(20 * c.getCounters(CounterEnumType.SHIELD), "shielded");
+            value += addValue(shieldCounterValue(c.getCounters(CounterEnumType.SHIELD), false), "shielded");
         }
         if (c.hasKeyword("Prevent all damage that would be dealt to CARDNAME.")) {
             value += addValue(60, "cho-manno");

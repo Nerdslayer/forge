@@ -49,6 +49,11 @@ public enum AiProps {
     TRY_TO_HOLD_COMBAT_TRICKS_UNTIL_BLOCK ("false"),
     CHANCE_TO_HOLD_COMBAT_TRICKS_UNTIL_BLOCK ("30"),
     ENABLE_RANDOM_FAVORABLE_TRADES_ON_BLOCK ("true"),
+    // Rollout gates: execution bridge exists; new declaration consumers are still being built.
+    ENABLE_COMBAT_BLOCK_PLANNING ("false"),
+    ENABLE_COMBAT_ATTACK_PLANNING ("false"),
+    COMBAT_PLANNING_MAX_NODES ("5000"),
+    COMBAT_PLANNING_TIMEOUT_MS ("100"),
     RANDOMLY_TRADE_EVEN_WHEN_HAVE_LESS_CREATS ("false"),
     MAX_DIFF_IN_CREATURE_COUNT_TO_TRADE ("1"),
     ALSO_TRADE_WHEN_HAVE_A_REPLACEMENT_CREAT ("true"),

@@ -32,4 +32,11 @@ final class EffectMath {
     static int negate(final int value) {
         return value == Integer.MIN_VALUE ? Integer.MAX_VALUE : -value;
     }
+
+    /** Symmetric rounding preserves friendly/hostile polarity at fractional profile weights. */
+    static int scalePercent(final int value, final int percentage) {
+        final long product = (long) value * percentage;
+        final long weighted = (product + (product >= 0 ? 50 : -50)) / 100;
+        return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, weighted));
+    }
 }

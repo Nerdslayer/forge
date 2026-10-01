@@ -3,7 +3,6 @@ package forge.ai.effect;
 import java.util.List;
 import java.util.Set;
 
-import forge.ai.PlayerResourceValueEvaluator;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.player.Player;
@@ -57,14 +56,12 @@ final class CardDrawOutcomeEvaluator implements OutcomeEvaluator {
                         : context.state().library(recipient);
                 final int hand = context.state() == null ? recipient.getCardsIn(ZoneType.Hand).size()
                         : context.state().hand(recipient);
-                final int amount = Math.min(requested, Math.min(
-                        StaticAbilityCantDraw.canDrawAmount(recipient, requested),
-                        library));
-                final int drawValue = PlayerResourceValueEvaluator.evaluateCardDraw(
-                        hand, amount);
+                final DrawOutcomeDescription.ResourceResult draw = DrawOutcomeDescription.evaluateResources(
+                        hand, library, requested, StaticAbilityCantDraw.canDrawAmount(recipient, requested));
+                final int drawValue = draw.value();
                 if (context.state() != null) {
-                    context.state().hands.put(recipient, EffectMath.add(hand, amount));
-                    context.state().libraries.put(recipient, library - amount);
+                    context.state().hands.put(recipient, draw.handAfter());
+                    context.state().libraries.put(recipient, draw.libraryAfter());
                 }
                 value = EffectMath.add(value,
                         orientForRecipient(context, recipient, drawValue));

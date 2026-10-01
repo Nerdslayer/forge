@@ -257,10 +257,7 @@ public final class UnifiedCardValueEvaluator {
     }
 
     private static int applyWeight(final int value, final int percentage) {
-        final long product = (long) value * percentage;
-        final long weighted = (product + (product >= 0 ? 50 : -50)) / 100;
-        return weighted > Integer.MAX_VALUE ? Integer.MAX_VALUE
-                : weighted < Integer.MIN_VALUE ? Integer.MIN_VALUE : (int) weighted;
+        return EffectMath.scalePercent(value, percentage);
     }
 
     private static int add(final int left, final int right) {

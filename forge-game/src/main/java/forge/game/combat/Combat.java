@@ -253,6 +253,18 @@ public class Combat {
         addAttacker(c, defender, null);
     }
     public final void addAttacker(final Card c, GameEntity defender, AttackingBand band) {
+        addAttacker(c, defender, band, true);
+    }
+
+    /** Detached rules validation only; never publishes live card/combat views. */
+    public final void addAttackerForValidation(final Card card, final GameEntity defender) {
+        if (this == getAttackingPlayer().getGame().getPhaseHandler().getCombat()) {
+            throw new IllegalStateException("Validation declarations must be detached");
+        }
+        addAttacker(card, defender, null, false);
+    }
+
+    private void addAttacker(final Card c, final GameEntity defender, AttackingBand band, final boolean publishViews) {
         Collection<AttackingBand> attackersOfDefender = attackedByBands.get().get(defender);
         if (attackersOfDefender == null) {
             System.out.println("Trying to add Attacker " + c + " to missing defender " + defender);
@@ -271,7 +283,7 @@ public class Combat {
         } else {
             band.addAttacker(c);
         }
-        c.updateAttackingForView();
+        if (publishViews) { c.updateAttackingForView(); }
     }
 
     public final GameEntity getDefenderByAttacker(final Card c) {
@@ -372,13 +384,25 @@ public class Combat {
     }
 
     public final void addBlocker(final Card attacker, final Card blocker) {
+        addBlocker(attacker, blocker, true);
+    }
+
+    /** Detached rules validation only; does not call controllers or publish live views. */
+    public final void addBlockerForValidation(final Card attacker, final Card blocker) {
+        if (this == getAttackingPlayer().getGame().getPhaseHandler().getCombat()) {
+            throw new IllegalStateException("Validation declarations must be detached");
+        }
+        addBlocker(attacker, blocker, false);
+    }
+
+    private void addBlocker(final Card attacker, final Card blocker, final boolean publishViews) {
         final AttackingBand band = getBandOfAttackerNotNull(attacker);
         blockedBands.get().put(band, blocker);
         // If damage is already assigned, add this blocker as a "late entry"
-        if (blockersOrderedForDamageAssignment.get().containsKey(attacker)) {
+        if (publishViews && blockersOrderedForDamageAssignment.get().containsKey(attacker)) {
             addBlockerToDamageAssignmentOrder(attacker, blocker);
         }
-        blocker.updateBlockingForView();
+        if (publishViews) { blocker.updateBlockingForView(); }
     }
 
     // remove blocker from specific attacker

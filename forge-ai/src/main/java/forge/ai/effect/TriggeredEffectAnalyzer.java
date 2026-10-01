@@ -241,36 +241,8 @@ final class TriggeredEffectAnalyzer {
     private static int evaluateRelationship(final Player evaluatingAi,
             final EffectProduction production, final EffectConsequence consequence,
             final EffectEventMatcher matcher, final EffectAnalysisTrace trace) {
-        try {
-            int value = 0;
-            for (final EffectMatch match : matcher.match(production, consequence)) {
-                final SpellAbility outcome = consequence.outcome().copy(consequence.source(), false);
-                outcome.setActivatingPlayer(consequence.source().getController());
-                outcome.resetTargets();
-                consequence.trigger().setTriggeringObjects(outcome, match.event().triggerParameters());
-                final int outcomeValue;
-                if (consequence.outcomeEvaluator() == PlannedOutcomeEvaluator.INSTANCE) {
-                    final OutcomePlan<OutcomeState> plan = SpellAbilityOutcomePlanner.evaluate(
-                            outcome, evaluatingAi, match.event());
-                    trace.outcomePlan(plan);
-                    outcomeValue = PlannedOutcomeEvaluator.score(plan);
-                } else {
-                    outcomeValue = consequence.outcomeEvaluator().evaluateOutcome(
-                            outcome, new OutcomeEvaluationContext(evaluatingAi, match.event()));
-                }
-                final int contribution = EffectMath.multiply(match.resolutions(), outcomeValue);
-                trace.triggeredMatch(
-                        production, consequence, match, outcomeValue, contribution);
-                value = EffectMath.add(value, contribution);
-            }
-            final int totalValue = EffectMath.multiply(production.expectedBatches(), value);
-            if (totalValue != 0) {
-                trace.triggeredRelationship(production, consequence, value, totalValue);
-            }
-            return totalValue;
-        } catch (final RuntimeException ignored) {
-            return 0;
-        }
+        return TriggeredRelationshipEvaluator.evaluate(
+                evaluatingAi, production, consequence, matcher, trace, false).value();
     }
 
     private static void addContribution(final Map<Card, List<AbilityValueContribution>> values,

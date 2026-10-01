@@ -75,7 +75,7 @@ public final class PermanentAbilityValueEvaluator {
                 EffectRelationshipEvaluator.evaluateRemovalContributions(ai, candidateList,
                         removalAbility, effectiveTrace);
         final Map<Card, Breakdown> result = new HashMap<>();
-        final Map<Card, IntrinsicEvaluation> intrinsicCache = new HashMap<>();
+        final Map<Card, FutureAbilityEvaluation> intrinsicCache = new HashMap<>();
         for (final Card candidate : candidateList) {
             final List<String> reasons = new ArrayList<>();
             final List<AbilityValueContribution> relationshipEntries = relationships.getOrDefault(
@@ -92,7 +92,7 @@ public final class PermanentAbilityValueEvaluator {
             boolean hasUnevaluatedAbility = false;
             if (includeIntrinsic && candidate.getController() != null
                     && isInspectableBattlefieldPermanent(candidate)) {
-                final IntrinsicEvaluation intrinsic = intrinsicCache.computeIfAbsent(candidate,
+                final FutureAbilityEvaluation intrinsic = intrinsicCache.computeIfAbsent(candidate,
                         card -> evaluateIntrinsic(ai, card,
                                 applyRelationshipCredit ? relationshipEntries : List.of(), effectiveTrace));
                 hasUnevaluatedAbility = intrinsic.hasUnevaluatedAbility();
@@ -113,11 +113,16 @@ public final class PermanentAbilityValueEvaluator {
         return result;
     }
 
-    private record IntrinsicEvaluation(List<AbilityValueContribution> contributions,
-            boolean hasUnevaluatedAbility, List<String> reasons) {
-        private IntrinsicEvaluation {
+    record FutureAbilityEvaluation(List<AbilityValueContribution> contributions,
+            boolean hasUnevaluatedAbility, List<String> reasons, Map<AbilityIdentity, Integer> referenceResolutionValues) {
+        FutureAbilityEvaluation {
             contributions = List.copyOf(contributions);
             reasons = List.copyOf(reasons);
+            referenceResolutionValues = Map.copyOf(referenceResolutionValues);
+        }
+        FutureAbilityEvaluation(final List<AbilityValueContribution> contributions,
+                final boolean hasUnevaluatedAbility, final List<String> reasons) {
+            this(contributions, hasUnevaluatedAbility, reasons, Map.of());
         }
     }
 
@@ -150,18 +155,34 @@ public final class PermanentAbilityValueEvaluator {
         }
     }
 
-    private static IntrinsicEvaluation evaluateIntrinsic(final Player ai, final Card candidate,
+    private static FutureAbilityEvaluation evaluateIntrinsic(final Player ai, final Card candidate,
             final List<AbilityValueContribution> relationshipEntries,
             final EffectAnalysisTrace trace) {
+        return evaluateFutureAbilities(ai, candidate, relationshipEntries, trace,
+                FutureAbilityMode.LIVE_OUTCOMES);
+    }
+
+    /** Reference-only preparation cannot invoke live outcome/target/combat prediction callbacks. */
+    enum FutureAbilityMode { LIVE_OUTCOMES, REFERENCE_ONLY }
+
+    static FutureAbilityEvaluation evaluateFutureAbilities(final Player ai, final Card candidate,
+            final List<AbilityValueContribution> relationshipEntries,
+            final EffectAnalysisTrace trace, final FutureAbilityMode mode) {
+        if (ai == null || candidate == null || candidate.getController() == null
+                || !isInspectableBattlefieldPermanent(candidate)) {
+            return new FutureAbilityEvaluation(List.of(), false,
+                    List.of("Future ability value unavailable for this public permanent"));
+        }
         final List<AbilityValueContribution> contributions = new ArrayList<>();
         final List<String> reasons = new ArrayList<>();
+        final Map<AbilityIdentity, Integer> referenceResolutionValues = new HashMap<>();
         collectStaticFutureAllowances(ai, candidate, contributions, reasons);
         final boolean hasUnevaluatedPrintedAbility = collectIntrinsicAbilities(ai, candidate,
-                relationshipEntries, contributions, reasons, trace);
+                relationshipEntries, contributions, reasons, trace, mode, referenceResolutionValues);
         final boolean hasUnevaluatedGrantedAbility = hasUnevaluatedGrantedAbility(candidate,
                 relationshipEntries, reasons);
         final boolean hasUnevaluatedAbility = hasUnevaluatedPrintedAbility || hasUnevaluatedGrantedAbility;
-        return new IntrinsicEvaluation(contributions, hasUnevaluatedAbility, reasons);
+        return new FutureAbilityEvaluation(contributions, hasUnevaluatedAbility, reasons, referenceResolutionValues);
     }
 
     private static boolean hasUnevaluatedGrantedAbility(final Card candidate,
@@ -205,7 +226,8 @@ public final class PermanentAbilityValueEvaluator {
     private static boolean collectIntrinsicAbilities(final Player ai, final Card candidate,
             final List<AbilityValueContribution> relationshipEntries,
             final List<AbilityValueContribution> destination, final List<String> reasons,
-            final EffectAnalysisTrace trace) {
+            final EffectAnalysisTrace trace, final FutureAbilityMode mode,
+            final Map<AbilityIdentity, Integer> referenceResolutionValues) {
         if (candidate.getPaperCard() == null) {
             reasons.add(candidate.getName() + ": intrinsic value skipped (no public definition)");
             return false;
@@ -279,6 +301,13 @@ public final class PermanentAbilityValueEvaluator {
                     * (candidate.getController().isOpponentOf(ai) ? 1 : -1);
             final int aggregateValue = toInt(signedReferenceValue);
             final AbilityIdentity identity = new AbilityIdentity(value.path(), true);
+            if (description.origin() == CardAbilityTraversal.Origin.TRIGGER && value.expectedOccurrences() > 0) {
+                // Metadata only: existing removal totals/occurrence estimates are unchanged.
+                // Combat can retire one reference resolution after crediting its concrete outcome.
+                // TODO: Attribute horizon-specific current shares when the occurrence report
+                // exposes them, rather than consuming the bounded allowance by resolution count.
+                referenceResolutionValues.put(identity, toInt(signedReferenceValue / value.expectedOccurrences()));
+            }
             final String api = description.outcome().api();
             final boolean scheduled = ScheduledTriggerParser.parse(description.parameters()).isPresent();
             if (description.origin() == CardAbilityTraversal.Origin.ACTIVATION
@@ -296,11 +325,15 @@ public final class PermanentAbilityValueEvaluator {
                 final double futureOccurrences = Math.max(0,
                         value.expectedOccurrences() - value.currentTurnUses());
                 final SituationalFutureOutcomeEvaluator.Evaluation situational =
-                        SituationalFutureOutcomeEvaluator.evaluateActivatedAbility(ai, candidate,
-                                value.path());
+                        mode == FutureAbilityMode.LIVE_OUTCOMES
+                                ? SituationalFutureOutcomeEvaluator.evaluateActivatedAbility(ai, candidate,
+                                        value.path())
+                                : SituationalFutureOutcomeEvaluator.Evaluation.unsupported("reference-only preparation");
                 final SituationalFutureOutcomeEvaluator.Evaluation immediate =
-                        SituationalFutureOutcomeEvaluator.evaluateReadyActivatedAbility(ai,
-                                candidate, value.path(), situational);
+                        mode == FutureAbilityMode.LIVE_OUTCOMES
+                                ? SituationalFutureOutcomeEvaluator.evaluateReadyActivatedAbility(ai,
+                                        candidate, value.path(), situational)
+                                : SituationalFutureOutcomeEvaluator.Evaluation.unsupported("no immediate use in preparation");
                 if (immediate.supported()) {
                     destination.add(AbilityValueContribution.counted(candidate, candidate, identity,
                             null, null, AbilityValueKind.INTRINSIC_IMMEDIATE, immediate.value(),
@@ -331,8 +364,10 @@ public final class PermanentAbilityValueEvaluator {
                 // A production edge scores its consumer's reaction, not this producer's own
                 // draw/counter outcome. Even a self-reaction is a different trigger/outcome.
                 final SituationalFutureOutcomeEvaluator.Evaluation situational =
-                        SituationalFutureOutcomeEvaluator.evaluateScheduledTrigger(ai, candidate,
-                                value.path());
+                        mode == FutureAbilityMode.LIVE_OUTCOMES
+                                ? SituationalFutureOutcomeEvaluator.evaluateScheduledTrigger(ai, candidate,
+                                        value.path())
+                                : SituationalFutureOutcomeEvaluator.Evaluation.unsupported("reference-only preparation");
                 if (situational.supported()) {
                     final int situationalValue = toInt(situational.value()
                             * value.expectedOccurrences());

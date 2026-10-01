@@ -20,6 +20,17 @@ import forge.game.zone.ZoneType;
 final class CardDrawProductionExtractor implements EffectProductionExtractor {
     static final CardDrawProductionExtractor INSTANCE = new CardDrawProductionExtractor();
 
+    /** Public preparation uses a local unknown-card placeholder, not a live game ID. */
+    static List<EffectProduction> extractForCombatPreparation(final Player evaluatingAi,
+            final Card source, final Trigger trigger) {
+        final ProductionOpportunity opportunity = ProductionOpportunity.fromTrigger(evaluatingAi, source, trigger);
+        if (opportunity == null) { return List.of(); }
+        final SpellAbility outcome = findSupportedDrawOutcome(opportunity.root());
+        final EffectProduction production = outcome == null ? null
+                : createProduction(source, outcome, opportunity.expectedBatches(), false, true);
+        return production == null ? List.of() : List.of(production);
+    }
+
     // TODO(effect analysis): Support ordinary draw-step production, spells and stack objects,
     // targeted/dynamic recipients, draws with choices or optionality, card-characteristic
     // prediction without hidden information, replacement effects, draw-all/loot/dig/named-action
@@ -108,6 +119,12 @@ final class CardDrawProductionExtractor implements EffectProductionExtractor {
     private static EffectProduction createProduction(final Card source,
             final SpellAbility outcome, final double expectedBatches,
             final boolean useCurrentDrawCount) {
+        return createProduction(source, outcome, expectedBatches, useCurrentDrawCount, false);
+    }
+
+    private static EffectProduction createProduction(final Card source,
+            final SpellAbility outcome, final double expectedBatches,
+            final boolean useCurrentDrawCount, final boolean preparation) {
         outcome.setActivatingPlayer(source.getController());
         final int requestedAmount = AbilityUtils.calculateAmount(source,
                 outcome.getParamOrDefault("NumCards", "1"), outcome);
@@ -129,8 +146,9 @@ final class CardDrawProductionExtractor implements EffectProductionExtractor {
                     && recipient.getGame().getPhaseHandler().is(PhaseType.DRAW, recipient);
             final int alreadyDrawnThisStep = inCurrentDrawStep
                     ? recipient.numDrawnThisDrawStep() : 0;
-            final Card unknownCard = EffectAnalysisCardFactory.createUnknownCard(
-                    recipient, ZoneType.Hand);
+            final Card unknownCard = preparation
+                    ? EffectAnalysisCardFactory.createUnknownCardForPreparation(recipient, ZoneType.Hand)
+                    : EffectAnalysisCardFactory.createUnknownCard(recipient, ZoneType.Hand);
             for (int i = 1; i <= amount; i++) {
                 final Map<AbilityKey, Object> triggerParameters =
                         new EnumMap<>(AbilityKey.class);

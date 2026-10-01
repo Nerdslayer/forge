@@ -38,6 +38,16 @@ public record ValuationContext(Player evaluatingAi, ValuationMode mode,
                 relationshipWeightPercent, intrinsicWeightPercent);
     }
 
+    /** Creates a live combat context without borrowing removal-target ranking semantics. */
+    public static ValuationContext forCombat(final Player evaluatingAi, final ValuationDecision decision,
+            final int relationshipWeightPercent, final int intrinsicWeightPercent) {
+        if (decision != ValuationDecision.ATTACK && decision != ValuationDecision.BLOCK) {
+            throw new IllegalArgumentException("Combat valuation requires ATTACK or BLOCK");
+        }
+        return new ValuationContext(evaluatingAi, ValuationMode.SITUATIONAL,
+                decision, 1, false, relationshipWeightPercent, intrinsicWeightPercent);
+    }
+
     /** Creates the live context used when selecting a card from a hand. */
     public static ValuationContext forHandSelection(final Player evaluatingAi,
             final boolean completeInformation) {

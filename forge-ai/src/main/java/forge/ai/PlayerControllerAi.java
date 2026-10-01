@@ -3,6 +3,7 @@ package forge.ai;
 import com.google.common.collect.*;
 import forge.LobbyPlayer;
 import forge.ai.ability.ProtectAi;
+import forge.ai.combat.CombatExecutionPlan;
 import forge.card.CardStateName;
 import forge.card.ColorSet;
 import forge.card.ICardFace;
@@ -56,6 +57,9 @@ import java.util.stream.Collectors;
  */
 public class PlayerControllerAi extends PlayerController {
     private final AiController brains;
+    private CombatExecutionPlan combatExecutionPlan;
+    private Combat requestedCombatExecution;
+    private boolean combatExecutionPreparationAttempted;
 
     private boolean pilotsNonAggroDeck = false;
     private volatile FailedAction failedAction;
@@ -239,7 +243,61 @@ public class PlayerControllerAi extends PlayerController {
 
     @Override
     public Map<Card, Integer> assignCombatDamage(Card attacker, CardCollectionView blockers, CardCollectionView remaining, int damageDealt, GameEntity defender, boolean overrideOrder) {
+        prepareRequestedCombatExecution(false);
+        if (combatExecutionPlan != null) {
+            if (isCombatPlanningEnabled()) {
+                final var planned = combatExecutionPlan.assignDamage(attacker, blockers, damageDealt, defender, overrideOrder);
+                if (planned.isPresent()) { return planned.orElseThrow(); }
+            }
+            if (!isCombatPlanningEnabled() || combatExecutionPlan.isInvalid()) { combatExecutionPlan = null; }
+        }
         return ComputerUtilCombat.distributeAIDamage(player, attacker, blockers, remaining, damageDealt, defender, overrideOrder);
+    }
+
+    /** Declaration planners install only a validated execution bridge for this controller. */
+    public boolean installCombatExecutionPlan(final CombatExecutionPlan plan) {
+        // TODO: When a stale plan is rejected, recompute through an audited execution-safe
+        // boundary rather than relying only on legacy after first-strike state changes.
+        combatExecutionPlan = null;
+        if (!isCombatPlanningEnabled() || plan == null || !plan.isFor(player)) { return false; }
+        combatExecutionPlan = plan;
+        return true;
+    }
+
+    public void clearCombatExecutionPlan() {
+        combatExecutionPlan = null;
+        requestedCombatExecution = null;
+        combatExecutionPreparationAttempted = false;
+    }
+
+    /** Successful attack selection authorizes preparation only after real blocks exist. */
+    public boolean requestCombatExecutionPlan(final Combat combat) {
+        if (!isCombatPlanningEnabled() || combat == null || combat.getAttackingPlayer() != player
+                || player.getGame().getPhaseHandler().getCombat() != combat) { return false; }
+        combatExecutionPlan = null;
+        requestedCombatExecution = combat;
+        combatExecutionPreparationAttempted = false;
+        return true;
+    }
+
+    private void prepareRequestedCombatExecution(final boolean chooseOrders) {
+        if (requestedCombatExecution == null || combatExecutionPreparationAttempted || combatExecutionPlan != null) { return; }
+        combatExecutionPreparationAttempted = true;
+        if (!isCombatPlanningEnabled() || player.getGame().getPhaseHandler().getCombat() != requestedCombatExecution) {
+            requestedCombatExecution = null;
+            return;
+        }
+        final var budget = forge.ai.combat.CombatPlanningPreparation.budget(player);
+        final var preparation = forge.ai.combat.CombatDamagePlanner.plan(player, requestedCombatExecution, chooseOrders, budget);
+        preparation.execution().ifPresent(this::installCombatExecutionPlan);
+        forge.ai.combat.CombatDecisionTrace.damagePreparation(player, preparation, budget);
+        // TODO: Replan stale execution at an audited damage boundary. A failed preparation is
+        // not retried for every source/callback; legacy handles the remainder of this combat.
+    }
+
+    protected boolean isCombatPlanningEnabled() {
+        return AiProfileUtil.getBoolProperty(player, AiProps.ENABLE_COMBAT_BLOCK_PLANNING)
+                || AiProfileUtil.getBoolProperty(player, AiProps.ENABLE_COMBAT_ATTACK_PLANNING);
     }
 
     @Override
@@ -507,6 +565,14 @@ public class PlayerControllerAi extends PlayerController {
 
     @Override
     public CardCollection orderBlockers(Card attacker, CardCollection blockers) {
+        prepareRequestedCombatExecution(true);
+        if (combatExecutionPlan != null) {
+            if (isCombatPlanningEnabled()) {
+                final var planned = combatExecutionPlan.orderBlockers(attacker, blockers);
+                if (planned.isPresent()) { return planned.orElseThrow(); }
+            }
+            if (!isCombatPlanningEnabled() || combatExecutionPlan.isInvalid()) { combatExecutionPlan = null; }
+        }
         return AiBlockController.orderBlockers(attacker, blockers);
     }
 

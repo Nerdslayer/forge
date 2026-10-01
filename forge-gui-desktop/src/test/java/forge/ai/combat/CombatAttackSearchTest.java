@@ -1,0 +1,113 @@
+package forge.ai.combat;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.testng.Assert;
+import org.testng.annotations.Test;
+
+import forge.ai.effect.ValuationCompleteness;
+
+public class CombatAttackSearchTest {
+    @Test
+    public void opponentMayForgoAnImmediateTradeToOpenALethalCounterattack() {
+        final var all = snapshot(2, 20, Map.of(10, creature(10, 1, 2, 2), 11, creature(11, 1, 0, 3),
+                20, creature(20, 2, 2, 2), 21, creature(21, 2, 2, 2)));
+        final var attack = CombatAttackCandidates.select(all, List.of(10));
+        final Map<Integer, PreparedCombatValuation.PermanentValue> cards = new LinkedHashMap<>();
+        all.creatures().forEach((id, card) -> cards.put(id, new PreparedCombatValuation.PermanentValue(id, card.controllerId(),
+                card.controllerId() == 1 ? -100 : 100, 0, 0, List.of())));
+        final var values = new PreparedCombatValuation(cards, List.of(), ValuationCompleteness.PARTIAL, List.of());
+        final var ready = new PublicCombatReadiness(2, Set.of(20, 21), Map.of(20, Set.of(10, 11), 21, Set.of(10, 11)), List.of());
+        final var immediate = CombatBlockSearch.search(attack, values, new CombatSearchBudget(10000));
+        Assert.assertFalse(immediate.best().orElseThrow().assignment().blockersByAttacker().isEmpty());
+        final CombatSearchBudget budget = new CombatSearchBudget(10000);
+        final var response = CombatBlockSearch.searchWithReplySafety(attack, values, budget,
+                state -> CombatSafetyEvaluator.nextAttack(attack, state, ready, values, budget));
+        Assert.assertTrue(response.outcomeDomainComplete() && response.searchExhaustive(), response.reasons().toString());
+        Assert.assertTrue(response.best().orElseThrow().assignment().blockersByAttacker().isEmpty());
+        Assert.assertTrue(response.best().orElseThrow().followUp().orElseThrow().lethalOpportunity());
+        final var selection = CombatAttackSearch.search(attack, values, ready, new CombatSearchBudget(20000));
+        Assert.assertTrue(selection.outcomeDomainComplete(), selection.reasons().toString());
+        Assert.assertTrue(selection.best().orElseThrow().attackers().isEmpty());
+    }
+
+    @Test
+    public void overloadedTwoTwoAttackGetsDamagePastOneThreeWithoutLosingCreatures() {
+        final var snapshot = snapshot(20, 20, Map.of(10, creature(10, 1, 2, 2), 11, creature(11, 1, 2, 2),
+                20, creature(20, 2, 1, 3)));
+        final var result = search(snapshot, new CombatSearchBudget(10000));
+        Assert.assertTrue(result.outcomeDomainComplete() && result.searchExhaustive(), result.reasons().toString());
+        Assert.assertEquals(result.best().orElseThrow().attackers(), List.of(10, 11));
+        Assert.assertEquals(result.best().orElseThrow().combat().projection().playerLifeAfter().get(2).intValue(), 18);
+        Assert.assertTrue(result.best().orElseThrow().combat().projection().lostCreatures().isEmpty());
+    }
+
+    @Test
+    public void actualLethalOutranksLosingValuableAttackersAndCannotHaveACounterattack() {
+        final var snapshot = snapshot(2, 2, Map.of(10, creature(10, 1, 2, 2), 11, creature(11, 1, 2, 2),
+                20, creature(20, 2, 4, 4)));
+        final var result = search(snapshot, new CombatSearchBudget(10000));
+        Assert.assertTrue(result.outcomeDomainComplete(), result.reasons().toString());
+        final var best = result.best().orElseThrow();
+        Assert.assertEquals(best.attackers(), List.of(10, 11));
+        Assert.assertEquals(best.combat().projection().terminal(), CombatProjection.Terminal.WIN);
+        Assert.assertTrue(best.reply().isEmpty());
+    }
+
+    @Test
+    public void holdBackDefensiveAnchorWhenTappingItOpensLethalReply() {
+        final var snapshot = snapshot(4, 20, Map.of(10, creature(10, 1, 5, 5),
+                20, creature(20, 2, 2, 2), 21, creature(21, 2, 2, 2)));
+        final var result = search(snapshot, new CombatSearchBudget(10000));
+        Assert.assertTrue(result.outcomeDomainComplete(), result.reasons().toString());
+        Assert.assertTrue(result.best().orElseThrow().attackers().isEmpty());
+        Assert.assertFalse(result.best().orElseThrow().reply().orElseThrow().lethalOpportunity());
+    }
+
+    @Test
+    public void insufficientReplyBudgetIsExplicitNotAnOptimisticSafeAttack() {
+        final var snapshot = snapshot(4, 20, Map.of(10, creature(10, 1, 5, 5),
+                20, creature(20, 2, 2, 2), 21, creature(21, 2, 2, 2)));
+        final var result = search(snapshot, new CombatSearchBudget(2));
+        Assert.assertFalse(result.outcomeDomainComplete());
+        Assert.assertFalse(result.searchExhaustive());
+        Assert.assertFalse(result.reasons().isEmpty());
+    }
+
+    private static CombatAttackSearch.Result search(final PublicCombatSnapshot snapshot, final CombatSearchBudget budget) {
+        final Map<Integer, PreparedCombatValuation.PermanentValue> values = new LinkedHashMap<>();
+        final Map<Integer, Set<Integer>> replies = new LinkedHashMap<>();
+        final Set<Integer> own = snapshot.creatures().keySet().stream().filter(id -> snapshot.creatures().get(id).controllerId() == 1)
+                .collect(java.util.stream.Collectors.toSet());
+        final Set<Integer> enemies = snapshot.creatures().keySet().stream().filter(id -> snapshot.creatures().get(id).controllerId() == 2)
+                .collect(java.util.stream.Collectors.toSet());
+        snapshot.creatures().forEach((id, card) -> {
+            values.put(id, new PreparedCombatValuation.PermanentValue(id, card.controllerId(), card.controllerId() == 1 ? -100 : 100,
+                    0, 0, List.of()));
+            if (card.controllerId() == 2) { replies.put(id, own); }
+        });
+        return CombatAttackSearch.search(snapshot, new PreparedCombatValuation(values, List.of(), ValuationCompleteness.PARTIAL, List.of()),
+                new PublicCombatReadiness(2, enemies, replies, List.of()), budget);
+    }
+
+    private static PublicCombatSnapshot snapshot(final int ownLife, final int opposingLife,
+            final Map<Integer, PublicCombatSnapshot.Creature> creatures) {
+        final Map<Integer, Integer> attacks = new LinkedHashMap<>();
+        final Map<Integer, Set<Integer>> blocks = new LinkedHashMap<>();
+        final Set<Integer> opponents = creatures.keySet().stream().filter(id -> creatures.get(id).controllerId() == 2)
+                .collect(java.util.stream.Collectors.toSet());
+        creatures.forEach((id, card) -> { if (card.controllerId() == 1) { attacks.put(id, 2); blocks.put(id, opponents); } });
+        return new PublicCombatSnapshot(1, 1, 2, creatures, Map.of(
+                1, new PublicCombatSnapshot.LifeState(ownLife, true, true, false, false),
+                2, new PublicCombatSnapshot.LifeState(opposingLife, true, true, false, false)), attacks, blocks,
+                List.of(), List.of(), false);
+    }
+
+    private static PublicCombatSnapshot.Creature creature(final int id, final int controller, final int power, final int toughness) {
+        return new PublicCombatSnapshot.Creature(id, controller, power, toughness, 0, false, false, false,
+                false, false, false, false, false, false);
+    }
+}

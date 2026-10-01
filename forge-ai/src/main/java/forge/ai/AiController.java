@@ -1327,12 +1327,24 @@ public class AiController {
 
     // declares blockers for given defender in a given combat
     public void declareBlockersFor(Player defender, Combat combat) {
+        if (AiProfileUtil.getBoolProperty(player, AiProps.ENABLE_COMBAT_BLOCK_PLANNING)
+                && forge.ai.combat.CombatBlockPlanner.tryDeclare(player, defender, combat,
+                        forge.ai.combat.CombatPlanningPreparation.budget(player))) { return; }
         AiBlockController block = new AiBlockController(defender, defender != player);
         // When player != defender, AI should declare blockers for its benefit.
         block.assignBlockersForCombat(combat);
     }
 
     public void declareAttackers(Player attacker, Combat combat) {
+        if (player.getController() instanceof PlayerControllerAi controller) { controller.clearCombatExecutionPlan(); }
+        if (getBoolProperty(AiProps.ENABLE_COMBAT_ATTACK_PLANNING)
+                && forge.ai.combat.CombatAttackPlanner.tryDeclare(player, attacker, combat,
+                        forge.ai.combat.CombatPlanningPreparation.budget(player))) {
+            // Exert/banding are outside the admitted mechanical domain. Keep their legacy
+            // aggression hint well-defined without filtering this planner's selected attack.
+            lastAttackAggression = combat.getAttackers().isEmpty() ? 0 : 4;
+            return;
+        }
         // 12/2/10(sol) the decision making here has moved to getAttackers()
         AiAttackController aiAtk = new AiAttackController(attacker);
         lastAttackAggression = aiAtk.declareAttackers(combat);

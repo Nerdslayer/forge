@@ -14,6 +14,8 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -173,7 +175,7 @@ public class AiBenchmarkCoreTest {
     }
 
     @Test
-    public void optionsUseEffectSynergyRemovalWhenNoDeckInputIsProvided() {
+    public void optionsUseEffectSynergyRemovalWhenNoDeckInputIsProvided() throws IOException {
         GuiBase.setInterface(new BenchmarkGuiDesktop());
 
         final BenchmarkOptions defaultOptions = BenchmarkOptions.parse(new String[] {"benchmark"});
@@ -184,6 +186,11 @@ public class AiBenchmarkCoreTest {
         Assert.assertEquals(defaultOptions.deckDirectory.getFileName().toString(), "EffectSynergyRemoval");
         Assert.assertEquals(defaultOptions.deckDirectory.getParent().getFileName().toString(), "benchmark");
         Assert.assertEquals(defaultOptions.workerHeap, "4g");
+        try (var files = Files.list(defaultOptions.deckDirectory)) {
+            final long decks = files.filter(Files::isRegularFile).filter(path -> path.getFileName().toString().endsWith(".dck")).count();
+            Assert.assertEquals(decks, 27L, "Routine benchmarks must use the complete current pool");
+            Assert.assertEquals(2 * decks * decks, 1458L);
+        }
         Assert.assertNull(explicitOptions.deckDirectory);
     }
 

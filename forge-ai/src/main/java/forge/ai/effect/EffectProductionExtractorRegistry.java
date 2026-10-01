@@ -35,6 +35,26 @@ final class EffectProductionExtractorRegistry {
     private EffectProductionExtractorRegistry() {
     }
 
+    /** Scheduled, fixed public events only: no activation or predicted-combat callbacks. */
+    static List<EffectProduction> extractForCombatPreparation(final Player evaluatingAi,
+            final Card source, final Trigger trigger) {
+        if (trigger.getMode() != forge.game.trigger.TriggerType.Phase) { return List.of(); }
+        final SpellAbility root = EffectAbilityUtils.copyTriggerOutcome(source, trigger);
+        if (!TriggeredRelationshipEvaluator.isFixedPublicOutcome(root)) { return List.of(); }
+        final List<EffectProduction> productions = new ArrayList<>(
+                CardDrawProductionExtractor.extractForCombatPreparation(evaluatingAi, source, trigger));
+        // TODO: Add audited activation, combat, normal draw/land/cast, richer sequences and
+        // dynamic events without consulting another combat planner or hidden card definitions.
+        // Token production additionally needs prototypes that do not consume live game card IDs
+        // or modify token-edition pins (the existing TokenAi/TokenInfo path does both).
+        for (final EffectProductionExtractor extractor : List.of(
+                CounterProductionExtractor.INSTANCE,
+                LifeGainProductionExtractor.INSTANCE, LifeLossProductionExtractor.INSTANCE)) {
+            productions.addAll(extractor.extract(evaluatingAi, source, trigger));
+        }
+        return withDerivedProductions(productions, AbilityIdentity.forTrigger(source, trigger));
+    }
+
     static List<EffectProduction> extract(final Player evaluatingAi, final Card source) {
         final List<EffectProduction> productions = new ArrayList<>();
         for (final EffectProductionExtractor extractor : EXTRACTORS) {

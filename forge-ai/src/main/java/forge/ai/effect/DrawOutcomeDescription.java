@@ -6,6 +6,18 @@ import java.util.Set;
 
 /** Shared fixed draw interpretation; legality and resources are backend responsibilities. */
 public record DrawOutcomeDescription(int amount, boolean controller) {
+    /** Shared resource arithmetic; backends retain their own legality and terminal policies. */
+    public record ResourceResult(int amount, int value, int handAfter, int libraryAfter, boolean overdraw) { }
+
+    public static ResourceResult evaluateResources(final int hand, final int library,
+            final int requested, final int drawLimit) {
+        if (hand < 0 || library < 0 || drawLimit < 0) { throw new IllegalArgumentException("Nonnegative resources required"); }
+        final int permitted = Math.min(Math.max(0, requested), drawLimit);
+        final int actual = Math.min(permitted, library);
+        return new ResourceResult(actual, forge.ai.PlayerResourceValueEvaluator.evaluateCardDraw(hand, actual),
+                EffectMath.add(hand, actual), library - actual, permitted > library);
+    }
+
     public static Optional<DrawOutcomeDescription> parse(final String api, final Map<String, String> params) {
         // TODO: Dynamic amounts, targets, optional draws, replacements and remembered cards.
         if (!"Draw".equals(api) || !Set.of("DB", "AB", "SP", "Cost", "Defined", "NumCards",

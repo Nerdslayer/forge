@@ -67,6 +67,11 @@ public class StaticEffects {
         return newEffect;
     }
 
+    /** Read-only lookup for analysis; unlike getStaticEffect this never creates tracked state. */
+    public final StaticEffect findStaticEffect(final StaticAbility staticAbility) {
+        return staticEffects.get(staticAbility);
+    }
+
     public Iterable<StaticEffect> getEffects() {
         return staticEffects.values();
     }
