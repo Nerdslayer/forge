@@ -70,14 +70,15 @@ public final class CombatBlockPlanner {
     public static boolean tryDeclare(final Player ai, final Player defender, final Combat combat, final CombatSearchBudget budget) {
         if (ai == null || combat == null || ai != defender || combat != ai.getGame().getPhaseHandler().getCombat()
                 || ai.getGame().getPhaseHandler().getPhase() != PhaseType.COMBAT_DECLARE_BLOCKERS) { return false; }
-        final Plan plan = plan(ai, combat, budget);
+        if (budget == null) { throw new IllegalArgumentException("A shared combat search budget is required"); }
+        final Plan plan = plan(ai, combat, budget.planningAllowance());
         String reason = "Planner is not applicable";
         if (plan.applicable()) {
             final CombatBlockSearch.Candidate candidate = plan.search().orElseThrow().best().orElseThrow();
             final PublicCombatSnapshot snapshot = plan.snapshot().orElseThrow();
-            if (!plan.fixedBlocks().equals(fixedBlocks(combat))
-                    || !PublicCombatSnapshot.capture(ai, combat, budget::tryConsume).filter(snapshot::equals).isPresent()) {
-                CombatDecisionTrace.blocks(ai, plan, false, "Public state or fixed declarations changed", budget);
+            final String initialValidation = validateSnapshot(ai, combat, plan, snapshot, budget);
+            if (initialValidation != null) {
+                CombatDecisionTrace.blocks(ai, plan, false, initialValidation, budget);
                 return false;
             }
             final Map<Integer, Card> cards = new LinkedHashMap<>();
@@ -87,8 +88,8 @@ public final class CombatBlockPlanner {
             candidate.assignment().blockersByAttacker().forEach((attacker, blockers) ->
                     blockers.forEach(blocker -> detached.addBlockerForValidation(cards.get(attacker), cards.get(blocker))));
             reason = CombatUtil.validateBlocks(detached, defender);
-            if (reason == null && plan.fixedBlocks().equals(fixedBlocks(combat))
-                    && PublicCombatSnapshot.capture(ai, combat, budget::tryConsume).filter(snapshot::equals).isPresent()) {
+            if (reason == null) { reason = validateSnapshot(ai, combat, plan, snapshot, budget); }
+            if (reason == null) {
                 candidate.assignment().blockersByAttacker().forEach((attacker, blockers) ->
                         blockers.stream().filter(blocker -> !plan.fixedBlocks().getOrDefault(attacker, List.of()).contains(blocker))
                                 .forEach(blocker -> combat.addBlocker(cards.get(attacker), cards.get(blocker))));
@@ -99,10 +100,17 @@ public final class CombatBlockPlanner {
                 CombatDecisionTrace.blocks(ai, plan, true, "Whole assignment validated and applied", budget);
                 return true;
             }
-            if (reason == null) { reason = "Public combat state changed during preparation/search"; }
         }
         CombatDecisionTrace.blocks(ai, plan, false, reason, budget);
         return false;
+    }
+
+    private static String validateSnapshot(final Player ai, final Combat combat, final Plan plan,
+            final PublicCombatSnapshot snapshot, final CombatSearchBudget budget) {
+        if (!plan.fixedBlocks().equals(fixedBlocks(combat))) { return "Fixed block declarations changed before validation"; }
+        final var captured = PublicCombatSnapshot.capture(ai, combat, budget::tryConsume);
+        if (captured.isEmpty()) { return "Combat validation budget exhausted during snapshot capture"; }
+        return snapshot.equals(captured.orElseThrow()) ? null : "Public combat snapshot changed before application";
     }
 
     private static Plan rejected(final String reason) {

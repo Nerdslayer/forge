@@ -57,14 +57,19 @@ public final class CombatAttackPlanner {
     /** A real own declaration only; rejected plans leave all live assignments untouched. */
     public static boolean tryDeclare(final Player ai, final Player attacker, final Combat combat, final CombatSearchBudget budget) {
         if (ai == null || ai != attacker || combat == null || combat != ai.getGame().getPhaseHandler().getCombat()) { return false; }
-        final Plan plan = plan(ai, combat, budget);
+        if (budget == null) { throw new IllegalArgumentException("A shared combat search budget is required"); }
+        final Plan plan = plan(ai, combat, budget.planningAllowance());
         if (!plan.applicable()) {
             CombatDecisionTrace.attacks(ai, plan, false, "Planner is not applicable", budget);
             return false;
         }
         final List<String> stale = validateEntry(ai, combat);
         final Capture fresh = capture(ai, combat, stale, budget);
-        if (fresh == null || !stale.isEmpty() || !plan.snapshot().orElseThrow().equals(fresh.snapshot())
+        if (fresh == null) {
+            CombatDecisionTrace.attacks(ai, plan, false, "Combat validation budget exhausted during alternatives/readiness capture", budget);
+            return false;
+        }
+        if (!stale.isEmpty() || !plan.snapshot().orElseThrow().equals(fresh.snapshot())
                 || !plan.readiness().orElseThrow().equals(fresh.readiness()) || !plan.fixedAttackers().equals(fresh.fixedAttackers())) {
             CombatDecisionTrace.attacks(ai, plan, false, "Public alternatives/readiness or declarations changed", budget);
             return false;
@@ -82,7 +87,11 @@ public final class CombatAttackPlanner {
         }
         final List<String> finalReasons = validateEntry(ai, combat);
         final Capture finalState = capture(ai, combat, finalReasons, budget);
-        if (finalState == null || !finalReasons.isEmpty() || !fresh.equals(finalState)) {
+        if (finalState == null) {
+            CombatDecisionTrace.attacks(ai, plan, false, "Combat validation budget exhausted during final alternatives/readiness capture", budget);
+            return false;
+        }
+        if (!finalReasons.isEmpty() || !fresh.equals(finalState)) {
             CombatDecisionTrace.attacks(ai, plan, false, "Public state changed during final legality validation", budget);
             return false;
         }
