@@ -25,7 +25,8 @@ public final class CombatDecisionTrace {
                     .append(", allocations=").append(candidate.damagePlan())
                     .append("\nLoss components: ").append(candidate.score().permanentLoss())
                     .append(", life after=").append(candidate.projection().playerLifeAfter())
-                    .append(", terminal=").append(candidate.projection().terminal()));
+                    .append(", terminal=").append(candidate.projection().terminal())
+                    .append("\nIgnored effects (approximate model): ").append(candidate.projection().reasons()));
         });
         Logger.info(text.toString());
     }
@@ -38,7 +39,8 @@ public final class CombatDecisionTrace {
                 .append("\nNodes: ").append(budget.used()).append(", elapsedMs=").append(budget.elapsedMillis())
                 .append("\nPlan reasons: ").append(plan.reasons()).append("\nExecution: ").append(executionReason);
         plan.snapshot().ifPresent(snapshot -> text.append("\nPublic attack alternatives: ").append(snapshot.attackersToDefenders())
-                .append("\nPublic creature IDs: ").append(publicLabels(ai, snapshot)));
+                .append("\nPublic creature IDs: ").append(publicLabels(ai, snapshot))
+                .append("\nIgnored effects (approximate model): ").append(snapshot.ignoredEffects()));
         plan.search().ifPresent(search -> {
             text.append("\nSearch exhaustive: ").append(search.searchExhaustive())
                     .append(", outcome domain supported: ").append(search.outcomeDomainComplete());
@@ -73,6 +75,7 @@ public final class CombatDecisionTrace {
             text.append("\nAttacking player: ").append(snapshot.attackingPlayerId())
                     .append(", defending player: ").append(snapshot.defendingPlayerId());
             text.append("\nPublic creature IDs: ").append(publicLabels(ai, snapshot));
+            text.append("\nIgnored effects (approximate model): ").append(snapshot.ignoredEffects());
         });
         plan.search().ifPresent(search -> {
             text.append("\nSearch exhaustive: ").append(search.searchExhaustive())

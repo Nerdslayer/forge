@@ -126,7 +126,8 @@ public class CombatTriggeredDrawTest extends AITest {
                 "SVar:X:Count$YourHand"), 2, 2);
         final var before = snapshot(f, attacker);
         Assert.assertTrue(before.triggers().isEmpty());
-        Assert.assertFalse(before.unsupportedReasons().isEmpty());
+        Assert.assertTrue(before.unsupportedReasons().isEmpty());
+        Assert.assertFalse(before.ignoredEffects().isEmpty());
     }
 
     @Test
@@ -302,8 +303,9 @@ public class CombatTriggeredDrawTest extends AITest {
     @Test
     public void simultaneousSelfDeathDrawsUseLastKnownControllersAndRetireAnExplicitlyOwnedAllowance() {
         final var f = fixture();
-        final Card attacker = deathCreature(f.ai(), 2, 2, List.of(), "You");
-        final Card blocker = deathCreature(f.opponent(), 2, 2, List.of(), "You");
+        final List<String> unknownActivation = List.of("A:AB$ Pump | Cost$ U | NumAtt$ 1 | NumDef$ -1 | Defined$ Self");
+        final Card attacker = deathCreature(f.ai(), 2, 2, unknownActivation, "You");
+        final Card blocker = deathCreature(f.opponent(), 2, 2, unknownActivation, "You");
         for (int index = 0; index < 7; index++) { addCard(f.opponent(), ZoneType.Hand, "Unknown Death Hand " + index); }
         final var before = snapshot(f, attacker);
         Assert.assertTrue(before.unsupportedReasons().isEmpty(), before.unsupportedReasons().toString());
@@ -326,6 +328,7 @@ public class CombatTriggeredDrawTest extends AITest {
         Assert.assertTrue(result.available(), result.reasons().toString());
         Assert.assertEquals(result.lostCreatures(), Set.of(attacker.getId(), blocker.getId()));
         Assert.assertEquals(result.outcomes().resolutions().size(), 2);
+        Assert.assertFalse(before.ignoredEffects().isEmpty(), "Unknown activations must not suppress known self-death draws");
         Assert.assertEquals(result.outcomes().utility(), PlayerResourceValueEvaluator.evaluateCardDraw(0, 1)
                 - PlayerResourceValueEvaluator.evaluateCardDraw(7, 1));
         Assert.assertEquals(result.outcomes().resourcesAfter().get(f.ai().getId()), new CombatPlayerResources(1, 11));
@@ -464,7 +467,7 @@ public class CombatTriggeredDrawTest extends AITest {
     }
 
     @Test(dataProvider = "unsupportedDeathTriggers")
-    public void broaderZoneChangesAndOptionalOrAggregateDeathsRemainFallbacks(final String mode, final String valid,
+    public void broaderZoneChangesAndOptionalOrAggregateDeathsRemainExplicitlyIgnored(final String mode, final String valid,
             final String origin, final String destination, final String extra) {
         final var f = fixture();
         final Card source = scriptedCreature(f.ai(), List.of(
@@ -473,7 +476,8 @@ public class CombatTriggeredDrawTest extends AITest {
                 "SVar:Draw:DB$ Draw | Defined$ You | NumCards$ 1"), 2, 3);
         final var before = snapshot(f, source);
         Assert.assertTrue(before.triggers().isEmpty());
-        Assert.assertFalse(before.unsupportedReasons().isEmpty());
+        Assert.assertTrue(before.unsupportedReasons().isEmpty());
+        Assert.assertFalse(before.ignoredEffects().isEmpty());
     }
 
     @DataProvider(name = "unsupportedDamageTriggers")
@@ -486,7 +490,7 @@ public class CombatTriggeredDrawTest extends AITest {
     }
 
     @Test(dataProvider = "unsupportedDamageTriggers")
-    public void broaderDamageFiltersAndBatchModesRemainExplicitFallbacks(final String mode, final String source,
+    public void broaderDamageFiltersAndBatchModesRemainExplicitlyIgnored(final String mode, final String source,
             final String target, final String combat, final String extra) {
         final var f = fixture();
         final Card attacker = scriptedCreature(f.ai(), List.of(
@@ -495,7 +499,8 @@ public class CombatTriggeredDrawTest extends AITest {
                 "SVar:Draw:DB$ Draw | Defined$ You | NumCards$ 1"), 2, 3);
         final var before = snapshot(f, attacker);
         Assert.assertTrue(before.triggers().isEmpty());
-        Assert.assertFalse(before.unsupportedReasons().isEmpty());
+        Assert.assertTrue(before.unsupportedReasons().isEmpty());
+        Assert.assertFalse(before.ignoredEffects().isEmpty());
     }
 
     @Test
@@ -542,14 +547,15 @@ public class CombatTriggeredDrawTest extends AITest {
     }
 
     @Test(dataProvider = "unsupportedTriggers")
-    public void unsupportedTriggerConditionsRemainExplicitFallbacks(final String extra) {
+    public void unsupportedTriggerConditionsRemainExplicitlyIgnored(final String extra) {
         final var f = fixture();
         final Card attacker = scriptedCreature(f.ai(), List.of(
                 "T:Mode$ Attacks | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ Draw" + extra,
                 "SVar:Draw:DB$ Draw | Defined$ You | NumCards$ 1"), 2, 2);
         final var before = snapshot(f, attacker);
         Assert.assertTrue(before.triggers().isEmpty());
-        Assert.assertFalse(before.unsupportedReasons().isEmpty());
+        Assert.assertTrue(before.unsupportedReasons().isEmpty());
+        Assert.assertFalse(before.ignoredEffects().isEmpty());
     }
 
     @Test

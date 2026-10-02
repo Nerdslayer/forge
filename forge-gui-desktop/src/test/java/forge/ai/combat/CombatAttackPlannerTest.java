@@ -98,7 +98,7 @@ public class CombatAttackPlannerTest extends AITest {
     }
 
     @Test
-    public void fixedAttacksArePreservedAndUnsupportedActivationsOrEmptyBudgetRemainUntouched() {
+    public void fixedAttacksArePreservedUnknownActivationsAreApproximatedAndEmptyBudgetRemainsUntouched() {
         final Fixture fixed = fixture();
         final Card already = creature(fixed.ai(), 2, 2, List.of());
         fixed.combat().addAttacker(already, fixed.opponent());
@@ -106,9 +106,8 @@ public class CombatAttackPlannerTest extends AITest {
         Assert.assertEquals(fixed.combat().getAttackers(), List.of(already));
         final Fixture unsupported = fixture();
         final Card pump = creature(unsupported.ai(), 2, 2, List.of("A:AB$ Pump | Cost$ U | NumAtt$ 1 | NumDef$ -1 | Defined$ Self"));
-        Assert.assertFalse(CombatAttackPlanner.tryDeclare(unsupported.ai(), unsupported.ai(), unsupported.combat(), new CombatSearchBudget(20000)));
-        Assert.assertTrue(unsupported.combat().getAttackers().isEmpty());
-        Assert.assertFalse(pump.getView().isAttacking());
+        Assert.assertTrue(CombatAttackPlanner.tryDeclare(unsupported.ai(), unsupported.ai(), unsupported.combat(), new CombatSearchBudget(20000)));
+        Assert.assertEquals(unsupported.combat().getAttackers(), List.of(pump));
         final Fixture budget = fixture();
         creature(budget.ai(), 2, 2, List.of());
         Assert.assertFalse(CombatAttackPlanner.tryDeclare(budget.ai(), budget.ai(), budget.combat(), new CombatSearchBudget(0)));

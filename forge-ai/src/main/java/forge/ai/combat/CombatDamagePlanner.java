@@ -94,7 +94,7 @@ public final class CombatDamagePlanner {
                     return a == null || b == null ? 0 : Boolean.compare(b.lethalOpportunity(), a.lethalOpportunity());
                 });
         reasons.addAll(result.reasons());
-        final boolean certifiedWin = result.outcomeSupported() && result.exhaustive() && result.best().isPresent()
+        final boolean certifiedWin = snapshot.ignoredEffects().isEmpty() && result.outcomeSupported() && result.exhaustive() && result.best().isPresent()
                 && result.best().orElseThrow().projection().terminal() == CombatProjection.Terminal.WIN;
         if (!result.outcomeSupported() || !result.exhaustive() || !supported[0] && !certifiedWin || result.best().isEmpty()) {
             reasons.add("No sufficiently supported complete execution allocation/reply result");

@@ -182,10 +182,15 @@ public class CombatShieldCounterTest extends AITest {
     }
 
     @Test(dataProvider = "unsupportedPreventionPolicies")
-    public void conditionalAndBroaderSourcePoliciesRemainExplicitFallbacks(final String policy) {
+    public void activeConditionalAndBroaderSourcePoliciesFallBackButInactiveZonesDoNot(final String policy) {
         final var f = fixture(2, 4, List.of("S:Mode$ CantPreventDamage" + policy), List.of(List.of("PT:1/3")));
         final var before = PublicCombatSnapshot.capture(f.attacker(), f.combat());
         Assert.assertTrue(before.preventionRules().isEmpty());
+        if (policy.contains("EffectZone$ Graveyard")) {
+            Assert.assertTrue(before.unsupportedReasons().isEmpty(), "An inactive off-zone policy is not combat prevention");
+            Assert.assertTrue(CombatOutcomePredictor.predict(before, assignment(f, before)).supported());
+            return;
+        }
         Assert.assertTrue(before.unsupportedReasons().stream().anyMatch(reason -> reason.startsWith("Unprojected static effect")));
         Assert.assertFalse(CombatOutcomePredictor.predict(before, assignment(f, before)).supported());
     }

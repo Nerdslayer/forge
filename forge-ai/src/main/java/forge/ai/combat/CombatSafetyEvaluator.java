@@ -88,7 +88,7 @@ public final class CombatSafetyEvaluator {
         int bestUtility = 0; // A legal no-attack baseline; admitted mechanics have no compulsory attacks.
         List<Integer> chosen = List.of();
         Continuation continuation = null;
-        final Set<String> reasons = new LinkedHashSet<>();
+        final Set<String> reasons = new LinkedHashSet<>(readiness.ignoredEffects());
         for (final List<Integer> group : declarations.groups()) {
             if (!budget.tryConsume()) { exhaustive = false; reasons.add("Follow-up shared budget exhausted"); break; }
             final Map<Integer, Integer> attacks = new LinkedHashMap<>();
@@ -103,7 +103,7 @@ public final class CombatSafetyEvaluator {
                     creatures, players, attacks, blockers, List.of(), List.of(), before.legacyDamageOrder(), resources,
                     before.triggers().stream().filter(trigger -> creatures.containsKey(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
                     before.preventionRules().stream().filter(rule -> !current.lostCreatures().contains(rule.providerId())).toList(),
-                    before.staticWorlds().surviving(current.lostCreatures()));
+                    before.staticWorlds().surviving(current.lostCreatures()), readiness.ignoredEffects());
             final CombatBlockSearch.Result response = CombatBlockSearch.search(next, survivingValues, budget);
             exhaustive &= response.searchExhaustive();
             if (!response.outcomeDomainComplete() || response.best().isEmpty()) {

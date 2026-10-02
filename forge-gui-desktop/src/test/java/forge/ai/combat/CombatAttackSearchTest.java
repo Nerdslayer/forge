@@ -58,6 +58,22 @@ public class CombatAttackSearchTest {
     }
 
     @Test
+    public void approximateLethalRemainsSelectableButIsNotCertified() {
+        final var exact = snapshot(20, 2, Map.of(10, creature(10, 1, 2, 2)));
+        final var approximate = new PublicCombatSnapshot(exact.observingPlayerId(), exact.attackingPlayerId(), exact.defendingPlayerId(),
+                exact.creatures(), exact.players(), exact.attackersToDefenders(), exact.legalBlockers(), exact.unavailableReasons(),
+                exact.unsupportedReasons(), exact.legacyDamageOrder(), exact.resources(), exact.triggers(), exact.observedAttackers(),
+                exact.observedBlockers(), exact.preventionRules(), exact.staticWorlds(), List.of("Unprojected public activation: 10"));
+        final var result = search(approximate, new CombatSearchBudget(10000));
+        Assert.assertTrue(result.outcomeDomainComplete(), result.reasons().toString());
+        final var best = result.best().orElseThrow();
+        Assert.assertEquals(best.attackers(), List.of(10));
+        Assert.assertEquals(best.combat().projection().terminal(), CombatProjection.Terminal.WIN);
+        Assert.assertFalse(best.certifiedWin());
+        Assert.assertFalse(best.combat().projection().reasons().isEmpty());
+    }
+
+    @Test
     public void holdBackDefensiveAnchorWhenTappingItOpensLethalReply() {
         final var snapshot = snapshot(4, 20, Map.of(10, creature(10, 1, 5, 5),
                 20, creature(20, 2, 2, 2), 21, creature(21, 2, 2, 2)));

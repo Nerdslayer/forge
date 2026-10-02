@@ -303,7 +303,7 @@ public class CombatOutcomePredictorTest extends AITest {
     }
 
     @Test
-    public void publicCombatActivationRequiresFallbackButFutureDrawAloneDoesNot() {
+    public void publicCombatActivationIsExplicitlyApproximatedAndFutureDrawAloneNeedsNoOmission() {
         final Fixture f = fixture();
         final Card attacker = creature(f.attacker(), 2, 3, List.of(
                 "A:AB$ Pump | Cost$ U | NumAtt$ +1 | NumDef$ -1"));
@@ -312,7 +312,9 @@ public class CombatOutcomePredictorTest extends AITest {
         final PublicCombatSnapshot unknown = PublicCombatSnapshot.capture(f.observer(), f.declaration());
         final CombatProjection result = CombatOutcomePredictor.predict(unknown,
                 new CombatAssignment(unknown.attackersToDefenders(), Map.of(attacker.getId(), List.of(blocker.getId()))));
-        Assert.assertFalse(result.supported());
+        Assert.assertTrue(result.supported());
+        Assert.assertTrue(result.available());
+        Assert.assertEquals(result.lostCreatures(), Set.of(), "Do not invent use of the unknown pump");
         Assert.assertTrue(result.reasons().stream().anyMatch(reason -> reason.contains("activation")));
         f.attacker().getZone(ZoneType.Battlefield).remove(attacker);
         final Card scheduled = creature(f.attacker(), 2, 2, List.of(

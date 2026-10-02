@@ -16,13 +16,19 @@ import forge.game.zone.ZoneType;
 
 /** Public next-turn eligibility, frozen before search; no controller/hand prediction calls. */
 public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAttackNextTurn,
-        Map<Integer, Set<Integer>> blockPairsNextTurn, List<String> unsupportedReasons) {
+        Map<Integer, Set<Integer>> blockPairsNextTurn, List<String> unsupportedReasons, List<String> ignoredEffects) {
     public PublicCombatReadiness {
         canAttackNextTurn = Set.copyOf(canAttackNextTurn);
         final Map<Integer, Set<Integer>> pairs = new LinkedHashMap<>();
         blockPairsNextTurn.forEach((id, blockers) -> pairs.put(id, Set.copyOf(blockers)));
         blockPairsNextTurn = Map.copyOf(pairs);
         unsupportedReasons = List.copyOf(unsupportedReasons);
+        ignoredEffects = List.copyOf(ignoredEffects);
+    }
+
+    public PublicCombatReadiness(final int nextActivePlayerId, final Set<Integer> canAttackNextTurn,
+            final Map<Integer, Set<Integer>> blockPairsNextTurn, final List<String> unsupportedReasons) {
+        this(nextActivePlayerId, canAttackNextTurn, blockPairsNextTurn, unsupportedReasons, List.of());
     }
 
     public static PublicCombatReadiness capture(final Player observer, final PublicCombatSnapshot snapshot) {
@@ -40,6 +46,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
         if (observer == null || snapshot == null || checkpoint == null) { throw new IllegalArgumentException("Explicit readiness inputs required"); }
         if (!checkpoint.getAsBoolean()) { return null; }
         final List<String> reasons = new ArrayList<>(snapshot.unsupportedReasons());
+        final List<String> ignored = new ArrayList<>(snapshot.ignoredEffects());
         if (snapshot.preventionRules().stream().anyMatch(rule -> !rule.survivesCleanup())) {
             reasons.add("Command-zone prevention policy needs duration-aware cleanup before a future attack");
         }
@@ -60,7 +67,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
                 if (!"Draw".equals(outcome.api()) || !outcome.issue().isEmpty() || outcome.next() != null
                         || !outcome.choices().isEmpty() || outcome.parameters().containsKey("ValidTgts")
                         || !count.matches("[0-9]{1,4}")) {
-                    reasons.add("Scheduled changes before the next attack are not projected: " + card.getId());
+                    ignored.add("Scheduled changes before the next attack are not projected: " + card.getId());
                 } else {
                     scheduledDraws += Integer.parseInt(count);
                 }
@@ -75,7 +82,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
         if (scheduledDraws > 0 && !snapshot.triggers().isEmpty()) {
             // TODO: Apply scheduled draws in chronological resource batches before forecasting
             // concrete combat draws. Frozen starting hands would misprice the latter.
-            reasons.add("Scheduled draws before combat outcomes need resource projection");
+            ignored.add("Scheduled draws before combat outcomes need resource projection");
         }
         final List<Card> creatures = observer.getGame().getCardsIn(ZoneType.Battlefield).stream().filter(Card::isCreature).toList();
         for (final Card attacker : creatures) {
@@ -86,7 +93,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
             // animation or granted keyword forward as if it were permanent.
             if (!forge.ai.effect.CombatStaticProjectionPreparation.hasOnlyPersistentBoosts(attacker) || !attacker.getSetPTTable().isEmpty()
                     || !attacker.getChangedCardKeywords().isEmpty() || attacker.getChangedCardTypes().iterator().hasNext()) {
-                reasons.add("Cleanup characteristic changes need a duration-aware projection: " + attacker.getId());
+                ignored.add("Cleanup characteristic changes need a duration-aware projection: " + attacker.getId());
             }
             final Set<Integer> eligible = new LinkedHashSet<>();
             for (final Player opponent : observer.getGame().getPlayers()) {
@@ -104,6 +111,6 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
             blocks.put(attacker.getId(), eligible);
         }
         if (!checkpoint.getAsBoolean()) { return null; }
-        return new PublicCombatReadiness(observer.getGame().getPhaseHandler().getNextTurn().getId(), attacks, blocks, reasons);
+        return new PublicCombatReadiness(observer.getGame().getPhaseHandler().getNextTurn().getId(), attacks, blocks, reasons, ignored);
     }
 }

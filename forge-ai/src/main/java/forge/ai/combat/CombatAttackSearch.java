@@ -90,7 +90,7 @@ public final class CombatAttackSearch {
                 supported = false;
                 reasons.add("A terminal attack result requires exhaustive opposing block responses");
             }
-            final boolean certifiedWin = blocks.outcomeDomainComplete() && blocks.searchExhaustive()
+            final boolean certifiedWin = alternatives.ignoredEffects().isEmpty() && blocks.outcomeDomainComplete() && blocks.searchExhaustive()
                     && combat.projection().terminal() == CombatProjection.Terminal.WIN;
             final Candidate candidate = new Candidate(group, combat, reply, adjustment, certifiedWin,
                     forecasts.cachedPressure(combat.projection()));

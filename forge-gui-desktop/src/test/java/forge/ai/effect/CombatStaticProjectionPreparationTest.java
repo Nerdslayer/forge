@@ -29,6 +29,29 @@ public class CombatStaticProjectionPreparationTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent) { }
 
     @Test
+    public void unprojectedInteractingStaticLayersFreezeCurrentCharacteristicsRatherThanVetoCombat() {
+        final var f = fixture();
+        final Card source = creature(f.opponent(), 4, 4, List.of(
+                "S:Mode$ Continuous | Affected$ Creature | AddPower$ 1 | AddToughness$ 1",
+                "S:Mode$ Continuous | Affected$ Creature.YouCtrl | AddKeyword$ Flying"));
+        final Card blocker = creature(f.ai(), 2, 2, List.of());
+        f.game().getAction().checkStaticAbilities();
+        final Combat combat = new Combat(f.opponent());
+        combat.addAttackerForValidation(source, f.ai());
+        final var snapshot = PublicCombatSnapshot.capture(f.ai(), combat);
+        Assert.assertTrue(snapshot.unsupportedReasons().isEmpty(), snapshot.unsupportedReasons().toString());
+        Assert.assertTrue(snapshot.staticWorlds().supported());
+        Assert.assertTrue(snapshot.staticWorlds().providers().isEmpty(), "Never expose a partial provider-loss table");
+        Assert.assertFalse(snapshot.ignoredEffects().isEmpty());
+        Assert.assertEquals(snapshot.creatureAfterLosses(blocker.getId(), Set.of(source.getId())).toughness(), 3,
+                "Frozen current characteristics are an explicit approximation, not a simulated layer removal");
+        final var projection = forge.ai.combat.CombatOutcomePredictor.predict(snapshot,
+                new forge.ai.combat.CombatAssignment(snapshot.attackersToDefenders(), java.util.Map.of()));
+        Assert.assertTrue(projection.supported() && projection.available(), projection.reasons().toString());
+        Assert.assertFalse(projection.reasons().isEmpty());
+    }
+
+    @Test
     public void snapshotCancellationIncludesCombinedWorldPreparationWithoutPublishingPartialState() {
         final var f = fixture();
         final Card source = creature(f.opponent(), 4, 4, List.of(

@@ -46,6 +46,6 @@ final class CombatAttackCandidates {
         }
         return new PublicCombatSnapshot(all.observingPlayerId(), all.attackingPlayerId(), all.defendingPlayerId(),
                 all.creatures(), all.players(), attacks, blocks, all.unavailableReasons(), all.unsupportedReasons(), all.legacyDamageOrder(),
-                all.resources(), all.triggers(), all.observedAttackers(), all.observedBlockers(), all.preventionRules(), all.staticWorlds());
+                all.resources(), all.triggers(), all.observedAttackers(), all.observedBlockers(), all.preventionRules(), all.staticWorlds(), all.ignoredEffects());
     }
 }

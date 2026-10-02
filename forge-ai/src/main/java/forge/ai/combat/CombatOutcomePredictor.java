@@ -231,7 +231,9 @@ public final class CombatOutcomePredictor {
         });
         // TODO: Bind the frozen event batches and LKI to shared projected outcomes;
         // support planeswalkers, poison/commander damage and broader replacement/prevention.
-        return new CombatProjection(true, true, List.of(), lost, survivors, life, batches, terminal, eventBatches, outcomes);
+        // Supported here means the approximate model can be evaluated, not that every
+        // printed ability has been simulated. Preserve omissions for callers and diagnostics.
+        return new CombatProjection(true, true, snapshot.ignoredEffects(), lost, survivors, life, batches, terminal, eventBatches, outcomes);
     }
 
     private static boolean dealsDamage(final PublicCombatSnapshot.Creature creature, final boolean first) {

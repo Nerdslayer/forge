@@ -57,6 +57,7 @@ public final class CombatTransitionValueEvaluator {
             default -> 0;
         };
         final List<String> reasons = new ArrayList<>(loss.reasons());
+        reasons.addAll(projection.reasons());
         reasons.add("Broader static layers and concrete outcome/event attribution remain");
         // TODO: Survivor changes beyond fixed additive P/T/shields and broader immediate outcome ownership. Tactical future
         // adjustments are intentionally composed by the search, not embedded in raw transitions.

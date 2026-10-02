@@ -109,6 +109,30 @@ public class CombatValuationFoundationTest extends AITest {
     }
 
     @Test
+    public void multipleUnknownAbilitiesReceiveOneManaScaledAllowanceSymmetrically() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        ai.setTeam(0);
+        opponent.setTeam(1);
+        final List<String> unknowns = List.of(
+                "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Human.Other+YouCtrl"
+                        + " | TriggerZones$ Battlefield | Execute$ AddCounter",
+                "T:Mode$ ChangesZone | Origin$ Any | Destination$ Graveyard | ValidCard$ Human.Other+YouCtrl"
+                        + " | TriggerZones$ Battlefield | Execute$ AddCounter",
+                "SVar:AddCounter:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1");
+        for (final int mana : List.of(0, 1, 4, 6)) {
+            final Card friendly = addDefinition(ai, "Unknown Friendly " + mana, Integer.toString(mana), unknowns);
+            final Card hostile = addDefinition(opponent, "Unknown Hostile " + mana, Integer.toString(mana), unknowns);
+            final var values = CombatValuationEvaluator.prepare(ValuationContext.forCombat(ai, ValuationDecision.BLOCK, 0, 100));
+            final int expected = Math.max(10, mana * 5);
+            Assert.assertEquals(values.permanents().get(friendly.getId()).unknownAbilityLossValue(), -expected);
+            Assert.assertEquals(values.permanents().get(hostile.getId()).unknownAbilityLossValue(), expected);
+            Assert.assertEquals(values.evaluateLosses(List.of(friendly.getId(), hostile.getId())).unknownAbility(), 0);
+        }
+    }
+
+    @Test
     public void zeroManaUnknownAbilityGetsCombatMinimumWithoutChangingRemoval() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

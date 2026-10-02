@@ -95,7 +95,12 @@ public class CombatBlockPlannerTest extends AITest {
             final PublicCombatSnapshot snapshot = PublicCombatSnapshot.capture(f.defender(), f.combat());
             Assert.assertTrue(snapshot.unsupportedReasons().isEmpty(), snapshot.unsupportedReasons().toString());
             final var future = PublicCombatReadiness.capture(f.defender(), snapshot);
-            Assert.assertFalse(future.unsupportedReasons().isEmpty());
+            if (effect.contains("Draw")) {
+                Assert.assertFalse(future.unsupportedReasons().isEmpty(), "Known possible decking remains a hard boundary");
+            } else {
+                Assert.assertTrue(future.unsupportedReasons().isEmpty());
+                Assert.assertFalse(future.ignoredEffects().isEmpty());
+            }
             Assert.assertTrue(source.isInPlay());
         }
     }
@@ -166,14 +171,17 @@ public class CombatBlockPlannerTest extends AITest {
     }
 
     @Test
-    public void unsupportedCombatIsUntouchedAndLegalPreassignedBlocksArePreserved() {
+    public void unknownActivationsDoNotVetoBlocksAndLegalPreassignedBlocksArePreserved() {
         final Fixture unknown = fixture();
         final Card attacker = creature(unknown.attacker(), 3, 3,
                 List.of("A:AB$ Pump | Cost$ U | NumAtt$ 1 | NumDef$ -1 | Defined$ Self"));
         final Card blocker = creature(unknown.defender(), 1, 3, List.of());
         unknown.combat().addAttacker(attacker, unknown.defender());
         final int sentinel = unknown.game().nextCardId();
-        Assert.assertFalse(CombatBlockPlanner.tryDeclare(unknown.defender(), unknown.defender(), unknown.combat(), new CombatSearchBudget(10000)));
+        final var approximate = PublicCombatSnapshot.capture(unknown.defender(), unknown.combat());
+        Assert.assertTrue(approximate.unsupportedReasons().isEmpty());
+        Assert.assertFalse(approximate.ignoredEffects().isEmpty());
+        Assert.assertTrue(CombatBlockPlanner.tryDeclare(unknown.defender(), unknown.defender(), unknown.combat(), new CombatSearchBudget(10000)));
         Assert.assertTrue(unknown.combat().getAllBlockers().isEmpty());
         Assert.assertEquals(unknown.game().nextCardId(), sentinel + 1);
         Assert.assertFalse(blocker.isTapped());
@@ -184,6 +192,35 @@ public class CombatBlockPlannerTest extends AITest {
         fixed.combat().addBlocker(other, assigned);
         Assert.assertTrue(CombatBlockPlanner.tryDeclare(fixed.defender(), fixed.defender(), fixed.combat(), new CombatSearchBudget(10000)));
         Assert.assertEquals(fixed.combat().getBlockers(other), List.of(assigned));
+    }
+
+    @Test
+    public void structuralDamageMechanicsStillFallBackWithoutChangingBlocks() {
+        for (final String keyword : List.of("Protection:Red", "Infect", "Wither", "Banding", "Absorb:1")) {
+            final Fixture f = fixture();
+            final Card attacker = creature(f.attacker(), 3, 3, List.of("K:" + keyword));
+            creature(f.defender(), 2, 2, List.of());
+            f.combat().addAttacker(attacker, f.defender());
+            Assert.assertFalse(CombatBlockPlanner.tryDeclare(f.defender(), f.defender(), f.combat(), new CombatSearchBudget(10000)), keyword);
+            Assert.assertTrue(f.combat().getAllBlockers().isEmpty());
+        }
+    }
+
+    @Test
+    public void departedPrintedAbilitiesDoNotVetoPublicCombat() {
+        final Fixture f = fixture();
+        final Card departed = creature(f.attacker(), 2, 2, List.of("K:Infect",
+                "A:AB$ Pump | Cost$ U | NumAtt$ 1 | Defined$ Self"));
+        f.attacker().getZone(ZoneType.Battlefield).remove(departed);
+        f.attacker().getZone(ZoneType.Graveyard).add(departed);
+        final Card attacker = creature(f.attacker(), 2, 2, List.of());
+        creature(f.defender(), 2, 2, List.of());
+        f.combat().addAttacker(attacker, f.defender());
+        final var snapshot = PublicCombatSnapshot.capture(f.defender(), f.combat());
+        Assert.assertTrue(snapshot.unsupportedReasons().isEmpty(), snapshot.unsupportedReasons().toString());
+        Assert.assertTrue(snapshot.ignoredEffects().stream().noneMatch(reason -> reason.startsWith("Unprojected public activation")
+                || reason.startsWith("Unprojected public keyword")));
+        Assert.assertTrue(CombatBlockPlanner.tryDeclare(f.defender(), f.defender(), f.combat(), new CombatSearchBudget(10000)));
     }
 
     @Test

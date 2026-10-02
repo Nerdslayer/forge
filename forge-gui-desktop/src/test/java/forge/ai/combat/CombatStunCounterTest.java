@@ -124,7 +124,8 @@ public class CombatStunCounterTest extends AITest {
         source.addReplacementEffect(forge.game.replacement.ReplacementHandler.parseReplacement(
                 "Event$ Untap | ActiveZones$ Battlefield | ValidCard$ Card.Self | ReplaceWith$ Other", source, false, null));
         final var snapshot = PublicCombatSnapshot.capture(player, new Combat(player));
-        Assert.assertTrue(snapshot.unsupportedReasons().stream().anyMatch(reason -> reason.startsWith("Unprojected replacement")));
+        Assert.assertTrue(snapshot.unsupportedReasons().isEmpty());
+        Assert.assertTrue(snapshot.ignoredEffects().stream().anyMatch(reason -> reason.startsWith("Unprojected replacement")));
     }
 
     private static Card creature(final Player owner) {

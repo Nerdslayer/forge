@@ -20,14 +20,15 @@ import forge.game.player.Player;
 import forge.game.phase.PhaseType;
 import forge.game.zone.ZoneType;
 
-/** Public, frozen mechanics for one attack declaration; subsequent block search is game-free. */
+/** Public, frozen mechanics for one attack declaration; subsequent block search is game-free.
+ * Unsupported reasons veto the model; ignored effects describe explicit approximations. */
 public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId, int defendingPlayerId,
         Map<Integer, Creature> creatures, Map<Integer, LifeState> players,
         Map<Integer, Integer> attackersToDefenders, Map<Integer, Set<Integer>> legalBlockers,
         List<String> unavailableReasons, List<String> unsupportedReasons, boolean legacyDamageOrder,
         Map<Integer, CombatPlayerResources> resources, List<CombatTriggerDescription> triggers,
         Set<Integer> observedAttackers, Set<Integer> observedBlockers, List<CombatDamagePreventionRule> preventionRules,
-        PreparedCombatStaticWorlds staticWorlds) {
+        PreparedCombatStaticWorlds staticWorlds, List<String> ignoredEffects) {
     public PublicCombatSnapshot {
         creatures = Map.copyOf(creatures);
         players = Map.copyOf(players);
@@ -37,12 +38,26 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         legalBlockers = Map.copyOf(blocks);
         unavailableReasons = List.copyOf(unavailableReasons);
         unsupportedReasons = List.copyOf(unsupportedReasons);
+        ignoredEffects = List.copyOf(ignoredEffects);
         resources = Map.copyOf(resources);
         triggers = List.copyOf(triggers);
         observedAttackers = Set.copyOf(observedAttackers);
         observedBlockers = Set.copyOf(observedBlockers);
         preventionRules = List.copyOf(preventionRules);
         if (staticWorlds == null) { throw new IllegalArgumentException("Explicit static coverage required"); }
+    }
+
+    /** Compatibility for explicitly understood synthetic snapshots. */
+    public PublicCombatSnapshot(final int observingPlayerId, final int attackingPlayerId, final int defendingPlayerId,
+            final Map<Integer, Creature> creatures, final Map<Integer, LifeState> players,
+            final Map<Integer, Integer> attackersToDefenders, final Map<Integer, Set<Integer>> legalBlockers,
+            final List<String> unavailableReasons, final List<String> unsupportedReasons, final boolean legacyDamageOrder,
+            final Map<Integer, CombatPlayerResources> resources, final List<CombatTriggerDescription> triggers,
+            final Set<Integer> observedAttackers, final Set<Integer> observedBlockers,
+            final List<CombatDamagePreventionRule> preventionRules, final PreparedCombatStaticWorlds staticWorlds) {
+        this(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players, attackersToDefenders, legalBlockers,
+                unavailableReasons, unsupportedReasons, legacyDamageOrder, resources, triggers, observedAttackers, observedBlockers,
+                preventionRules, staticWorlds, List.of());
     }
 
     public PublicCombatSnapshot(final int observingPlayerId, final int attackingPlayerId, final int defendingPlayerId,
@@ -173,6 +188,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         }
         if (!checkpoint.getAsBoolean()) { return null; }
         final List<String> reasons = new ArrayList<>();
+        final List<String> ignored = new ArrayList<>();
         final List<String> unavailable = new ArrayList<>();
         final Map<Integer, Creature> creatures = new LinkedHashMap<>();
         final Map<Integer, LifeState> players = new LinkedHashMap<>();
@@ -201,7 +217,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         for (final Card card : observer.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES)) {
             if (!checkpoint.getAsBoolean()) { return null; }
             if (card.isPhasedOut()) { continue; }
-            auditPublicEffects(card, reasons);
+            auditPublicEffects(card, reasons, ignored);
             if (card.isInPlay() && card.isCreature()) {
                 final Player recipient = observer.getGame().getPlayers().stream()
                         .filter(player -> player.isOpponentOf(card.getController())).findFirst().orElse(null);
@@ -297,63 +313,88 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
             final var prepared = forge.ai.effect.CombatStaticProjectionPreparation.prepare(observer, checkpoint);
             if (prepared.isEmpty()) { return null; }
             staticWorlds = prepared.orElseThrow();
-            if (!staticWorlds.supported()) { reasons.addAll(staticWorlds.reasons()); }
+            if (!staticWorlds.supported()) {
+                // TODO: Project broader interacting layers. Freeze current public characteristics
+                // rather than using an incomplete provider-loss table or vetoing the entire combat.
+                ignored.addAll(staticWorlds.reasons());
+                staticWorlds = PreparedCombatStaticWorlds.empty();
+            }
         }
         if (!checkpoint.getAsBoolean()) { return null; }
         return new PublicCombatSnapshot(observer.getId(), attacking.getId(), defending == null ? -1 : defending.getId(),
                 creatures, players, attacks, blocks, unavailable, reasons, observer.getGame().getRules().hasOrderCombatants(),
-                resources, triggers, observedAttacks, observedBlocks, preventionRules, staticWorlds);
+                resources, triggers, observedAttacks, observedBlocks, preventionRules, staticWorlds, ignored);
     }
 
-    private static void auditPublicEffects(final Card card, final List<String> reasons) {
+    private static void auditPublicEffects(final Card card, final List<String> reasons, final List<String> ignored) {
+        // TODO: Project the ignored keywords, counter-dependent effects, broader triggers,
+        // static transitions and replacements. Their current valuation/fallback allowance
+        // remains in CombatValuationEvaluator; this audit never adds a per-ability bonus.
         if (card.isFaceDown()) {
             // Never inspect the underlying face/activation costs to decide whether a hidden
             // combat trick exists. TODO: Admit known public face-down mechanics explicitly.
-            reasons.add("Face-down combat mechanics need public-only handling: " + card.getId());
+            if (card.isInPlay()) { reasons.add("Face-down combat mechanics need public-only handling: " + card.getId()); }
             return;
         }
-        if (card.getPreventNextDamageTotalShields() > 0 || card.isCommander() || card.isGoaded()) {
+        if (card.isInPlay() && (card.getPreventNextDamageTotalShields() > 0 || card.isCommander() || card.isGoaded())) {
             reasons.add("Unprojected prevention, commander damage or goad: " + card.getId());
         }
-        for (final var keyword : card.getKeywords()) {
-            if (!SUPPORTED_KEYWORDS.contains(keyword.getKeyword())) {
-                reasons.add("Unprojected public keyword: " + keyword.getKeyword() + " on " + card.getId());
+        // Printed keywords, counters and activations on departed cards are not combat
+        // mechanics. Active off-battlefield triggers/statics are audited separately below.
+        if (card.isInPlay()) {
+            for (final var keyword : card.getKeywords()) {
+                if (!SUPPORTED_KEYWORDS.contains(keyword.getKeyword())) {
+                    // These change damage representation, prevention or assignment ownership;
+                    // ignoring them would not even preserve the baseline combat calculation.
+                    final boolean structural = Set.of(Keyword.PROTECTION, Keyword.INFECT, Keyword.WITHER,
+                            Keyword.BANDING, Keyword.ABSORB).contains(keyword.getKeyword());
+                    (structural ? reasons : ignored).add("Unprojected public keyword: " + keyword.getKeyword() + " on " + card.getId());
+                }
             }
-        }
-        for (final var entry : card.getCounters().entrySet()) {
-            if (entry.getElement() != CounterEnumType.P1P1 && entry.getElement() != CounterEnumType.M1M1
-                    && entry.getElement() != CounterEnumType.STUN && entry.getElement() != CounterEnumType.SHIELD) {
-                reasons.add("Unprojected counter mechanic: " + entry.getElement() + " on " + card.getId());
+            for (final var entry : card.getCounters().entrySet()) {
+                if (entry.getElement() != CounterEnumType.P1P1 && entry.getElement() != CounterEnumType.M1M1
+                        && entry.getElement() != CounterEnumType.STUN && entry.getElement() != CounterEnumType.SHIELD) {
+                    ignored.add("Unprojected counter mechanic: " + entry.getElement() + " on " + card.getId());
+                }
             }
-        }
-        for (final var ability : card.getSpellAbilities()) {
-            if (ability.isActivatedAbility() && !ability.isManaAbility()) {
-                // TODO: Distinguish irrelevant activations and project affordable public combat
-                // abilities with coupled state changes, repeated uses and a shared mana budget.
-                reasons.add("Unprojected public activation: " + card.getId());
+            for (final var ability : card.getSpellAbilities()) {
+                if (ability.isActivatedAbility() && !ability.isManaAbility()) {
+                    // TODO: Project affordable public combat abilities with coupled state
+                    // changes, repeated uses and a shared mana budget. Ignoring is approximate.
+                    ignored.add("Unprojected public activation: " + card.getId());
+                }
             }
         }
         for (final var trigger : card.getTriggers()) {
             if (!trigger.isSuppressed() && trigger.zonesCheck(card.getZone())
                     && ScheduledTriggerParser.parse(trigger.getMapParams()).isEmpty()
                     && CombatTriggerDescription.parse(trigger).isEmpty()) {
-                reasons.add("Unprojected public trigger: " + trigger.getMode() + " on " + card.getId());
+                ignored.add("Unprojected public trigger: " + trigger.getMode() + " on " + card.getId());
             }
         }
         for (final var ability : card.getStaticAbilities()) {
-            if (!ability.isSuppressed() && (ability.getKeyword() == null
+            if (!ability.isSuppressed() && (ability.getActiveZone() == null
+                    || ability.getActiveZone().contains(card.getZone().getZoneType())) && (ability.getKeyword() == null
                     || !SUPPORTED_KEYWORDS.contains(ability.getKeyword().getKeyword())) && !fixedSelfBlockerBounds(ability)
                     && !CombatDamagePreventionRule.supported(ability)
                     && !forge.ai.effect.CombatStaticProjectionPreparation.supportsFixedPowerToughness(ability)) {
-                reasons.add("Unprojected static effect: " + card.getId());
+                final boolean structural = Set.of("CantPreventDamage", "MinMaxBlocker")
+                        .contains(ability.getMapParams().getOrDefault("Mode", ""));
+                (structural ? reasons : ignored).add("Unprojected static effect: " + card.getId());
             }
         }
         for (final var ability : card.getHiddenStaticAbilities()) {
-            if (!ability.isSuppressed()) { reasons.add("Unprojected hidden static effect: " + card.getId()); }
+            if (!ability.isSuppressed() && (ability.getActiveZone() == null
+                    || ability.getActiveZone().contains(card.getZone().getZoneType()))) {
+                ignored.add("Unprojected hidden static effect: " + card.getId());
+            }
         }
-        if (card.getReplacementEffects().stream().anyMatch(effect -> !fixedSelfStunReplacement(card, effect)
-                && !fixedSelfShieldReplacement(card, effect))) {
-            reasons.add("Unprojected replacement: " + card.getId());
+        for (final var effect : card.getReplacementEffects()) {
+            if (!effect.isSuppressed() && effect.zonesCheck(card.getZone())
+                    && !fixedSelfStunReplacement(card, effect) && !fixedSelfShieldReplacement(card, effect)) {
+                final boolean damage = "DamageDone".equals(effect.getMapParams().get("Event"));
+                (damage ? reasons : ignored).add("Unprojected replacement: " + card.getId());
+            }
         }
     }
 
