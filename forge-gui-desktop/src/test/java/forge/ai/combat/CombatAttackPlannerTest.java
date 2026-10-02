@@ -53,12 +53,8 @@ public class CombatAttackPlannerTest extends AITest {
         Assert.assertTrue(f.combat().getAttackers().isEmpty());
         Assert.assertFalse(first.getView().isAttacking() || second.getView().isAttacking() || blocker.getView().isBlocking());
         Assert.assertEquals(f.game().nextCardId(), sentinel + 1);
-        Assert.assertFalse(AiProfileUtil.getBoolProperty(f.ai(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
-        final AiController controller = new AiController(f.ai(), f.game()) {
-            @Override public boolean getBoolProperty(final AiProps property) {
-                return property == AiProps.ENABLE_COMBAT_ATTACK_PLANNING || super.getBoolProperty(property);
-            }
-        };
+        Assert.assertTrue(AiProfileUtil.getBoolProperty(f.ai(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
+        final AiController controller = new AiController(f.ai(), f.game());
         controller.declareAttackers(f.ai(), f.combat());
         Assert.assertEquals(f.combat().getAttackers().size(), 2);
         Assert.assertTrue(first.getView().isAttacking() && second.getView().isAttacking());
@@ -168,6 +164,21 @@ public class CombatAttackPlannerTest extends AITest {
         Assert.assertTrue(plan.applicable(), plan.reasons().toString());
         Assert.assertEquals(plan.snapshot().orElseThrow().attackersToDefenders().keySet(), java.util.Set.of(haste.getId()));
         Assert.assertFalse(tapped.getView().isAttacking() || sick.getView().isAttacking() || wall.getView().isAttacking());
+    }
+
+    @Test
+    public void completedGreedyDeclarationIsAppliedWithoutClaimingAllSubsetsWereSearched() {
+        final Fixture f = fixture();
+        final Card first = creature(f.ai(), 2, 2, List.of());
+        final Card second = creature(f.ai(), 2, 2, List.of());
+        final Card third = creature(f.ai(), 2, 2, List.of());
+        creature(f.opponent(), 1, 3, List.of());
+        final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(20000));
+        Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+        Assert.assertTrue(plan.search().orElseThrow().candidateSearchComplete());
+        Assert.assertFalse(plan.search().orElseThrow().searchExhaustive());
+        Assert.assertTrue(CombatAttackPlanner.tryDeclare(f.ai(), f.ai(), f.combat(), new CombatSearchBudget(20000)));
+        Assert.assertEquals(java.util.Set.copyOf(f.combat().getAttackers()), java.util.Set.of(first, second, third));
     }
 
     private Fixture fixture() {

@@ -21,16 +21,21 @@ public final class CombatSafetyEvaluator {
 
     public record Forecast(FollowUp evaluation, Optional<Continuation> continuation) { }
 
+    /** Ordinary speculative combat value gets half weight; lethal protection is ranked separately. */
+    public static int discountedFollowUpValue(final long value) {
+        return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, Math.round(value * 0.5)));
+    }
+
     /** A heuristic opportunity is not an actual win; current terminal ranking remains separate. */
     public static int incrementalPressure(final FollowUp baseline, final FollowUp candidate) {
         if (!baseline.supported() || !baseline.searchExhaustive() || !candidate.supported() || !candidate.searchExhaustive()) {
             throw new IllegalArgumentException("Complete comparable follow-up estimates required");
         }
         final long delta = (long) candidate.nonterminalUtility() - baseline.nonterminalUtility();
-        final int ordinary = (int) Math.max(-40, Math.min(40, Math.round(delta * 0.35)));
+        final int ordinary = discountedFollowUpValue(delta);
         final int lethal = candidate.lethalOpportunity() == baseline.lethalOpportunity() ? 0
                 : candidate.lethalOpportunity() ? 500 : -500;
-        return ordinary + lethal;
+        return CombatOutcomePredictor.add(ordinary, lethal);
     }
 
     public static FollowUp nextAttack(final PublicCombatSnapshot before, final CombatProjection current,

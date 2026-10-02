@@ -404,10 +404,11 @@ public final class CombatBlockSearch {
         private int pressure(final CombatProjection projection) {
             if (replyEstimator != null) {
                 final var reply = estimateReply(projection);
-                // For attack responses, compare complete immediate + reply utility. The
+                // For attack responses, compare immediate + half-weight ordinary reply utility. The
                 // no-attack constant is subtracted once by the outer declaration search.
                 return reply == null || !reply.supported() || !reply.searchExhaustive() ? 0
-                        : CombatOutcomePredictor.add(reply.nonterminalUtility(), continuationPressure(projection));
+                        : CombatOutcomePredictor.add(CombatSafetyEvaluator.discountedFollowUpValue(reply.nonterminalUtility()),
+                                continuationPressure(projection));
             }
             if (readiness != null && projection.terminal() == CombatProjection.Terminal.NONE
                     && (!baselineEvaluated || pressureEnabled)) {

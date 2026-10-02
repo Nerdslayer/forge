@@ -26,10 +26,10 @@ public class CombatBlockPlannerTest extends AITest {
     private record Fixture(Game game, Player attacker, Player defender, Combat combat) { }
 
     @Test
-    public void blockingRolloutIsEnabledOnlyInMastermindAndAttackRolloutRemainsDisabled() {
+    public void combatRolloutIsEnabledOnlyInMastermind() {
         final Fixture f = fixture();
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
-        Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
+        Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
         ((LobbyPlayerAi) f.defender().getLobbyPlayer()).setAiProfile("Default");
         Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
         Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));

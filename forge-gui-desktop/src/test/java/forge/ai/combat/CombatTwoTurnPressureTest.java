@@ -89,7 +89,8 @@ public class CombatTwoTurnPressureTest {
         for (final int ownLife : List.of(20, 2)) {
             final var before = board(ownLife, 12, creature(30, 2, 3, 2, false, false));
             final var result = CombatAttackSearch.search(before, values(before, 700), readiness(before), new CombatSearchBudget(500000));
-            Assert.assertTrue(result.outcomeDomainComplete() && result.searchExhaustive(), result.reasons().toString());
+            Assert.assertTrue(result.outcomeDomainComplete() && result.candidateSearchComplete(), result.reasons().toString());
+            Assert.assertFalse(result.searchExhaustive(), "A completed greedy frontier is not an exhaustive subset search");
             final var chosen = result.best().orElseThrow();
             Assert.assertFalse(chosen.reply().orElseThrow().lethalOpportunity());
             if (ownLife == 20) {

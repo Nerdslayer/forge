@@ -46,10 +46,11 @@ public final class CombatAttackPlanner {
         final CombatAttackSearch.Result search = CombatAttackSearch.search(capture.snapshot(), values, capture.readiness(), budget,
                 capture.fixedAttackers().keySet());
         reasons.addAll(search.reasons());
-        // TODO: Certify sufficiently audited bounded responses without requiring a wholly exact
-        // small-domain search; incomplete opponent responses must never become "zero threat".
+        // Greedy declaration coverage need not enumerate every subset. Opposing responses must
+        // still be complete; an incomplete counterattack must never become "zero threat".
+        // TODO: Audit bounded opposing responses before relaxing their separate completeness gate.
         final boolean applicable = search.best().isPresent() && (search.best().orElseThrow().certifiedWin()
-                || search.outcomeDomainComplete() && search.searchExhaustive());
+                || search.outcomeDomainComplete() && search.candidateSearchComplete());
         if (!applicable) { reasons.add("No sufficiently supported, verified attack/reply result"); }
         return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.of(search), applicable, reasons, capture.fixedAttackers());
     }

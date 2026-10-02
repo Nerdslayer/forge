@@ -355,7 +355,7 @@ ACTION_COMBINATION_VALUE_SELECTION_TIMEOUT_MS=100
 
 # Enable audited block planning; unsupported mechanics and exhausted budgets use legacy blocking.
 ENABLE_COMBAT_BLOCK_PLANNING=true
-# Attack planning remains disabled pending its separate rollout.
-ENABLE_COMBAT_ATTACK_PLANNING=false
+# Enable audited attack planning; unsupported mechanics and exhausted budgets use legacy attacking.
+ENABLE_COMBAT_ATTACK_PLANNING=true
 COMBAT_PLANNING_MAX_NODES=5000
 COMBAT_PLANNING_TIMEOUT_MS=100

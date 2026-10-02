@@ -87,7 +87,7 @@ public final class CombatDamagePlanner {
                     final var future = forecasts.pressure(state);
                     supported[0] &= future.supported() && future.searchExhaustive();
                     reasons.addAll(future.reasons());
-                    return CombatOutcomePredictor.add(reply.nonterminalUtility(), future.value());
+                    return CombatOutcomePredictor.add(CombatSafetyEvaluator.discountedFollowUpValue(reply.nonterminalUtility()), future.value());
                 }, (left, right) -> {
                     final var a = forecast.apply(left);
                     final var b = forecast.apply(right);

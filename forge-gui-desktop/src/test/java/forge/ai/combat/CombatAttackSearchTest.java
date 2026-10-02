@@ -93,7 +93,76 @@ public class CombatAttackSearchTest {
         Assert.assertFalse(result.reasons().isEmpty());
     }
 
+    @Test
+    public void interchangeableSingletonsAreReusedButDistinctLossOrBlockingRolesAreNot() {
+        final var before = snapshot(20, 20, Map.of(10, creature(10, 1, 2, 2), 11, creature(11, 1, 2, 2),
+                12, creature(12, 1, 2, 2), 20, creature(20, 2, 1, 3)));
+        final Map<Integer, PreparedCombatValuation.PermanentValue> cards = new LinkedHashMap<>();
+        before.creatures().forEach((id, card) -> cards.put(id, new PreparedCombatValuation.PermanentValue(id, card.controllerId(),
+                card.controllerId() == 1 ? -100 : 100, 0, id == 12 ? -20 : 0, List.of())));
+        final var ledger = new PreparedCombatValuation(cards, List.of(), ValuationCompleteness.PARTIAL, List.of());
+        final var ready = new PublicCombatReadiness(2, Set.of(20), Map.of(20, Set.of(10, 11, 12)), List.of());
+        final var representatives = CombatAttackEquivalence.representatives(before, ledger, ready, List.of(10, 11, 12));
+        Assert.assertEquals(representatives.get(10), representatives.get(11));
+        Assert.assertNotEquals(representatives.get(10), representatives.get(12));
+        final var distinctBlocks = new PublicCombatReadiness(2, Set.of(20), Map.of(20, Set.of(10, 12)), List.of());
+        final var distinct = CombatAttackEquivalence.representatives(before, ledger, distinctBlocks, List.of(10, 11));
+        Assert.assertNotEquals(distinct.get(10), distinct.get(11));
+        final var result = CombatAttackSearch.search(before, ledger, ready, new CombatSearchBudget(100000));
+        Assert.assertTrue(result.candidateSearchComplete(), result.reasons().toString());
+        Assert.assertFalse(result.searchExhaustive());
+        Assert.assertTrue(result.declarationsEvaluated() < 8, "Do not enumerate all three-attacker subsets");
+        Assert.assertEquals(result.best().orElseThrow().attackers(), List.of(10, 11, 12));
+    }
+
+    @Test
+    public void individuallyLethalAttackersForceChumpsAndFreeOtherwiseUnprofitableAttackers() {
+        final var board = lethalOverloadBoard(false);
+        assertSmallAttackersLoseAlone(board);
+        final var result = search(board, new CombatSearchBudget(2000000), true);
+        Assert.assertTrue(result.candidateSearchComplete(), result.reasons().toString());
+        final var best = result.best().orElseThrow();
+        Assert.assertEquals(best.attackers(), List.of(10, 11, 12, 13, 14));
+        Assert.assertEquals(best.combat().projection().playerLifeAfter().get(2).intValue(), 3);
+        Assert.assertEquals(best.combat().projection().lostCreatures(), Set.of(20, 21, 22));
+    }
+
+    @Test
+    public void spareBlockerKeepsOtherwiseUnprofitableAttackersHomeDespiteForcedChumps() {
+        final var board = lethalOverloadBoard(true);
+        assertSmallAttackersLoseAlone(board);
+        final var result = search(board, new CombatSearchBudget(2000000), true);
+        Assert.assertTrue(result.candidateSearchComplete(), result.reasons().toString());
+        final var best = result.best().orElseThrow();
+        Assert.assertEquals(best.attackers(), List.of(10, 11, 12));
+        Assert.assertEquals(best.combat().projection().playerLifeAfter().get(2).intValue(), 5);
+        Assert.assertEquals(best.combat().projection().lostCreatures().size(), 3);
+        Assert.assertTrue(best.combat().projection().lostCreatures().stream().allMatch(id -> id >= 20));
+    }
+
+    private static PublicCombatSnapshot lethalOverloadBoard(final boolean spareBlocker) {
+        // Blockers have defender: isolate forced chumps without unrelated counterattack choices.
+        final Map<Integer, PublicCombatSnapshot.Creature> cards = new LinkedHashMap<>();
+        for (int id = 10; id <= 12; id++) { cards.put(id, creature(id, 1, 5, 5)); }
+        for (int id = 13; id <= 14; id++) { cards.put(id, creature(id, 1, 1, 1)); }
+        for (int id = 20; id <= (spareBlocker ? 23 : 22); id++) { cards.put(id, creature(id, 2, 2, 3)); }
+        return snapshot(40, 5, cards);
+    }
+
+    private static void assertSmallAttackersLoseAlone(final PublicCombatSnapshot board) {
+        for (final int id : List.of(13, 14)) {
+            final var alone = search(CombatAttackCandidates.select(board, List.of(id)), new CombatSearchBudget(2000000), true);
+            Assert.assertTrue(alone.candidateSearchComplete(), alone.reasons().toString());
+            Assert.assertTrue(alone.best().orElseThrow().attackers().isEmpty());
+        }
+    }
+
     private static CombatAttackSearch.Result search(final PublicCombatSnapshot snapshot, final CombatSearchBudget budget) {
+        return search(snapshot, budget, false);
+    }
+
+    private static CombatAttackSearch.Result search(final PublicCombatSnapshot snapshot, final CombatSearchBudget budget,
+            final boolean defenderOnlyBlockers) {
         final Map<Integer, PreparedCombatValuation.PermanentValue> values = new LinkedHashMap<>();
         final Map<Integer, Set<Integer>> replies = new LinkedHashMap<>();
         final Set<Integer> own = snapshot.creatures().keySet().stream().filter(id -> snapshot.creatures().get(id).controllerId() == 1)
@@ -106,7 +175,7 @@ public class CombatAttackSearchTest {
             if (card.controllerId() == 2) { replies.put(id, own); }
         });
         return CombatAttackSearch.search(snapshot, new PreparedCombatValuation(values, List.of(), ValuationCompleteness.PARTIAL, List.of()),
-                new PublicCombatReadiness(2, enemies, replies, List.of()), budget);
+                new PublicCombatReadiness(2, defenderOnlyBlockers ? Set.of() : enemies, replies, List.of()), budget);
     }
 
     private static PublicCombatSnapshot snapshot(final int ownLife, final int opposingLife,

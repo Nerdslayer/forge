@@ -45,6 +45,8 @@ public final class CombatDecisionTrace {
             text.append("\nSearch exhaustive: ").append(search.searchExhaustive())
                     .append(", outcome domain supported: ").append(search.outcomeDomainComplete());
             text.append("\nFixed attackers: ").append(plan.fixedAttackers());
+            text.append("\nGreedy candidate search complete: ").append(search.candidateSearchComplete())
+                    .append(", declarations evaluated: ").append(search.declarationsEvaluated());
             search.noAttack().ifPresent(candidate -> text.append("\nNo additional attacks: ").append(candidate.total())
                     .append(", public reply=").append(candidate.reply()));
             search.best().ifPresent(candidate -> text.append("\nChosen attackers: ").append(candidate.attackers())
