@@ -37,6 +37,14 @@ final class TriggeredEffectAnalyzer {
     static Map<Card, List<AbilityValueContribution>> evaluateContributions(
             final Player evaluatingAi, final Iterable<Card> candidates,
             final SpellAbility removalAbility, final EffectAnalysisTrace trace) {
+        final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
+        merge(values, evaluateBaseline(evaluatingAi, candidates, trace));
+        merge(values, evaluateTargetOverlay(evaluatingAi, candidates, removalAbility, trace));
+        return values;
+    }
+
+    static Map<Card, List<AbilityValueContribution>> evaluateBaseline(
+            final Player evaluatingAi, final Iterable<Card> candidates, final EffectAnalysisTrace trace) {
         if (evaluatingAi == null || candidates == null) {
             return Collections.emptyMap();
         }
@@ -59,10 +67,66 @@ final class TriggeredEffectAnalyzer {
                 productions, trace);
         addNormalDrawStep(evaluatingAi, productions, trace);
         extractEffects(evaluatingAi, analyzedControllers, productions, consequences, trace);
-        final List<EffectProduction> targetEvents = BecameTargetProductionExtractor.extract(
+        return evaluateProductions(evaluatingAi, productions, consequences, trace);
+    }
+
+    /** Target-caused opportunities depend on the current action and are never cached as baseline. */
+    static Map<Card, List<AbilityValueContribution>> evaluateTargetOverlay(
+            final Player evaluatingAi, final Iterable<Card> candidates,
+            final SpellAbility removalAbility, final EffectAnalysisTrace trace) {
+        if (evaluatingAi == null || candidates == null || removalAbility == null) {
+            return Map.of();
+        }
+        final List<Card> candidateList = copyCandidates(candidates);
+        final List<EffectProduction> productions = BecameTargetProductionExtractor.extract(
                 evaluatingAi, removalAbility, candidateList);
-        productions.addAll(targetEvents);
-        targetEvents.forEach(trace::production);
+        if (productions.isEmpty()) {
+            return Map.of();
+        }
+        productions.forEach(trace::production);
+        final Map<EffectType, List<EffectConsequence>> consequences = new EnumMap<>(EffectType.class);
+        final List<Player> controllers = List.copyOf(findAnalyzedControllers(evaluatingAi, candidateList));
+        final SituationalAnalysisSession session = SituationalAnalysisSession.current(evaluatingAi);
+        if (session == null) {
+            // Preserve the original standalone/Default extraction and its fallback behavior.
+            for (final Player controller : controllers) {
+                for (final Card source : controller.getCardsIn(ZoneType.Battlefield)) {
+                    for (final Trigger trigger : source.getTriggers()) {
+                        try {
+                            addConsequence(consequences, EffectConsequenceExtractorRegistry.extract(source, trigger));
+                        } catch (final RuntimeException ignored) {
+                            SituationalAnalysisSession.noteFailure(evaluatingAi);
+                        }
+                    }
+                }
+            }
+        } else {
+            final PreparedConsequenceIndex index = session.consequenceIndex(candidateList, controllers, trace);
+            final Set<EffectType> types = new LinkedHashSet<>();
+            productions.forEach(production -> types.add(production.type()));
+            for (final EffectType type : types) {
+                for (final PreparedConsequenceIndex.Reference reference : index.forType(type)) {
+                    try {
+                        addConsequence(consequences, reference.bind());
+                    } catch (final RuntimeException ignored) {
+                        SituationalAnalysisSession.noteFailure(evaluatingAi);
+                    }
+                }
+            }
+        }
+        return evaluateProductions(evaluatingAi, productions, consequences, trace);
+    }
+
+    private static void addConsequence(final Map<EffectType, List<EffectConsequence>> consequences,
+            final EffectConsequence consequence) {
+        if (consequence != null) {
+            consequences.computeIfAbsent(consequence.observedType(), key -> new ArrayList<>()).add(consequence);
+        }
+    }
+
+    private static Map<Card, List<AbilityValueContribution>> evaluateProductions(final Player evaluatingAi,
+            final List<EffectProduction> productions,
+            final Map<EffectType, List<EffectConsequence>> consequences, final EffectAnalysisTrace trace) {
 
         final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
         for (final EffectProduction production : productions) {
@@ -98,6 +162,11 @@ final class TriggeredEffectAnalyzer {
         return values;
     }
 
+    private static void merge(final Map<Card, List<AbilityValueContribution>> values,
+            final Map<Card, List<AbilityValueContribution>> additions) {
+        additions.forEach((card, entries) -> values.computeIfAbsent(card, key -> new ArrayList<>()).addAll(entries));
+    }
+
     private static Set<Player> findAnalyzedControllers(final Player evaluatingAi,
             final Iterable<Card> candidates) {
         final Set<Player> controllers = new LinkedHashSet<>();
@@ -130,6 +199,7 @@ final class TriggeredEffectAnalyzer {
                     productions.addAll(extracted);
                     extracted.forEach(trace::production);
                 } catch (final RuntimeException ignored) {
+                    SituationalAnalysisSession.noteFailure(evaluatingAi);
                     // Unknown or malformed card state must not disrupt AI decisions.
                 }
                 for (final SpellAbility ability : permanent.getSpellAbilities()) {
@@ -144,6 +214,7 @@ final class TriggeredEffectAnalyzer {
                                     ActivatedAbilityUseEvaluator.estimate(permanent, ability));
                         }
                     } catch (final RuntimeException ignored) {
+                        SituationalAnalysisSession.noteFailure(evaluatingAi);
                         // Unknown or malformed card scripts must not disrupt AI decisions.
                     }
                 }
@@ -162,6 +233,7 @@ final class TriggeredEffectAnalyzer {
                             trace.consequence(consequence);
                         }
                     } catch (final RuntimeException ignored) {
+                        SituationalAnalysisSession.noteFailure(evaluatingAi);
                         // Unknown or malformed card scripts must not disrupt AI decisions.
                     }
                 }
@@ -198,6 +270,7 @@ final class TriggeredEffectAnalyzer {
                     addPlayerProductions(evaluatingAi, permanent, ability, includedTypes,
                             productions, trace);
                 } catch (final RuntimeException ignored) {
+                    SituationalAnalysisSession.noteFailure(evaluatingAi);
                     // Unknown or malformed card scripts must not disrupt AI decisions.
                 }
             }
@@ -206,6 +279,7 @@ final class TriggeredEffectAnalyzer {
                     addPlayerProductions(evaluatingAi, permanent, trigger, includedTypes,
                             productions, trace);
                 } catch (final RuntimeException ignored) {
+                    SituationalAnalysisSession.noteFailure(evaluatingAi);
                     // Unknown or malformed card scripts must not disrupt AI decisions.
                 }
             }
@@ -241,8 +315,12 @@ final class TriggeredEffectAnalyzer {
     private static int evaluateRelationship(final Player evaluatingAi,
             final EffectProduction production, final EffectConsequence consequence,
             final EffectEventMatcher matcher, final EffectAnalysisTrace trace) {
-        return TriggeredRelationshipEvaluator.evaluate(
-                evaluatingAi, production, consequence, matcher, trace, false).value();
+        final TriggeredRelationshipEvaluator.Evaluation result = TriggeredRelationshipEvaluator.evaluate(
+                evaluatingAi, production, consequence, matcher, trace, false);
+        if (!result.supported()) {
+            SituationalAnalysisSession.noteFailure(evaluatingAi);
+        }
+        return result.value();
     }
 
     private static void addContribution(final Map<Card, List<AbilityValueContribution>> values,

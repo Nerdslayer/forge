@@ -76,6 +76,7 @@ public class StaticEffect {
      *            a long
      */
     public final void setTimestamp(final long t) {
+        if (timestamp != t) { invalidateAnalysisState(); }
         this.timestamp = t;
     }
 
@@ -119,6 +120,7 @@ public class StaticEffect {
      *            a {@link CardCollectionView} object.
      */
     public final void setAffectedCards(final CardCollectionView list) {
+        invalidateAnalysisState();
         affectedCards = list;
     }
 
@@ -138,6 +140,7 @@ public class StaticEffect {
      *            the new affected players
      */
     public final void setAffectedPlayers(final List<Player> list) {
+        invalidateAnalysisState();
         this.affectedPlayers = list;
     }
 
@@ -148,8 +151,22 @@ public class StaticEffect {
      *            a HashMap
      */
     public final void setParams(final Map<String, String> params) {
+        invalidateAnalysisState();
         this.mapParams = params;
     }
+
+    private void invalidateAnalysisState() {
+        // Mapped/untracked effects must not affect the original game's revision. A projected
+        // effect actually installed in the tracked registry does change that registry.
+        if (source == null) { return; }
+        final Game game = source.getGame();
+        if (game != null && ability != null && game.getStaticEffects().findStaticEffect(ability) == this) {
+            game.invalidateAnalysisState();
+        }
+    }
+
+    // TODO: Direct edits through exposed recipient/parameter collections bypass these setters;
+    // static recomputation and restoration can also change unrelated live model fields.
 
     /**
      * Gets the params.

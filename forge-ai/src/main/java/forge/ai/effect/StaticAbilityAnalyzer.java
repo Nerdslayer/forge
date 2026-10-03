@@ -66,6 +66,7 @@ final class StaticAbilityAnalyzer {
                             trace.staticRelationship(source, value);
                         }
                     } catch (final RuntimeException ignored) {
+                        SituationalAnalysisSession.noteFailure(evaluatingAi);
                         // Card scripts are data. Unknown forms must not disrupt AI decisions.
                     }
                 }
@@ -81,7 +82,8 @@ final class StaticAbilityAnalyzer {
             return List.of();
         }
 
-        final StaticEffect effect = source.getGame().getStaticEffects().getStaticEffect(ability);
+        final StaticEffect effect = source.getGame().getStaticEffects().findStaticEffect(ability);
+        if (effect == null) { return List.of(); }
         // AIEffectValue supplements automatic evaluation and is signed from each recipient's
         // perspective: positive helps that card, negative harms it.
         final int hintedValue = ability.hasParam("AIEffectValue")

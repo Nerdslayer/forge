@@ -194,8 +194,8 @@ final class AttachmentOutcomeEvaluator implements OutcomeEvaluator {
             for (final StaticAbility ability : Iterables.concat(
                     source.getStaticAbilities(), source.getHiddenStaticAbilities())) {
                 final StaticEffect effect = original.getGame().getStaticEffects()
-                        .getStaticEffect(ability);
-                if (effect.getAffectedCards().contains(original)) {
+                        .findStaticEffect(ability);
+                if (effect != null && effect.getAffectedCards().contains(original)) {
                     StaticAbilityAnalyzer.removeTrackedChanges(copy, effect, ability);
                 }
             }

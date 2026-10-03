@@ -360,9 +360,9 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     private int planeswalkerAbilityActivated;
     private boolean planeswalkerActivationLimitUsed;
 
-    private final ActivationTable numberTurnActivations = new ActivationTable();
-    private final ActivationTable numberGameActivations = new ActivationTable();
-    private final ActivationTable numberAbilityResolved = new ActivationTable();
+    private final ActivationTable numberTurnActivations = new ActivationTable(this);
+    private final ActivationTable numberGameActivations = new ActivationTable(this);
+    private final ActivationTable numberAbilityResolved = new ActivationTable(this);
 
     private final Map<SpellAbility, List<String>> chosenModesTurn = Maps.newHashMap();
     private final Map<SpellAbility, List<String>> chosenModesGame = Maps.newHashMap();
@@ -595,6 +595,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
 
         currentStateName = state;
         currentState = getState(state);
+        invalidateAnalysisState();
 
         updateTypeCache();
         if (updateView) {
@@ -1936,6 +1937,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
 
     @Override
     public final void setCounters(final Multiset<CounterType> allCounters) {
+        if (!counters.equals(allCounters)) { invalidateAnalysisState(); }
         boolean changed = counters.contains(CounterEnumType.MANABOND) || counters.elementSet().stream().anyMatch(CounterType::isKeywordCounter);
         counters = allCounters;
         view.updateCounters(this);
@@ -1954,6 +1956,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
 
     @Override
     public final void clearCounters() {
+        if (!counters.isEmpty()) { invalidateAnalysisState(); }
         if (counters.isEmpty()) { return; }
         boolean changed = counters.contains(CounterEnumType.MANABOND) || counters.elementSet().stream().anyMatch(CounterType::isKeywordCounter);
 
@@ -3705,6 +3708,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
 
     public final void setController(final Player player, final long tstamp) {
+        invalidateAnalysisState();
         tempControllers.clear();
         controller = player;
         controllerTimestamp = tstamp;
@@ -3712,12 +3716,14 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
 
     public final void addTempController(final Player player, final long tstamp) {
+        invalidateAnalysisState();
         tempControllers.put(tstamp, player);
         view.updateController(this);
     }
 
     public final void removeTempController(final long tstamp) {
         if (tempControllers.remove(tstamp) != null) {
+            invalidateAnalysisState();
             view.updateController(this);
         }
     }
@@ -3729,18 +3735,21 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
             changed = true;
         }
         if (changed) {
+            invalidateAnalysisState();
             view.updateController(this);
         }
     }
 
     public final void clearTempControllers() {
         if (tempControllers.isEmpty()) { return; }
+        invalidateAnalysisState();
         tempControllers.clear();
         view.updateController(this);
     }
 
     public final void clearControllers() {
         if (tempControllers.isEmpty() && controller == null) { return; }
+        invalidateAnalysisState();
         tempControllers.clear();
         controller = null;
         view.updateController(this);
@@ -3872,6 +3881,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
     public final void setEntityAttachedTo(final GameEntity e) {
         if (entityAttachedTo == e) { return; }
+        invalidateAnalysisState();
         entityAttachedTo = e;
         view.updateAttachedTo(this);
     }
@@ -4626,6 +4636,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
     public final void setTapped(boolean tapped0) {
         if (tapped == tapped0) { return; }
+        invalidateAnalysisState();
         tapped = tapped0;
         view.updateTapped(this);
     }
@@ -5582,6 +5593,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
     public final void setPhasedOut(final Player phasedOut0) {
         if (phasedOut == phasedOut0) { return; }
+        invalidateAnalysisState();
         phasedOut = phasedOut0;
         view.updatePhasedOut(this);
     }
@@ -6044,6 +6056,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
         return hasBeenDealtDeathtouchDamage;
     }
     public final void setHasBeenDealtDeathtouchDamage(final boolean hasBeenDealtDeatchtouchDamage) {
+        if (this.hasBeenDealtDeathtouchDamage != hasBeenDealtDeatchtouchDamage) { invalidateAnalysisState(); }
         this.hasBeenDealtDeathtouchDamage = hasBeenDealtDeatchtouchDamage;
     }
 
@@ -6792,8 +6805,13 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
     public void setZone(Zone zone) {
         if (currentZone == zone) { return; }
+        invalidateAnalysisState();
         currentZone = zone;
         view.updateZone(this);
+    }
+
+    private void invalidateAnalysisState() {
+        invalidateEntityAnalysisState();
     }
 
     public boolean isInZone(final ZoneType zone) {
@@ -7129,6 +7147,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     public void onEndOfCombat(final Player active) {
         setEnlistedThisCombat(false);
         if (this.getController().equals(active)) {
+            invalidateAnalysisState();
             chosenModesYourLastCombat.clear();
             chosenModesYourLastCombatStatic.clear();
             chosenModesYourLastCombat.putAll(chosenModesYourCombat);
@@ -7140,6 +7159,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
 
     public void onCleanupPhase(final Player turn) {
+        invalidateAnalysisState();
         tappedThisTurn = 0;
         setRegeneratedThisTurn(0);
         resetShieldCount();
@@ -7774,6 +7794,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
 
     public void addChosenModes(SpellAbility ability, String mode, boolean yourCombat) {
+        invalidateAnalysisState();
         SpellAbility original = null;
         SpellAbility root = ability.getRootAbility();
 
@@ -7823,6 +7844,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
 
     public void resetChosenModeTurn() {
         boolean updateView = !chosenModesTurn.isEmpty() || !chosenModesTurnStatic.isEmpty();
+        if (updateView) { invalidateAnalysisState(); }
         chosenModesTurn.clear();
         chosenModesTurnStatic.clear();
         if (updateView) {
@@ -7835,6 +7857,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
 
     public void addPlaneswalkerAbilityActivated() {
+        invalidateAnalysisState();
         // track if increased limit was used for activation because if there are also additional ones they can count on top
         if (++planeswalkerAbilityActivated == 2 && StaticAbilityNumLoyaltyAct.limitIncrease(this)) {
             planeswalkerActivationLimitUsed = true;
@@ -7846,6 +7869,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     }
 
     public void resetActivationsPerTurn() {
+        if (planeswalkerAbilityActivated != 0 || planeswalkerActivationLimitUsed) { invalidateAnalysisState(); }
         planeswalkerAbilityActivated = 0;
         planeswalkerActivationLimitUsed = false;
         numberTurnActivations.clear();

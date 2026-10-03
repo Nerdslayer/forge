@@ -45,6 +45,12 @@ public final class EffectAnalysisTrace {
         return details != null;
     }
 
+    void sharedBaseline(final long sessionId, final String section, final boolean reused) {
+        if (isEnabled()) {
+            line("Shared analysis: session=%d, section=%s, reused=%s", sessionId, section, reused);
+        }
+    }
+
     /** Records information about the removal decision after target filtering. */
     public void context(final int candidateCount) {
         if (!isEnabled()) {

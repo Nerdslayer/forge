@@ -119,6 +119,7 @@ public class Combat {
     }
 
     public void initConstraints() {
+        invalidateAnalysisState();
         attackableEntries.get().clear();
         // Create keys for all possible attack targets
         attackableEntries.get().addAll(CombatUtil.getAllPossibleDefenders(playerWhoAttacks));
@@ -149,6 +150,7 @@ public class Combat {
     }
 
     public void endCombat() {
+        invalidateAnalysisState();
         //backup attackers and blockers
         CardCollection attackers = getAttackers();
         CardCollection blockers = getAllBlockers();
@@ -270,6 +272,7 @@ public class Combat {
             System.out.println("Trying to add Attacker " + c + " to missing defender " + defender);
             return;
         }
+        invalidateAnalysisState();
 
         // This is trying to fix the issue of an attacker existing in two bands at once
         AttackingBand existingBand = getBandOfAttacker(c);
@@ -380,6 +383,7 @@ public class Combat {
 
     // Some cards in Alpha may UNBLOCK an attacker, so second parameter is not always-true
     public final void setBlocked(final Card attacker, boolean value) {
+        invalidateAnalysisState();
         getBandOfAttackerNotNull(attacker).setBlocked(value); // called by Curtain of Light, Dazzling Beauty, Trap Runner
     }
 
@@ -396,6 +400,7 @@ public class Combat {
     }
 
     private void addBlocker(final Card attacker, final Card blocker, final boolean publishViews) {
+        invalidateAnalysisState();
         final AttackingBand band = getBandOfAttackerNotNull(attacker);
         blockedBands.get().put(band, blocker);
         // If damage is already assigned, add this blocker as a "late entry"
@@ -407,6 +412,7 @@ public class Combat {
 
     // remove blocker from specific attacker
     public final void removeBlockAssignment(final Card attacker, final Card blocker) {
+        invalidateAnalysisState();
         AttackingBand band = getBandOfAttackerNotNull(attacker);
         Collection<Card> cc = blockedBands.get().get(band);
         if (cc != null) {
@@ -417,6 +423,7 @@ public class Combat {
 
     // remove blocker from everywhere
     public final void undoBlockingAssignment(final Card blocker) {
+        invalidateAnalysisState();
         CardCollection toRemove = new CardCollection(blocker);
         blockedBands.get().values().removeAll(toRemove);
         blocker.updateBlockingForView();
@@ -515,6 +522,7 @@ public class Combat {
 
     /** If there are multiple blockers, the Attacker declares the Assignment Order */
     public void orderBlockersForDamageAssignment(Card attacker, CardCollection blockers) { // this method performs controller's role
+        invalidateAnalysisState();
         if (blockers.size() <= 1 || !this.legacyOrderCombatants) {
             blockersOrderedForDamageAssignment.get().put(attacker, new CardCollection(blockers));
             return;
@@ -549,6 +557,7 @@ public class Combat {
      * @param blocker the blocking creature.
      */
     public void addBlockerToDamageAssignmentOrder(Card attacker, Card blocker) {
+        invalidateAnalysisState();
         final CardCollection oldBlockers = blockersOrderedForDamageAssignment.get().get(attacker);
         if (oldBlockers == null || oldBlockers.isEmpty()) {
             blockersOrderedForDamageAssignment.get().put(attacker, new CardCollection(blocker));
@@ -569,6 +578,7 @@ public class Combat {
     }
 
     public void orderAttackersForDamageAssignment(Card blocker) { // this method performs controller's role
+        invalidateAnalysisState();
         CardCollection attackers = getAttackersBlockedBy(blocker);
         // They need a reverse map here: Blocker => List<Attacker>
 
@@ -581,6 +591,7 @@ public class Combat {
 
     // removes references to this attacker from all indices and orders
     public void unregisterAttacker(final Card c, AttackingBand ab) {
+        invalidateAnalysisState();
         blockersOrderedForDamageAssignment.get().remove(c);
 
         Collection<Card> blockers = blockedBands.get().get(ab);
@@ -614,6 +625,7 @@ public class Combat {
 
     // removes references to this defender from all indices and orders
     public void unregisterDefender(final Card c, AttackingBand bandBeingBlocked) {
+        invalidateAnalysisState();
         attackersOrderedForDamageAssignment.get().remove(c);
         for (Card atk : bandBeingBlocked.getAttackers()) {
             if (blockersOrderedForDamageAssignment.get().containsKey(atk)) {
@@ -624,6 +636,7 @@ public class Combat {
 
     // remove a combatant whose side is unknown
     public final void removeFromCombat(final Card c) {
+        invalidateAnalysisState();
         AttackingBand ab = getBandOfAttacker(c);
         if (ab != null) {
             unregisterAttacker(c, ab);
@@ -695,6 +708,7 @@ public class Combat {
 
     // Call this method right after turn-based action of declare blockers has been performed
     public final void fireTriggersForUnblockedAttackers(final Game game) {
+        invalidateAnalysisState();
         boolean bFlag = false;
         List<GameEntity> defenders = Lists.newArrayList();
         for (AttackingBand ab : attackedByBands.get().values()) {
@@ -940,6 +954,7 @@ public class Combat {
     }
 
     public final boolean assignCombatDamage(boolean firstStrikeDamage) {
+        invalidateAnalysisState();
         boolean assignedDamage = assignAttackersDamage(firstStrikeDamage);
         assignedDamage |= assignBlockersDamage(firstStrikeDamage);
         if (!firstStrikeDamage) {
@@ -950,6 +965,7 @@ public class Combat {
     }
 
     public void dealAssignedDamage() {
+        invalidateAnalysisState();
         final Game game = playerWhoAttacks.getGame();
         game.copyLastState();
 
@@ -991,6 +1007,13 @@ public class Combat {
             }
         }
         return false;
+    }
+
+    // TODO: Direct mutation of exposed bands/collections and card damage/activation history
+    // still needs auditing before the game revision permits cross-decision numeric reuse.
+    private void invalidateAnalysisState() {
+        final Game game = playerWhoAttacks.getGame();
+        if (game != null && game.getCombat() == this) { game.invalidateAnalysisState(); }
     }
 
     public boolean isBlocking(Card blocker) {

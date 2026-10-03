@@ -172,10 +172,12 @@ public abstract class GameEntity implements GameObject, IIdentifiable {
     }
 
     public final void setAttachedCards(final Iterable<Card> cards) {
+        invalidateEntityAnalysisState();
         attachedCards = getView().setCards(attachedCards, cards, TrackableProperty.AttachedCards);
     }
 
     public final void clearAttachedCards() {
+        if (attachedCards != null && !attachedCards.isEmpty()) { invalidateEntityAnalysisState(); }
         attachedCards = getView().clearCards(attachedCards, TrackableProperty.AttachedCards);
     }
 
@@ -205,10 +207,12 @@ public abstract class GameEntity implements GameObject, IIdentifiable {
     }
 
     public final void addAttachedCard(final Card c) {
+        if (attachedCards == null || !attachedCards.contains(c)) { invalidateEntityAnalysisState(); }
         attachedCards = getView().addCard(attachedCards, c, TrackableProperty.AttachedCards);
     }
 
     public final void removeAttachedCard(final Card c) {
+        if (attachedCards != null && attachedCards.contains(c)) { invalidateEntityAnalysisState(); }
         attachedCards = getView().removeCard(attachedCards, c, TrackableProperty.AttachedCards);
     }
 
@@ -324,7 +328,14 @@ public abstract class GameEntity implements GameObject, IIdentifiable {
     }
 
     public void setCounters(final CounterType counterType, final Integer num) {
+        if (counters.count(counterType) != num) { invalidateEntityAnalysisState(); }
         counters.setCount(counterType, num);
+    }
+
+    /** Model changes must ignore detached cards and projected player entities. */
+    protected final void invalidateEntityAnalysisState() {
+        final Game game = getGame();
+        if (game != null) { game.invalidateAnalysisState(this); }
     }
 
     abstract public void setCounters(final Multiset<CounterType> allCounters);

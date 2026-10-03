@@ -79,6 +79,14 @@ public record ActionDecisionSnapshot(PhaseType phase, boolean aiTurn, boolean st
         return phase != null && phase.isMain() && aiTurn && stackEmpty && reservedResources.isEmpty();
     }
 
+    /** Captures only copied mana-source probes; does not run the mutating legacy mana estimate. */
+    static ActionDecisionSnapshot captureForAffordability(final Player ai) {
+        final ManaSources sources = captureManaSources(ai, Set.of());
+        return new ActionDecisionSnapshot(ai.getGame().getPhaseHandler().getPhase(),
+                ai.getGame().getPhaseHandler().isPlayerTurn(ai), ai.getGame().getStack().isEmpty(),
+                0, Set.of(), 0, sources.sources(), sources.complete());
+    }
+
     public boolean hasResourceReservation() {
         return !reservedResources.isEmpty();
     }

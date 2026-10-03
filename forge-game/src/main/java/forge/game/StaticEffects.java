@@ -40,8 +40,18 @@ public class StaticEffects {
 
     // **************** StaticAbility system **************************
     private final Map<StaticAbility, StaticEffect> staticEffects = Maps.newHashMap();
+    private final Game game;
+
+    public StaticEffects() { this(null); }
+
+    public StaticEffects(final Game game) { this.game = game; }
+
+    private void invalidateAnalysisState() {
+        if (game != null) { game.invalidateAnalysisState(); }
+    }
 
     public final void clearStaticEffects(final Set<Card> affectedCards, Map<StaticAbilityLayer, Set<Card>> affectedPerLayer) {
+        if (!staticEffects.isEmpty()) { invalidateAnalysisState(); }
         // remove all static effects
         for (final StaticEffect se : staticEffects.values()) {
             se.remove(affectedPerLayer).forEach(affectedCards::add);
@@ -63,6 +73,7 @@ public class StaticEffects {
         }
 
         final StaticEffect newEffect = new StaticEffect(staticAbility);
+        invalidateAnalysisState();
         this.staticEffects.put(staticAbility, newEffect);
         return newEffect;
     }
@@ -77,6 +88,7 @@ public class StaticEffects {
     }
 
     public boolean removeStaticEffect(final StaticAbility staticAbility, final StaticAbilityLayer layer, final boolean removeFull) {
+        if (staticEffects.containsKey(staticAbility)) { invalidateAnalysisState(); }
         final StaticEffect currentEffect;
         if (removeFull) {
             currentEffect = staticEffects.remove(staticAbility);

@@ -34,6 +34,9 @@ import forge.game.combat.Combat;
 import forge.game.event.Event;
 import forge.game.event.GameEventDayTimeChanged;
 import forge.game.event.GameEventAddLog;
+import forge.game.event.GameEvent;
+import forge.game.event.GameEventCardStatsChanged;
+import forge.game.event.GameEventCardTapped;
 import forge.game.event.GameEventGameOutcome;
 import forge.game.phase.Phase;
 import forge.game.phase.PhaseHandler;
@@ -56,6 +59,7 @@ import org.tinylog.TaggedLogger;
 
 import java.util.*;
 import java.util.function.Predicate;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Represents the state of a <i>single game</i>, a new instance is created for each game.
@@ -89,12 +93,14 @@ public class Game {
     // to execute commands for "current" phase each time state based action is checked
     public final List<GameCommand> sbaCheckedCommandList;
     public final MagicStack stack;
-    public final CostPaymentStack costPaymentStack = new CostPaymentStack();
+    public final CostPaymentStack costPaymentStack = new CostPaymentStack(this);
     private final PhaseHandler phaseHandler;
-    private final StaticEffects staticEffects = new StaticEffects();
+    private final StaticEffects staticEffects = new StaticEffects(this);
     private final TriggerHandler triggerHandler = new TriggerHandler(this);
     private final ReplacementHandler replacementHandler = new ReplacementHandler(this);
     private final EventBus events = new EventBus("game events");
+    private final AtomicLong analysisStateRevision = new AtomicLong();
+    private volatile boolean analysisStateTracking;
     private final GameLog gameLog = new GameLog();
 
     private final Zone stackZone = new Zone(ZoneType.Stack, this);
@@ -1017,8 +1023,57 @@ public class Game {
      * The events are sent to UI, log and sound system. Network listeners are under development.
      */
     public void fireEvent(final Event event) {
+        if (analysisStateTracking && event instanceof GameEvent && !(event instanceof GameEventAddLog)) {
+            // Copied outcome probes can emit card-view events. They are not live mutations.
+            if (event instanceof GameEventCardStatsChanged stats) {
+                if (stats.cards().stream().anyMatch(this::isLiveAnalysisView)) { invalidateAnalysisState(); }
+            } else if (event instanceof GameEventCardTapped tapped) {
+                if (isLiveAnalysisView(tapped.card())) { invalidateAnalysisState(); }
+            } else {
+                invalidateAnalysisState();
+            }
+        }
         events.post(event);
     }
+
+    /** Opt-in engine revision plumbing; no score, view, or hidden-card data is recorded. */
+    public synchronized void enableAnalysisStateTracking() {
+        if (!analysisStateTracking) {
+            analysisStateTracking = true;
+            analysisStateRevision.incrementAndGet();
+        }
+    }
+
+    public long getAnalysisStateRevision() {
+        return analysisStateRevision.get();
+    }
+
+    public void invalidateAnalysisState() {
+        if (analysisStateTracking) { analysisStateRevision.incrementAndGet(); }
+    }
+
+    /** Silent setters must not advance the live revision for detached/projected/LKI entities. */
+    public void invalidateAnalysisState(final GameEntity entity) {
+        if (!analysisStateTracking || entity == null) { return; }
+        if (entity instanceof Card card) {
+            if (card.isLKI() || card.getZone() == null) { return; }
+            for (final Card live : card.getZone().getCards(false)) {
+                if (live == card) { invalidateAnalysisState(); return; }
+            }
+        } else if (entity instanceof Player player) {
+            for (final Player live : getPlayers()) {
+                if (live == player) { invalidateAnalysisState(); return; }
+            }
+        }
+    }
+
+    private boolean isLiveAnalysisView(final CardView view) {
+        final Card live = view == null ? null : findById(view.getId());
+        return live != null && live.getView() == view;
+    }
+
+    // TODO: Audit engine-only history/limits, static mutations, direct mutable collections and silent
+    // variants before treating this opt-in revision as sufficient for cross-decision retention.
     public void subscribeToEvents(final Object subscriber) {
         events.register(subscriber);
     }

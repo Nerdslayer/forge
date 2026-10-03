@@ -256,6 +256,9 @@ public class DamageDealAi extends DamageAiBase {
         if (chainDmg != null) {
             if (!damageTargetAI(ai, sa, dmg + chainDmg.getValue(), false)) {
                 // won't play it even in chain
+                if (prepareCoordinatedDamage(ai, sa)) {
+                    return new AiAbilityDecision(100, AiPlayDecision.WillPlay);
+                }
                 return new AiAbilityDecision(0, AiPlayDecision.TargetingFailed);
             }
             if (chainDmg.getKey().getApi() == ApiType.Pump && sa.getTargets().isTargetingAnyPlayer()) {
@@ -273,6 +276,9 @@ public class DamageDealAi extends DamageAiBase {
             }
         } else if (!damageTargetAI(ai, sa, dmg, false)) {
             // simple targeting when there is no spell chaining plan
+            if (prepareCoordinatedDamage(ai, sa)) {
+                return new AiAbilityDecision(100, AiPlayDecision.WillPlay);
+            }
             return new AiAbilityDecision(0, AiPlayDecision.TargetingFailed);
         }
 
@@ -303,6 +309,14 @@ public class DamageDealAi extends DamageAiBase {
         }
 
         return new AiAbilityDecision(100, AiPlayDecision.WillPlay);
+    }
+
+    private static boolean prepareCoordinatedDamage(final Player ai, final SpellAbility ability) {
+        if (!AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_COORDINATED_TAP_DAMAGE)
+                || !(ai.getController() instanceof PlayerControllerAi controller)) {
+            return false;
+        }
+        return controller.getAi().getCoordinatedDamagePlanner().prepare(ai, ability);
     }
 
     /**

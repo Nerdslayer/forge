@@ -22,11 +22,14 @@ import com.google.common.collect.Sets;
 
 import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ChangeZoneAi;
+import forge.ai.ability.CoordinatedDamagePlanner;
 import forge.ai.ability.LearnAi;
 import forge.ai.effect.ActivateAbilityValueTieBreaker;
 import forge.ai.effect.ActionCombinationOverrideGate;
 import forge.ai.effect.ActionDecisionSnapshot;
 import forge.ai.effect.CastCardValueTieBreaker;
+import forge.ai.effect.EarlyActionAffordability;
+import forge.ai.effect.SituationalAnalysisSession;
 import forge.ai.effect.ManaActionCombinationSelector;
 import forge.ai.effect.PlaneswalkerActivationSupport;
 import forge.ai.simulation.GameStateEvaluator;
@@ -102,6 +105,54 @@ public class AiController {
     private int lastAttackAggression;
     private boolean useLivingEnd;
     private List<SpellAbility> skipped;
+    private final CoordinatedDamagePlanner coordinatedDamagePlanner = new CoordinatedDamagePlanner();
+    private volatile SituationalAnalysisSession situationalAnalysisSession;
+    private SituationalAnalysisSession.RetainedAnalysis retainedSituationalAnalysis;
+
+    public SituationalAnalysisSession getSituationalAnalysisSession() {
+        final SituationalAnalysisSession session = situationalAnalysisSession;
+        return session != null && session.isOwnedByCurrentThread() ? session : null;
+    }
+
+    /** Each decision owns fresh values; only validated immutable structural facts transfer. */
+    public <T> T withSituationalAnalysis(final java.util.function.Supplier<T> decision) {
+        if (!getBoolProperty(AiProps.ENABLE_SHARED_SITUATIONAL_ANALYSIS)) {
+            synchronized (this) { retainedSituationalAnalysis = null; }
+            return decision.get();
+        }
+        if (getSituationalAnalysisSession() != null) {
+            return decision.get();
+        }
+        final SituationalAnalysisSession session;
+        synchronized (this) {
+            session = new SituationalAnalysisSession(player,
+                    getBoolProperty(AiProps.ENABLE_RETAINED_SITUATIONAL_ANALYSIS) ? retainedSituationalAnalysis : null);
+            retainedSituationalAnalysis = null;
+            situationalAnalysisSession = session;
+        }
+        boolean completed = false;
+        try {
+            final T result = decision.get();
+            completed = true;
+            return result;
+        } finally {
+            synchronized (this) {
+                // An older timed-out worker may finish after its replacement: never let it
+                // clear the new session or publish its own obsolete snapshot.
+                if (situationalAnalysisSession == session) {
+                    retainedSituationalAnalysis = completed && getBoolProperty(AiProps.ENABLE_SHARED_SITUATIONAL_ANALYSIS)
+                            && getBoolProperty(AiProps.ENABLE_RETAINED_SITUATIONAL_ANALYSIS)
+                            ? session.retainStructuralAnalysis() : null;
+                    situationalAnalysisSession = null;
+                }
+            }
+            session.close();
+        }
+    }
+
+    public CoordinatedDamagePlanner getCoordinatedDamagePlanner() {
+        return coordinatedDamagePlanner;
+    }
 
     public AiController(final Player computerPlayer, final Game game0) {
         player = computerPlayer;
@@ -865,6 +916,11 @@ public class AiController {
 
         if (sa.hasParam("AICheckSVar") && !aiShouldRun(sa, sa, host, null)) {
             return AiPlayDecision.NeedsToPlayCriteriaNotMet;
+        }
+
+        if (getBoolProperty(AiProps.ENABLE_EARLY_ACTION_AFFORDABILITY)
+                && EarlyActionAffordability.assess(player, sa) == EarlyActionAffordability.Result.UNAVAILABLE) {
+            return AiPlayDecision.CantAfford;
         }
 
         // this is the "heaviest" check, which also sets up targets, defines X, etc.
@@ -1646,7 +1702,7 @@ public class AiController {
             Sentry.captureMessage(ex.getMessage() + "\nAssertionError [verifyTransitivity]: " + assertex);
         }
 
-        FutureTask<SpellAbility> future = new FutureTask<>(() -> {
+        FutureTask<SpellAbility> future = new FutureTask<>(() -> withSituationalAnalysis(() -> {
             //avoid ComputerUtil.aiLifeInDanger in loops as it slows down a lot.. call this outside loops will generally be fast...
             boolean isLifeInDanger = useLivingEnd && ComputerUtil.aiLifeInDanger(player, true, 0);
             final List<SpellAbility> playableAbilities =
@@ -1857,7 +1913,7 @@ public class AiController {
             }
 
             return null;
-        });
+        }));
         Thread t = new Thread(future, "Game AI Eval");
         t.setDaemon(true);
         t.start();

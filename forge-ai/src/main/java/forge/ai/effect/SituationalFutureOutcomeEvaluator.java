@@ -99,6 +99,7 @@ final class SituationalFutureOutcomeEvaluator {
                 return Evaluation.unsupported("activation is not currently playable and payable");
             }
         } catch (final RuntimeException unavailable) {
+            SituationalAnalysisSession.noteFailure(evaluatingAi);
             return Evaluation.unsupported("activation playability could not be established");
         }
         // The existing live plan used the same ability and legal targets. Its outcome value can

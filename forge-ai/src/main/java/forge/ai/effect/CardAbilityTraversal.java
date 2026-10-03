@@ -13,6 +13,7 @@ import forge.game.spellability.SpellAbility;
 import forge.game.spellability.LandAbility;
 import forge.game.spellability.SpellPermanent;
 import forge.game.trigger.Trigger;
+import forge.game.player.Player;
 
 /** Inventories a selected face without checking activity, affordability or conditions. */
 public final class CardAbilityTraversal {
@@ -80,6 +81,15 @@ public final class CardAbilityTraversal {
             result.add(entry(face + "/replacement:" + index++, Origin.REPLACEMENT, ability));
         }
         return List.copyOf(result);
+    }
+
+    /** Explicit live boundary: reference definitions and projected states retain standalone parsing. */
+    static List<AbilityDescription> inspectLive(final Player evaluatingAi, final Card card,
+            final EffectAnalysisTrace trace) {
+        // TODO: Share normalized production/consequence descriptors through audited consumers;
+        // event bindings, legality, and executable outcome copies must remain action-local.
+        final SituationalAnalysisSession session = SituationalAnalysisSession.current(evaluatingAi);
+        return session == null ? inspect(card.getCurrentState()) : session.inventory(card, trace);
     }
 
     /** Permanent cast and land-play wrappers are not printed abilities on the card. */

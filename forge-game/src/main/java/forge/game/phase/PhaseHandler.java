@@ -109,6 +109,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
     }
     private void setPhase(final PhaseType phase0) {
         if (phase == phase0) { return; }
+        game.invalidateAnalysisState();
         phase = phase0;
         game.updatePhaseForView();
     }
@@ -126,6 +127,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
     }
     public final void setPlayerTurn(final Player playerTurn0) {
         if (playerTurn == playerTurn0) { return; }
+        game.invalidateAnalysisState();
         playerTurn = playerTurn0;
         game.updatePlayerTurnForView();
         resetPriority();
@@ -300,7 +302,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
 
                 case COMBAT_BEGIN:
                     nCombatsThisTurn++;
-                    combat = new Combat(playerTurn);
+                    setCombat(new Combat(playerTurn));
                     game.getBeginOfCombat().executeUntil(playerTurn);
                     //PhaseUtil.verifyCombat();
                     break;
@@ -1284,12 +1286,13 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
         game.getEndOfCombat().executeUntilEndOfPhase(playerTurn);
         if (inCombat()) {
             combat.endCombat();
-            combat = null;
+            setCombat(null);
         }
         game.updateCombatForView();
     }
 
     public void setCombat(Combat combat) {
+        if (this.combat != combat) { game.invalidateAnalysisState(); }
         this.combat = combat;
     }
 

@@ -78,13 +78,20 @@ public final class EffectRelationshipEvaluator {
             return Collections.emptyMap();
         }
         final List<Card> candidateList = new ArrayList<>();
-        candidates.forEach(candidateList::add);
+        candidates.forEach(candidate -> { if (candidate != null) { candidateList.add(candidate); } });
 
         final Map<Card, List<AbilityValueContribution>> values = new HashMap<>();
-        mergeContributions(values, TriggeredEffectAnalyzer.evaluateContributions(
+        final SituationalAnalysisSession session = SituationalAnalysisSession.current(evaluatingAi);
+        mergeContributions(values, session == null
+                ? TriggeredEffectAnalyzer.evaluateBaseline(evaluatingAi, candidateList, trace)
+                : session.baseline(SituationalAnalysisSession.Section.TRIGGERED_BASELINE, candidateList, trace,
+                        () -> TriggeredEffectAnalyzer.evaluateBaseline(evaluatingAi, candidateList, trace)));
+        mergeContributions(values, TriggeredEffectAnalyzer.evaluateTargetOverlay(
                 evaluatingAi, candidateList, removalAbility, trace));
-        mergeContributions(values, StaticAbilityAnalyzer.evaluateContributions(
-                evaluatingAi, candidateList, trace));
+        mergeContributions(values, session == null
+                ? StaticAbilityAnalyzer.evaluateContributions(evaluatingAi, candidateList, trace)
+                : session.baseline(SituationalAnalysisSession.Section.CURRENT_STATIC, candidateList, trace,
+                        () -> StaticAbilityAnalyzer.evaluateContributions(evaluatingAi, candidateList, trace)));
         return values;
     }
 
