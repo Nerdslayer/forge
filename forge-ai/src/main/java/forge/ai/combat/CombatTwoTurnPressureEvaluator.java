@@ -11,9 +11,17 @@ public final class CombatTwoTurnPressureEvaluator {
     private CombatTwoTurnPressureEvaluator() { }
 
     public record Forecast(boolean supported, boolean searchExhaustive, boolean lethalOpportunity,
-            List<Integer> removedAttackers, int currentDamage, int nextDamage, int opponentLifeAfterReply, List<String> reasons) {
+            List<Integer> removedAttackers, int currentDamage, int nextDamage, int opponentLifeAfterReply, List<String> reasons,
+            boolean candidateSearchComplete) {
         public Forecast { removedAttackers = List.copyOf(removedAttackers); reasons = List.copyOf(reasons); }
-        public int value() { return supported && searchExhaustive && lethalOpportunity ? 500 : 0; }
+        public Forecast(final boolean supported, final boolean searchExhaustive, final boolean lethalOpportunity,
+                final List<Integer> removedAttackers, final int currentDamage, final int nextDamage,
+                final int opponentLifeAfterReply, final List<String> reasons) {
+            this(supported, searchExhaustive, lethalOpportunity, removedAttackers, currentDamage, nextDamage,
+                    opponentLifeAfterReply, reasons, searchExhaustive);
+        }
+        public boolean usable() { return supported && candidateSearchComplete; }
+        public int value() { return usable() && lethalOpportunity ? 500 : 0; }
     }
 
     public static Forecast evaluate(final PublicCombatSnapshot before, final CombatProjection current,
@@ -27,14 +35,14 @@ public final class CombatTwoTurnPressureEvaluator {
             return new Forecast(false, false, false, List.of(), currentDamage, 0, 0,
                     List.of("Two-turn pressure requires a continuing supported current combat"));
         }
-        if (!reply.evaluation().supported() || !reply.evaluation().searchExhaustive()) {
+        if (!reply.evaluation().usable()) {
             return new Forecast(false, false, false, List.of(), currentDamage, 0, 0, reply.evaluation().reasons());
         }
         if (reply.evaluation().lethalOpportunity()) {
             // An avoidable lethal reply always outranks speculative pressure; do no deeper work.
             final int life = reply.continuation().map(state -> state.projection().playerLifeAfter().get(opponent)).orElse(0);
-            return new Forecast(true, true, false, List.of(), currentDamage, 0, life,
-                    List.of("Two-turn pressure suppressed by the intervening lethal reply"));
+            return new Forecast(true, reply.evaluation().searchExhaustive(), false, List.of(), currentDamage, 0, life,
+                    List.of("Two-turn pressure suppressed by the intervening lethal reply"), true);
         }
         if (reply.continuation().isEmpty()) {
             return new Forecast(false, false, false, List.of(), currentDamage, 0, 0,
@@ -44,8 +52,8 @@ public final class CombatTwoTurnPressureEvaluator {
         final var replyState = continuation.projection();
         final int life = replyState.playerLifeAfter().get(opponent);
         if (replyState.terminal() != CombatProjection.Terminal.NONE) {
-            return new Forecast(true, true, false, List.of(), currentDamage, 0, life,
-                    List.of("No continuing game after the public reply"));
+            return new Forecast(true, reply.evaluation().searchExhaustive(), false, List.of(), currentDamage, 0, life,
+                    List.of("No continuing game after the public reply"), true);
         }
         final var board = continuation.snapshot();
         final List<Integer> removed = replyState.survivors().keySet().stream()
@@ -69,8 +77,9 @@ public final class CombatTwoTurnPressureEvaluator {
         // Actual updated life (including reply lifelink) determines lethal, not a gross damage sum.
         // TODO: Alternative tied replies, future turn-order changes, scheduled resources/static
         // changes and the separate generic-new-blocker stress case. Do not stack stress models.
-        return new Forecast(next.evaluation().supported(), next.evaluation().searchExhaustive(),
-                next.evaluation().lethalOpportunity(), removed, currentDamage, nextDamage, life, next.evaluation().reasons());
+        return new Forecast(next.evaluation().supported(), reply.evaluation().searchExhaustive() && next.evaluation().searchExhaustive(),
+                next.evaluation().lethalOpportunity(), removed, currentDamage, nextDamage, life, next.evaluation().reasons(),
+                next.evaluation().candidateSearchComplete());
     }
 
     private static long attackDamage(final PublicCombatSnapshot.Creature creature) {

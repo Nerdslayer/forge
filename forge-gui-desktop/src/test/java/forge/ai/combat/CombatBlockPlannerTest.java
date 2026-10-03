@@ -30,9 +30,13 @@ public class CombatBlockPlannerTest extends AITest {
         final Fixture f = fixture();
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
+        Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_MAX_NODES), 25000);
+        Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_TIMEOUT_MS), 500);
         ((LobbyPlayerAi) f.defender().getLobbyPlayer()).setAiProfile("Default");
         Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
         Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
+        Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_MAX_NODES), 5000);
+        Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_TIMEOUT_MS), 100);
     }
 
     @Test
@@ -330,6 +334,28 @@ public class CombatBlockPlannerTest extends AITest {
         Assert.assertTrue(f.combat().getAllBlockers().isEmpty());
         Assert.assertFalse(CombatBlockPlanner.tryDeclare(f.attacker(), f.defender(), f.combat(), new CombatSearchBudget(100)));
         Assert.assertFalse(CombatBlockPlanner.tryDeclare(f.defender(), f.defender(), new Combat(f.attacker()), new CombatSearchBudget(100)));
+    }
+
+    @Test
+    public void unavoidableLethalStillDeclaresDamageMinimizingBlocksAndSurvivalAlwaysWins() {
+        for (final int life : List.of(1, 4)) {
+            final Fixture f = fixture();
+            final Card large = creature(f.attacker(), 5, 5, List.of());
+            final Card small = creature(f.attacker(), 3, 3, List.of());
+            final Card blocker = creature(f.defender(), 1, 1, List.of());
+            f.defender().setLife(life, null);
+            f.combat().addAttacker(large, f.defender());
+            f.combat().addAttacker(small, f.defender());
+            final var plan = CombatBlockPlanner.plan(f.defender(), f.combat(), new CombatSearchBudget(20000));
+            Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+            final var selected = plan.search().orElseThrow().best().orElseThrow();
+            Assert.assertEquals(selected.projection().playerLifeAfter().get(f.defender().getId()).intValue(), life - 3);
+            Assert.assertEquals(selected.projection().terminal(), life == 1 ? CombatProjection.Terminal.LOSS : CombatProjection.Terminal.NONE);
+            Assert.assertTrue(CombatBlockPlanner.tryDeclare(f.defender(), f.defender(), f.combat(), new CombatSearchBudget(20000)));
+            Assert.assertEquals(f.combat().getBlockers(large), List.of(blocker));
+            Assert.assertTrue(f.combat().getBlockers(small).isEmpty());
+            Assert.assertNull(CombatUtil.validateBlocks(f.combat(), f.defender()));
+        }
     }
 
     private Fixture fixture() {

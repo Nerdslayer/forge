@@ -57,8 +57,10 @@ public final class CombatBlockPlanner {
         final CombatBlockSearch.Result result = CombatBlockSearch.searchWithPressure(snapshot, values, budget,
                 readiness.orElseThrow(), fixed);
         reasons.addAll(result.reasons());
-        final boolean applicable = result.outcomeDomainComplete() && result.best().isPresent()
-                && (result.searchExhaustive() || result.best().orElseThrow().projection().terminal() != CombatProjection.Terminal.LOSS);
+        // A bounded search can still apply its best supported legal defense, even when every
+        // explored assignment loses. Requiring exhaustive search here falls back instead of
+        // minimizing damage; this does not claim that an unsearched survival line is impossible.
+        final boolean applicable = result.outcomeDomainComplete() && result.best().isPresent();
         if (!applicable) { reasons.add("No sufficiently supported, verified combat result"); }
         // TODO: Support global mandatory constraints and multiplayer/planeswalker blocks, current static recipient
         // changes and concrete event ownership. Broader reply/pressure support is still pending;

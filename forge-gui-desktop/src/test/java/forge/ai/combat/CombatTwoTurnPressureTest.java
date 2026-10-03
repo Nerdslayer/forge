@@ -19,7 +19,7 @@ public class CombatTwoTurnPressureTest {
             final var ready = readiness(before);
             final var reply = CombatSafetyEvaluator.forecastNextAttack(before, current, ready, values(before, 100), new CombatSearchBudget(10000));
             final var forecast = CombatTwoTurnPressureEvaluator.evaluate(before, current, ready, reply, new CombatSearchBudget(10000));
-            Assert.assertTrue(forecast.supported() && forecast.searchExhaustive(), forecast.reasons().toString());
+            Assert.assertTrue(forecast.usable(), forecast.reasons().toString());
             Assert.assertEquals(forecast.removedAttackers(), List.of(10, 11));
             Assert.assertEquals(forecast.currentDamage(), 10);
             Assert.assertEquals(forecast.nextDamage(), 6);
@@ -37,7 +37,7 @@ public class CombatTwoTurnPressureTest {
             final var current = CombatOutcomePredictor.predict(before, new CombatAssignment(before.attackersToDefenders(), Map.of()));
             final var ready = readiness(before);
             final var reply = CombatSafetyEvaluator.forecastNextAttack(before, current, ready, values(before, 100), new CombatSearchBudget(10000));
-            Assert.assertTrue(reply.evaluation().supported() && reply.evaluation().searchExhaustive());
+            Assert.assertTrue(reply.evaluation().usable());
             final var forecast = CombatTwoTurnPressureEvaluator.evaluate(before, current, ready, reply, new CombatSearchBudget(10000));
             Assert.assertFalse(forecast.lethalOpportunity());
             Assert.assertEquals(forecast.value(), 0);
@@ -79,7 +79,7 @@ public class CombatTwoTurnPressureTest {
         final var ready = readiness(before);
         final var reply = CombatSafetyEvaluator.forecastNextAttack(before, current, ready, values(before, 100), new CombatSearchBudget(10000));
         final var forecast = CombatTwoTurnPressureEvaluator.evaluate(before, current, ready, reply, new CombatSearchBudget(1));
-        Assert.assertFalse(forecast.supported() && forecast.searchExhaustive());
+        Assert.assertFalse(forecast.usable());
         Assert.assertEquals(forecast.value(), 0);
         Assert.assertFalse(forecast.reasons().isEmpty());
     }

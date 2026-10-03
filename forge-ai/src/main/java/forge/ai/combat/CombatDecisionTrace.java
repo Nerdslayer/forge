@@ -51,6 +51,7 @@ public final class CombatDecisionTrace {
                     .append(", public reply=").append(candidate.reply()));
             search.best().ifPresent(candidate -> text.append("\nChosen attackers: ").append(candidate.attackers())
                     .append(", predicted blocks=").append(candidate.combat().assignment().blockersByAttacker())
+                    .append(", blocker chump life adjustment=").append(candidate.combat().chumpLifeAdjustment())
                     .append("\nLoss components: ").append(candidate.combat().score().permanentLoss())
                     .append("\nLife utility: ").append(candidate.combat().score().lifeUtility())
                     .append(", immediate outcome utility=").append(candidate.combat().score().outcomeUtility())
@@ -97,6 +98,7 @@ public final class CombatDecisionTrace {
                     .append(", allocations=").append(candidate.damagePlan())
                     .append("\nIncremental pressure: ").append(candidate.pressureValue())
                     .append(", equal-exchange preference=").append(candidate.exchangePreference())
+                    .append(", nonlethal chump life adjustment=").append(candidate.chumpLifeAdjustment())
                     .append(", public follow-up=").append(candidate.followUp()));
         });
         Logger.info(text.toString());

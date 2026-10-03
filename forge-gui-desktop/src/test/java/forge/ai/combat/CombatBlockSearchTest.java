@@ -214,23 +214,30 @@ public class CombatBlockSearchTest {
                     Map.of(10, Set.of(20, 21), 11, Set.of(20, 21)));
             final PreparedCombatValuation ledger = values(snapshot);
             final List<CombatTransitionValueEvaluator.Score> all = new ArrayList<>();
+            final List<Integer> chumpAdjustments = new ArrayList<>();
+            final var chumps = new CombatChumpValueEvaluator(snapshot, new CombatSearchBudget(1000));
             for (final int first : List.of(-1, 20, 21)) {
                 for (final int second : List.of(-1, 20, 21)) {
                     if (first >= 0 && first == second) { continue; }
                     final Map<Integer, List<Integer>> blocks = new LinkedHashMap<>();
                     if (first >= 0) { blocks.put(10, List.of(first)); }
                     if (second >= 0) { blocks.put(11, List.of(second)); }
-                    final CombatProjection projection = CombatOutcomePredictor.predict(snapshot,
-                            new CombatAssignment(snapshot.attackersToDefenders(), blocks));
+                    final var assignment = new CombatAssignment(snapshot.attackersToDefenders(), blocks);
+                    final CombatProjection projection = CombatOutcomePredictor.predict(snapshot, assignment);
                     all.add(CombatTransitionValueEvaluator.evaluate(snapshot, ledger, projection));
+                    final var adjustment = chumps.evaluate(assignment, projection, Map.of());
+                    Assert.assertTrue(adjustment.complete());
+                    chumpAdjustments.add(adjustment.adjustment());
                 }
             }
             final CombatBlockSearch.Result result = CombatBlockSearch.search(snapshot, ledger, new CombatSearchBudget(10000));
             Assert.assertTrue(result.searchExhaustive());
             final CombatTransitionValueEvaluator.Score chosen = result.best().orElseThrow().score();
-            for (final var alternative : all) {
+            for (int index = 0; index < all.size(); index++) {
+                final var alternative = all.get(index);
                 if (chosen.terminal() == alternative.terminal()) {
-                    Assert.assertTrue(chosen.total() >= alternative.total());
+                    Assert.assertTrue(result.best().orElseThrow().adjustedTotal()
+                            >= CombatOutcomePredictor.add(alternative.total(), chumpAdjustments.get(index)));
                 } else {
                     Assert.assertEquals(chosen.terminal(), CombatProjection.Terminal.NONE);
                     Assert.assertEquals(alternative.terminal(), CombatProjection.Terminal.LOSS);
