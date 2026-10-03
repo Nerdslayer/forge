@@ -12,8 +12,14 @@ public final class CombatSafetyEvaluator {
     private CombatSafetyEvaluator() { }
 
     public record FollowUp(boolean supported, boolean searchExhaustive, int nonterminalUtility,
-            boolean lethalOpportunity, List<Integer> attackers, List<String> reasons) {
+            boolean lethalOpportunity, List<Integer> attackers, List<String> reasons, boolean candidateSearchComplete) {
         public FollowUp { attackers = List.copyOf(attackers); reasons = List.copyOf(reasons); }
+        public FollowUp(final boolean supported, final boolean searchExhaustive, final int nonterminalUtility,
+                final boolean lethalOpportunity, final List<Integer> attackers, final List<String> reasons) {
+            this(supported, searchExhaustive, nonterminalUtility, lethalOpportunity, attackers, reasons, searchExhaustive);
+        }
+        /** All chosen heuristic candidates and their opposing blocks were evaluated, not all subsets. */
+        public boolean usable() { return supported && candidateSearchComplete; }
     }
 
     /** Optional scalar continuation for the explicit two-turn heuristic, never a recursive policy. */
@@ -28,7 +34,7 @@ public final class CombatSafetyEvaluator {
 
     /** A heuristic opportunity is not an actual win; current terminal ranking remains separate. */
     public static int incrementalPressure(final FollowUp baseline, final FollowUp candidate) {
-        if (!baseline.supported() || !baseline.searchExhaustive() || !candidate.supported() || !candidate.searchExhaustive()) {
+        if (!baseline.usable() || !candidate.usable()) {
             throw new IllegalArgumentException("Complete comparable follow-up estimates required");
         }
         final long delta = (long) candidate.nonterminalUtility() - baseline.nonterminalUtility();
@@ -87,54 +93,59 @@ public final class CombatSafetyEvaluator {
         final List<Integer> eligible = creatures.keySet().stream()
                 .filter(id -> creatures.get(id).controllerId() == active && !creatures.get(id).tapped()
                         && readiness.canAttackNextTurn().contains(id)).sorted().toList();
-        final var declarations = CombatAttackCandidates.generate(eligible);
-        boolean exhaustive = declarations.exhaustive();
-        boolean lethal = false;
-        int bestUtility = 0; // A legal no-attack baseline; admitted mechanics have no compulsory attacks.
-        List<Integer> chosen = List.of();
-        Continuation continuation = null;
         final Set<String> reasons = new LinkedHashSet<>(readiness.ignoredEffects());
-        for (final List<Integer> group : declarations.groups()) {
-            if (!budget.tryConsume()) { exhaustive = false; reasons.add("Follow-up shared budget exhausted"); break; }
-            final Map<Integer, Integer> attacks = new LinkedHashMap<>();
-            final Map<Integer, Set<Integer>> blockers = new LinkedHashMap<>();
-            for (final int id : group) {
-                attacks.put(id, defending);
-                blockers.put(id, readiness.blockPairsNextTurn().getOrDefault(id, Set.of()).stream()
-                        .filter(blocker -> creatures.containsKey(blocker) && creatures.get(blocker).controllerId() == defending
-                                && !creatures.get(blocker).tapped()).collect(java.util.stream.Collectors.toSet()));
-            }
-            final PublicCombatSnapshot next = new PublicCombatSnapshot(before.observingPlayerId(), active, defending,
-                    creatures, players, attacks, blockers, List.of(), List.of(), before.legacyDamageOrder(), resources,
-                    before.triggers().stream().filter(trigger -> creatures.containsKey(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
-                    before.preventionRules().stream().filter(rule -> !current.lostCreatures().contains(rule.providerId())).toList(),
-                    before.staticWorlds().surviving(current.lostCreatures()), readiness.ignoredEffects());
+        final Map<Integer, Integer> attacks = new LinkedHashMap<>();
+        final Map<Integer, Set<Integer>> blockers = new LinkedHashMap<>();
+        for (final int id : eligible) {
+            attacks.put(id, defending);
+            blockers.put(id, readiness.blockPairsNextTurn().getOrDefault(id, Set.of()).stream()
+                    .filter(blocker -> creatures.containsKey(blocker) && creatures.get(blocker).controllerId() == defending
+                            && !creatures.get(blocker).tapped()).collect(java.util.stream.Collectors.toSet()));
+        }
+        final PublicCombatSnapshot alternatives = new PublicCombatSnapshot(before.observingPlayerId(), active, defending,
+                creatures, players, attacks, blockers, List.of(), List.of(), before.legacyDamageOrder(), resources,
+                before.triggers().stream().filter(trigger -> creatures.containsKey(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
+                before.preventionRules().stream().filter(rule -> !current.lostCreatures().contains(rule.providerId())).toList(),
+                before.staticWorlds().surviving(current.lostCreatures()), readiness.ignoredEffects());
+        final var selection = GreedyAttackCandidates.select(List.of(), eligible, group -> {
+            if (!budget.tryConsume()) { reasons.add("Follow-up shared budget exhausted"); return null; }
+            final PublicCombatSnapshot next = CombatAttackCandidates.select(alternatives, group);
             final CombatBlockSearch.Result response = CombatBlockSearch.search(next, survivingValues, budget);
-            exhaustive &= response.searchExhaustive();
-            if (!response.outcomeDomainComplete() || response.best().isEmpty()) {
-                return new Forecast(new FollowUp(false, false, 0, false, List.of(), response.reasons()), Optional.empty());
+            reasons.addAll(response.reasons());
+            // TODO: The block expansion bound ignores used-blocker pruning and can choose a
+            // beam for a manageable domain. Audit a tighter bound before relaxing this gate.
+            if (!response.outcomeDomainComplete() || !response.searchExhaustive() || response.best().isEmpty()) {
+                reasons.add("Incomplete opposing block responses in greedy future attack search");
+                return null;
             }
             final var candidate = response.best().orElseThrow();
-            final int utility = CombatOutcomePredictor.add(CombatOutcomePredictor.add(candidate.score().permanentLoss().total(),
-                    candidate.score().lifeUtility()), candidate.score().outcomeUtility());
-            final boolean groupLethal = response.searchExhaustive() && candidate.projection().terminal()
-                    == (observingAttacker ? CombatProjection.Terminal.WIN : CombatProjection.Terminal.LOSS);
-            if (continuation == null && group.isEmpty()) {
-                continuation = new Continuation(next, candidate.projection(), survivingValues);
-            }
-            if (groupLethal && !lethal || groupLethal == lethal && (observingAttacker ? utility > bestUtility : utility < bestUtility)) {
-                bestUtility = utility;
-                chosen = group;
-                continuation = new Continuation(next, candidate.projection(), survivingValues);
-            }
-            lethal |= groupLethal;
+            return new FutureCandidate(next, candidate);
+        }, (left, right) -> {
+            final int comparison = CombatTransitionValueEvaluator.compare(left.combat().score(), right.combat().score());
+            return observingAttacker ? comparison : -comparison;
+        }, id -> id);
+        // TODO: Reuse permutation-equivalent future singleton scores once future-role keys are audited.
+        // Greedy search may miss non-prefix combinations; no-lethal is an estimate, not a safety certificate.
+        reasons.add("Greedy future singleton/addition search with independent all-out candidate; not a global optimum certificate");
+        reasons.add("Greedy future declarations evaluated: " + selection.evaluations());
+        if (!selection.complete()) { reasons.add("Greedy future attack candidates were not completely evaluated"); }
+        final FutureCandidate selected = selection.best().orElse(null);
+        if (selected == null) {
+            return new Forecast(new FollowUp(false, false, 0, false, List.of(), List.copyOf(reasons), false), Optional.empty());
         }
-        if (!exhaustive) { reasons.add("Bounded next-combat estimate, not a complete future-game prediction"); }
+        final var candidate = selected.combat();
+        final int utility = CombatOutcomePredictor.add(CombatOutcomePredictor.add(candidate.score().permanentLoss().total(),
+                candidate.score().lifeUtility()), candidate.score().outcomeUtility());
+        final boolean lethal = candidate.projection().terminal()
+                == (observingAttacker ? CombatProjection.Terminal.WIN : CombatProjection.Terminal.LOSS);
         // TODO: Scheduled state-changing opportunities, static layers beyond fixed additive P/T,
         // untap/turn-skipping rules and alternative equally ranked public reply continuations.
-        return new Forecast(new FollowUp(true, exhaustive, bestUtility, lethal, chosen, List.copyOf(reasons)),
-                Optional.ofNullable(continuation));
+        return new Forecast(new FollowUp(true, selection.complete() && eligible.size() <= 2, utility, lethal,
+                candidate.assignment().attackersToDefenders().keySet().stream().sorted().toList(), List.copyOf(reasons), selection.complete()),
+                Optional.of(new Continuation(selected.snapshot(), candidate.projection(), survivingValues)));
     }
+
+    private record FutureCandidate(PublicCombatSnapshot snapshot, CombatBlockSearch.Candidate combat) { }
 
     private static FollowUp rejected(final String reason) {
         return new FollowUp(false, false, 0, false, List.of(), List.of(reason));

@@ -35,12 +35,20 @@ public final class CombatDamageOptimizer {
     public static Result optimizeBlockGroups(final PublicCombatSnapshot snapshot, final CombatAssignment assignment,
             final PreparedCombatValuation values, final CombatSearchBudget budget,
             final java.util.function.ToIntFunction<CombatProjection> adjustment) {
-        return optimize(snapshot, assignment, values, budget, true, adjustment, (left, right) -> 0);
+        return optimize(snapshot, assignment, values, budget, true, candidate -> adjustment.applyAsInt(candidate.projection()), (left, right) -> 0);
     }
 
     public static Result optimizeBlockGroups(final PublicCombatSnapshot snapshot, final CombatAssignment assignment,
             final PreparedCombatValuation values, final CombatSearchBudget budget,
             final java.util.function.ToIntFunction<CombatProjection> adjustment,
+            final java.util.function.BiFunction<CombatProjection, CombatProjection, Integer> tacticalPriority) {
+        return optimize(snapshot, assignment, values, budget, true, candidate -> adjustment.applyAsInt(candidate.projection()), tacticalPriority);
+    }
+
+    /** Policy counterfactuals retain the candidate's actual block order and damage allocations. */
+    static Result optimizeBlockGroupsWithCandidateAdjustment(final PublicCombatSnapshot snapshot, final CombatAssignment assignment,
+            final PreparedCombatValuation values, final CombatSearchBudget budget,
+            final java.util.function.ToIntFunction<Candidate> adjustment,
             final java.util.function.BiFunction<CombatProjection, CombatProjection, Integer> tacticalPriority) {
         return optimize(snapshot, assignment, values, budget, true, adjustment, tacticalPriority);
     }
@@ -49,7 +57,7 @@ public final class CombatDamageOptimizer {
 
     private static Result optimize(final PublicCombatSnapshot snapshot, final CombatAssignment assignment,
             final PreparedCombatValuation values, final CombatSearchBudget budget, final boolean chooseOrders,
-            final java.util.function.ToIntFunction<CombatProjection> adjustment,
+            final java.util.function.ToIntFunction<Candidate> adjustment,
             final java.util.function.BiFunction<CombatProjection, CombatProjection, Integer> tacticalPriority) {
         final int before = budget.used();
         final List<Integer> orderable = chooseOrders && snapshot.legacyDamageOrder()
@@ -113,7 +121,7 @@ public final class CombatDamageOptimizer {
             }
             final Candidate candidate = new Candidate(work.assignment(), plan, projection,
                     CombatTransitionValueEvaluator.evaluate(snapshot, values, projection));
-            final int candidateAdjustment = adjustment.applyAsInt(projection);
+            final int candidateAdjustment = adjustment.applyAsInt(candidate);
             int comparison = best == null ? 0 : CombatTransitionValueEvaluator.compare(candidate.score(), best.score());
             if (best != null && candidate.score().terminal() == best.score().terminal()) {
                 comparison = tacticalPriority.apply(candidate.projection(), best.projection());

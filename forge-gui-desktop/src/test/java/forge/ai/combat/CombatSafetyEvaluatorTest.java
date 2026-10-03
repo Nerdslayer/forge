@@ -22,7 +22,8 @@ public class CombatSafetyEvaluatorTest {
         final var ledger = new PreparedCombatValuation(cards, List.of(), ValuationCompleteness.PARTIAL, List.of());
         final var current = CombatOutcomePredictor.predict(ownAttack, new CombatAssignment(ownAttack.attackersToDefenders(), Map.of()));
         final var reply = CombatSafetyEvaluator.nextAttack(ownAttack, current, readiness(ownAttack), ledger, new CombatSearchBudget(20000));
-        Assert.assertTrue(reply.supported() && reply.searchExhaustive());
+        Assert.assertTrue(reply.usable());
+        Assert.assertFalse(reply.searchExhaustive(), "Five attackers use the completed greedy heuristic, not all subsets");
         Assert.assertTrue(reply.lethalOpportunity(), "Five public 2/2s can kill the attacking observer on the reply");
         Assert.assertEquals(reply.attackers().size(), 5);
         Assert.assertTrue(reply.nonterminalUtility() < 0);
@@ -80,10 +81,10 @@ public class CombatSafetyEvaluatorTest {
                 new CombatSearchBudget(20000));
         final CombatSafetyEvaluator.FollowUp lost = CombatSafetyEvaluator.nextAttack(snapshot, trade, readiness, values,
                 new CombatSearchBudget(20000));
-        Assert.assertTrue(retained.supported() && retained.searchExhaustive());
+        Assert.assertTrue(retained.usable());
         Assert.assertTrue(retained.lethalOpportunity());
         Assert.assertEquals(retained.attackers().size(), 5);
-        Assert.assertTrue(lost.supported() && lost.searchExhaustive());
+        Assert.assertTrue(lost.usable());
         Assert.assertFalse(lost.lethalOpportunity());
         Assert.assertEquals(lost.attackers().size(), 4);
         Assert.assertTrue(retained.nonterminalUtility() < 10000, "No actual-game terminal bonus in a future opportunity");
@@ -96,7 +97,7 @@ public class CombatSafetyEvaluatorTest {
                 new CombatAssignment(snapshot.attackersToDefenders(), Map.of()));
         final CombatSafetyEvaluator.FollowUp follow = CombatSafetyEvaluator.nextAttack(snapshot, current, readiness(snapshot),
                 values(snapshot, List.of()), new CombatSearchBudget(20000));
-        Assert.assertTrue(follow.supported() && follow.searchExhaustive());
+        Assert.assertTrue(follow.usable());
         Assert.assertFalse(follow.lethalOpportunity());
         Assert.assertFalse(current.survivors().get(10).tapped());
     }
@@ -137,7 +138,7 @@ public class CombatSafetyEvaluatorTest {
         final CombatSafetyEvaluator.FollowUp follow = CombatSafetyEvaluator.nextAttack(snapshot, current,
                 new PublicCombatReadiness(2, Set.of(21), Map.of(21, Set.of(10, 11)), List.of()), values(snapshot, List.of(edge)),
                 new CombatSearchBudget(1000));
-        Assert.assertTrue(follow.supported() && follow.searchExhaustive());
+        Assert.assertTrue(follow.usable());
         Assert.assertEquals(follow.nonterminalUtility(), 0);
     }
 
@@ -152,8 +153,53 @@ public class CombatSafetyEvaluatorTest {
         Assert.assertFalse(follow.searchExhaustive());
         Assert.assertFalse(follow.lethalOpportunity());
         final var complete = CombatSafetyEvaluator.nextAttack(snapshot, current, readiness(snapshot), values(snapshot, List.of()), new CombatSearchBudget(20000));
-        Assert.assertTrue(complete.searchExhaustive());
+        Assert.assertTrue(complete.usable());
+        Assert.assertFalse(complete.searchExhaustive());
         Assert.assertEquals(current.playerLifeAfter().get(2).intValue(), 18);
+    }
+
+    @Test
+    public void largeFutureArmyUsesGreedySearchWithoutPretendingItEnumeratedEverySubset() {
+        final Map<Integer, PublicCombatSnapshot.Creature> creatures = new LinkedHashMap<>();
+        final Map<Integer, Set<Integer>> blocks = new LinkedHashMap<>();
+        for (int id = 20; id < 36; id++) {
+            creatures.put(id, creature(id, 2, 2, 2, false));
+            blocks.put(id, Set.of());
+        }
+        final var before = new PublicCombatSnapshot(1, 1, 2, creatures, players(100, 20),
+                Map.of(), Map.of(), List.of(), List.of(), false);
+        final var state = CombatOutcomePredictor.predict(before, new CombatAssignment(Map.of(), Map.of()));
+        final var budget = new CombatSearchBudget(500);
+        final var forecast = CombatSafetyEvaluator.forecastNextAttack(before, state,
+                new PublicCombatReadiness(2, blocks.keySet(), blocks, List.of()), values(before, List.of()), budget);
+        Assert.assertTrue(forecast.evaluation().usable(), forecast.evaluation().reasons().toString());
+        Assert.assertFalse(forecast.evaluation().searchExhaustive());
+        Assert.assertEquals(forecast.evaluation().attackers().size(), 16);
+        Assert.assertTrue(budget.used() < 400, "Linear candidates plus block-prefix checkpoints, not 65,536 subsets");
+        Assert.assertTrue(forecast.continuation().isPresent());
+    }
+
+    @Test
+    public void futureAttackSearchHandlesForcedChumpsAndSkipsSmallAttackersWithASpareBlocker() {
+        for (final int blockerCount : List.of(3, 4)) {
+            final Map<Integer, PublicCombatSnapshot.Creature> creatures = new LinkedHashMap<>();
+            for (int id = 10; id < 10 + blockerCount; id++) { creatures.put(id, creature(id, 1, 2, 3, false)); }
+            for (int id = 20; id <= 22; id++) { creatures.put(id, creature(id, 2, 5, 5, false)); }
+            for (int id = 23; id <= 24; id++) { creatures.put(id, creature(id, 2, 1, 1, false)); }
+            final Set<Integer> blockers = creatures.keySet().stream().filter(id -> id < 20)
+                    .collect(java.util.stream.Collectors.toSet());
+            final Map<Integer, Set<Integer>> pairs = new LinkedHashMap<>();
+            for (int id = 20; id <= 24; id++) { pairs.put(id, blockers); }
+            final var before = new PublicCombatSnapshot(1, 1, 2, creatures, players(5, 40),
+                    Map.of(), Map.of(), List.of(), List.of(), false);
+            final var state = CombatOutcomePredictor.predict(before, new CombatAssignment(Map.of(), Map.of()));
+            final var forecast = CombatSafetyEvaluator.forecastNextAttack(before, state,
+                    new PublicCombatReadiness(2, pairs.keySet(), pairs, List.of()), values(before, List.of()),
+                    new CombatSearchBudget(2000000));
+            Assert.assertTrue(forecast.evaluation().usable(), forecast.evaluation().reasons().toString());
+            Assert.assertFalse(forecast.evaluation().searchExhaustive());
+            Assert.assertEquals(forecast.evaluation().attackers(), blockerCount == 3 ? List.of(20, 21, 22, 23, 24) : List.of(20, 21, 22));
+        }
     }
 
     private static PublicCombatSnapshot fiveCreatures(final boolean vigilance, final int ownLife) {
@@ -185,7 +231,7 @@ public class CombatSafetyEvaluatorTest {
             final List<PreparedCombatValuation.RelationshipValue> relationships) {
         final Map<Integer, PreparedCombatValuation.PermanentValue> cards = new LinkedHashMap<>();
         snapshot.creatures().forEach((id, card) -> cards.put(id, new PreparedCombatValuation.PermanentValue(id, card.controllerId(),
-                card.controllerId() == 2 ? -100 : 100, 0, 0, List.of())));
+                card.controllerId() == snapshot.observingPlayerId() ? -100 : 100, 0, 0, List.of())));
         return new PreparedCombatValuation(cards, relationships, ValuationCompleteness.PARTIAL, List.of());
     }
 }

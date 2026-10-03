@@ -16,9 +16,10 @@ public final class CombatBlockSearch {
 
     public record Candidate(CombatAssignment assignment, CombatProjection projection,
             CombatTransitionValueEvaluator.Score score, Optional<CombatDamagePlan> damagePlan,
-            int pressureValue, int exchangePreference, Optional<CombatSafetyEvaluator.FollowUp> followUp) {
+            int pressureValue, int exchangePreference, Optional<CombatSafetyEvaluator.FollowUp> followUp, int chumpLifeAdjustment) {
         public int adjustedTotal() {
-            return CombatOutcomePredictor.add(CombatOutcomePredictor.add(score.total(), pressureValue), exchangePreference);
+            return CombatOutcomePredictor.add(CombatOutcomePredictor.add(
+                    CombatOutcomePredictor.add(score.total(), pressureValue), exchangePreference), chumpLifeAdjustment);
         }
     }
 
@@ -78,6 +79,7 @@ public final class CombatBlockSearch {
         private final PublicCombatSnapshot snapshot;
         private final PreparedCombatValuation values;
         private final CombatSearchBudget budget;
+        private final CombatChumpValueEvaluator chumps;
         private final int startingNodes;
         private final int beamWidth;
         private final List<Integer> attackers;
@@ -122,6 +124,7 @@ public final class CombatBlockSearch {
             fixedBlocks.values().forEach(reservedBlockers::addAll);
             values = values0;
             budget = budget0;
+            chumps = new CombatChumpValueEvaluator(snapshot0, budget0);
             startingNodes = budget.used();
             beamWidth = width;
             readiness = readiness0;
@@ -134,7 +137,10 @@ public final class CombatBlockSearch {
             final boolean defendingObserver = snapshot.observingPlayerId() == snapshot.defendingPlayerId();
             ordering = (left, right) -> {
                 int comparison = CombatTransitionValueEvaluator.compare(left.score(), right.score());
-                if (left.score().terminal() == right.score().terminal()) {
+                final int doomedDefense = hopelessDefensePriority(left.projection(), right.projection());
+                if (left.score().terminal() == right.score().terminal() && doomedDefense != 0) {
+                    comparison = doomedDefense;
+                } else if (left.score().terminal() == right.score().terminal()) {
                     comparison = replyPriority(left.projection(), right.projection());
                     if (comparison == 0) { comparison = Integer.compare(left.adjustedTotal(), right.adjustedTotal()); }
                 }
@@ -355,8 +361,9 @@ public final class CombatBlockSearch {
                     || snapshot.creatures().get(entry.getKey()).trample()
                     && entry.getValue().stream().anyMatch(id -> snapshot.creatures().get(id).indestructible()));
             if (allocationNeeded) {
-                final CombatDamageOptimizer.Result allocations = CombatDamageOptimizer.optimizeBlockGroups(snapshot, assignment, values, budget,
-                        state -> CombatOutcomePredictor.add(pressure(state), exchangePreference(state)), this::replyPriority);
+                final CombatDamageOptimizer.Result allocations = CombatDamageOptimizer.optimizeBlockGroupsWithCandidateAdjustment(snapshot, assignment, values, budget,
+                        candidate -> CombatOutcomePredictor.add(CombatOutcomePredictor.add(pressure(candidate.projection()), exchangePreference(candidate.projection())),
+                                chumpAdjustment(candidate.assignment(), candidate.projection(), candidate.damagePlan())), this::replyPriority);
                 interrupted |= !allocations.exhaustive();
                 domainComplete &= allocations.outcomeSupported();
                 reasons.addAll(allocations.reasons());
@@ -380,9 +387,19 @@ public final class CombatBlockSearch {
             final Optional<CombatSafetyEvaluator.FollowUp> followUp = Optional.ofNullable(forecasts.get(projection));
             final Candidate candidate = new Candidate(assignment, projection,
                     CombatTransitionValueEvaluator.evaluate(snapshot, values, projection), damagePlan, pressure,
-                    exchangePreference(projection), followUp);
+                    exchangePreference(projection), followUp, chumpAdjustment(assignment, projection, damagePlan.orElse(null)));
             if (best == null || ordering.compare(candidate, best) < 0) { best = candidate; }
             return candidate;
+        }
+
+        private int chumpAdjustment(final CombatAssignment assignment, final CombatProjection projection, final CombatDamagePlan plan) {
+            final var result = chumps.evaluate(assignment, projection, fixedBlocks, plan);
+            if (!result.complete()) {
+                domainComplete = false;
+                if (budget.remaining() == 0) { interrupted = true; }
+                reasons.add("Nonlethal chump counterfactual unavailable or shared budget exhausted");
+            }
+            return result.adjustment();
         }
 
         /** Capped tie-band preference, never a per-casualty reward or a terminal override. */
@@ -406,7 +423,7 @@ public final class CombatBlockSearch {
                 final var reply = estimateReply(projection);
                 // For attack responses, compare immediate + half-weight ordinary reply utility. The
                 // no-attack constant is subtracted once by the outer declaration search.
-                return reply == null || !reply.supported() || !reply.searchExhaustive() ? 0
+                return reply == null || !reply.usable() ? 0
                         : CombatOutcomePredictor.add(CombatSafetyEvaluator.discountedFollowUpValue(reply.nonterminalUtility()),
                                 continuationPressure(projection));
             }
@@ -415,15 +432,15 @@ public final class CombatBlockSearch {
                 final CombatSafetyEvaluator.FollowUp forecast = forecasts.computeIfAbsent(projection,
                         state -> CombatSafetyEvaluator.nextAttack(snapshot, state, readiness, values, budget));
                 reasons.addAll(forecast.reasons());
-                if (!forecast.supported() || !forecast.searchExhaustive()) {
+                if (!forecast.usable()) {
                     // Do not compare a complete baseline with an optimistic partial reply.
                     domainComplete = false;
                     reasons.add("A complete public follow-up estimate is required for pressure ranking");
                 }
                 if (!baselineEvaluated) {
                     baselineFollowUp = forecast;
-                    pressureEnabled = forecast.supported() && forecast.searchExhaustive();
-                } else if (forecast.supported() && forecast.searchExhaustive()) {
+                    pressureEnabled = forecast.usable();
+                } else if (forecast.usable()) {
                     return CombatSafetyEvaluator.incrementalPressure(baselineFollowUp, forecast);
                 }
             }
@@ -434,9 +451,9 @@ public final class CombatBlockSearch {
             if (continuationEstimator == null) { return 0; }
             final var forecast = continuations.computeIfAbsent(projection, continuationEstimator);
             reasons.addAll(forecast.reasons());
-            if (!forecast.supported() || !forecast.searchExhaustive()) {
+            if (!forecast.usable()) {
                 domainComplete = false;
-                interrupted |= !forecast.searchExhaustive();
+                interrupted |= !forecast.candidateSearchComplete();
                 reasons.add("A complete stressed next-attack estimate is required for two-turn pressure ranking");
             }
             return forecast.value();
@@ -446,7 +463,7 @@ public final class CombatBlockSearch {
             if (replyEstimator == null || projection.terminal() != CombatProjection.Terminal.NONE) { return null; }
             final var reply = forecasts.computeIfAbsent(projection, replyEstimator);
             reasons.addAll(reply.reasons());
-            if (!reply.supported() || !reply.searchExhaustive()) {
+            if (!reply.usable()) {
                 domainComplete = false;
                 reasons.add("A complete opposing reply is required for attack safety");
             }
@@ -457,6 +474,24 @@ public final class CombatBlockSearch {
             final var a = estimateReply(left);
             final var b = estimateReply(right);
             return a == null || b == null ? 0 : Boolean.compare(b.lethalOpportunity(), a.lethalOpportunity());
+        }
+
+        /** Below-zero life is still meaningful when every legal defense loses. Preserve terminal
+         * priority, then minimize incoming player damage before choosing among equal-damage trades.
+         * TODO: Other loss conditions need their own least-bad metric when projected here. */
+        private int hopelessDefensePriority(final CombatProjection left, final CombatProjection right) {
+            final boolean observingDefender = snapshot.observingPlayerId() == snapshot.defendingPlayerId();
+            final var defeatedDefender = observingDefender ? CombatProjection.Terminal.LOSS : CombatProjection.Terminal.WIN;
+            if (left.terminal() != defeatedDefender || right.terminal() != defeatedDefender) { return 0; }
+            final long leftDamage = left.batches().stream().mapToLong(batch ->
+                    batch.playerDamage().getOrDefault(snapshot.defendingPlayerId(), 0)).sum();
+            final long rightDamage = right.batches().stream().mapToLong(batch ->
+                    batch.playerDamage().getOrDefault(snapshot.defendingPlayerId(), 0)).sum();
+            final int damagePreference = Long.compare(rightDamage, leftDamage);
+            if (damagePreference != 0) { return observingDefender ? damagePreference : -damagePreference; }
+            final int lessDamage = Integer.compare(left.playerLifeAfter().get(snapshot.defendingPlayerId()),
+                    right.playerLifeAfter().get(snapshot.defendingPlayerId()));
+            return observingDefender ? lessDamage : -lessDamage;
         }
 
         private int compareAssignments(final CombatAssignment left, final CombatAssignment right) {

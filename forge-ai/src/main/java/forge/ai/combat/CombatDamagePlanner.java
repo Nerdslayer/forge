@@ -76,16 +76,16 @@ public final class CombatDamagePlanner {
         final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> forecast = state -> {
             if (state.terminal() != CombatProjection.Terminal.NONE) { return null; }
             final var reply = forecasts.reply(state);
-            supported[0] &= reply.supported() && reply.searchExhaustive();
+            supported[0] &= reply.usable();
             reasons.addAll(reply.reasons());
             return reply;
         };
         final CombatDamageOptimizer.Result result = CombatDamageOptimizer.optimizeBlockGroups(snapshot, assignment, values, budget,
                 state -> {
                     final var reply = forecast.apply(state);
-                    if (reply == null || !reply.supported() || !reply.searchExhaustive()) { return 0; }
+                    if (reply == null || !reply.usable()) { return 0; }
                     final var future = forecasts.pressure(state);
-                    supported[0] &= future.supported() && future.searchExhaustive();
+                    supported[0] &= future.usable();
                     reasons.addAll(future.reasons());
                     return CombatOutcomePredictor.add(CombatSafetyEvaluator.discountedFollowUpValue(reply.nonterminalUtility()), future.value());
                 }, (left, right) -> {

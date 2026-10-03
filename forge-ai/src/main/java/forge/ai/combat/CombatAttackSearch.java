@@ -102,8 +102,8 @@ public final class CombatAttackSearch {
                 final var forecast = combat.followUp().orElseThrow();
                 reply = Optional.of(forecast);
                 reasons.addAll(forecast.reasons());
-                supported &= forecast.supported() && forecast.searchExhaustive();
-                if (baseline != null && forecast.supported() && forecast.searchExhaustive() && baseline.reply().isPresent()) {
+                supported &= forecast.usable();
+                if (baseline != null && forecast.usable() && baseline.reply().isPresent()) {
                     final long delta = (long) forecast.nonterminalUtility() - baseline.reply().orElseThrow().nonterminalUtility();
                     // Immediate casualties are already excluded from the reply ledger. Discount
                     // ordinary future changes; compare() still gives lethal reply risk priority.
