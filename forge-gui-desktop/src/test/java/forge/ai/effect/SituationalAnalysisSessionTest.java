@@ -442,7 +442,10 @@ public class SituationalAnalysisSessionTest extends AITest {
         });
         inspect.run();
         card.setTapped(true);
-        inspect.run();
+        controller.withSituationalAnalysis(() -> {
+            Assert.assertSame(CardAbilityTraversal.inspectLive(ai, card, EffectAnalysisTrace.disabled()), inventory[0]);
+            return null;
+        });
         card.getTriggers().get(0).putParam("Phase", "EndOfTurn");
         inspect.run();
         Assert.expectThrows(IllegalStateException.class, () -> controller.withSituationalAnalysis(() -> {
@@ -461,6 +464,52 @@ public class SituationalAnalysisSessionTest extends AITest {
         controller.withSituationalAnalysis(() -> { Assert.assertNull(controller.getSituationalAnalysisSession()); return null; });
         ((LobbyPlayerAi) ai.getLobbyPlayer()).setAiProfile("Mastermind");
         inspect.run();
+    }
+
+    @Test
+    public void transientPaymentAndTargetChangesRetainStructureAcrossWorkerDecisions() throws Exception {
+        final Player ai = mastermind();
+        final Player opponent = ai.getGame().getPlayers().get(0);
+        final Card card = addCard("Staff of Nin", opponent);
+        final Card target = addCard("Grizzly Bears", ai);
+        final var controller = ((PlayerControllerAi) ai.getController()).getAi();
+        final Object[] previous = new Object[2];
+        final AtomicInteger numericCalls = new AtomicInteger();
+        final var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        for (int decision = 0; decision < 3; decision++) {
+            final boolean first = decision == 0;
+            final Thread worker = new Thread(() -> {
+                try {
+                    controller.withSituationalAnalysis(() -> {
+                        final var session = controller.getSituationalAnalysisSession();
+                        final var trace = EffectAnalysisTrace.disabled();
+                        final var inventory = session.inventory(card, trace);
+                        final var index = session.consequenceIndex(List.of(card), List.of(opponent), trace);
+                        if (first) {
+                            previous[0] = inventory;
+                            previous[1] = index;
+                        } else {
+                            Assert.assertSame(inventory, previous[0]);
+                            Assert.assertSame(index, previous[1]);
+                        }
+                        session.baseline(SituationalAnalysisSession.Section.CURRENT_STATIC, List.of(card), trace,
+                                () -> { numericCalls.incrementAndGet(); return Map.of(); });
+                        // Legacy action probes can change payment memory/targets after the last valuation.
+                        AiCardMemory.rememberCard(ai, target, AiCardMemory.MemorySet.PAYS_TAP_COST);
+                        card.getSpellAbilities().get(1).getTargets().add(target);
+                        ai.getGame().invalidateAnalysisState();
+                        return null;
+                    });
+                } catch (final Throwable problem) { failure.set(problem); }
+            });
+            worker.start();
+            worker.join(5000);
+            Assert.assertFalse(worker.isAlive());
+            Assert.assertNull(failure.get());
+            // Decisions that do not request analysis must not erase compatible retained structure.
+            controller.withSituationalAnalysis(() -> null);
+        }
+        Assert.assertEquals(numericCalls.get(), 3);
     }
 
     @Test

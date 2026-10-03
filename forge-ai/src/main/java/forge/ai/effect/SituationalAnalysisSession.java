@@ -39,6 +39,7 @@ public final class SituationalAnalysisSession implements AutoCloseable {
     private final Map<List<Player>, PreparedConsequenceIndex> consequenceIndexes = new HashMap<>();
     private final Set<Object> building = new HashSet<>();
     private List<Object> inputs;
+    private List<Object> structuralInputs;
     private boolean closed;
     private long failures;
     private int preparations;
@@ -46,6 +47,8 @@ public final class SituationalAnalysisSession implements AutoCloseable {
     private int invalidations;
     private long preparationNanos;
     private int retainedEntries;
+    private String retentionImport = "none";
+    private String retentionExport = "not_requested";
 
     private record Key(Section section, Set<Player> controllers) { }
     private record FutureKey(Card candidate, long timestamp,
@@ -68,7 +71,7 @@ public final class SituationalAnalysisSession implements AutoCloseable {
 
         private RetainedAnalysis(final SituationalAnalysisSession session) {
             owner = session.ai;
-            inputs = List.copyOf(session.inputs);
+            inputs = List.copyOf(session.structuralInputs);
             inventories = Map.copyOf(session.inventories);
             consequenceIndexes = Map.copyOf(session.consequenceIndexes);
         }
@@ -83,13 +86,16 @@ public final class SituationalAnalysisSession implements AutoCloseable {
         ai.getGame().enableAnalysisStateTracking();
         if (retained != null && retained.owner == ai && !ai.getGame().isGameOver()) {
             try {
-                if (retained.inputs.equals(probeInputs())) {
-                    inputs = retained.inputs;
+                final List<Object> currentInputs = probeInputs(true);
+                retentionImport = inputDifference(retained.inputs, currentInputs);
+                if (retained.inputs.equals(currentInputs)) {
+                    structuralInputs = retained.inputs;
                     inventories.putAll(retained.inventories);
                     consequenceIndexes.putAll(retained.consequenceIndexes);
                     retainedEntries = inventories.size() + consequenceIndexes.size();
                 }
             } catch (final RuntimeException unavailable) {
+                retentionImport = "validation_failed";
                 // Retention is optional; an incomplete validation must not affect legacy play.
                 invalidate();
             }
@@ -97,15 +103,31 @@ public final class SituationalAnalysisSession implements AutoCloseable {
     }
 
     public RetainedAnalysis retainStructuralAnalysis() {
+        retentionExport = "ineligible";
         if (!isOwnedByCurrentThread() || Thread.currentThread().isInterrupted() || ai.getGame().isGameOver()
-                || failures != 0 || !building.isEmpty() || inputs == null
-                || inventories.isEmpty() && consequenceIndexes.isEmpty()) { return null; }
+                || failures != 0 || !building.isEmpty() || structuralInputs == null
+                || inventories.isEmpty() && consequenceIndexes.isEmpty()) {
+            retentionExport = failures != 0 ? "preparation_failed" : "empty_or_ineligible";
+            return null;
+        }
         try {
-            if (inputs.equals(probeInputs())) { return new RetainedAnalysis(this); }
+            final List<Object> currentInputs = probeInputs(true);
+            retentionExport = inputDifference(structuralInputs, currentInputs);
+            if (structuralInputs.equals(currentInputs)) { return new RetainedAnalysis(this); }
         } catch (final RuntimeException unavailable) {
+            retentionExport = "validation_failed";
             // A failed/unstable end-of-decision validation publishes no reusable entries.
         }
         return null;
+    }
+
+    private static String inputDifference(final List<Object> previous, final List<Object> current) {
+        for (int i = 0; i < Math.min(previous.size(), current.size()); i++) {
+            if (!previous.get(i).equals(current.get(i))) {
+                return "changed_" + previous.get(i).getClass().getSimpleName();
+            }
+        }
+        return previous.size() == current.size() ? "compatible" : "changed_shape";
     }
 
     public boolean isOwnedByCurrentThread() {
@@ -167,7 +189,7 @@ public final class SituationalAnalysisSession implements AutoCloseable {
         }
         final InventoryKey key = new InventoryKey(card, card.getGameTimestamp(), card.getCurrentState());
         return prepared(inventories, key, "ABILITY_INVENTORY card=" + card.getId(), trace,
-                () -> List.copyOf(CardAbilityTraversal.inspect(card.getCurrentState())), null);
+                () -> List.copyOf(CardAbilityTraversal.inspect(card.getCurrentState())), null, true);
     }
 
     PreparedConsequenceIndex consequenceIndex(final List<Card> candidates, final List<Player> controllers,
@@ -176,16 +198,34 @@ public final class SituationalAnalysisSession implements AutoCloseable {
             return PreparedConsequenceIndex.prepare(ai, controllers);
         }
         return prepared(consequenceIndexes, List.copyOf(controllers), "CONSEQUENCE_INDEX", trace,
-                () -> PreparedConsequenceIndex.prepare(ai, controllers), null);
+                () -> PreparedConsequenceIndex.prepare(ai, controllers), null, true);
     }
 
     private <K, V> V prepared(final Map<K, V> cache, final K key, final String section,
             final EffectAnalysisTrace trace, final Supplier<V> prepare, final V reentrantFallback) {
-        final List<Object> nextInputs = probeInputs();
-        if (inputs != null && !inputs.equals(nextInputs)) {
+        return prepared(cache, key, section, trace, prepare, reentrantFallback, false);
+    }
+
+    private <K, V> V prepared(final Map<K, V> cache, final K key, final String section,
+            final EffectAnalysisTrace trace, final Supplier<V> prepare, final V reentrantFallback,
+            final boolean structural) {
+        // Structural facts contain no legality, occurrence, targets, X, or outcome scores.
+        // Payment probes and phase/life/tap events must still invalidate numerical results,
+        // but cannot invalidate parsing/routing when the actual card scripts are unchanged.
+        final List<Object> nextInputs = probeInputs(structural);
+        final List<Object> nextStructure = structural ? nextInputs : nextInputs.stream()
+                .skip(1 + AiCardMemory.MemorySet.values().length)
+                .filter(input -> !(input instanceof AbilityInputs)).toList();
+        if (structuralInputs != null && !structuralInputs.equals(nextStructure)) {
             invalidate();
         }
-        inputs = nextInputs;
+        structuralInputs = nextStructure;
+        if (!structural && inputs != null && !inputs.equals(nextInputs)) {
+            baselines.clear();
+            futureValues.clear();
+            invalidations++;
+        }
+        if (!structural) { inputs = nextInputs; }
         final V cached = cache.get(key);
         if (cached != null) {
             hits++;
@@ -210,8 +250,8 @@ public final class SituationalAnalysisSession implements AutoCloseable {
             final V result = prepare.get();
             if (failures == failuresBefore && invalidations == invalidationsBefore && !Thread.currentThread().isInterrupted()
                     && baselines.size() + futureValues.size() + inventories.size() + consequenceIndexes.size() < MAX_ENTRIES
-                    && inputs != null
-                    && nextInputs.equals(inputs) && nextInputs.equals(probeInputs())) {
+                    && nextInputs.equals(structural ? structuralInputs : inputs)
+                    && nextInputs.equals(probeInputs(structural))) {
                 cache.put(key, result);
             }
             trace.sharedBaseline(id, section, false);
@@ -245,14 +285,16 @@ public final class SituationalAnalysisSession implements AutoCloseable {
         return true;
     }
 
-    private List<Object> probeInputs() {
+    private List<Object> probeInputs(final boolean structural) {
         // These transient inputs can change even without executing an action: legacy probes
         // select targets/X and reserve payment sources. Preserve their existing effects.
         final List<Object> result = new ArrayList<>();
-        result.add(ai.getGame().getAnalysisStateRevision());
-        for (final AiCardMemory.MemorySet set : AiCardMemory.MemorySet.values()) {
-            final Set<Card> memory = AiCardMemory.getMemorySet(ai, set);
-            result.add(memory == null ? Set.of() : Set.copyOf(memory));
+        if (!structural) {
+            result.add(ai.getGame().getAnalysisStateRevision());
+            for (final AiCardMemory.MemorySet set : AiCardMemory.MemorySet.values()) {
+                final Set<Card> memory = AiCardMemory.getMemorySet(ai, set);
+                result.add(memory == null ? Set.of() : Set.copyOf(memory));
+            }
         }
         final List<Card> cards = new ArrayList<>();
         ai.getGame().getCardsIn(ZoneType.Battlefield).forEach(cards::add);
@@ -263,7 +305,7 @@ public final class SituationalAnalysisSession implements AutoCloseable {
             }
             result.add(new CardInputs(card, card.getGameTimestamp(), card.getCurrentState(),
                     card.getChosenNumber(), card.getChosenType(), card.getChosenColor(), card.getController(), Map.copyOf(card.getSVars())));
-            appendTraits(card, result);
+            appendTraits(card, result, structural);
         }
         return List.copyOf(result);
     }
@@ -273,7 +315,7 @@ public final class SituationalAnalysisSession implements AutoCloseable {
                 trait.isIntrinsic(), trait.getKeyword() != null, trait.isSuppressed()));
     }
 
-    private static void appendTraits(final Card card, final List<Object> result) {
+    private static void appendTraits(final Card card, final List<Object> result, final boolean structural) {
         final ArrayDeque<SpellAbility> pending = new ArrayDeque<>();
         card.getCurrentState().getSpellAbilities().forEach(pending::add);
         for (final var trigger : card.getCurrentState().getTriggers()) {
@@ -294,9 +336,11 @@ public final class SituationalAnalysisSession implements AutoCloseable {
                 return;
             }
             appendTrait(ability, result);
-            final List<GameObject> targets = new ArrayList<>();
-            ability.getTargets().forEach(targets::add);
-            result.add(new AbilityInputs(ability, ability.getXManaCostPaid(), List.copyOf(targets)));
+            if (!structural) {
+                final List<GameObject> targets = new ArrayList<>();
+                ability.getTargets().forEach(targets::add);
+                result.add(new AbilityInputs(ability, ability.getXManaCostPaid(), List.copyOf(targets)));
+            }
             final List<AbilityLink> children = new ArrayList<>();
             if (ability.getSubAbility() != null) { children.add(new AbilityLink("next", ability.getSubAbility())); }
             new TreeMap<>(ability.getAdditionalAbilities()).forEach((name, child) -> children.add(new AbilityLink(name, child)));
@@ -326,6 +370,7 @@ public final class SituationalAnalysisSession implements AutoCloseable {
         inventories.clear();
         consequenceIndexes.clear();
         inputs = null;
+        structuralInputs = null;
         invalidations++;
     }
 
@@ -338,14 +383,16 @@ public final class SituationalAnalysisSession implements AutoCloseable {
         closed = true;
         if (Boolean.parseBoolean(System.getProperty(EffectAnalysisTrace.ENABLE_PROPERTY, "true"))) {
             Logger.info("[AI Effect Analysis] Shared analysis session: id={}, preparations={}, hits={}, "
-                    + "invalidations={}, retainedEntries={}, preparationMs={}", id, preparations, hits, invalidations, retainedEntries,
-                    preparationNanos / 1_000_000.0);
+                    + "invalidations={}, retainedEntries={}, preparationMs={}, retentionImport={}, retentionExport={}, failures={}",
+                    id, preparations, hits, invalidations, retainedEntries,
+                    preparationNanos / 1_000_000.0, retentionImport, retentionExport, failures);
         }
         baselines.clear();
         futureValues.clear();
         inventories.clear();
         consequenceIndexes.clear();
         inputs = null;
+        structuralInputs = null;
         // TODO: Numeric cross-decision retention still requires complete static/history/limit and
         // concurrent mutation coverage. Add normalized production facts and compatible combat preparation;
         // reference/projected evaluations and action overlays must keep independent lifetimes.
