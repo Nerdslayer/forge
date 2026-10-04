@@ -295,6 +295,14 @@ public final class PermanentAbilityValueEvaluator {
                 addSkipped(destination, candidate, value.path(), "self-ETB benefit already realized");
                 continue;
             }
+            if (IntrinsicSelfDeathTriggerAdapter.bindableSourceEvent(AbilityOptionality.triggerParameters(description.parameters()))) {
+                // Intrinsic deployment benefits are not automatically lost benefits of removal:
+                // destroying this source can realize its death payoff instead. TODO: Admit these
+                // through concrete departure/action projection with correct event credit/sign.
+                hasUnevaluatedAbility = true;
+                addSkipped(destination, candidate, value.path(), "self-death benefit requires concrete departure projection");
+                continue;
+            }
             if (!aggregate.complete() || aggregate.unresolvedRandomProbability() != 0) {
                 hasUnevaluatedAbility = true;
                 addSkipped(destination, candidate, value.path(), "intrinsic outcome is incomplete: "

@@ -1,6 +1,8 @@
 package forge.ai.effect;
 
 import java.util.Map;
+import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -30,5 +32,24 @@ public record DrawOutcomeDescription(int amount, boolean controller) {
             return Optional.of(new DrawOutcomeDescription(Integer.parseInt(params.getOrDefault("NumCards", "1")),
                     "You".equals(recipient)));
         } catch (final NumberFormatException invalid) { return Optional.empty(); }
+    }
+
+    /** Fixed 1v1 recipient union; each distinct player draws once, not once per alias. */
+    public static Optional<List<DrawOutcomeDescription>> parseFixedRecipients(final String api, final Map<String, String> params) {
+        final var recipients = new LinkedHashSet<String>();
+        for (final String part : params.getOrDefault("Defined", "You").split("&", -1)) {
+            if (!Set.of("You", "Opponent").contains(part.trim())) { return Optional.empty(); }
+            recipients.add(part.trim());
+        }
+        final var draws = new java.util.ArrayList<DrawOutcomeDescription>();
+        for (final String recipient : recipients) {
+            final var single = new java.util.LinkedHashMap<>(params);
+            single.put("Defined", recipient);
+            final var draw = parse(api, single);
+            if (draw.isEmpty()) { return Optional.empty(); }
+            draws.add(draw.get());
+        }
+        // TODO: Multiplayer/all-player sets and event identities require explicit recipient state.
+        return Optional.of(List.copyOf(draws));
     }
 }

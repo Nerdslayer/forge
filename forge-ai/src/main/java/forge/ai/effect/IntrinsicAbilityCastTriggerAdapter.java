@@ -65,7 +65,7 @@ final class IntrinsicAbilityCastTriggerAdapter {
             final Map<String, String> parameters) {
         return switch (parameters.getOrDefault("ValidActivatingPlayer", "Player")) {
         case "You" -> IntrinsicEventTrigger.TurnScope.CONTROLLER_TURN;
-        case "Opponent" -> IntrinsicEventTrigger.TurnScope.OPPONENT_TURN;
+        case "Opponent", "Player.Opponent" -> IntrinsicEventTrigger.TurnScope.OPPONENT_TURN;
         default -> IntrinsicEventTrigger.TurnScope.ANY_TURN;
         };
     }

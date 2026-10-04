@@ -33,17 +33,27 @@ public final class IntrinsicDrawOutcomeBackend
     public static final String OPPONENT_PERMANENT = "opponentPermanent";
     public static final String CONTROLLER_CREATURE_COUNT = "controllerCreatureCount";
     public static final String OPPONENT_CREATURE_COUNT = "opponentCreatureCount";
+    public static final String SOURCE_P1P1 = "P1P1_COUNTERS";
+    public static final String SOURCE_INITIAL_P1P1 = "sourceInitialP1p1Counters";
+    public static final String CONTROLLER_P1P1 = "controllerP1p1Counters";
+    public static final String OPPONENT_P1P1 = "opponentP1p1Counters";
 
     private static final int MAX_DIMENSION_DEPTH = 24;
     private static final Set<String> COMMON_METADATA = Set.of("DB", "SubAbility",
-            "SpellDescription", "StackDescription");
+            "SpellDescription", "StackDescription", "Secondary", "PrecostDesc", "CostDesc");
     private static final Set<String> CHOICE_PARAMETERS = Set.of(
             "DB", "AB", "SP", "Cost", "Choices", "CharmNum", "MinCharmNum", "CanRepeatModes",
             "ChoiceAmount", "Defined", "Chooser", "Random", "AtRandom", "SubAbility",
             "SpellDescription", "StackDescription");
     private static final Set<String> DRAW_PARAMETERS = parameters("NumCards", "Defined");
+    private static final Set<String> DIG_PARAMETERS = parameters("Defined", "DigNum", "ChangeNum", "ChangeValid",
+            "ChangeValidDesc", "DestinationZone", "DestinationZone2", "SourceZone", "RestRandomOrder", "Reveal",
+            "ForceRevealToController", "PrimaryPrompt");
+    private static final Set<String> SCRY_PARAMETERS = parameters("Defined", "ScryNum");
+    private static final Set<String> SURVEIL_PARAMETERS = parameters("Defined", "Amount");
     private static final Set<String> COUNTER_PARAMETERS = parameters("CounterType", "CounterNum",
             "Defined", "ValidCards", "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
+    private static final Set<String> MULTIPLY_COUNTER_PARAMETERS = parameters("CounterType", "Multiplier", "Defined");
     private static final Set<String> PUMP_PARAMETERS = parameters("Defined", "ValidCards",
             "ValidTgts", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone", "Duration",
             "NumAtt", "NumDef", "KW");
@@ -58,6 +68,7 @@ public final class IntrinsicDrawOutcomeBackend
     private static final Set<String> TOKEN_PARAMETERS = parameters("TokenScript", "TokenOwner",
             "TokenAmount", "TokenPower", "TokenToughness", "TokenTypes", "TokenColors",
             "TokenTapped", "TokenAttacking", "TokenBlocking");
+    private static final Set<String> INVESTIGATE_PARAMETERS = parameters("Defined", "Num");
     private static final Set<String> LIFE_PARAMETERS = parameters("Defined", "LifeAmount",
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax");
     private static final Set<String> DISCARD_PARAMETERS = parameters("Defined", "Mode", "NumCards",
@@ -67,7 +78,7 @@ public final class IntrinsicDrawOutcomeBackend
             "ReflectProperty", "Amount");
     private static final Set<String> DAMAGE_PARAMETERS = parameters("Defined", "NumDmg", "DamageSource",
             "ValidTgts", "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax");
-    private static final Set<String> DAMAGE_ALL_PARAMETERS = parameters("ValidPlayers", "ValidCards",
+    private static final Set<String> DAMAGE_ALL_PARAMETERS = parameters("ValidPlayers", "ValidCards", "ValidDescription",
             "NumDmg", "DamageSource");
     private static final Set<String> FIGHT_PARAMETERS = parameters("Defined", "ValidTgts",
             "ValidTgtsDesc", "TgtPrompt", "TargetMin", "TargetMax", "TgtZone");
@@ -109,8 +120,12 @@ public final class IntrinsicDrawOutcomeBackend
             int opponentCreatureCount, CreatureProfile controllerCreature,
             CreatureProfile opponentCreature, PermanentProfile controllerPermanent,
             PermanentProfile opponentPermanent, PermanentProfile sourcePermanent,
-            TargetRef target) {
+            TargetRef target, java.util.Map<TargetRef, Integer> p1p1Counters) {
         public State {
+            p1p1Counters = p1p1Counters == null ? java.util.Map.of() : java.util.Map.copyOf(p1p1Counters);
+            if (p1p1Counters.values().stream().anyMatch(value -> value < 0)) {
+                throw new IllegalArgumentException("Counter inventory must be nonnegative");
+            }
             controllerHand = Math.max(0, controllerHand);
             opponentHand = Math.max(0, opponentHand);
             controllerLife = Math.max(0, controllerLife);
@@ -128,6 +143,28 @@ public final class IntrinsicDrawOutcomeBackend
             sourcePermanent = sourcePermanent == null ? PermanentProfile.absent() : sourcePermanent;
         }
 
+        public State(final int controllerHand, final int opponentHand, final int controllerLife, final int opponentLife,
+                final int controllerMana, final int opponentMana, final int controllerCreatureCount,
+                final int opponentCreatureCount, final CreatureProfile controllerCreature, final CreatureProfile opponentCreature,
+                final PermanentProfile controllerPermanent, final PermanentProfile opponentPermanent,
+                final PermanentProfile sourcePermanent, final TargetRef target) {
+            this(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana, opponentMana,
+                    controllerCreatureCount, opponentCreatureCount, controllerCreature, opponentCreature,
+                    controllerPermanent, opponentPermanent, sourcePermanent, target, java.util.Map.of());
+        }
+
+        int p1p1(final TargetRef recipient) { return p1p1Counters.getOrDefault(recipient, 0); }
+
+        State withP1p1(final TargetRef recipient, final int amount) {
+            final var counters = new java.util.EnumMap<TargetRef, Integer>(TargetRef.class);
+            counters.putAll(p1p1Counters);
+            counters.put(recipient, Math.max(0, amount));
+            return new State(controllerHand, opponentHand, controllerLife, opponentLife,
+                    controllerMana, opponentMana, controllerCreatureCount, opponentCreatureCount,
+                    controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
+                    sourcePermanent, target, counters);
+        }
+
         public State(final int controllerHand, final int opponentHand) {
             this(controllerHand, opponentHand, 20, 20, 3, 3, 1, 1,
                     CreatureProfile.absent(), CreatureProfile.absent(),
@@ -139,7 +176,7 @@ public final class IntrinsicDrawOutcomeBackend
             return new State(controllerHand, opponentHand, controllerLife, opponentLife,
                     controllerMana, opponentMana, controllerCreatureCount, opponentCreatureCount,
                     controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                    sourcePermanent, value);
+                    sourcePermanent, value, p1p1Counters);
         }
 
         State clearTarget() {
@@ -151,11 +188,11 @@ public final class IntrinsicDrawOutcomeBackend
                     ? new State(value, opponentHand, controllerLife, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                            sourcePermanent, target)
+                            sourcePermanent, target, p1p1Counters)
                     : new State(controllerHand, value, controllerLife, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                            sourcePermanent, target);
+                            sourcePermanent, target, p1p1Counters);
         }
 
         State withLife(final boolean controller, final int value) {
@@ -163,11 +200,11 @@ public final class IntrinsicDrawOutcomeBackend
                     ? new State(controllerHand, opponentHand, value, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                            sourcePermanent, target)
+                            sourcePermanent, target, p1p1Counters)
                     : new State(controllerHand, opponentHand, controllerLife, value, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                            sourcePermanent, target);
+                            sourcePermanent, target, p1p1Counters);
         }
 
         State withMana(final boolean controller, final int value) {
@@ -175,21 +212,21 @@ public final class IntrinsicDrawOutcomeBackend
                     ? new State(controllerHand, opponentHand, controllerLife, opponentLife, value,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                            sourcePermanent, target)
+                            sourcePermanent, target, p1p1Counters)
                     : new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
                             value, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                            sourcePermanent, target);
+                            sourcePermanent, target, p1p1Counters);
         }
 
         State withCreatureCount(final boolean controller, final int value) {
             return controller
                     ? new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
                             opponentMana, Math.max(0, value), opponentCreatureCount, controllerCreature,
-                            opponentCreature, controllerPermanent, opponentPermanent, sourcePermanent, target)
+                            opponentCreature, controllerPermanent, opponentPermanent, sourcePermanent, target, p1p1Counters)
                     : new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, Math.max(0, value), controllerCreature,
-                            opponentCreature, controllerPermanent, opponentPermanent, sourcePermanent, target);
+                            opponentCreature, controllerPermanent, opponentPermanent, sourcePermanent, target, p1p1Counters);
         }
 
         int creatureCount(final boolean controller) {
@@ -200,11 +237,11 @@ public final class IntrinsicDrawOutcomeBackend
             return controller
                     ? new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount, profile,
-                            opponentCreature, controllerPermanent, opponentPermanent, sourcePermanent, target)
+                            opponentCreature, controllerPermanent, opponentPermanent, sourcePermanent, target, p1p1Counters)
                     : new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, profile, controllerPermanent, opponentPermanent,
-                            sourcePermanent, target);
+                            sourcePermanent, target, p1p1Counters);
         }
 
         State withPermanent(final boolean controller, final PermanentProfile profile) {
@@ -212,23 +249,26 @@ public final class IntrinsicDrawOutcomeBackend
                     ? new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, profile, opponentPermanent,
-                            sourcePermanent, target)
+                            sourcePermanent, target, p1p1Counters)
                     : new State(controllerHand, opponentHand, controllerLife, opponentLife, controllerMana,
                             opponentMana, controllerCreatureCount, opponentCreatureCount,
                             controllerCreature, opponentCreature, controllerPermanent, profile,
-                            sourcePermanent, target);
+                            sourcePermanent, target, p1p1Counters);
         }
 
         State withSourcePermanent(final PermanentProfile profile) {
             return new State(controllerHand, opponentHand, controllerLife, opponentLife,
                     controllerMana, opponentMana, controllerCreatureCount, opponentCreatureCount,
                     controllerCreature, opponentCreature, controllerPermanent, opponentPermanent,
-                    profile, target);
+                    profile, target, p1p1Counters);
         }
     }
 
     private final IntrinsicOutcomeEvaluator evaluator;
     private final Function<String, Optional<PermanentProfile>> tokenProfileResolver;
+    private final IntrinsicLibraryReference library;
+    private final PermanentProfile watchedEventCreature;
+    private final boolean initialSourceLifelink;
 
     public IntrinsicDrawOutcomeBackend(final IntrinsicEvaluationSettings settings) {
         this(settings, PermanentProfile.absent());
@@ -246,10 +286,35 @@ public final class IntrinsicDrawOutcomeBackend
     public IntrinsicDrawOutcomeBackend(final IntrinsicEvaluationSettings settings,
             final PermanentProfile source,
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver) {
+        this(settings, source, tokenProfileResolver, IntrinsicLibraryReference.defaults());
+    }
+
+    public IntrinsicDrawOutcomeBackend(final IntrinsicEvaluationSettings settings,
+            final PermanentProfile source, final Function<String, Optional<PermanentProfile>> tokenProfileResolver,
+            final IntrinsicLibraryReference library) {
+        this(settings, source, tokenProfileResolver, library, null);
+    }
+
+    IntrinsicDrawOutcomeBackend(final IntrinsicEvaluationSettings settings,
+            final PermanentProfile source, final Function<String, Optional<PermanentProfile>> tokenProfileResolver,
+            final IntrinsicLibraryReference library, final PermanentProfile watchedEventCreature) {
         // Source characteristics are read from each projected State, never a stale initial copy.
         evaluator = new IntrinsicOutcomeEvaluator(settings);
         this.tokenProfileResolver = tokenProfileResolver == null ? script -> Optional.empty()
                 : tokenProfileResolver;
+        this.library = java.util.Objects.requireNonNull(library);
+        this.watchedEventCreature = watchedEventCreature;
+        initialSourceLifelink = hasKeyword(source, "lifelink");
+    }
+
+    @Override
+    public Outcome<State> conditional(final AbilityOutcomeDescription node,
+            final Function<AbilityOutcomeDescription, Outcome<State>> compile) {
+        final var condition = IntrinsicOutcomeConditions.describe(node);
+        final Outcome<State> effect = compile.apply(condition.node());
+        if (condition.predicate() == null) { return effect; }
+        return new Outcome.Deferred<>(state -> condition.predicate().test(state) ? effect
+                : new Outcome.Atomic<State>(node.path() + ":condition-inactive", current -> new Outcome.Transition<>(0, current)));
     }
 
     @Override
@@ -272,7 +337,10 @@ public final class IntrinsicDrawOutcomeBackend
         if (!node.choices().isEmpty()) { return false; }
         return switch (node.api()) {
         case "Draw" -> acceptsDraw(node);
+        case "Dig" -> acceptsDig(node);
+        case "Scry", "Surveil" -> acceptsFiltering(node);
         case "PutCounter" -> acceptsCounter(node) || acceptsCounterChoice(node);
+        case "MultiplyCounter" -> acceptsMultiplyCounter(node);
         case "RemoveCounter" -> acceptsRemoveCounter(node);
         case "RemoveCounterAll" -> acceptsRemoveCounterAll(node);
         case "PutCounterAll" -> acceptsCounterAll(node);
@@ -282,6 +350,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Animate" -> acceptsAnimate(node);
         case "AnimateAll" -> acceptsAnimateAll(node);
         case "Token" -> acceptsToken(node);
+        case "Investigate" -> investigateToken(node) != null;
         case "GainLife", "LoseLife" -> acceptsLife(node);
         case "Discard" -> acceptsDiscard(node);
         case "Mana" -> acceptsMana(node);
@@ -309,11 +378,36 @@ public final class IntrinsicDrawOutcomeBackend
         final Set<String> dimensions = new LinkedHashSet<>();
         collectDimensions(node, dimensions,
                 Collections.newSetFromMap(new IdentityHashMap<>()), 0);
+        if (initialSourceLifelink || watchedEventCreature != null && hasKeyword(watchedEventCreature, "lifelink")
+                || containsLifelinkGrant(node, Collections.newSetFromMap(new IdentityHashMap<>()), 0)) {
+            // A source's lifelink gain can matter even when the damage recipient is a creature.
+            // Include both owners for projected control changes; mechanics read current/LKI state.
+            dimensions.add(CONTROLLER_LIFE);
+            dimensions.add(OPPONENT_LIFE);
+        }
         return Set.copyOf(dimensions);
+    }
+
+    private static boolean containsLifelinkGrant(final AbilityOutcomeDescription node,
+            final Set<AbilityOutcomeDescription> visited, final int depth) {
+        if (node == null || !visited.add(node)) { return false; }
+        if (depth > 24) { return true; }
+        if (Set.of("KW", "AddKeyword").stream().anyMatch(field -> node.parameters()
+                .getOrDefault(field, "").toLowerCase(java.util.Locale.ROOT).contains("lifelink"))) { return true; }
+        return node.choices().stream().anyMatch(choice -> containsLifelinkGrant(choice, visited, depth + 1))
+                || containsLifelinkGrant(node.next(), visited, depth + 1);
     }
 
     @Override
     public Outcome<State> bindTargets(final List<AbilityOutcomeDescription> chain, final Outcome<State> child) {
+        // TODO: Counter identity across these transitions needs explicit inventory transfer /
+        // removal. Do not claim a complete multiply sequence using stale representative counts.
+        if (chain.stream().anyMatch(node -> containsApi(node, Set.of("MultiplyCounter")))
+                && chain.stream().anyMatch(node -> containsApi(node, Set.of(
+                        "MoveCounter", "Token", "Investigate", "CopyPermanent", "GainControl", "Animate", "AnimateAll"))
+                        || containsM1m1(node))) {
+            return new Outcome.Unresolved<>("Unsupported intrinsic counter-inventory transition before/after multiplication");
+        }
         // A chain with one targeted child is safe: the planner resolves that child and then
         // continues with the fixed or already-defined steps. Multiple targeted children still
         // need shared-target bindings and all-targets-illegal resolution rules.
@@ -322,6 +416,16 @@ public final class IntrinsicDrawOutcomeBackend
             return new Outcome.Unresolved<>("Unsupported intrinsic multiple-target sequence");
         }
         return child;
+    }
+
+    private static boolean containsApi(final AbilityOutcomeDescription node, final Set<String> apis) {
+        return node != null && (apis.contains(node.api()) || node.choices().stream().anyMatch(choice -> containsApi(choice, apis))
+                || containsApi(node.next(), apis));
+    }
+
+    private static boolean containsM1m1(final AbilityOutcomeDescription node) {
+        return node != null && (node.parameters().getOrDefault("CounterType", "").toUpperCase(Locale.ROOT).contains("M1M1")
+                || node.choices().stream().anyMatch(IntrinsicDrawOutcomeBackend::containsM1m1) || containsM1m1(node.next()));
     }
 
     private static boolean containsTarget(final AbilityOutcomeDescription node) {
@@ -347,7 +451,10 @@ public final class IntrinsicDrawOutcomeBackend
         }
         return switch (node.api()) {
         case "Draw" -> draw(node);
+        case "Dig" -> dig(node);
+        case "Scry", "Surveil" -> filtering(node);
         case "PutCounter", "PutCounterAll" -> counter(node);
+        case "MultiplyCounter" -> multiplyCounter(node);
         case "RemoveCounter" -> removeCounter(node);
         case "RemoveCounterAll" -> removeCounterAll(node);
         case "Pump", "PumpAll" -> pump(node);
@@ -355,6 +462,7 @@ public final class IntrinsicDrawOutcomeBackend
         case "Animate" -> animate(node);
         case "AnimateAll" -> animateAll(node);
         case "Token" -> token(node);
+        case "Investigate" -> token(investigateToken(node));
         case "GainLife", "LoseLife" -> life(node);
         case "Discard" -> discard(node);
         case "Mana" -> mana(node);
@@ -373,14 +481,65 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private Outcome<State> draw(final AbilityOutcomeDescription node) {
-        final DrawOutcomeDescription draw = DrawOutcomeDescription.parse(node.api(), node.parameters()).orElseThrow();
-        final int amount = draw.amount();
-        final boolean controller = draw.controller();
+        final List<DrawOutcomeDescription> draws = DrawOutcomeDescription.parseFixedRecipients(node.api(), node.parameters()).orElseThrow();
+        return new Outcome.Atomic<>(node.path(), state -> {
+            int value = 0;
+            State projected = state;
+            for (final var draw : draws) {
+                final int hand = draw.controller() ? state.controllerHand() : state.opponentHand();
+                value = EffectMath.add(value, evaluator.evaluateCardDraw(hand, draw.amount(), draw.controller()));
+                projected = projected.withHands(draw.controller(), EffectMath.add(hand, draw.amount()));
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    private boolean acceptsDig(final AbilityOutcomeDescription node) {
+        // TODO: Battlefield/exile placement, graveyard follow-ups, remembered card identity,
+        // depletion, exact selection quality and ordering require richer library state.
+        if (!DIG_PARAMETERS.containsAll(node.parameters().keySet())
+                || !Set.of("You", "Opponent").contains(node.parameters().getOrDefault("Defined", "You"))
+                || !"Library".equals(node.parameters().getOrDefault("SourceZone", "Library"))
+                || !"Hand".equals(node.parameters().getOrDefault("DestinationZone", "Hand"))
+                || !"Library".equals(node.parameters().getOrDefault("DestinationZone2", "Library"))
+                || !node.parameters().containsKey("DigNum") || !literalNonnegativeOrAbsent(node, "DigNum")) { return false; }
+        final String selection = node.parameters().getOrDefault("ChangeNum", "1");
+        if (!"All".equals(selection) && !literalNonnegativeOrAbsent(node, "ChangeNum")) { return false; }
+        return integer(node, "DigNum", 0) <= 32 && ("All".equals(selection) || integer(node, "ChangeNum", 1) <= 32)
+                && library.hitProbability(node.parameters().getOrDefault("ChangeValid", "Card")).isPresent();
+    }
+
+    private Outcome<State> dig(final AbilityOutcomeDescription node) {
+        final int lookedAt = integer(node, "DigNum", 0);
+        final int limit = "All".equals(node.parameters().get("ChangeNum")) ? lookedAt : integer(node, "ChangeNum", 1);
+        final boolean controller = "You".equals(node.parameters().getOrDefault("Defined", "You"));
+        final var counts = IntrinsicLibraryReference.selectedCounts(lookedAt, limit,
+                library.hitProbability(node.parameters().getOrDefault("ChangeValid", "Card")).orElseThrow());
+        return new Outcome.Random<>(node.path() + ":library-hits", counts.entries().stream().map(entry ->
+                new Outcome.Weighted<State>(new Outcome.Atomic<State>(node.path(), state -> {
+                    final int hand = controller ? state.controllerHand() : state.opponentHand();
+                    return new Outcome.Transition<>((double) evaluator.evaluateCardDraw(hand, entry.value(), controller),
+                            state.withHands(controller, EffectMath.add(hand, entry.value())).clearTarget(), "Dig: " + entry.value());
+                }), entry.weight())).toList());
+    }
+
+    private static boolean acceptsFiltering(final AbilityOutcomeDescription node) {
+        final boolean scry = "Scry".equals(node.api());
+        return (scry ? SCRY_PARAMETERS : SURVEIL_PARAMETERS).containsAll(node.parameters().keySet())
+                && Set.of("You", "Opponent").contains(node.parameters().getOrDefault("Defined", "You"))
+                && literalNonnegativeOrAbsent(node, scry ? "ScryNum" : "Amount");
+    }
+
+    private Outcome<State> filtering(final AbilityOutcomeDescription node) {
+        final int lookedAt = integer(node, "Scry".equals(node.api()) ? "ScryNum" : "Amount", 1);
+        final boolean controller = "You".equals(node.parameters().getOrDefault("Defined", "You"));
+        // TODO: Surveil's additional graveyard benefits, library exhaustion, replacements and
+        // remembered cards. This is only generic future-draw quality; it never adds a hand card
+        // or projects a specific library order/number of graveyard cards.
         return new Outcome.Atomic<>(node.path(), state -> {
             final int hand = controller ? state.controllerHand() : state.opponentHand();
-            final int value = evaluator.evaluateCardDraw(hand, amount, controller);
-            return new Outcome.Transition<>((double) value,
-                    state.withHands(controller, EffectMath.add(hand, amount)).clearTarget(), node.api());
+            return new Outcome.Transition<>(evaluator.evaluateCardDraw(hand, 1, controller)
+                    * library.filteringCardFraction(lookedAt), state.clearTarget(), node.api());
         });
     }
 
@@ -389,30 +548,65 @@ public final class IntrinsicDrawOutcomeBackend
         if (spec == null) {
             return unresolved(node, "Unsupported intrinsic token form");
         }
+        if (spec.amount() == 0) {
+            // A known zero quantity is understood, not unsupported; no prototype is needed.
+            return new Outcome.Atomic<>(node.path(), state -> new Outcome.Transition<>(0, state.clearTarget(), node.api()));
+        }
         return new Outcome.Deferred<>(state -> {
-            final List<PermanentProfile> profiles = new java.util.ArrayList<>();
+            final List<IntrinsicTokenResolver.Definition> definitions = new java.util.ArrayList<>();
             for (final String script : spec.scripts()) {
-                final PermanentProfile profile = tokenProfileResolver.apply(script).orElse(null);
-                if (profile == null || !isCreature(profile)) {
-                    return unresolved(node, "Token definition is unavailable or noncreature");
+                final IntrinsicTokenResolver.Definition definition = tokenProfileResolver instanceof IntrinsicTokenResolver resolver
+                        ? resolver.resolveToken(script).orElse(null)
+                        : tokenProfileResolver.apply(script).map(profile -> new IntrinsicTokenResolver.Definition(profile, null)).orElse(null);
+                if (definition == null || !isCreature(definition.profile()) && definition.resourceValue() == null) {
+                    return unresolved(node, "Token definition or its noncreature ability is unavailable");
                 }
-                profiles.add(withTokenOverrides(withControl(profile, spec.recipientIsController()), node));
+                if (definition.resourceValue() != null && (node.parameters().containsKey("TokenPower")
+                        || node.parameters().containsKey("TokenToughness") || node.parameters().containsKey("TokenTypes"))) {
+                    return unresolved(node, "Resource token characteristic overrides are unsupported");
+                }
+                definitions.add(definition.resourceValue() == null
+                        ? new IntrinsicTokenResolver.Definition(withTokenOverrides(withControl(definition.profile(), spec.recipientIsController()), node), null)
+                        : definition);
             }
             return new Outcome.Atomic<>(node.path(), current -> {
-                int value = 0;
+                double value = 0;
                 State projected = current;
-                for (final PermanentProfile profile : profiles) {
-                    final int tokenValue = evaluator.evaluatePermanent(profile);
-                    value = EffectMath.add(value, spec.recipientIsController()
-                            ? tokenValue : EffectMath.negate(tokenValue));
-                    projected = projected.withCreatureCount(spec.recipientIsController(),
+                for (final var definition : definitions) {
+                    final double tokenValue = definition.resourceValue() == null ? evaluator.evaluatePermanent(definition.profile())
+                            : definition.resourceValue().evaluate(spec.recipientIsController() ? current.controllerHand() : current.opponentHand(),
+                                    spec.recipientIsController() ? current.controllerLife() : current.opponentLife(),
+                                    "True".equalsIgnoreCase(node.parameters().get("TokenTapped")));
+                    value += spec.recipientIsController() ? tokenValue : -tokenValue;
+                    if (definition.resourceValue() == null) {
+                        projected = projected.withCreatureCount(spec.recipientIsController(),
                             EffectMath.add(projected.creatureCount(spec.recipientIsController()),
                                     spec.amount()));
+                    }
+                    // TODO: Track created noncreature token objects for later sacrifice/control/
+                    // attachment steps. They provide option value here, not immediate resources,
+                    // and must never inflate the projected creature population.
                 }
                 return new Outcome.Transition<>((double) value * spec.amount(),
                         projected.clearTarget(), node.api());
             });
         });
+    }
+
+    private static AbilityOutcomeDescription investigateToken(final AbilityOutcomeDescription node) {
+        // Forge investigates once per Num, creating one Clue each time. The intrinsic value
+        // is first-order creation value, not any extra "whenever you investigate" reactions.
+        // TODO: Targeted/all-player, optional and remembered-investigator event bindings.
+        if (!INVESTIGATE_PARAMETERS.containsAll(node.parameters().keySet())
+                || !Set.of("You", "Opponent").contains(node.parameters().getOrDefault("Defined", "You"))
+                || !literalNonnegativeOrAbsent(node, "Num")) { return null; }
+        final java.util.Map<String, String> parameters = new java.util.LinkedHashMap<>(node.parameters());
+        parameters.put("TokenOwner", parameters.getOrDefault("Defined", "You"));
+        parameters.put("TokenAmount", parameters.getOrDefault("Num", "1"));
+        parameters.put("TokenScript", "c_a_clue_draw");
+        parameters.remove("Defined");
+        parameters.remove("Num");
+        return new AbilityOutcomeDescription(node.path(), "Token", parameters, node.choices(), node.next(), node.issue());
     }
 
     private Outcome<State> life(final AbilityOutcomeDescription node) {
@@ -528,19 +722,14 @@ public final class IntrinsicDrawOutcomeBackend
         return new Outcome.Atomic<>(node.path(), current -> {
             int value = 0;
             State projected = current;
-            for (final TargetRef target : targets) {
-                final Outcome.Transition<State> transition = damagePlayerTransition(node, projected, target);
-                if (transition == null) {
-                    return null;
-                }
-                value = EffectMath.add(value, (int) Math.round(transition.value()));
-                projected = transition.state();
-            }
+            long creatureDamage = 0;
+            final int amount = integer(node, "NumDmg", 0);
             final CreatureGroupTarget creatureTarget = creatureGroupTarget(node);
             if (creatureTarget != null) {
                 if (creatureTarget.controller()) {
+                    creatureDamage += groupDamageDealt(current, true, creatureTarget.other(), amount);
                     final GroupApplication application = applyDamageGroup(projected, node, true,
-                            creatureTarget.other());
+                            creatureTarget.other(), damageSource(node, current));
                     if (!application.supported()) {
                         return null;
                     }
@@ -548,8 +737,9 @@ public final class IntrinsicDrawOutcomeBackend
                     value = EffectMath.add(value, application.value());
                 }
                 if (creatureTarget.opponent()) {
+                    creatureDamage += groupDamageDealt(current, false, creatureTarget.other(), amount);
                     final GroupApplication application = applyDamageGroup(projected, node, false,
-                            creatureTarget.other());
+                            creatureTarget.other(), damageSource(node, current));
                     if (!application.supported()) {
                         return null;
                     }
@@ -557,12 +747,24 @@ public final class IntrinsicDrawOutcomeBackend
                     value = EffectMath.add(value, application.value());
                 }
             }
-            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+            return damageLifeTransition(node, current, projected.clearTarget(),
+                    targets.contains(TargetRef.CONTROLLER_PLAYER) ? amount : 0,
+                    targets.contains(TargetRef.OPPONENT_PLAYER) ? amount : 0, creatureDamage, value);
         });
     }
 
+    private static long groupDamageDealt(final State state, final boolean controller,
+            final boolean other, final int amount) {
+        final CreatureProfile representative = controller ? state.controllerCreature() : state.opponentCreature();
+        final long others = representative.present() ? state.creatureCount(controller) : 0;
+        final PermanentProfile host = state.sourcePermanent();
+        final long source = !other && isCreature(host) && host.controlledByAi() == controller ? 1 : 0;
+        return (others + source) * amount;
+    }
+
     private GroupApplication applyDamageGroup(final State state,
-            final AbilityOutcomeDescription node, final boolean controller, final boolean other) {
+            final AbilityOutcomeDescription node, final boolean controller, final boolean other,
+            final PermanentProfile damageSource) {
         final CreatureProfile representative = controller
                 ? state.controllerCreature() : state.opponentCreature();
         if (!simpleKeywords(representative.keywords())) {
@@ -573,8 +775,10 @@ public final class IntrinsicDrawOutcomeBackend
         int value = 0;
         final int amount = integer(node, "NumDmg", 0);
         final int count = state.creatureCount(controller);
-        final boolean lethal = representative.present() && (amount >= representative.toughness()
-                || hasKeyword(state.sourcePermanent(), "deathtouch"));
+        // All recipients take this damage simultaneously. Losing the source in the first
+        // recipient group must not erase deathtouch for later groups in the same batch.
+        final boolean lethal = amount > 0 && representative.present() && (amount >= representative.toughness()
+                || hasKeyword(damageSource, "deathtouch"));
         if (count > 0 && lethal && !representative.indestructible()
                 && !hasKeyword(representative, "indestructible")) {
             value = EffectMath.multiply(count, evaluator.evaluateCreatureDelta(
@@ -584,8 +788,8 @@ public final class IntrinsicDrawOutcomeBackend
         }
 
         final PermanentProfile source = projected.sourcePermanent();
-        final boolean sourceLethal = isCreature(source)
-                && amount >= source.toughness();
+        final boolean sourceLethal = amount > 0 && isCreature(source) && !hasKeyword(source, "indestructible")
+                && (amount >= source.toughness() || hasKeyword(damageSource, "deathtouch"));
         if (!other && sourceLethal && source.controlledByAi() == controller) {
             value = EffectMath.add(value, evaluator.evaluatePermanentDelta(source,
                     PermanentProfile.absent(), controller));
@@ -609,11 +813,11 @@ public final class IntrinsicDrawOutcomeBackend
                 return null;
             }
             final int amount = integer(node, "NumDmg", 0);
-            final boolean lethal = !before.indestructible()
-                    && (amount >= before.toughness() || hasKeyword(current.sourcePermanent(), "deathtouch"));
+            final boolean lethal = amount > 0 && !before.indestructible()
+                    && (amount >= before.toughness() || hasKeyword(damageSource(node, current), "deathtouch"));
             if (!lethal) {
                 // Nonlethal marked damage is not represented in the first intrinsic state slice.
-                return new Outcome.Transition<>(0, current.clearTarget(), node.api());
+                return damageLifeTransition(node, current, current.clearTarget(), 0, 0, amount, 0);
             }
             final boolean controller = controls(target, current);
             final int value = evaluator.evaluateCreatureDelta(before,
@@ -622,23 +826,53 @@ public final class IntrinsicDrawOutcomeBackend
             final State projected = current.withCreatures(friendly, CreatureProfile.absent())
                     .withCreatureCount(friendly,
                             Math.max(0, current.creatureCount(friendly) - 1)).clearTarget();
-            return new Outcome.Transition<>((double) value, projected, node.api());
+            return damageLifeTransition(node, current, projected, 0, 0, amount, value);
         });
     }
 
     private Outcome.Transition<State> damagePlayerTransition(final AbilityOutcomeDescription node,
             final State current, final TargetRef target) {
-        if (!isPlayer(target) || hasKeyword(current.sourcePermanent(), "infect")
-                || hasKeyword(current.sourcePermanent(), "toxic")
-                || hasKeyword(current.sourcePermanent(), "lifelink")) {
-            return null;
-        }
+        if (!isPlayer(target)) { return null; }
         final boolean controller = controls(target, current);
-        final int before = controller ? current.controllerLife() : current.opponentLife();
         final int amount = integer(node, "NumDmg", 0);
-        final int value = evaluator.evaluatePlayerDamage(before, amount, controller);
+        return damageLifeTransition(node, current, current.clearTarget(), controller ? amount : 0,
+                controller ? 0 : amount, 0, 0);
+    }
+
+    /** Damage and lifelink are simultaneous: evaluate only the final net change for each player. */
+    private Outcome.Transition<State> damageLifeTransition(final AbilityOutcomeDescription node,
+            final State before, final State projected, final long controllerDamage, final long opponentDamage,
+            final long creatureDamage, final int permanentValue) {
+        final PermanentProfile source = damageSource(node, before);
+        if ((controllerDamage > 0 || opponentDamage > 0) && hasKeyword(source, "infect")) { return null; }
+        // Supported DealDamage/DamageAll scripts represent noncombat damage. Toxic applies only
+        // to combat damage (Keyword.TOXIC), so it neither prevents life loss nor adds poison here.
+        final long gain = hasKeyword(source, "lifelink") ? controllerDamage + opponentDamage + creatureDamage : 0;
+        // Damage isn't capped by toughness or remaining life. Indestructibility doesn't prevent
+        // damage or lifelink. TODO: Prevention, replacements and protection need actual dealt amounts.
+        return netLifeTransition(node, before, projected,
+                -controllerDamage + (source.controlledByAi() ? gain : 0),
+                -opponentDamage + (source.controlledByAi() ? 0 : gain), permanentValue);
+    }
+
+    private Outcome.Transition<State> netLifeTransition(final AbilityOutcomeDescription node,
+            final State before, final State projected, final long controllerChange,
+            final long opponentChange, final int permanentValue) {
+        final int controllerAfter = boundedLife((long) before.controllerLife() + controllerChange);
+        final int opponentAfter = boundedLife((long) before.opponentLife() + opponentChange);
+        int value = EffectMath.add(permanentValue, netLifeValue(before.controllerLife(), controllerAfter, true));
+        value = EffectMath.add(value, netLifeValue(before.opponentLife(), opponentAfter, false));
         return new Outcome.Transition<>((double) value,
-                current.withLife(controller, Math.max(0, before - amount)), node.api());
+                projected.withLife(true, controllerAfter).withLife(false, opponentAfter), node.api());
+    }
+
+    private int netLifeValue(final int before, final int after, final boolean controller) {
+        return after < before ? evaluator.evaluateLifeLoss(before, before - after, controller)
+                : evaluator.evaluateLifeGain(before, after - before, controller);
+    }
+
+    private static int boundedLife(final long life) {
+        return (int) Math.max(0, Math.min(Integer.MAX_VALUE, life));
     }
 
     private Outcome<State> fight(final AbilityOutcomeDescription node) {
@@ -660,6 +894,10 @@ public final class IntrinsicDrawOutcomeBackend
             if (!isCreature(source) || !isCreature(opposing)) {
                 return null;
             }
+            // TODO: Infect/wither need counter-based deltas (including indestructible casualties),
+            // while protection/prevention/replacements need actual dealt damage for each fighter.
+            if (hasKeyword(source, "infect") || hasKeyword(source, "wither")
+                    || hasKeyword(opposing, "infect") || hasKeyword(opposing, "wither")) { return null; }
 
             // Fight damage is simultaneous. Marked damage on survivors is intentionally omitted
             // from this bounded reference state, so only deaths affect the projected profiles.
@@ -677,7 +915,15 @@ public final class IntrinsicDrawOutcomeBackend
             projected = targetAfter.present()
                     ? replacePermanent(projected, target, targetAfter)
                     : removePermanent(projected, target);
-            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+            final long sourceGain = hasKeyword(source, "lifelink") ? Math.max(0, source.power()) : 0;
+            final long opposingGain = hasKeyword(opposing, "lifelink") ? Math.max(0, opposing.power()) : 0;
+            // Both fighters deal full power simultaneously, even if either dies. Gains for the
+            // same controller are combined before applying the nonlinear life utility.
+            final long controllerGain = (source.controlledByAi() ? sourceGain : 0)
+                    + (opposing.controlledByAi() ? opposingGain : 0);
+            final long opponentGain = (source.controlledByAi() ? 0 : sourceGain)
+                    + (opposing.controlledByAi() ? 0 : opposingGain);
+            return netLifeTransition(node, current, projected.clearTarget(), controllerGain, opponentGain, value);
         });
     }
 
@@ -1064,7 +1310,7 @@ public final class IntrinsicDrawOutcomeBackend
         }
         final String owner = node.parameters().getOrDefault("TokenOwner", "You");
         if (!Set.of("You", "Opponent").contains(owner)
-                || !literalPositive(node, "TokenAmount", 1)
+                || !literalNonnegativeOrAbsent(node, "TokenAmount")
                 || !literalNonnegativeOrAbsent(node, "TokenPower")
                 || !literalNonnegativeOrAbsent(node, "TokenToughness")) {
             return null;
@@ -1186,14 +1432,14 @@ public final class IntrinsicDrawOutcomeBackend
         }
         // TokenAttacking/TokenBlocking are intentionally accepted with ordinary token value.
         // TODO: Adjust their value when an intrinsic combat-state model exists.
-        // TODO: Add noncreature, copied, targeted, token-ability, ETB, and duration semantics.
+          // TODO: Add broader noncreature, copied, targeted, creature-token-ability, ETB, and duration semantics.
         return tokenSpec(node) != null;
     }
 
     private static boolean acceptsLife(final AbilityOutcomeDescription node) {
         // TODO: Add payment, exchange, set-life, replacement, prevention, optional and dynamic forms.
         if (!LIFE_PARAMETERS.containsAll(node.parameters().keySet())
-                || !literalPositive(node, "LifeAmount", 0)) {
+                || !node.parameters().containsKey("LifeAmount") || !literalNonnegativeOrAbsent(node, "LifeAmount")) {
             return false;
         }
         return playerTarget(node) != null;
@@ -1207,7 +1453,7 @@ public final class IntrinsicDrawOutcomeBackend
             return false;
         }
         if (!"Hand".equals(node.parameters().get("Mode"))
-                && !literalPositive(node, "NumCards", 0)) {
+                && (!node.parameters().containsKey("NumCards") || !literalNonnegativeOrAbsent(node, "NumCards"))) {
             return false;
         }
         return playerTarget(node) != null;
@@ -1218,7 +1464,7 @@ public final class IntrinsicDrawOutcomeBackend
         if (!MANA_PARAMETERS.containsAll(node.parameters().keySet())
                 || !Set.of("You", "Opponent").contains(node.parameters().getOrDefault("Defined", "You"))
                 || node.parameters().getOrDefault("Produced", "").isBlank()
-                || !literalPositive(node, "Amount", 1)) {
+                || !literalNonnegativeOrAbsent(node, "Amount")) {
             return false;
         }
         return true;
@@ -1233,14 +1479,20 @@ public final class IntrinsicDrawOutcomeBackend
                 || !"Type".equals(node.parameters().getOrDefault("ColorOrType", "Type"))) {
             return false;
         }
-        return !node.parameters().containsKey("Amount") || literalPositive(node, "Amount", 1);
+        return literalNonnegativeOrAbsent(node, "Amount");
     }
 
-    private static boolean acceptsDamage(final AbilityOutcomeDescription node) {
-        // TODO: Add planeswalkers, combat/prevention/replacement semantics, infect/toxic, and
+    private PermanentProfile damageSource(final AbilityOutcomeDescription node, final State state) {
+        return "TriggeredCard".equals(node.parameters().get("DamageSource"))
+                ? watchedEventCreature : state.sourcePermanent();
+    }
+
+    private boolean acceptsDamage(final AbilityOutcomeDescription node) {
+        // TODO: Add planeswalkers, combat/prevention/replacement semantics, infect, and
         // nonlethal marked damage that persists in projected state.
-        if (!literalPositive(node, "NumDmg", 0)
-                || !"Self".equals(node.parameters().getOrDefault("DamageSource", "Self"))) {
+        if (!node.parameters().containsKey("NumDmg") || !literalNonnegativeOrAbsent(node, "NumDmg")
+                || !("Self".equals(node.parameters().getOrDefault("DamageSource", "Self"))
+                        || watchedEventCreature != null && "TriggeredCard".equals(node.parameters().get("DamageSource")))) {
             return false;
         }
         if ("DamageAll".equals(node.api())) {
@@ -1404,9 +1656,17 @@ public final class IntrinsicDrawOutcomeBackend
             return unresolved(node, "Unsupported intrinsic counter target");
         }
         if (target.scope() == CounterTargetScope.SELF) {
-            return new Outcome.Deferred<>(state -> hasCounterTarget(state, TargetRef.SOURCE, node)
-                    ? counterAtomic(node, TargetRef.SOURCE)
-                    : unresolved(node, "Self counter recipient is not a modeled permanent"));
+            return new Outcome.Deferred<>(state -> {
+                if (!state.sourcePermanent().present()) {
+                    // A self-death trigger cannot put counters on its departed battlefield
+                    // source. This is understood unavailability, not unsupported semantics.
+                    return new Outcome.Target<>(node.path() + ":source", current -> List.<TargetRef>of(),
+                            State::withTarget, counterAtomic(node, TargetRef.SOURCE), true);
+                }
+                return hasCounterTarget(state, TargetRef.SOURCE, node)
+                        ? counterAtomic(node, TargetRef.SOURCE)
+                        : unresolved(node, "Self counter recipient is not a modeled permanent");
+            });
         }
         return new Outcome.Deferred<>(state -> {
             // TODO: Protection, ward costs, conditional hexproof and counter restrictions need
@@ -1421,7 +1681,8 @@ public final class IntrinsicDrawOutcomeBackend
 
     private Outcome<State> counterAll(final AbilityOutcomeDescription node) {
         // TODO: Intrinsic group valuation currently uses one representative creature and an
-        // independent recipient count. Subtypes, noncreature recipients, correlated populations,
+        // recipient count (shared with bound root quantities when available). Subtypes,
+        // noncreature recipients, broader correlated populations,
         // and effects that distribute different counters or amounts still need richer reference
         // modeling.
         final CreatureGroupTarget target = creatureGroupTarget(node);
@@ -1472,6 +1733,10 @@ public final class IntrinsicDrawOutcomeBackend
             value = EffectMath.add(value, EffectMath.multiply(count,
                     evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after), controller)));
             projected = projected.withCreatures(controller, toCreature(after));
+            if ("P1P1".equalsIgnoreCase(counterType(node))) {
+                final var recipient = controller ? TargetRef.CONTROLLER_CREATURE : TargetRef.OPPONENT_CREATURE;
+                projected = projected.withP1p1(recipient, EffectMath.add(state.p1p1(recipient), integer(node, "CounterNum", 1)));
+            }
         }
 
         final PermanentProfile source = projected.sourcePermanent();
@@ -1480,6 +1745,9 @@ public final class IntrinsicDrawOutcomeBackend
             value = EffectMath.add(value, evaluator.evaluateCreatureDelta(
                     toCreature(source), toCreature(after), controller));
             projected = projected.withSourcePermanent(after);
+            if ("P1P1".equalsIgnoreCase(counterType(node))) {
+                projected = projected.withP1p1(TargetRef.SOURCE, EffectMath.add(state.p1p1(TargetRef.SOURCE), integer(node, "CounterNum", 1)));
+            }
         }
         return new GroupApplication(projected, value, true);
     }
@@ -1756,9 +2024,77 @@ public final class IntrinsicDrawOutcomeBackend
                     ? evaluator.evaluatePermanentDelta(before, after, controls(target, current))
                     : evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
                             controls(target, current));
-            return new Outcome.Transition<>((double) value,
-                    replacePermanent(current, target, after).clearTarget(), node.api());
+            State projected = replacePermanent(current, target, after).clearTarget();
+            if ("P1P1".equalsIgnoreCase(counterType(node))) {
+                projected = projected.withP1p1(target, EffectMath.add(current.p1p1(target), integer(node, "CounterNum", 1)));
+            }
+            return new Outcome.Transition<>((double) value, projected, node.api());
         });
+    }
+
+    private static boolean acceptsMultiplyCounter(final AbilityOutcomeDescription node) {
+        // TODO: Other counter inventories, players, targeted/filtered recipients, replacement
+        // effects, heterogeneous groups and token/control/animation identity changes.
+        return MULTIPLY_COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
+                && "P1P1".equals(node.parameters().get("CounterType"))
+                && literalNonnegativeOrAbsent(node, "Multiplier") && integer(node, "Multiplier", 2) >= 1
+                && integer(node, "Multiplier", 2) <= 16
+                && (Set.of("Self", "Card.Self", "Creature.Self").contains(node.parameters().getOrDefault("Defined", ""))
+                    || multiplyCounterGroup(node) != null);
+    }
+
+    private static CreatureGroupTarget multiplyCounterGroup(final AbilityOutcomeDescription node) {
+        final String defined = node.parameters().getOrDefault("Defined", "");
+        if (!defined.startsWith("Valid ")) { return null; }
+        return creatureGroupTarget(new AbilityOutcomeDescription(node.path(), node.api(),
+                java.util.Map.of("ValidCards", defined.substring(6)), List.of(), null, ""));
+    }
+
+    private Outcome<State> multiplyCounter(final AbilityOutcomeDescription node) {
+        final CreatureGroupTarget group = multiplyCounterGroup(node);
+        return new Outcome.Atomic<>(node.path(), current -> {
+            State projected = current;
+            int value = 0;
+            final List<TargetRef> recipients = new java.util.ArrayList<>();
+            if (group == null) { recipients.add(TargetRef.SOURCE); }
+            else {
+                if (group.controller()) { recipients.add(TargetRef.CONTROLLER_CREATURE); }
+                if (group.opponent()) { recipients.add(TargetRef.OPPONENT_CREATURE); }
+                if (!group.other() && isCreature(current.sourcePermanent())
+                        && (current.sourcePermanent().controlledByAi() ? group.controller() : group.opponent())) {
+                    recipients.add(TargetRef.SOURCE);
+                }
+            }
+            for (final var recipient : recipients) {
+                final var before = permanent(current, recipient);
+                if (!before.present()) { continue; }
+                if (!isCreature(before) || recipient != TargetRef.SOURCE && !simpleKeywords(before.keywords())) { return null; }
+                final int added = EffectMath.multiply(current.p1p1(recipient), integer(node, "Multiplier", 2) - 1);
+                final var put = new AbilityOutcomeDescription(node.path(), "PutCounter",
+                        java.util.Map.of("CounterType", "P1P1", "CounterNum", Integer.toString(added)), List.of(), null, "");
+                final var after = addCounter(before, put);
+                final int count = recipient == TargetRef.SOURCE ? 1 : current.creatureCount(controls(recipient, current));
+                value = EffectMath.add(value, EffectMath.multiply(count,
+                        evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after), controls(recipient, current))));
+                projected = replacePermanent(projected, recipient, after).withP1p1(recipient,
+                        EffectMath.add(current.p1p1(recipient), added));
+            }
+            return new Outcome.Transition<>((double) value, projected.clearTarget(), node.api());
+        });
+    }
+
+    static State initializeP1p1(final State state, final TargetRef recipient, final int count) {
+        return initializeP1p1(state, recipient, count, 0);
+    }
+
+    static State initializeP1p1(final State state, final TargetRef recipient, final int count, final int includedInProfile) {
+        // Unconditional literal starting counters may already be in the source profile.
+        // TODO: Variable/conditional ETB inventories, replacements and counter-dependent CDAs.
+        final var before = permanent(state, recipient);
+        if (!isCreature(before) || count == 0) { return state.withP1p1(recipient, 0); }
+        final var put = new AbilityOutcomeDescription("reference:counters", "PutCounter",
+                java.util.Map.of("CounterType", "P1P1", "CounterNum", Integer.toString(Math.max(0, count - includedInProfile))), List.of(), null, "");
+        return replacePermanent(state, recipient, addCounter(before, put)).withP1p1(recipient, count);
     }
 
     private Outcome<State> removeCounter(final AbilityOutcomeDescription node) {
@@ -1790,10 +2126,11 @@ public final class IntrinsicDrawOutcomeBackend
                 return null;
             }
 
-            // A matching counter is assumed to exist because the reference state does not yet
-            // carry arbitrary counter inventory. Exact inventory, replacement effects, and
-            // multiple-counter choices must be modeled before this can become state-sensitive.
-            final PermanentProfile after = removeCounterPermanent(before, node);
+            // P1P1 uses projected inventory. Other types retain the existing one-counter
+            // assumption until their own inventory/replacement/choice semantics are modeled.
+            final var removal = clampedCounterRemoval(node, current, target);
+            if (removal == null) { return null; }
+            final PermanentProfile after = removeCounterPermanent(before, removal);
             if (after == null) {
                 return null;
             }
@@ -1801,8 +2138,11 @@ public final class IntrinsicDrawOutcomeBackend
                     ? evaluator.evaluatePermanentDelta(before, after, controls(target, current))
                     : evaluator.evaluateCreatureDelta(toCreature(before), toCreature(after),
                             controls(target, current));
-            return new Outcome.Transition<>((double) value,
-                    replacePermanent(current, target, after).clearTarget(), node.api());
+            State projected = replacePermanent(current, target, after).clearTarget();
+            if ("P1P1".equals(counterType(node))) {
+                projected = projected.withP1p1(target, Math.max(0, current.p1p1(target) - integer(removal, "CounterNum", 1)));
+            }
+            return new Outcome.Transition<>((double) value, projected, node.api());
         });
     }
 
@@ -1853,13 +2193,19 @@ public final class IntrinsicDrawOutcomeBackend
             final PermanentProfile before = new PermanentProfile(true, PermanentKind.CREATURE,
                     controller, representative.power(), representative.toughness(),
                     representative.keywords());
-            final PermanentProfile after = removeCounterPermanent(before, node);
+            final TargetRef recipient = controller ? TargetRef.CONTROLLER_CREATURE : TargetRef.OPPONENT_CREATURE;
+            final var removal = clampedCounterRemoval(node, state, recipient);
+            if (removal == null) { return GroupApplication.unsupported(state); }
+            final PermanentProfile after = removeCounterPermanent(before, removal);
             if (after == null) {
                 return GroupApplication.unsupported(state);
             }
             value = EffectMath.multiply(count, evaluator.evaluateCreatureDelta(
                     representative, toCreature(after), controller));
             projected = projected.withCreatures(controller, toCreature(after));
+            if ("P1P1".equals(counterType(node))) {
+                projected = projected.withP1p1(recipient, Math.max(0, state.p1p1(recipient) - integer(removal, "CounterNum", 1)));
+            }
             if (!after.present()) {
                 projected = projected.withCreatureCount(controller, 0);
             }
@@ -1867,13 +2213,18 @@ public final class IntrinsicDrawOutcomeBackend
 
         final PermanentProfile source = projected.sourcePermanent();
         if (!other && isCreature(source) && source.controlledByAi() == controller) {
-            final PermanentProfile after = removeCounterPermanent(source, node);
+            final var removal = clampedCounterRemoval(node, state, TargetRef.SOURCE);
+            if (removal == null) { return GroupApplication.unsupported(state); }
+            final PermanentProfile after = removeCounterPermanent(source, removal);
             if (after == null) {
                 return GroupApplication.unsupported(state);
             }
             value = EffectMath.add(value, evaluator.evaluateCreatureDelta(
                     toCreature(source), toCreature(after), controller));
             projected = projected.withSourcePermanent(after);
+            if ("P1P1".equals(counterType(node))) {
+                projected = projected.withP1p1(TargetRef.SOURCE, Math.max(0, state.p1p1(TargetRef.SOURCE) - integer(removal, "CounterNum", 1)));
+            }
         }
         return new GroupApplication(projected, value, true);
     }
@@ -1884,8 +2235,24 @@ public final class IntrinsicDrawOutcomeBackend
         if (!DRAW_PARAMETERS.containsAll(node.parameters().keySet())) {
             return false;
         }
-        return DrawOutcomeDescription.parse(node.api(), node.parameters())
-                .filter(draw -> draw.amount() >= 0).isPresent();
+        return DrawOutcomeDescription.parseFixedRecipients(node.api(), node.parameters())
+                .filter(draws -> draws.stream().allMatch(draw -> draw.amount() >= 0)).isPresent();
+    }
+
+    private static AbilityOutcomeDescription clampedCounterRemoval(final AbilityOutcomeDescription node,
+            final State state, final TargetRef recipient) {
+        if (!"P1P1".equals(counterType(node))) { return node; }
+        if (!state.p1p1Counters().containsKey(recipient)) {
+            // Compatibility for directly constructed legacy reference states. Definition
+            // evaluation supplies inventory dimensions; larger/All removals cannot guess it.
+            return "1".equals(node.parameters().getOrDefault("CounterNum", "1")) ? node : null;
+        }
+        final int available = state.p1p1(recipient);
+        final int removed = "All".equals(node.parameters().get("CounterNum")) ? available
+                : Math.min(available, integer(node, "CounterNum", 1));
+        final var parameters = new java.util.LinkedHashMap<>(node.parameters());
+        parameters.put("CounterNum", Integer.toString(removed));
+        return new AbilityOutcomeDescription(node.path(), node.api(), parameters, node.choices(), node.next(), node.issue());
     }
 
     private static boolean acceptsCounter(final AbilityOutcomeDescription node) {
@@ -1909,13 +2276,14 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private static boolean acceptsRemoveCounter(final AbilityOutcomeDescription node) {
-        // The reference state assumes one matching counter is present. Keep this to one fixed
-        // counter and the already-valued creature/planeswalker counter types until arbitrary
-        // counter inventory and RemoveCounterAll/Proliferate state are represented.
+        // P1P1 can remove a literal amount or All using projected inventory. Other counter
+        // types retain the single-counter approximation; arbitrary inventories remain TODO.
         if (!COUNTER_PARAMETERS.containsAll(node.parameters().keySet())
                 || node.parameters().containsKey("ValidCards")
                 || !supportedCounterType(counterType(node))
-                || !"1".equals(node.parameters().getOrDefault("CounterNum", "1"))) {
+                || !("P1P1".equals(counterType(node))
+                        ? "All".equals(node.parameters().get("CounterNum")) || literalPositive(node, "CounterNum", 1)
+                        : "1".equals(node.parameters().getOrDefault("CounterNum", "1")))) {
             return false;
         }
         final CounterTarget target = counterTarget(node);
@@ -1928,12 +2296,13 @@ public final class IntrinsicDrawOutcomeBackend
     }
 
     private static boolean acceptsRemoveCounterAll(final AbilityOutcomeDescription node) {
-        // Only one fixed counter on each represented creature is modeled. All-counter modes,
-        // arbitrary counter types, planeswalker groups, and non-battlefield groups remain open.
+        // Literal P1P1 amounts use representative inventory. TODO: AllCounters/AllCounterTypes,
+        // other inventories, heterogeneous groups, planeswalkers and non-battlefield recipients.
         return REMOVE_COUNTER_ALL_PARAMETERS.containsAll(node.parameters().keySet())
                 && !"LOYALTY".equalsIgnoreCase(counterType(node))
                 && supportedCounterType(counterType(node))
-                && "1".equals(node.parameters().getOrDefault("CounterNum", "1"))
+                && ("P1P1".equals(counterType(node)) ? literalPositive(node, "CounterNum", 1)
+                        : "1".equals(node.parameters().getOrDefault("CounterNum", "1")))
                 && (!node.parameters().containsKey("ValidZone")
                         || "Battlefield".equalsIgnoreCase(node.parameters().get("ValidZone")))
                 && creatureGroupTarget(node) != null;
@@ -2076,20 +2445,46 @@ public final class IntrinsicDrawOutcomeBackend
                 node.issue());
     }
 
-    private static void collectDimensions(final AbilityOutcomeDescription node,
+    private void collectDimensions(final AbilityOutcomeDescription original,
             final Set<String> dimensions, final Set<AbilityOutcomeDescription> visited,
             final int depth) {
-        if (node == null) { return; }
+        if (original == null) { return; }
         if (depth > MAX_DIMENSION_DEPTH || visited.size() >= 1024) {
             throw new IllegalArgumentException("Intrinsic reference traversal limit exceeded");
         }
-        if (!visited.add(node)) { return; }
-        if ("Draw".equals(node.api()) && acceptsDraw(node)) {
+        if (!visited.add(original)) { return; }
+        final var condition = IntrinsicOutcomeConditions.describe(original);
+        dimensions.addAll(condition.dimensions());
+        final AbilityOutcomeDescription node = condition.node();
+        final AbilityOutcomeDescription tokenNode = "Investigate".equals(node.api()) ? investigateToken(node) : node;
+        if (tokenNode != null && "Token".equals(tokenNode.api()) && acceptsToken(tokenNode)
+                && tokenProfileResolver instanceof IntrinsicTokenResolver resolver) {
+            final TokenSpec spec = tokenSpec(tokenNode);
+            if (spec.amount() > 0 && spec.scripts().stream().anyMatch(script -> resolver.resolveToken(script)
+                    .map(definition -> definition.resourceValue() != null).orElse(false))) {
+                dimensions.add(spec.recipientIsController() ? CONTROLLER_HAND : OPPONENT_HAND);
+                dimensions.add(spec.recipientIsController() ? CONTROLLER_LIFE : OPPONENT_LIFE);
+            }
+        } else if ("Draw".equals(node.api()) && acceptsDraw(node)) {
+            for (final var draw : DrawOutcomeDescription.parseFixedRecipients(node.api(), node.parameters()).orElseThrow()) {
+                dimensions.add(draw.controller() ? CONTROLLER_HAND : OPPONENT_HAND);
+            }
+        } else if ("Dig".equals(node.api()) && acceptsDig(node)
+                || Set.of("Scry", "Surveil").contains(node.api()) && acceptsFiltering(node)) {
             final String defined = node.parameters().getOrDefault("Defined", "You");
             if ("You".equalsIgnoreCase(defined)) {
                 dimensions.add(CONTROLLER_HAND);
             } else if ("Opponent".equalsIgnoreCase(defined)) {
                 dimensions.add(OPPONENT_HAND);
+            }
+        } else if ("MultiplyCounter".equals(node.api()) && acceptsMultiplyCounter(node)) {
+            final var group = multiplyCounterGroup(node);
+            if (group == null) { dimensions.add(SOURCE_P1P1); }
+            else {
+                addCreatureGroupDimensions(group, dimensions);
+                if (group.controller()) { dimensions.add(CONTROLLER_P1P1); }
+                if (group.opponent()) { dimensions.add(OPPONENT_P1P1); }
+                if (!group.other()) { dimensions.add(SOURCE_P1P1); }
             }
         } else if ("PutCounter".equals(node.api())) {
             final List<AbilityOutcomeDescription> counterNodes = acceptsCounter(node)
@@ -2098,10 +2493,26 @@ public final class IntrinsicDrawOutcomeBackend
             addCounterDimensions(counterNodes, dimensions);
         } else if ("RemoveCounter".equals(node.api()) && acceptsRemoveCounter(node)) {
             addCounterDimensions(List.of(node), dimensions);
+            if ("P1P1".equals(counterType(node))) {
+                final var target = counterTarget(node);
+                if (!target.other()) { dimensions.add(SOURCE_P1P1); }
+                if (target.scope() == CounterTargetScope.ANY_CREATURE || target.scope() == CounterTargetScope.CONTROLLER_CREATURE) {
+                    dimensions.add(CONTROLLER_P1P1);
+                }
+                if (target.scope() == CounterTargetScope.ANY_CREATURE || target.scope() == CounterTargetScope.OPPONENT_CREATURE) {
+                    dimensions.add(OPPONENT_P1P1);
+                }
+            }
         } else if (("PutCounterAll".equals(node.api()) && acceptsCounterAll(node))
                 || ("RemoveCounterAll".equals(node.api()) && acceptsRemoveCounterAll(node))
                 || ("PumpAll".equals(node.api()) && acceptsPumpAll(node))) {
             addCreatureGroupDimensions(creatureGroupTarget(node), dimensions);
+            if ("RemoveCounterAll".equals(node.api()) && "P1P1".equals(counterType(node))) {
+                final var group = creatureGroupTarget(node);
+                if (group.controller()) { dimensions.add(CONTROLLER_P1P1); }
+                if (group.opponent()) { dimensions.add(OPPONENT_P1P1); }
+                if (!group.other()) { dimensions.add(SOURCE_P1P1); }
+            }
         } else if (("Pump".equals(node.api()) && acceptsPump(node))
                 || ("Debuff".equals(node.api()) && acceptsDebuff(node))) {
             final CounterTarget target = counterTarget(node);
@@ -2269,11 +2680,19 @@ public final class IntrinsicDrawOutcomeBackend
             return;
         }
         switch (target.scope()) {
-        case CONTROLLER_CREATURE -> dimensions.add(CONTROLLER_CREATURE);
-        case OPPONENT_CREATURE -> dimensions.add(OPPONENT_CREATURE);
+        case CONTROLLER_CREATURE -> {
+            dimensions.add(CONTROLLER_CREATURE);
+            dimensions.add(CONTROLLER_LIFE);
+        }
+        case OPPONENT_CREATURE -> {
+            dimensions.add(OPPONENT_CREATURE);
+            dimensions.add(OPPONENT_LIFE);
+        }
         case ANY_CREATURE -> {
             dimensions.add(CONTROLLER_CREATURE);
             dimensions.add(OPPONENT_CREATURE);
+            dimensions.add(CONTROLLER_LIFE);
+            dimensions.add(OPPONENT_LIFE);
         }
         default -> { }
         }

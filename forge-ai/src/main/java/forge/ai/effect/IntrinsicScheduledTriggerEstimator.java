@@ -13,9 +13,9 @@ public final class IntrinsicScheduledTriggerEstimator {
     /**
      * Estimates scheduled opportunities during the first bounded controller turns. The schedule
      * is matched against the relative player turn sequence implied by the entry timing, so “your
-     * upkeep” is not treated as every upkeep. Survival is applied at the exact checkpoint of each
-     * opportunity, while horizon discounts count the relevant player's turns rather than every
-     * alternating turn.
+     * upkeep” is not treated as every upkeep. Survival uses the matching checkpoint (or a
+     * conservative turn-end proxy for beginning of combat), while horizon discounts count the
+     * relevant player's turns rather than every alternating turn.
      */
     public static IntrinsicScheduledTriggerEstimate estimate(
             final IntrinsicScheduledTrigger trigger, final PermanentProfile source,
@@ -71,6 +71,12 @@ public final class IntrinsicScheduledTriggerEstimator {
         final boolean timingMatches = switch (trigger.schedule()) {
         case UPKEEP, TURN_BEGIN -> checkpoint.isTurnStart();
         case END_STEP -> checkpoint.isTurnEnd();
+        // Normal deployment assumes the first main phase. A late flash deployment is after
+        // that turn's combat; never give it a trigger for an already-passed phase.
+        // TODO: Add intra-turn survival checkpoints and deployment-phase timing. Until then,
+        // turn-end survival is a conservative proxy for surviving to beginning of combat.
+        case BEGIN_COMBAT -> checkpoint.isTurnEnd()
+                && (checkpoint.turnNumber() > 1 || entryTiming.firstTurnIsControllerTurn());
         };
         return playerMatches && timingMatches;
     }

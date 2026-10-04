@@ -14,6 +14,79 @@ import forge.game.trigger.TriggerHandler;
 
 public class IntrinsicSurvivalEstimatorTest extends AITest {
     @Test
+    public void beginningCombatUsesPlayerScopeAndSkipsAlreadyPassedFlashCombat() {
+        final var source = new PermanentProfile(true, PermanentKind.CREATURE, true, 3, 3, Set.of());
+        for (final var scope : IntrinsicScheduledTrigger.PlayerScope.values()) {
+            final var trigger = new IntrinsicScheduledTrigger(IntrinsicScheduledTrigger.Schedule.BEGIN_COMBAT, scope);
+            for (final var timing : EntryTiming.values()) {
+                final var estimate = IntrinsicScheduledTriggerEstimator.estimate(trigger, source,
+                        IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults(), timing);
+                Assert.assertTrue(estimate.expectedOccurrences() > 0);
+                for (final var opportunity : estimate.opportunities()) {
+                    final var checkpoint = opportunity.checkpoint();
+                    Assert.assertTrue(checkpoint.isTurnEnd());
+                    if (scope != IntrinsicScheduledTrigger.PlayerScope.EACH_PLAYER) {
+                        Assert.assertEquals(checkpoint.isControllerTurn(timing),
+                                scope == IntrinsicScheduledTrigger.PlayerScope.CONTROLLER);
+                    }
+                    if (timing == EntryTiming.FLASH_LATE_TURN) {
+                        Assert.assertNotEquals(checkpoint, SurvivalCheckpoint.END_OF_FIRST_TURN);
+                    }
+                }
+                if (timing == EntryTiming.NORMAL_SPEED
+                        && scope != IntrinsicScheduledTrigger.PlayerScope.OPPONENT) {
+                    Assert.assertEquals(estimate.opportunities().get(0).checkpoint(),
+                            SurvivalCheckpoint.END_OF_FIRST_TURN);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void beginningCombatTraversalReusesTokenAndCounterOutcomes() {
+        final var evaluator = new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(),
+                IntrinsicEvaluationSettings.defaults());
+        for (final String name : java.util.List.of("Goblin Rabblemaster", "Siege Veteran")) {
+            final var entry = evaluator.evaluateDefinition(forge.model.FModel.getMagicDb()
+                    .getCommonCards().getCard(name), forge.card.CardStateName.Original).stream()
+                    .filter(value -> value.path().endsWith("trigger:0")).findFirst().orElseThrow();
+            Assert.assertEquals(entry.triggerStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED, name);
+            Assert.assertTrue(entry.contribution().value() > 0, name);
+            Assert.assertTrue(entry.expectedOccurrences() > 0, name);
+        }
+    }
+
+    @Test
+    public void selfDeathIsBoundedAndGameEndDoesNotProduceDeath() {
+        final var reference = IntrinsicReferenceModel.defaults();
+        final var availability = new java.util.EnumMap<PermanentKind, WeightedDistribution<Boolean>>(PermanentKind.class);
+        final var events = new java.util.EnumMap<IntrinsicReferenceModel.EventType, WeightedDistribution<Double>>(
+                IntrinsicReferenceModel.EventType.class);
+        for (final var kind : PermanentKind.values()) {
+            if (reference.targetAvailability(kind) != null) { availability.put(kind, reference.targetAvailability(kind)); }
+        }
+        for (final var type : IntrinsicReferenceModel.EventType.values()) {
+            if (reference.eventRates(type) != null) { events.put(type, reference.eventRates(type)); }
+        }
+        final var gameEndOnly = new IntrinsicReferenceModel(reference.lifeTotals(), reference.handSizes(), reference.availableMana(),
+                reference.friendlyCreatureCounts(), reference.opposingCreatureCounts(), reference.creatureProfiles(), reference.permanentProfiles(),
+                availability, events, java.util.Map.of(PermanentKind.PERMANENT, new IntrinsicReferenceModel.SurvivalProfile(0, 0, 0)), .80);
+        final var creature = new PermanentProfile(true, PermanentKind.CREATURE, true, 2, 2, Set.of());
+        final var estimator = new PermanentSurvivalEstimator(gameEndOnly);
+        Assert.assertEquals(estimator.expectedSelfDeathOccurrences(creature, EntryTiming.NORMAL_SPEED, 6), 0.0);
+        Assert.assertTrue(estimator.estimate(creature, EntryTiming.NORMAL_SPEED)
+                .probability(SurvivalCheckpoint.END_OF_THIRD_TURN) < .01);
+
+        final var ordinary = new PermanentSurvivalEstimator(reference);
+        final double death = ordinary.expectedSelfDeathOccurrences(creature, EntryTiming.NORMAL_SPEED, 6);
+        Assert.assertTrue(death > 0 && death < 1);
+        Assert.assertTrue(death < 1 - ordinary.probabilityAtTurnStart(creature, EntryTiming.NORMAL_SPEED, 7));
+        final var protectedCreature = new PermanentProfile(true, PermanentKind.CREATURE, true, 2, 2, Set.of("Hexproof", "Indestructible"));
+        Assert.assertTrue(ordinary.expectedSelfDeathOccurrences(protectedCreature, EntryTiming.NORMAL_SPEED, 6) < death);
+        Assert.assertEquals(ordinary.expectedSelfDeathOccurrences(PermanentProfile.absent(), EntryTiming.NORMAL_SPEED, 6), 0.0);
+    }
+
+    @Test
     public void auraIncludesSurvivalOfDefaultAttachedCreature() {
         final PermanentSurvivalEstimator estimator = new PermanentSurvivalEstimator();
         final PermanentProfile aura = new PermanentProfile(true, PermanentKind.AURA,
@@ -177,5 +250,15 @@ public class IntrinsicSurvivalEstimatorTest extends AITest {
         Assert.assertEquals(IntrinsicScheduledTriggerAdapter.describe(endStep).orElseThrow(),
                 new IntrinsicScheduledTrigger(IntrinsicScheduledTrigger.Schedule.END_STEP,
                         IntrinsicScheduledTrigger.PlayerScope.OPPONENT));
+        for (final String player : java.util.List.of("You", "Opponent", "Any")) {
+            final Trigger combat = TriggerHandler.parseTrigger(
+                    "Mode$ Phase | Phase$ BeginCombat | ValidPlayer$ " + player, card, false);
+            final var description = IntrinsicScheduledTriggerAdapter.describe(combat).orElseThrow();
+            Assert.assertEquals(description.schedule(), IntrinsicScheduledTrigger.Schedule.BEGIN_COMBAT);
+            Assert.assertEquals(description.playerScope(), "You".equals(player)
+                    ? IntrinsicScheduledTrigger.PlayerScope.CONTROLLER : "Opponent".equals(player)
+                    ? IntrinsicScheduledTrigger.PlayerScope.OPPONENT : IntrinsicScheduledTrigger.PlayerScope.EACH_PLAYER);
+        }
+        Assert.assertTrue(ScheduledTriggerParser.parse(java.util.Map.of("Mode", "Phase", "Phase", "Main1")).isEmpty());
     }
 }

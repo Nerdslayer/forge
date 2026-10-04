@@ -43,7 +43,13 @@ public final class AbilityOutcomeParser {
                     choices.add(parse(modes.get(i), path + "/choice:" + i, ancestors, depth + 1, remaining, bindings));
                 }
             }
-            // TODO: Additional execution lists and remembered references need explicit adapters.
+            if (ability.getApi() != null && "RepeatEach".equals(ability.getApi().name())) {
+                // Retain the repeated execution tree, not merely its SVar name. This is not a
+                // choice: consumers must explicitly recognize RepeatEach before using it.
+                choices.add(parse(ability.getAdditionalAbility("RepeatSubAbility"), path + "/repeat",
+                        ancestors, depth + 1, remaining, bindings));
+            }
+            // TODO: Other additional execution lists and remembered references need explicit adapters.
             // Backends must reject unknown semantic parameters instead of discarding them.
             return new AbilityOutcomeDescription(path, ability.getApi() == null ? "" : ability.getApi().name(),
                     ability.getMapParams(), choices, ability.getSubAbility() == null ? null

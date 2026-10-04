@@ -38,6 +38,9 @@ public final class PermanentSurvivalEstimator {
     private static final double EVASION_COMBAT_FACTOR = .75;
     private static final double FIRST_STRIKE_COMBAT_FACTOR = .85;
     private static final double STRONG_FIRST_STRIKE_COMBAT_FACTOR = .85;
+    // A coarse intrinsic calibration: non-damage departures also include exile and bounce.
+    // TODO: Separate destroy, sacrifice, exile and bounce hazards when reference inputs exist.
+    private static final double NON_DAMAGE_DEATH_SHARE = .65;
 
     private final IntrinsicReferenceModel model;
 
@@ -54,6 +57,45 @@ public final class PermanentSurvivalEstimator {
 
     public IntrinsicReferenceModel model() {
         return model;
+    }
+
+    /**
+     * Discounted probability of one creature death before the bounded horizon. Game end and
+     * non-death departures compete with death but never produce a death trigger. This does not
+     * assume recursion/reanimation or an intentional sacrifice outlet.
+     */
+    public double expectedSelfDeathOccurrences(final PermanentProfile source,
+            final EntryTiming entryTiming, final int playerTurns) {
+        if (entryTiming == null || playerTurns < 1) {
+            throw new IllegalArgumentException("Entry timing and a positive horizon are required");
+        }
+        if (source == null || !source.present()
+                || source.kind() != PermanentKind.CREATURE && source.kind() != PermanentKind.TOKEN) {
+            return 0;
+        }
+        final CauseHazards hazards = causeHazards(model.survivalProfile(source.kind()), source, null);
+        final double nonDamageRate = hazardRate(hazards.nonDamage());
+        final double damageRate = hazardRate(hazards.damage());
+        final double combatRate = hazardRate(hazards.combat());
+        final double totalRate = nonDamageRate + damageRate + combatRate
+                + hazardRate(model.gameEndHazardPerTurn());
+        if (totalRate == 0) { return 0; }
+        final double deathRate = nonDamageRate * NON_DAMAGE_DEATH_SHARE + damageRate
+                + (hasKeyword(source.keywords(), "indestructible") ? 0 : combatRate);
+        double remaining = 1;
+        double expected = 0;
+        for (int turn = 1; turn <= playerTurns; turn++) {
+            final double exposure = turn == 1 ? entryTiming.firstTurnExposure() : 1;
+            final double departure = -Math.expm1(-totalRate * exposure);
+            expected += remaining * departure * deathRate / totalRate
+                    * AbilityOccurrenceEstimator.turnDiscount((turn + 1) / 2);
+            remaining *= 1 - departure;
+        }
+        return clamp(expected);
+    }
+
+    private static double hazardRate(final double hazard) {
+        return -Math.log1p(-Math.min(1 - 1e-12, clamp(hazard)));
     }
 
     public PermanentSurvivalEstimate estimate(final PermanentProfile source,
@@ -128,6 +170,15 @@ public final class PermanentSurvivalEstimator {
 
     private static double causeHazard(final SurvivalProfile profile,
             final PermanentProfile permanent, final CreatureProfile creature) {
+        final CauseHazards hazards = causeHazards(profile, permanent, creature);
+        return combineIndependentHazards(
+                combineIndependentHazards(hazards.nonDamage(), hazards.damage()), hazards.combat());
+    }
+
+    private record CauseHazards(double nonDamage, double damage, double combat) { }
+
+    private static CauseHazards causeHazards(final SurvivalProfile profile,
+            final PermanentProfile permanent, final CreatureProfile creature) {
         double nonDamageRemoval = profile.nonDamageRemovalHazard();
         double damageRemoval = profile.damageRemovalHazard();
         double combat = profile.combatHazard();
@@ -160,8 +211,7 @@ public final class PermanentSurvivalEstimator {
             combat = adjustCombatHazard(combat, creature.power(), creature.toughness(),
                     creature.keywords());
         }
-        return combineIndependentHazards(
-                combineIndependentHazards(nonDamageRemoval, damageRemoval), combat);
+        return new CauseHazards(nonDamageRemoval, damageRemoval, combat);
     }
 
     private static double adjustNonDamageRemoval(final double base, final boolean hexproof,

@@ -4,6 +4,7 @@ package forge.ai.effect;
 public record IntrinsicScheduledTrigger(Schedule schedule, PlayerScope playerScope) {
     public enum Schedule {
         UPKEEP,
+        BEGIN_COMBAT,
         END_STEP,
         TURN_BEGIN
     }

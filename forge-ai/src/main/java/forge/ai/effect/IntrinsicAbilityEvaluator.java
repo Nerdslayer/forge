@@ -30,6 +30,7 @@ public final class IntrinsicAbilityEvaluator {
     private static final int MAX_CACHED_DEFINITIONS = 256;
     private final IntrinsicReferenceModel model;
     private final IntrinsicEvaluationSettings settings;
+    private final IntrinsicWatchedCreatureBinding watchedCreatureBinding;
     /**
      * Definition ability evaluation is independent of the live game state, so retain its first
      * result for repeated card valuations. Keep this bounded because card-creator previews can
@@ -76,8 +77,14 @@ public final class IntrinsicAbilityEvaluator {
     }
 
     public IntrinsicAbilityEvaluator(final IntrinsicReferenceModel model, final IntrinsicEvaluationSettings settings) {
+        this(model, settings, null);
+    }
+
+    private IntrinsicAbilityEvaluator(final IntrinsicReferenceModel model, final IntrinsicEvaluationSettings settings,
+            final IntrinsicWatchedCreatureBinding watchedCreatureBinding) {
         this.model = model;
         this.settings = settings;
+        this.watchedCreatureBinding = watchedCreatureBinding;
     }
 
     /** Game-free public entry point for a selected definition face. Results are per ability. */
@@ -114,26 +121,207 @@ public final class IntrinsicAbilityEvaluator {
     private DefinitionEvaluation evaluateDefinitionUncached(final IPaperCard definition,
             final CardStateName face) {
         final CardState state = CardAbilityTraversal.definitionState(definition, face);
-        final forge.card.CardTypeView type = state.getType();
+        final forge.card.CardTypeView type = IntrinsicSourceProfileResolver.definitionTypeFacts(state);
         final PermanentKind kind = type.isAura() ? PermanentKind.AURA : type.isCreature() ? PermanentKind.CREATURE
                 : type.isPlaneswalker() ? PermanentKind.PLANESWALKER : type.isArtifact() ? PermanentKind.ARTIFACT
                 : type.isEnchantment() ? PermanentKind.ENCHANTMENT : type.isLand() ? PermanentKind.LAND : PermanentKind.PERMANENT;
         final Set<String> keywords = state.getIntrinsicKeywords().stream().map(k -> k.getOriginal()).collect(Collectors.toSet());
-        // TODO: Variable characteristic values and nonpermanent origins need dedicated models.
-        if (type.isCreature() && (!state.getBasePowerString().matches("\\d+")
-                || !state.getBaseToughnessString().matches("\\d+"))) {
-            throw new IllegalArgumentException("Variable creature characteristics require a reference profile");
-        }
         final String baseLoyalty = state.getBaseLoyalty();
         final int loyalty = type.isPlaneswalker() && baseLoyalty != null
                 && baseLoyalty.matches("\\d+") ? Integer.parseInt(baseLoyalty) : 0;
         final PermanentProfile profile = new PermanentProfile(true, kind, true, Math.max(0, state.getBasePower()),
                 Math.max(0, state.getBaseToughness()), keywords, type.isBasicLand(), loyalty);
         final List<AbilityDescription> descriptions = CardAbilityTraversal.inspect(state);
-        final List<AbilityValue> values = evaluate(descriptions, profile,
-                keywords.stream().anyMatch("Flash"::equalsIgnoreCase) ? EntryTiming.FLASH_LATE_TURN : EntryTiming.NORMAL_SPEED,
-                IntrinsicTokenProfileResolver.forSource(definition));
-        return new DefinitionEvaluation(descriptions, values);
+        final var profiles = IntrinsicSourceProfileResolver.resolveCases(state, profile, model)
+                .orElse(null);
+        if (profiles == null) {
+            return new DefinitionEvaluation(descriptions, descriptions.stream().map(ability -> unsupported(ability,
+                    "Variable creature characteristics require a supported reference quantity",
+                    SupportStatus.UNSUPPORTED, SupportStatus.NOT_EVALUATED)).toList());
+        }
+        final EntryTiming timing = keywords.stream().anyMatch("Flash"::equalsIgnoreCase)
+                ? EntryTiming.FLASH_LATE_TURN : EntryTiming.NORMAL_SPEED;
+        final Function<String, Optional<PermanentProfile>> tokenResolver = IntrinsicTokenProfileResolver.forSource(definition, model, settings);
+        final List<AbilityValue> values = descriptions.stream().map(original -> {
+            final AbilityDescription ability = IntrinsicGroupCombatDamageAdapter.prepare(
+                    IntrinsicCreatureEntryTriggerAdapter.excludeNonmatchingSource(
+                            IntrinsicCreatureDeathTriggerAdapter.excludeNonmatchingSource(original, type), type), type);
+            if (ability.origin() == CardAbilityTraversal.Origin.STATIC
+                    && type.isCreature() && IntrinsicSourceProfileResolver.ownsCharacteristic(ability.parameters())) {
+                // The body owns these characteristics. The resolved profiles affect survival and
+                // ability outcomes; do not also award a second characteristic ability bonus.
+                return new AbilityValue(ability.path(), 1,
+                        new IntrinsicReferenceAggregate(0, 1, 0, 0, 0, 0, List.of()),
+                        SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
+            }
+            if (profiles.size() == 1) {
+                return evaluateDefinitionAbility(ability, profiles.get(0).value().profile(), timing, tokenResolver,
+                        state.getSVars(), profiles.get(0).value().quantities());
+            }
+            return IntrinsicAbilityValueAggregator.aggregate(profiles.stream().map(reference ->
+                    new WeightedValue<>(evaluateDefinitionAbility(ability, reference.value().profile(), timing,
+                            tokenResolver, state.getSVars(), reference.value().quantities()), reference.weight())).toList());
+        }).toList();
+        final var loyaltyCases = profiles.stream().map(reference -> new WeightedValue<>(IntrinsicLoyaltyAbilityEvaluator.evaluate(
+                descriptions, reference.value().profile(), model, settings, timing, (ability, paidSource) -> {
+                    final var parameters = new LinkedHashMap<>(ability.parameters());
+                    for (final String metadata : Set.of("Cost", "AB", "Planeswalker", "Ultimate", "SorcerySpeed", "PlayerTurn", "ActivationLimit")) {
+                        parameters.remove(metadata);
+                    }
+                    // One resolving activation, after payment; the shared planner owns occurrence
+                    // and cost legality. All ordinary outcome/quantity/target adapters are reused.
+                    return evaluateDefinitionAbility(new AbilityDescription(ability.path(), CardAbilityTraversal.Origin.SPELL,
+                            ability.provenance(), parameters, withoutExecutionMetadata(ability.outcome(), 0)), paidSource, timing,
+                            tokenResolver, state.getSVars(), reference.value().quantities());
+                }), reference.weight())).toList();
+        final List<AbilityValue> sharedValues = values.stream().map(value -> {
+            if (loyaltyCases.stream().anyMatch(reference -> !reference.value().containsKey(value.path()))) { return value; }
+            return IntrinsicAbilityValueAggregator.aggregate(loyaltyCases.stream().map(reference ->
+                    new WeightedValue<>(reference.value().get(value.path()), reference.weight())).toList());
+        }).toList();
+        return new DefinitionEvaluation(descriptions, sharedValues);
+    }
+
+    private AbilityValue evaluateDefinitionAbility(final AbilityDescription ability, final PermanentProfile profile,
+            final EntryTiming timing, final Function<String, Optional<PermanentProfile>> tokenResolver,
+            final Map<String, String> variables, final Map<String, Integer> existingQuantities) {
+        final var characteristicFilter = IntrinsicEventCharacteristicFilter.normalize(ability, variables, model, profile);
+        if (characteristicFilter != ability) {
+            return evaluateDefinitionAbility(characteristicFilter, profile, timing, tokenResolver, variables, existingQuantities);
+        }
+        final var recipientCases = IntrinsicTriggerBindingNormalizer.recipientCases(ability, model).orElse(null);
+        if (recipientCases != null) {
+            return IntrinsicAbilityValueAggregator.aggregate(recipientCases.stream().map(reference -> new WeightedValue<>(
+                    evaluateDefinitionAbility(reference.value(), profile, timing, tokenResolver, variables, existingQuantities),
+                    reference.weight())).toList());
+        }
+        final var playerComponent = IntrinsicOutgoingCombatDamageBinding.playerComponent(ability).orElse(null);
+        if (playerComponent != null) {
+            final var value = evaluateDefinitionAbility(playerComponent, profile, timing, tokenResolver, variables, existingQuantities);
+            final var aggregate = value.contribution();
+            final var reasons = new ArrayList<>(aggregate.unresolvedReasons());
+            reasons.add(ability.path() + ": battle combat-hit opportunities are not modeled; value is the player-hit subtotal");
+            return new AbilityValue(value.path(), value.expectedOccurrences(), new IntrinsicReferenceAggregate(aggregate.value(),
+                    0, 0, Math.min(1, aggregate.knownCaseProbability() + aggregate.partialCaseProbability()),
+                    aggregate.unsupportedCaseProbability(), aggregate.unresolvedRandomProbability(), reasons),
+                    SupportStatus.PARTIAL, value.outcomeStatus(), value.currentTurnUses());
+        }
+        final var attackerCases = IntrinsicAttackCountBinding.cases(ability, variables, model).orElse(null);
+        if (attackerCases != null) {
+            if (attackerCases.isEmpty()) {
+                return new AbilityValue(ability.path(), 0, new IntrinsicReferenceAggregate(0, 0, 1, 0, 0, 0, List.of()),
+                        SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
+            }
+            return IntrinsicAbilityValueAggregator.aggregate(attackerCases.stream().map(reference -> new WeightedValue<>(
+                    evaluateDefinitionAbility(new AbilityDescription(ability.path(), ability.origin(), ability.provenance(),
+                            reference.value().bindVariables(ability.parameters()), reference.value().bindOutcome(ability.outcome())),
+                            profile, timing, tokenResolver, reference.value().bindVariables(variables), existingQuantities), reference.weight())).toList());
+        }
+        final var outgoingCases = IntrinsicOutgoingCombatDamageBinding.cases(ability, variables, profile).orElse(null);
+        if (outgoingCases != null) {
+            if (outgoingCases.isEmpty()) {
+                return new AbilityValue(ability.path(), 0, new IntrinsicReferenceAggregate(0, 0, 1, 0, 0, 0, List.of()),
+                        SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
+            }
+            return IntrinsicAbilityValueAggregator.aggregate(outgoingCases.stream().map(reference -> new WeightedValue<>(
+                    evaluateDefinitionAbility(new AbilityDescription(ability.path(), ability.origin(), ability.provenance(),
+                            reference.value().bindVariables(ability.parameters()), reference.value().bindOutcome(ability.outcome())),
+                            profile, timing, tokenResolver, reference.value().bindVariables(variables), existingQuantities), reference.weight())).toList());
+        }
+        final var damageCases = IntrinsicReceivedDamageBinding.cases(ability, variables, model).orElse(null);
+        if (damageCases != null) {
+            if (damageCases.isEmpty()) {
+                return new AbilityValue(ability.path(), 0, new IntrinsicReferenceAggregate(0, 0, 1, 0, 0, 0, List.of()),
+                        SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
+            }
+            return IntrinsicAbilityValueAggregator.aggregate(damageCases.stream().map(reference -> new WeightedValue<>(
+                    evaluateDefinitionAbility(new AbilityDescription(ability.path(), ability.origin(), ability.provenance(),
+                            reference.value().bindVariables(ability.parameters()), reference.value().bindOutcome(ability.outcome())), profile, timing,
+                            tokenResolver, reference.value().bindVariables(variables), existingQuantities), reference.weight())).toList());
+        }
+        if (watchedCreatureBinding == null && IntrinsicWatchedCreatureBinding.needed(ability, variables)) {
+            final var entries = IntrinsicWatchedCreatureBinding.cases(ability, model, profile).orElse(null);
+            if (entries != null) {
+                if (entries.isEmpty()) {
+                    return new AbilityValue(ability.path(), 0,
+                            new IntrinsicReferenceAggregate(0, 0, 1, 0, 0, 0, List.of()),
+                            SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
+                }
+                return IntrinsicAbilityValueAggregator.aggregate(entries.stream().map(entry -> new WeightedValue<>(
+                        new IntrinsicAbilityEvaluator(model, settings, entry.value()).evaluateDefinitionAbility(
+                                ability, profile, timing, tokenResolver, variables, existingQuantities), entry.weight())).toList());
+            }
+        }
+        final AbilityDescription normalized = IntrinsicTriggerBindingNormalizer.normalize(ability);
+        final boolean selfDeath = normalized.origin() == CardAbilityTraversal.Origin.TRIGGER
+                && IntrinsicSelfDeathTriggerAdapter.bindableSourceEvent(AbilityOptionality.triggerParameters(normalized.parameters()));
+        final Map<String, String> boundVariables = watchedCreatureBinding != null ? watchedCreatureBinding.bindVariables(variables)
+                : selfDeath ? IntrinsicSelfDeathTriggerAdapter.bindSourceQuantities(variables) : variables;
+        final boolean staticAbility = normalized.origin() == CardAbilityTraversal.Origin.STATIC;
+        final boolean conditionalOrigin = staticAbility || normalized.origin() == CardAbilityTraversal.Origin.TRIGGER
+                || normalized.origin() == CardAbilityTraversal.Origin.ACTIVATION;
+        // Bind root conditions and executed outcomes in one tree, so a condition testing X and
+        // an outcome using X share a sample rather than multiplying independent expectations.
+        final AbilityOutcomeDescription quantityDescription = new AbilityOutcomeDescription(normalized.path(), "IntrinsicRoot",
+                conditionalOrigin ? IntrinsicAbilityConditions.prepare(normalized.parameters()) : normalized.parameters(),
+                List.of(), staticAbility ? null : IntrinsicRepeatedOutcomeNormalizer.normalize(watchedCreatureBinding == null
+                        ? normalized.outcome() : watchedCreatureBinding.bindOutcome(normalized.outcome())), "");
+        final var variants = IntrinsicOutcomeQuantityBinder.bindCases(
+                quantityDescription, boundVariables, model, profile, existingQuantities);
+        if (variants.size() == 1) {
+            return evaluateDefinitionCase(normalized, variants.get(0).value(), profile, timing, tokenResolver, boundVariables);
+        }
+        return IntrinsicAbilityValueAggregator.aggregate(variants.stream().map(variant -> new WeightedValue<>(
+                evaluateDefinitionCase(normalized, variant.value(), profile, timing, tokenResolver, boundVariables), variant.weight())).toList());
+    }
+
+    private AbilityValue evaluateDefinitionCase(final AbilityDescription description, final IntrinsicOutcomeQuantityBinder.BoundCase reference,
+            final PermanentProfile source, final EntryTiming timing, final Function<String, Optional<PermanentProfile>> tokenResolver,
+            final Map<String, String> variables) {
+        final AbilityOutcomeDescription bound = reference.outcome();
+        final boolean staticAbility = description.origin() == CardAbilityTraversal.Origin.STATIC;
+        final boolean activation = description.origin() == CardAbilityTraversal.Origin.ACTIVATION;
+        final boolean conditionalOrigin = staticAbility || description.origin() == CardAbilityTraversal.Origin.TRIGGER || activation;
+        final IntrinsicAbilityConditions.Result condition = conditionalOrigin
+                ? IntrinsicAbilityConditions.resolve(bound.parameters()) : new IntrinsicAbilityConditions.Result(bound.parameters(), false);
+        if (condition.inactive()) {
+            return new AbilityValue(description.path(), 0, new IntrinsicReferenceAggregate(0, 0, 1, 0, 0, 0, List.of()),
+                    SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
+        }
+        final IntrinsicReferenceModel conditioned = model.withQuantityBindings(reference.quantities());
+        final IntrinsicAbilityEvaluator evaluator = conditioned == model ? this : new IntrinsicAbilityEvaluator(conditioned, settings, watchedCreatureBinding);
+        final AbilityOutcomeDescription outcome = activation
+                ? withoutEvaluatedActivationConditions(bound.next(), description.parameters(), condition.parameters()) : bound.next();
+        final var evaluated = new AbilityDescription(description.path(), description.origin(), description.provenance(),
+                condition.parameters(), staticAbility ? description.outcome() : outcome);
+        // Choose damage donors after population/condition quantities have been bound. The host
+        // mixture must not be averaged from a different board population than occurrence uses.
+        final var amounts = IntrinsicGroupCombatDamageAdapter.amountCases(evaluated, variables, conditioned, source).orElse(null);
+        if (amounts != null) {
+            if (amounts.isEmpty()) {
+                return new AbilityValue(description.path(), 0, new IntrinsicReferenceAggregate(0, 0, 1, 0, 0, 0, List.of()),
+                        SupportStatus.SUPPORTED, SupportStatus.SUPPORTED);
+            }
+            return IntrinsicAbilityValueAggregator.aggregate(amounts.stream().map(amount -> new WeightedValue<>(
+                    evaluator.evaluateDefinitionAbility(new AbilityDescription(evaluated.path(), evaluated.origin(), evaluated.provenance(),
+                            amount.value().bindVariables(evaluated.parameters()), amount.value().bindOutcome(evaluated.outcome())),
+                            source, timing, tokenResolver, amount.value().bindVariables(variables), reference.quantities()), amount.weight())).toList());
+        }
+        return evaluator.evaluate(evaluated, source, timing, tokenResolver);
+    }
+
+    private static AbilityOutcomeDescription withoutEvaluatedActivationConditions(final AbilityOutcomeDescription outcome,
+            final Map<String, String> original, final Map<String, String> remaining) {
+        if (outcome == null) { return null; }
+        final Map<String, String> parameters = new java.util.LinkedHashMap<>(outcome.parameters());
+        for (final String field : Set.of("CheckSVar", "SVarCompare", "IsPresent", "PresentCompare",
+                "PresentDefined", "PresentPlayer", "PresentZone", "LifeTotal", "LifeAmount")) {
+            if (original.containsKey(field) && !remaining.containsKey(field)) { parameters.remove(field); }
+        }
+        // Only the root activation restriction was evaluated. Conditions on following effects
+        // retain their resolution-time meaning and must not be stripped from the whole chain.
+        return new AbilityOutcomeDescription(outcome.path(), outcome.api(), parameters,
+                outcome.choices(), outcome.next(), outcome.issue());
     }
 
     private static DefinitionCacheKey cacheKey(final IPaperCard definition,
@@ -212,6 +400,16 @@ public final class IntrinsicAbilityEvaluator {
             return unsupported(ability, optionality.issue(), SupportStatus.UNSUPPORTED,
                     outcomeStatusBeforeEvaluation(ability));
         }
+        if (IntrinsicSelfDeathTriggerAdapter.supports(triggerParameters)) {
+            if (source.kind() != PermanentKind.CREATURE && source.kind() != PermanentKind.TOKEN) {
+                return unsupported(ability, "Self death requires a creature reference source",
+                        SupportStatus.UNSUPPORTED, outcomeStatusBeforeEvaluation(ability));
+            }
+            final double deathOccurrences = new PermanentSurvivalEstimator(model).expectedSelfDeathOccurrences(
+                    source, timing, settings.recurringTriggerResolutions() * 2);
+            return evaluateOutcome(ability, ability.outcome(), source, deathOccurrences, tokenProfileResolver,
+                    SupportStatus.SUPPORTED, false);
+        }
         if (IntrinsicSelfEntryTriggerAdapter.supports(triggerParameters)) {
             // The definition is valued at deployment: its own unconditional ETB happens once,
             // without future survival or event-rate discounts. Battlefield callers must exclude
@@ -221,7 +419,7 @@ public final class IntrinsicAbilityEvaluator {
         }
         if (!"Battlefield".equalsIgnoreCase(
                 ability.parameters().getOrDefault("TriggerZones", "Battlefield"))
-                || !supportsTriggerParameters(triggerParameters, schedule)) {
+                || !supportsTriggerParameters(triggerParameters, schedule, source, model)) {
             return unsupported(ability, "unsupported intrinsic trigger filters", SupportStatus.UNSUPPORTED,
                     outcomeStatusBeforeEvaluation(ability));
         }
@@ -240,7 +438,7 @@ public final class IntrinsicAbilityEvaluator {
                     .estimate(trigger, source, model, settings, timing).expectedOccurrences();
         } else {
             final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter
-                    .describe(triggerParameters).orElse(null);
+                    .describe(triggerParameters, model, source).orElse(null);
             if (trigger == null) {
                 return unsupported(ability, "unsupported intrinsic trigger", SupportStatus.UNSUPPORTED,
                         outcomeStatusBeforeEvaluation(ability));
@@ -275,7 +473,9 @@ public final class IntrinsicAbilityEvaluator {
         }
         final IntrinsicActivationOccurrenceEstimate occurrence = IntrinsicActivationOccurrenceEstimator
                 .estimate(cost.manaCost(), cost.hasTapCost(), cost.lifeCost(), source, model, settings,
-                        timing);
+                        timing, "True".equalsIgnoreCase(ability.parameters().get("SorcerySpeed"))
+                                || "True".equals(ability.parameters().get("PlayerTurn")),
+                        intrinsicActivationLimit(ability.parameters()));
         if (!occurrence.supported()) {
             return unsupported(ability, occurrence.reason(), SupportStatus.SUPPORTED,
                     outcomeStatusBeforeEvaluation(ability));
@@ -291,18 +491,42 @@ public final class IntrinsicAbilityEvaluator {
     }
 
     /**
-     * The occurrence model currently assumes an ordinary battlefield activation. Timing, zone,
-     * conditional, optional, and cost-modifying parameters need their own reference inputs.
+     * The occurrence model assumes a battlefield activation. Supported definition root conditions
+     * are removed only after binding; unresolved timing, zone, history and cost-modifying rules
+     * remain rejected. PlayerTurn and SorcerySpeed share the controller-turn resource window.
      */
-    private static boolean supportsIntrinsicActivationParameters(final Map<String, String> parameters) {
+    static boolean supportsIntrinsicActivationParameters(final Map<String, String> parameters) {
+        // TODO: Opponent-turn/phase-specific windows, ActivationLifeTotal, richer conditions,
+        // alternative activators, zones, shared/game limits and cost modifiers need explicit models.
         for (final String parameter : parameters.keySet()) {
+            if ("PlayerTurn".equals(parameter)) {
+                if (!"True".equals(parameters.get(parameter))) { return false; }
+                continue;
+            }
+            if ("ActivationLimit".equals(parameter)) {
+                if (intrinsicActivationLimit(parameters) < 0) { return false; }
+                continue;
+            }
+            if ("SorcerySpeed".equals(parameter)) {
+                if (!Set.of("True", "False").contains(parameters.get(parameter))) { return false; }
+                continue;
+            }
             if (parameter.startsWith("Activation") || parameter.startsWith("Condition")
-                    || parameter.startsWith("Check") || Set.of("Optional", "PlayerTurn",
-                            "SorcerySpeed", "PowerUp", "XMax", "ReduceCost").contains(parameter)) {
+                    || parameter.startsWith("Check") || Set.of("Optional", "OpponentTurn", "IsPresent", "PresentCompare",
+                            "PresentDefined", "PresentPlayer", "PresentZone", "PowerUp", "XMax", "ReduceCost",
+                            "GameActivationLimit").contains(parameter)) {
                 return false;
             }
         }
         return true;
+    }
+
+    private static int intrinsicActivationLimit(final Map<String, String> parameters) {
+        if (!parameters.containsKey("ActivationLimit")) { return Integer.MAX_VALUE; }
+        final String encoded = parameters.get("ActivationLimit");
+        if (encoded == null || !encoded.matches("\\d+")) { return -1; }
+        try { return Integer.parseInt(encoded); }
+        catch (final NumberFormatException invalid) { return -1; }
     }
 
     private AbilityValue evaluateStatic(final AbilityDescription ability,
@@ -324,7 +548,7 @@ public final class IntrinsicAbilityEvaluator {
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver,
             final SupportStatus triggerStatus, final boolean canDecline) {
         final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(settings,
-                source, tokenProfileResolver);
+                source, tokenProfileResolver, model.library(), watchedCreatureBinding == null ? null : watchedCreatureBinding.creature());
         if (outcomeDescription == null) {
             return unsupported(ability, "missing intrinsic outcome", triggerStatus, SupportStatus.UNSUPPORTED);
         }
@@ -364,7 +588,14 @@ public final class IntrinsicAbilityEvaluator {
                     SupportStatus.UNSUPPORTED);
         }
         final IntrinsicReferenceAggregate aggregate = IntrinsicReferenceAggregator.aggregate(cases, reference -> {
-            final State state = referenceState(reference, source);
+            final boolean selfDeath = ability.origin() == CardAbilityTraversal.Origin.TRIGGER
+                    && IntrinsicSelfDeathTriggerAdapter.supports(AbilityOptionality.triggerParameters(ability.parameters()));
+            final PermanentProfile battlefieldSource = selfDeath
+                    ? new PermanentProfile(false, source.kind(), source.controlledByAi(), source.power(),
+                            source.toughness(), source.keywords(), source.basicLand(), source.loyalty()) : source;
+            // The departing source is no longer a legal battlefield recipient, but its LKI
+            // remains available to the supported source-damage and bound quantity evaluators.
+            final State state = referenceState(reference, battlefieldSource);
             final OutcomePlan<State> plan = new OutcomePlanner<State>(settings.maximumOutcomeSearchBudget())
                     .evaluate(outcome, state);
             // Repeated uses share a per-resolution expectation, not projected later hand sizes.
@@ -421,9 +652,18 @@ public final class IntrinsicAbilityEvaluator {
             return node;
         }
         final Map<String, String> parameters = new java.util.HashMap<>(node.parameters());
+        if (parameters.containsKey("AB")) {
+            // The root activation occurrence estimator enforced this limit. Do not strip limits
+            // from nested standalone DB effects that have no modeled activation opportunity.
+            parameters.remove("ActivationLimit");
+            parameters.remove("PlayerTurn");
+            parameters.remove("Planeswalker");
+            parameters.remove("Ultimate");
+        }
         parameters.remove("Cost");
         parameters.remove("AB");
         parameters.remove("SP");
+        parameters.remove("SorcerySpeed"); // Enforced by intrinsic activation occurrence, not an outcome.
         final List<AbilityOutcomeDescription> choices = node.choices().stream()
                 .map(choice -> withoutExecutionMetadata(choice, depth + 1)).toList();
         return new AbilityOutcomeDescription(node.path(), node.api(), parameters, choices,
@@ -439,11 +679,13 @@ public final class IntrinsicAbilityEvaluator {
      * predicates are deliberately rejected until their reference populations are modeled.
      */
     private static boolean supportsTriggerParameters(final Map<String, String> parameters,
-            final ScheduledTriggerParser.Schedule schedule) {
+            final ScheduledTriggerParser.Schedule schedule, final PermanentProfile source,
+            final IntrinsicReferenceModel model) {
         if (schedule != null) {
             return true;
         }
-        return IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters);
+        return IntrinsicCreatureEntryTriggerAdapter.describe(parameters, model, source).isPresent()
+                || IntrinsicEventTriggerAdapter.supportsIntrinsicParameters(parameters);
     }
 
     private static long referenceCaseCount(final List<ReferenceDimension> dimensions) {
@@ -473,10 +715,10 @@ public final class IntrinsicAbilityEvaluator {
             switch (name) {
             case IntrinsicDrawOutcomeBackend.CONTROLLER_HAND,
                     IntrinsicDrawOutcomeBackend.OPPONENT_HAND -> dimensions.add(
-                            new ReferenceDimension(name, model.handSizes()));
+                            new ReferenceDimension(name, model.referenceIntegers(name, model.handSizes())));
             case IntrinsicDrawOutcomeBackend.CONTROLLER_LIFE,
                     IntrinsicDrawOutcomeBackend.OPPONENT_LIFE -> dimensions.add(
-                            new ReferenceDimension(name, model.lifeTotals()));
+                            new ReferenceDimension(name, model.referenceIntegers(name, model.lifeTotals())));
             case IntrinsicDrawOutcomeBackend.CONTROLLER_CREATURE,
                     IntrinsicDrawOutcomeBackend.OPPONENT_CREATURE -> dimensions.add(
                             new ReferenceDimension(name, model.creatureProfiles()));
@@ -490,6 +732,10 @@ public final class IntrinsicAbilityEvaluator {
                     new ReferenceDimension(name, model.friendlyCreatureCounts()));
             case IntrinsicDrawOutcomeBackend.OPPONENT_CREATURE_COUNT -> dimensions.add(
                     new ReferenceDimension(name, model.opposingCreatureCounts()));
+            case IntrinsicDrawOutcomeBackend.SOURCE_P1P1,
+                    IntrinsicDrawOutcomeBackend.CONTROLLER_P1P1,
+                    IntrinsicDrawOutcomeBackend.OPPONENT_P1P1 -> dimensions.add(new ReferenceDimension(name,
+                            model.referenceIntegers(name, model.quantities().distribution(IntrinsicReferenceQuantities.Quantity.P1P1_COUNTERS))));
             default -> throw new IllegalArgumentException("Unknown intrinsic reference dimension " + name);
             }
         }
@@ -497,7 +743,7 @@ public final class IntrinsicAbilityEvaluator {
     }
 
     private State referenceState(final ReferenceCase reference, final PermanentProfile source) {
-        return new State(integer(reference, IntrinsicDrawOutcomeBackend.CONTROLLER_HAND, 3),
+        State state = new State(integer(reference, IntrinsicDrawOutcomeBackend.CONTROLLER_HAND, 3),
                 integer(reference, IntrinsicDrawOutcomeBackend.OPPONENT_HAND, 3),
                 integer(reference, IntrinsicDrawOutcomeBackend.CONTROLLER_LIFE, 20),
                 integer(reference, IntrinsicDrawOutcomeBackend.OPPONENT_LIFE, 20),
@@ -513,6 +759,17 @@ public final class IntrinsicAbilityEvaluator {
                 reference.value(IntrinsicDrawOutcomeBackend.OPPONENT_PERMANENT,
                         IntrinsicReferenceModel.PermanentProfile.class),
                 source, null);
+        final int includedSourceCounters = model.referenceIntegers(IntrinsicDrawOutcomeBackend.SOURCE_INITIAL_P1P1,
+                WeightedDistribution.of(new WeightedValue<>(0, 1))).entries().get(0).value();
+        if (includedSourceCounters > 0) { state = state.withP1p1(IntrinsicDrawOutcomeBackend.TargetRef.SOURCE, includedSourceCounters); }
+        for (final var recipient : java.util.Map.of(IntrinsicDrawOutcomeBackend.SOURCE_P1P1, IntrinsicDrawOutcomeBackend.TargetRef.SOURCE,
+                IntrinsicDrawOutcomeBackend.CONTROLLER_P1P1, IntrinsicDrawOutcomeBackend.TargetRef.CONTROLLER_CREATURE,
+                IntrinsicDrawOutcomeBackend.OPPONENT_P1P1, IntrinsicDrawOutcomeBackend.TargetRef.OPPONENT_CREATURE).entrySet()) {
+            final Integer count = reference.value(recipient.getKey(), Integer.class);
+            if (count != null) { state = IntrinsicDrawOutcomeBackend.initializeP1p1(state, recipient.getValue(), count,
+                    recipient.getValue() == IntrinsicDrawOutcomeBackend.TargetRef.SOURCE ? includedSourceCounters : 0); }
+        }
+        return state;
     }
 
     private static int integer(final ReferenceCase reference, final String name, final int fallback) {

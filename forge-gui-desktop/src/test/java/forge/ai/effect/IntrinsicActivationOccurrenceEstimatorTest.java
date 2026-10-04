@@ -11,6 +11,53 @@ import forge.ai.effect.IntrinsicReferenceModel.PermanentProfile;
 /** Regression coverage for the bounded intrinsic activation horizon. */
 public class IntrinsicActivationOccurrenceEstimatorTest {
     @Test
+    public void hastePermitsEntryTurnTapUsesForCreatureAndTokenSources() {
+        final var model = IntrinsicReferenceModel.defaults();
+        final var settings = IntrinsicEvaluationSettings.defaults();
+        for (final var kind : java.util.List.of(PermanentKind.CREATURE, PermanentKind.TOKEN)) {
+            final var plain = new PermanentProfile(true, kind, true, 1, 1, Set.of());
+            final var hasty = new PermanentProfile(true, kind, true, 1, 1, Set.of("haste"));
+            final var normal = IntrinsicActivationOccurrenceEstimator.estimate(0, true, plain, model, settings, EntryTiming.NORMAL_SPEED);
+            final var fast = IntrinsicActivationOccurrenceEstimator.estimate(0, true, hasty, model, settings, EntryTiming.NORMAL_SPEED);
+            Assert.assertEquals(normal.currentTurnUses(), 0.0);
+            Assert.assertEquals(fast.currentTurnUses(), 1.0);
+            Assert.assertEquals(fast.expectedOccurrences() - normal.expectedOccurrences(), 1.0, 1e-9);
+            Assert.assertEquals(fast.expectedUsesPerFutureTurn(), normal.expectedUsesPerFutureTurn());
+            Assert.assertEquals(IntrinsicActivationOccurrenceEstimator.estimate(0, true, hasty, model, settings,
+                    EntryTiming.FLASH_LATE_TURN).currentTurnUses(), 0.0); // Existing controller-turn resource windows.
+        }
+    }
+
+    @Test
+    public void explicitLimitsCapEachAffordabilityCaseWithoutChangingTapOrTimingRules() {
+        final var model = IntrinsicReferenceModel.defaults();
+        final var settings = IntrinsicEvaluationSettings.defaults();
+        final var source = new PermanentProfile(true, PermanentKind.CREATURE, true, 2, 3, Set.of());
+        final var limited = IntrinsicActivationOccurrenceEstimator.estimate(1, false, 0, source, model,
+                settings, EntryTiming.NORMAL_SPEED, false, 1);
+        final double expectedUses = model.availableMana().entries().stream().filter(entry -> entry.value() >= 1)
+                .mapToDouble(WeightedValue::weight).sum();
+        Assert.assertEquals(limited.currentTurnUses(), expectedUses, 1e-9);
+        Assert.assertEquals(limited.expectedUsesPerFutureTurn(), expectedUses, 1e-9);
+        final var unlimited = IntrinsicActivationOccurrenceEstimator.estimate(1, false, 0, source, model,
+                settings, EntryTiming.NORMAL_SPEED, false);
+        Assert.assertTrue(unlimited.currentTurnUses() > limited.currentTurnUses());
+        Assert.assertTrue(limited.currentTurnUses() < Math.min(1, unlimited.currentTurnUses()));
+        final var tapped = IntrinsicActivationOccurrenceEstimator.estimate(1, true, 0, source, model,
+                settings, EntryTiming.NORMAL_SPEED, false, 2);
+        Assert.assertEquals(tapped.currentTurnUses(), 0.0);
+        Assert.assertEquals(tapped.expectedUsesPerFutureTurn(), expectedUses, 1e-9);
+        final var flashSorcery = IntrinsicActivationOccurrenceEstimator.estimate(1, false, 0, source, model,
+                settings, EntryTiming.FLASH_LATE_TURN, true, 1);
+        Assert.assertEquals(flashSorcery.currentTurnUses(), 0.0);
+        Assert.assertTrue(flashSorcery.expectedOccurrences() > 0);
+        Assert.assertEquals(IntrinsicActivationOccurrenceEstimator.estimate(1, false, 0, source, model,
+                settings, EntryTiming.NORMAL_SPEED, false, 0).expectedOccurrences(), 0.0);
+        Assert.assertFalse(IntrinsicActivationOccurrenceEstimator.estimate(1, false, 0, source, model,
+                settings, EntryTiming.NORMAL_SPEED, false, -1).supported());
+    }
+
+    @Test
     public void tapAbilityUsesOnlyControllerTurns() {
         final IntrinsicReferenceModel model = IntrinsicReferenceModel.defaults();
         final IntrinsicEvaluationSettings settings = IntrinsicEvaluationSettings.defaults();

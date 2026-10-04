@@ -70,7 +70,15 @@ public final class CardAbilityTraversal {
             } catch (final RuntimeException failure) {
                 outcome = AbilityOutcomeDescription.unresolved(path, "Cannot resolve trigger Execute");
             }
-            result.add(new AbilityDescription(path, Origin.TRIGGER, provenance(trigger), trigger.getMapParams(), outcome));
+            final var parameters = new java.util.LinkedHashMap<>(trigger.getMapParams());
+            if (trigger.isKeyword(forge.game.keyword.Keyword.EVOLVE)) {
+                // Trigger.meetsRequirementsOnTriggeredObjects supplies this semantic condition
+                // outside the script map; preserve it rather than treating every entry as valid.
+                parameters.put("Condition", "Evolve");
+            }
+            // TODO: Other keyword-only event requirements need explicit semantic descriptors;
+            // keyword provenance alone does not mean its expanded map contains every condition.
+            result.add(new AbilityDescription(path, Origin.TRIGGER, provenance(trigger), parameters, outcome));
         }
         index = 0;
         for (final CardTraitBase ability : state.getStaticAbilities()) {

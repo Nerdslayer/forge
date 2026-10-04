@@ -10,6 +10,8 @@ public final class OutcomeDescriptionCompiler<S> {
         Outcome<S> atomic(AbilityOutcomeDescription description);
         boolean maximize(AbilityOutcomeDescription node, boolean opponentChooses);
         default boolean acceptsNode(final AbilityOutcomeDescription node) { return true; }
+        default Outcome<S> conditional(final AbilityOutcomeDescription node,
+                final java.util.function.Function<AbilityOutcomeDescription, Outcome<S>> compile) { return compile.apply(node); }
         default String decisionId(final AbilityOutcomeDescription node, final boolean random) { return node.path(); }
         default int amount(final AbilityOutcomeDescription node, final String expression) {
             return Integer.parseInt(expression);
@@ -45,6 +47,10 @@ public final class OutcomeDescriptionCompiler<S> {
     }
 
     private Outcome<S> part(final AbilityOutcomeDescription node, final int depth, final int[] remaining) {
+        return backend.conditional(node, conditioned -> partUnconditional(conditioned, depth, remaining));
+    }
+
+    private Outcome<S> partUnconditional(final AbilityOutcomeDescription node, final int depth, final int[] remaining) {
         final AbilityOptionality.Decision optionality = AbilityOptionality.effect(node);
         if (!optionality.supported()) { return unresolved(node.path() + ": " + optionality.issue()); }
         final Outcome<S> effect = partCore(AbilityOptionality.effectParameters(node), depth, remaining);

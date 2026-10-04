@@ -12,7 +12,7 @@ public final class ScheduledTriggerParser {
     private ScheduledTriggerParser() { }
 
     public record Schedule(Timing timing, PlayerScope playerScope) { }
-    public enum Timing { UPKEEP, END_STEP, TURN_BEGIN }
+    public enum Timing { UPKEEP, BEGIN_COMBAT, END_STEP, TURN_BEGIN }
     public enum PlayerScope { CONTROLLER, OPPONENT, EACH_PLAYER }
 
     public static Optional<Schedule> parse(final Map<String, String> parameters) {
@@ -29,6 +29,7 @@ public final class ScheduledTriggerParser {
         } else if ("Phase".equals(parameters.get("Mode"))) {
             final String phase = parameters.getOrDefault("Phase", "");
             if ("Upkeep".equalsIgnoreCase(phase)) { timing = Timing.UPKEEP; }
+            else if ("BeginCombat".equalsIgnoreCase(phase)) { timing = Timing.BEGIN_COMBAT; }
             else if ("End of Turn".equalsIgnoreCase(phase)) { timing = Timing.END_STEP; }
             else { return Optional.empty(); }
         } else { return Optional.empty(); }

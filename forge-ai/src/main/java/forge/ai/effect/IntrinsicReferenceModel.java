@@ -29,7 +29,7 @@ public final class IntrinsicReferenceModel {
         ATTACKER_UNBLOCKED, COMBAT_DAMAGE, SPELL_CAST, ABILITY_CAST,
         ABILITY_RESOLVED, ABILITY_TRIGGERED,
         LAND_PLAYED,
-        CREATURE_DIED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
+        CREATURE_DIED, CREATURE_ENTERED, PERMANENT_SACRIFICED, TOKEN_CREATED, COUNTER_ADDED, COUNTER_REMOVED,
         CONTROL_CHANGED,
         TAPPED, UNTAPPED, MANA_ADDED_OR_SPENT,
         MANA_EXPENDED,
@@ -126,6 +126,9 @@ public final class IntrinsicReferenceModel {
     private final Map<EventType, WeightedDistribution<Double>> eventRates;
     private final Map<PermanentKind, SurvivalProfile> survivalProfiles;
     private final double gameEndHazardPerTurn;
+    private final IntrinsicReferenceQuantities quantities;
+    private final IntrinsicLibraryReference library;
+    private final Map<String, Integer> sampledQuantities;
 
     public IntrinsicReferenceModel(final WeightedDistribution<Integer> lifeTotals,
             final WeightedDistribution<Integer> handSizes,
@@ -152,6 +155,25 @@ public final class IntrinsicReferenceModel {
             final Map<EventType, WeightedDistribution<Double>> eventRates,
             final Map<PermanentKind, SurvivalProfile> survivalProfiles,
             final double gameEndHazardPerTurn) {
+        this(lifeTotals, handSizes, availableMana, friendlyCreatureCounts, opposingCreatureCounts,
+                creatureProfiles, permanentProfiles, targetAvailability, eventRates, survivalProfiles,
+                gameEndHazardPerTurn, IntrinsicReferenceQuantities.defaults(), IntrinsicLibraryReference.defaults(), Map.of());
+    }
+
+    private IntrinsicReferenceModel(final WeightedDistribution<Integer> lifeTotals,
+            final WeightedDistribution<Integer> handSizes, final WeightedDistribution<Integer> availableMana,
+            final WeightedDistribution<Integer> friendlyCreatureCounts,
+            final WeightedDistribution<Integer> opposingCreatureCounts,
+            final WeightedDistribution<CreatureProfile> creatureProfiles,
+            final WeightedDistribution<PermanentProfile> permanentProfiles,
+            final Map<PermanentKind, WeightedDistribution<Boolean>> targetAvailability,
+            final Map<EventType, WeightedDistribution<Double>> eventRates,
+            final Map<PermanentKind, SurvivalProfile> survivalProfiles,
+            final double gameEndHazardPerTurn, final IntrinsicReferenceQuantities quantities,
+            final IntrinsicLibraryReference library, final Map<String, Integer> sampledQuantities) {
+        this.quantities = require(quantities, "quantities");
+        this.library = require(library, "library");
+        this.sampledQuantities = Map.copyOf(sampledQuantities);
         this.lifeTotals = require(lifeTotals, "lifeTotals");
         this.handSizes = require(handSizes, "handSizes");
         this.availableMana = require(availableMana, "availableMana");
@@ -214,6 +236,8 @@ public final class IntrinsicReferenceModel {
         // outside this first reference model.
         events.put(EventType.LAND_PLAYED, rateDistribution(0, .15, 1, .70, 2, .12, 3, .03));
         events.put(EventType.CREATURE_DIED, rateDistribution(0, .25, 1, .50, 2, .20, 3, .05));
+        // Per player-turn, including modest ordinary creature/token development, not self ETB.
+        events.put(EventType.CREATURE_ENTERED, rateDistribution(0, .35, 1, .45, 2, .17, 3, .03));
         events.put(EventType.PERMANENT_SACRIFICED, rateDistribution(0, .50, 1, .40, 2, .10));
         events.put(EventType.TOKEN_CREATED, rateDistribution(0, .30, 1, .50, 2, .20));
         events.put(EventType.COUNTER_ADDED, rateDistribution(0, .40, 1, .45, 2, .15));
@@ -294,6 +318,46 @@ public final class IntrinsicReferenceModel {
 
     public WeightedDistribution<Integer> lifeTotals() {
         return lifeTotals;
+    }
+
+    public IntrinsicReferenceQuantities quantities() {
+        return quantities;
+    }
+
+    public IntrinsicReferenceModel withQuantities(final IntrinsicReferenceQuantities replacement) {
+        return new IntrinsicReferenceModel(lifeTotals, handSizes, availableMana, friendlyCreatureCounts,
+                opposingCreatureCounts, creatureProfiles, permanentProfiles, targetAvailability,
+                eventRates, survivalProfiles, gameEndHazardPerTurn, replacement, library, sampledQuantities);
+    }
+
+    public IntrinsicLibraryReference library() { return library; }
+
+    public IntrinsicReferenceModel withLibrary(final IntrinsicLibraryReference replacement) {
+        return new IntrinsicReferenceModel(lifeTotals, handSizes, availableMana, friendlyCreatureCounts,
+                opposingCreatureCounts, creatureProfiles, permanentProfiles, targetAvailability,
+                eventRates, survivalProfiles, gameEndHazardPerTurn, quantities, replacement, sampledQuantities);
+    }
+
+    /** Reuses sampled quantities only for the corresponding reference dimension. */
+    IntrinsicReferenceModel withQuantityBindings(final Map<String, Integer> bindings) {
+        final java.util.Set<String> modeled = java.util.Set.of("otherFriendlyCreatures", "opposingCreatures",
+                IntrinsicDrawOutcomeBackend.CONTROLLER_HAND, IntrinsicDrawOutcomeBackend.OPPONENT_HAND,
+                IntrinsicDrawOutcomeBackend.CONTROLLER_LIFE, IntrinsicDrawOutcomeBackend.OPPONENT_LIFE,
+                IntrinsicDrawOutcomeBackend.SOURCE_P1P1, IntrinsicDrawOutcomeBackend.SOURCE_INITIAL_P1P1);
+        if (bindings.keySet().stream().noneMatch(modeled::contains)) { return this; }
+        final Map<String, Integer> samples = new java.util.LinkedHashMap<>(sampledQuantities);
+        bindings.forEach((name, count) -> { if (modeled.contains(name)) { samples.put(name, count); } });
+        final WeightedDistribution<Integer> friendly = bindings.containsKey("otherFriendlyCreatures")
+                ? WeightedDistribution.of(new WeightedValue<>(bindings.get("otherFriendlyCreatures"), 1)) : friendlyCreatureCounts;
+        final WeightedDistribution<Integer> opposing = bindings.containsKey("opposingCreatures")
+                ? WeightedDistribution.of(new WeightedValue<>(bindings.get("opposingCreatures"), 1)) : opposingCreatureCounts;
+        return new IntrinsicReferenceModel(lifeTotals, handSizes, availableMana, friendly, opposing,
+                creatureProfiles, permanentProfiles, targetAvailability, eventRates, survivalProfiles,
+                gameEndHazardPerTurn, quantities, library, samples);
+    }
+
+    WeightedDistribution<Integer> referenceIntegers(final String name, final WeightedDistribution<Integer> fallback) {
+        return sampledQuantities.containsKey(name) ? WeightedDistribution.of(new WeightedValue<>(sampledQuantities.get(name), 1)) : fallback;
     }
 
     public WeightedDistribution<Integer> handSizes() {

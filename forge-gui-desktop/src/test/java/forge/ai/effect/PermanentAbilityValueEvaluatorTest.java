@@ -54,6 +54,22 @@ public class PermanentAbilityValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void selfDeathDeploymentBenefitsDoNotBecomeLostAbilityRemovalValue() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        setOpposingTeams(ai, opponent);
+        for (final String name : List.of("Doomed Traveler", "Perilous Myr")) {
+            final Card card = addCard(name, opponent);
+            final var intrinsic = new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                    .evaluateDefinition(card.getPaperCard(), CardStateName.Original);
+            Assert.assertTrue(intrinsic.stream().anyMatch(value -> value.contribution().value() > 0), name);
+            final var removal = evaluate(ai, List.of(card)).get(card);
+            Assert.assertEquals(removal.intrinsicValue(), 0, removal.toString());
+        }
+    }
+
+    @Test
     public void selfEntryBenefitsDoNotBecomeFutureRemovalValue() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);

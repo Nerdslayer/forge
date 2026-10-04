@@ -25,8 +25,8 @@ final class IntrinsicSelfEntryTriggerAdapter {
 
     private static boolean supportsEvent(final Map<String, String> parameters) {
         // TODO: Model conditional/payment-dependent ETBs, restricted origins, cast/history predicates,
-        // entry replacements, and blink/re-entry opportunities. Other-object ETBs need their
-        // own population model; this adapter must not use recurring source-survival rates.
+        // entry replacements, and blink/re-entry opportunities. Other-creature ETBs use their
+        // separate entry adapter/population; this adapter must not use recurring survival rates.
         return isSelfEntry(parameters)
                 && PARAMETERS.containsAll(parameters.keySet())
                 && "Any".equalsIgnoreCase(parameters.getOrDefault("Origin", "Any"))

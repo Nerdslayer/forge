@@ -4,7 +4,6 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
 
 import forge.StaticData;
 import forge.card.ICardFace;
@@ -13,17 +12,19 @@ import forge.item.PaperToken;
 import forge.ai.effect.IntrinsicReferenceModel.PermanentKind;
 import forge.ai.effect.IntrinsicReferenceModel.PermanentProfile;
 
-/** Resolves fixed creature token scripts into game-free intrinsic profiles. */
+/** Resolves fixed token scripts into game-free body or supported resource-option values. */
 final class IntrinsicTokenProfileResolver {
     private IntrinsicTokenProfileResolver() {
     }
 
-    static Function<String, Optional<PermanentProfile>> forSource(final IPaperCard source) {
-        return script -> resolve(source, script);
+    static IntrinsicTokenResolver forSource(final IPaperCard source, final IntrinsicReferenceModel model,
+            final IntrinsicEvaluationSettings settings) {
+        final java.util.Map<String, Optional<IntrinsicTokenResolver.Definition>> cache = new java.util.HashMap<>();
+        return script -> cache.computeIfAbsent(script, key -> resolve(source, key, model, settings));
     }
 
-    private static Optional<PermanentProfile> resolve(final IPaperCard source,
-            final String script) {
+    private static Optional<IntrinsicTokenResolver.Definition> resolve(final IPaperCard source,
+            final String script, final IntrinsicReferenceModel model, final IntrinsicEvaluationSettings settings) {
         if (source == null || script == null || script.isBlank()) {
             return Optional.empty();
         }
@@ -40,12 +41,18 @@ final class IntrinsicTokenProfileResolver {
                 return Optional.empty();
             }
             final ICardFace face = token.getMainFace();
-            if (face == null || !face.getType().isCreature()
-                    || face.getIntPower() < 0 || face.getIntToughness() < 0) {
+            if (face == null) { return Optional.empty(); }
+            if (!face.getType().isCreature()) {
+                return IntrinsicConsumableAbilityEvaluator.evaluate(face, model, settings).map(value ->
+                        new IntrinsicTokenResolver.Definition(new PermanentProfile(true, PermanentKind.ARTIFACT,
+                                true, 0, 0, Set.of()), value));
+            }
+            if (face.getIntPower() < 0 || face.getIntToughness() < 0) {
                 return Optional.empty();
             }
-            return Optional.of(new PermanentProfile(true, PermanentKind.TOKEN, true,
-                    face.getIntPower(), face.getIntToughness(), keywords(face), false));
+            // TODO: Add creature-token abilities without duplicating body/keyword credit.
+            return Optional.of(new IntrinsicTokenResolver.Definition(new PermanentProfile(true, PermanentKind.TOKEN, true,
+                    face.getIntPower(), face.getIntToughness(), keywords(face), false), null));
         } catch (final RuntimeException ignored) {
             return Optional.empty();
         }

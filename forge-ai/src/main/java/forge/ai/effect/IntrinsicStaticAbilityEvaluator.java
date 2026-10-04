@@ -20,7 +20,7 @@ final class IntrinsicStaticAbilityEvaluator {
     // dynamic predicates, characteristic-defining abilities, permissions, and multi-effect text.
     private static final Set<String> ALLOWED_PARAMS = Set.of(
             "Mode", "Affected", "AddPower", "AddToughness", "SetPower", "SetToughness",
-            "AddKeyword", "AIEffectValue", "Description");
+            "AddKeyword", "RemoveKeyword", "AIEffectValue", "Description");
     private static final Set<String> SUPPORTED_KEYWORDS = Set.of(
             "flying", "reach", "first strike", "double strike", "menace", "fear", "intimidate",
             "deathtouch", "lifelink", "trample", "vigilance", "defender", "indestructible",
@@ -43,15 +43,27 @@ final class IntrinsicStaticAbilityEvaluator {
             return unsupported("unsupported intrinsic static parameters");
         }
 
-        final String affected = ability.parameters().get("Affected");
+        final IntrinsicStaticRecipientFilter.Filter recipients = IntrinsicStaticRecipientFilter.describe(
+                ability.parameters().get("Affected"), model);
+        final String affected = recipients.affected();
         final StaticAbilityScope scope = StaticAbilityScope.parse(affected);
         if (scope == null) {
             return unsupported("unsupported intrinsic static recipient scope");
         }
+        if (recipients.profileRestricted() && !scope.isCreatureScope(affected)
+                && !(scope == StaticAbilityScope.SELF && (source.kind() == PermanentKind.CREATURE || source.kind() == PermanentKind.TOKEN))) {
+            return unsupported("static profile eligibility requires creature recipients");
+        }
         final Set<String> addedKeywords = parseSupportedKeywords(ability.parameters().get("AddKeyword"));
-        if (addedKeywords == null) {
+        final Set<String> removedKeywords = parseSupportedKeywords(ability.parameters().get("RemoveKeyword"));
+        if (addedKeywords == null || removedKeywords == null) {
             return unsupported("static keyword is not observed by the intrinsic permanent scorer");
         }
+        if (addedKeywords.stream().anyMatch(removedKeywords::contains)) {
+            return unsupported("conflicting static keyword changes require layer ordering");
+        }
+        // TODO: CantHaveKeyword, RemoveAllAbilities, conditional/parameterized removals and
+        // timestamp/dependency interactions require more than a first-order profile delta.
         final int powerChange = literalInteger(ability.parameters().get("AddPower"), 0);
         final int toughnessChange = literalInteger(ability.parameters().get("AddToughness"), 0);
         final int setPower = literalInteger(ability.parameters().get("SetPower"), Integer.MIN_VALUE);
@@ -60,11 +72,11 @@ final class IntrinsicStaticAbilityEvaluator {
         final boolean hasAutomaticChange = ability.parameters().containsKey("AddPower")
                 || ability.parameters().containsKey("AddToughness")
                 || ability.parameters().containsKey("SetPower")
-                || ability.parameters().containsKey("SetToughness") || !addedKeywords.isEmpty();
+                || ability.parameters().containsKey("SetToughness") || !addedKeywords.isEmpty() || !removedKeywords.isEmpty();
         if (!ability.parameters().containsKey("AddPower")
                 && !ability.parameters().containsKey("AddToughness")
                 && !ability.parameters().containsKey("SetPower")
-                && !ability.parameters().containsKey("SetToughness") && addedKeywords.isEmpty()) {
+                && !ability.parameters().containsKey("SetToughness") && addedKeywords.isEmpty() && removedKeywords.isEmpty()) {
             if (hintedValue == 0) {
                 return unsupported("static effect has no intrinsically valued change");
             }
@@ -87,6 +99,7 @@ final class IntrinsicStaticAbilityEvaluator {
         final IntrinsicOutcomeEvaluator evaluator = new IntrinsicOutcomeEvaluator();
         final int automaticPerRecipient;
         final double recipientCount;
+        final double eligibleRecipients;
         if (scope == StaticAbilityScope.SELF) {
             if (hasAutomaticChange && source.kind() != PermanentKind.CREATURE
                     && source.kind() != PermanentKind.TOKEN) {
@@ -96,40 +109,48 @@ final class IntrinsicStaticAbilityEvaluator {
                 final PermanentProfile after = withPowerAndToughness(source,
                         applySetAndAdd(source.power(), setPower, powerChange),
                         applySetAndAdd(source.toughness(), setToughness, toughnessChange),
-                        addedKeywords);
+                        addedKeywords, removedKeywords);
                 automaticPerRecipient = evaluator.evaluatePermanentDelta(source, after, true);
             } else {
                 automaticPerRecipient = 0;
             }
             recipientCount = 1;
+            eligibleRecipients = recipients.matches(source) ? 1 : 0;
         } else {
             if (hasAutomaticChange) {
                 automaticPerRecipient = averageCreatureDelta(model, evaluator, setPower,
-                        setToughness, powerChange, toughnessChange, addedKeywords);
+                        setToughness, powerChange, toughnessChange, addedKeywords, removedKeywords, recipients::matches);
             } else {
                 automaticPerRecipient = 0;
             }
             recipientCount = scope.isTribal(affected) ? TRIBAL_FUTURE_RECIPIENTS
                     : scope == StaticAbilityScope.ATTACHED ? 1 : FUTURE_RECIPIENTS;
+            final double present = model.creatureProfiles().entries().stream().filter(entry -> entry.value().present())
+                    .mapToDouble(WeightedValue::weight).sum();
+            eligibleRecipients = !recipients.profileRestricted() ? 1 : present == 0 ? 0 : model.creatureProfiles().entries().stream()
+                    .filter(entry -> entry.value().present() && recipients.matches(entry.value()))
+                    .mapToDouble(WeightedValue::weight).sum() / present;
         }
-        final int perRecipient = EffectMath.add(automaticPerRecipient, hintedValue);
+        final double perRecipient = !recipients.profileRestricted() ? EffectMath.add(automaticPerRecipient, hintedValue)
+                : (scope == StaticAbilityScope.SELF ? automaticPerRecipient * eligibleRecipients : automaticPerRecipient)
+                        + hintedValue * eligibleRecipients;
 
         final double signedValue = switch (scope) {
         case SELF, ATTACHED, CONTROLLER -> perRecipient * recipientCount;
         case OPPONENT -> -perRecipient * recipientCount;
         case BOTH -> 0;
         };
-        return supported(signedValue, scope.description() + " static characteristic potential"
+        return supported(signedValue * recipients.probability(), scope.description() + " static characteristic potential"
                 + (hintedValue == 0 ? "" : " with AIEffectValue supplement"));
     }
 
     private static PermanentProfile withPowerAndToughness(final PermanentProfile source,
-            final int power, final int toughness, final Set<String> addedKeywords) {
+            final int power, final int toughness, final Set<String> addedKeywords, final Set<String> removedKeywords) {
         if (toughness <= 0 && (source.kind() == PermanentKind.CREATURE
                 || source.kind() == PermanentKind.TOKEN)) {
             return PermanentProfile.absent();
         }
-        final Set<String> keywords = plusKeywords(source.keywords(), addedKeywords);
+        final Set<String> keywords = changeKeywords(source.keywords(), addedKeywords, removedKeywords);
         return new PermanentProfile(true, source.kind(), source.controlledByAi(),
                 Math.max(0, power), Math.max(0, toughness), keywords,
                 source.basicLand(), source.loyalty());
@@ -138,6 +159,14 @@ final class IntrinsicStaticAbilityEvaluator {
     private static int averageCreatureDelta(final IntrinsicReferenceModel model,
             final IntrinsicOutcomeEvaluator evaluator, final int setPower, final int setToughness,
             final int powerChange, final int toughnessChange, final Set<String> addedKeywords) {
+        return averageCreatureDelta(model, evaluator, setPower, setToughness, powerChange, toughnessChange,
+                addedKeywords, Set.of(), profile -> true);
+    }
+
+    private static int averageCreatureDelta(final IntrinsicReferenceModel model,
+            final IntrinsicOutcomeEvaluator evaluator, final int setPower, final int setToughness,
+            final int powerChange, final int toughnessChange, final Set<String> addedKeywords, final Set<String> removedKeywords,
+            final java.util.function.Predicate<CreatureProfile> eligible) {
         double presentProbability = 0;
         double weightedValue = 0;
         for (final WeightedValue<CreatureProfile> weighted : model.creatureProfiles().entries()) {
@@ -146,12 +175,14 @@ final class IntrinsicStaticAbilityEvaluator {
                 continue;
             }
             presentProbability += weighted.weight();
+            if (!eligible.test(before)) { continue; }
             final int power = Math.max(0, applySetAndAdd(before.power(), setPower, powerChange));
             final int toughness = applySetAndAdd(before.toughness(), setToughness, toughnessChange);
             final CreatureProfile after = toughness <= 0 ? CreatureProfile.absent()
                     : new CreatureProfile(true, power, toughness,
-                            plusKeywords(before.keywords(), addedKeywords), before.hexproof(),
-                            before.indestructible());
+                            changeKeywords(before.keywords(), addedKeywords, removedKeywords),
+                            before.hexproof() && !removedKeywords.contains("hexproof"),
+                            before.indestructible() && !removedKeywords.contains("indestructible"));
             weightedValue += weighted.weight()
                     * evaluator.evaluateCreatureDelta(before, after, true);
         }
@@ -199,9 +230,11 @@ final class IntrinsicStaticAbilityEvaluator {
         return (set == Integer.MIN_VALUE ? before : set) + add;
     }
 
-    private static Set<String> plusKeywords(final Set<String> original,
-            final Set<String> additions) {
+    private static Set<String> changeKeywords(final Set<String> original,
+            final Set<String> additions, final Set<String> removals) {
         final Set<String> result = new java.util.LinkedHashSet<>(original);
+        result.removeIf(keyword -> removals.contains(keyword.toLowerCase(Locale.ROOT)));
+        // First-order snapshot semantics, not a full timestamp/dependency layer simulation.
         result.addAll(additions);
         return Set.copyOf(result);
     }

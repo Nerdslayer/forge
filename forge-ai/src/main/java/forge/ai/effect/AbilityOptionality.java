@@ -42,13 +42,16 @@ final class AbilityOptionality {
         }
         // These effects ask the activator before this node. AbilityUtils executes the next
         // subability independently, so it must remain outside this optional boundary.
-        if (Set.of("PutCounter", "RemoveCounter", "Mana", "GainControl", "CopyPermanent", "Charm")
+        if (Set.of("PutCounter", "RemoveCounter", "Mana", "GainControl", "CopyPermanent", "Charm", "Dig")
                 .contains(node.api())) { return new Decision(true, false, ""); }
         if ("Sacrifice".equals(node.api()) && "Self".equals(
                 parameters.getOrDefault("SacValid", "Self"))) {
             return new Decision(true, false, "");
         }
         if ("Discard".equals(node.api()) || "Sacrifice".equals(node.api())) {
+            return recipient(parameters);
+        }
+        if ("Scry".equals(node.api()) || "Surveil".equals(node.api())) {
             return recipient(parameters);
         }
         // TODO: Per-recipient/group decisions, up-to amounts, payment/unless choices,

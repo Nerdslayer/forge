@@ -24,7 +24,48 @@ public final class IntrinsicEventTriggerAdapter {
         return describeEvent(AbilityOptionality.triggerParameters(parameters));
     }
 
+    static Optional<IntrinsicEventTrigger> describe(final Map<String, String> parameters,
+            final IntrinsicReferenceModel model) {
+        return describe(parameters, model, null);
+    }
+
+    static Optional<IntrinsicEventTrigger> describe(final Map<String, String> parameters,
+            final IntrinsicReferenceModel model, final IntrinsicReferenceModel.PermanentProfile source) {
+        if (!AbilityOptionality.trigger(parameters).supported()) { return Optional.empty(); }
+        final var spellCast = IntrinsicSpellCastTriggerAdapter.describe(AbilityOptionality.triggerParameters(parameters), model);
+        if (spellCast.isPresent()) { return spellCast; }
+        final var outgoingDamage = IntrinsicOutgoingCombatDamageBinding.describe(
+                AbilityOptionality.triggerParameters(parameters), source);
+        if (outgoingDamage.isPresent()) { return outgoingDamage; }
+        final var groupCombat = IntrinsicGroupCombatDamageAdapter.describe(
+                AbilityOptionality.triggerParameters(parameters), model, source);
+        if (groupCombat.isPresent()) { return groupCombat; }
+        final var typedDiscard = IntrinsicTypedDiscardTriggerAdapter.describe(
+                AbilityOptionality.triggerParameters(parameters), model.library());
+        if (typedDiscard.isPresent()) { return typedDiscard; }
+        final var typedDeath = IntrinsicCreatureDeathTriggerAdapter.describe(
+                AbilityOptionality.triggerParameters(parameters), model);
+        if (typedDeath.isPresent()) { return typedDeath; }
+        final var entry = IntrinsicCreatureEntryTriggerAdapter.describe(
+                AbilityOptionality.triggerParameters(parameters), model, source);
+        return entry.isPresent() ? entry : describe(parameters);
+    }
+
     private static Optional<IntrinsicEventTrigger> describeEvent(final Map<String, String> parameters) {
+        final var groupCombat = IntrinsicGroupCombatDamageAdapter.describe(parameters, IntrinsicReferenceModel.defaults(), null);
+        if (groupCombat.isPresent()) { return groupCombat; }
+        final var outgoingDamage = IntrinsicOutgoingCombatDamageBinding.describe(parameters, null);
+        if (outgoingDamage.isPresent()) { return outgoingDamage; }
+        final var receivedDamage = IntrinsicReceivedDamageBinding.describe(parameters);
+        if (receivedDamage.isPresent()) { return receivedDamage; }
+        final var typedDeath = IntrinsicCreatureDeathTriggerAdapter.describe(parameters, IntrinsicReferenceModel.defaults());
+        if (typedDeath.isPresent()) { return typedDeath; }
+        final var typedDiscard = IntrinsicTypedDiscardTriggerAdapter.describe(parameters, IntrinsicLibraryReference.defaults());
+        if (typedDiscard.isPresent()) { return typedDiscard; }
+        final var creatureEntry = IntrinsicCreatureEntryTriggerAdapter.describe(parameters, IntrinsicLibraryReference.defaults());
+        if (creatureEntry.isPresent()) { return creatureEntry; }
+        final Optional<IntrinsicEventTrigger> landEntry = IntrinsicLandEntryTriggerAdapter.describe(parameters);
+        if (landEntry.isPresent()) { return landEntry; }
         final Optional<IntrinsicEventTrigger> spellCast = IntrinsicSpellCastTriggerAdapter.describe(parameters);
         if (spellCast.isPresent()) {
             return spellCast;
@@ -141,6 +182,13 @@ public final class IntrinsicEventTriggerAdapter {
     }
 
     private static boolean supportsEventParameters(final Map<String, String> parameters) {
+        if (IntrinsicGroupCombatDamageAdapter.describe(parameters, IntrinsicReferenceModel.defaults(), null).isPresent()) { return true; }
+        if (IntrinsicOutgoingCombatDamageBinding.describe(parameters, null).isPresent()) { return true; }
+        if (IntrinsicReceivedDamageBinding.describe(parameters).isPresent()) { return true; }
+        if (IntrinsicCreatureDeathTriggerAdapter.describe(parameters, IntrinsicReferenceModel.defaults()).isPresent()) { return true; }
+        if (IntrinsicTypedDiscardTriggerAdapter.describe(parameters, IntrinsicLibraryReference.defaults()).isPresent()) { return true; }
+        if (IntrinsicCreatureEntryTriggerAdapter.describe(parameters, IntrinsicLibraryReference.defaults()).isPresent()) { return true; }
+        if (IntrinsicLandEntryTriggerAdapter.describe(parameters).isPresent()) { return true; }
         if (IntrinsicSpellCastTriggerAdapter.supports(parameters)) {
             return true;
         }
@@ -467,8 +515,8 @@ public final class IntrinsicEventTriggerAdapter {
 
     private static boolean supportsCreatureDeath(final Map<String, String> parameters) {
         // This first intrinsic zone slice is deliberately limited to deaths observed while the
-        // source remains on the battlefield. Self-only death triggers need a departure-aware
-        // occurrence model; do not value them using the source-survival event estimator.
+        // source remains on the battlefield. IntrinsicSelfDeathTriggerAdapter separately handles
+        // self-only deaths with departure-aware occurrence, never this survival event estimator.
         if (!"Battlefield".equalsIgnoreCase(parameters.get("Origin"))
                 || !"Graveyard".equalsIgnoreCase(parameters.get("Destination"))) {
             return false;
