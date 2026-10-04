@@ -30,7 +30,7 @@ public class CombatBlockPlannerTest extends AITest {
         final Fixture f = fixture();
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
-        Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_MAX_NODES), 25000);
+        Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_MAX_NODES), 50000);
         Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_TIMEOUT_MS), 500);
         ((LobbyPlayerAi) f.defender().getLobbyPlayer()).setAiProfile("Default");
         Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
