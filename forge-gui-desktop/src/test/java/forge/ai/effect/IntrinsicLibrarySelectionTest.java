@@ -36,13 +36,31 @@ public class IntrinsicLibrarySelectionTest extends AITest {
     }
 
     @Test
+    public void manaValueFiltersSeparateLandsAndDeduplicateOverlappingBranches() {
+        final var library = IntrinsicLibraryReference.defaults();
+        Assert.assertEquals(library.hitProbability("Card.cmcEQ0").orElseThrow(), .4 + .6 * .05, 1e-9);
+        Assert.assertEquals(library.hitProbability("Card.cmcGE4").orElseThrow(), .6 * .23, 1e-9);
+        Assert.assertEquals(library.hitProbability("Land.cmcGE1").orElseThrow(), 0.0);
+        Assert.assertEquals(library.hitProbability("Card.cmcGE4,Creature").orElseThrow(), .30 + .30 * .23, 1e-9);
+        Assert.assertEquals(library.hitProbability("Card.cmcGE4,Card.cmcGE4").orElseThrow(), .6 * .23, 1e-9);
+        Assert.assertEquals(library.hitProbability("Card.cmcGT2+cmcLE3").orElseThrow(), .6 * .22, 1e-9);
+        Assert.assertEquals(library.hitProbability("Card.cmcNE0").orElseThrow(), .6 * .95, 1e-9);
+        for (final String unsupported : List.of("Card.cmcLEX", "Card.cmcLE999999999999", "Artifact.Creature.cmcGT999")) {
+            Assert.assertTrue(library.hitProbability(unsupported).isEmpty(), unsupported);
+        }
+        Assert.assertTrue(evaluate(dig("Card.cmcLE3", "3", "1"), 3).complete());
+        Assert.assertTrue(evaluate(new AbilityOutcomeDescription("tutor", "ChangeZone", Map.of("Origin", "Library",
+                "Destination", "Hand", "ChangeType", "Card.nonLand+cmcLE3"), List.of(), null, ""), 3).complete());
+    }
+
+    @Test
     public void filterUnionsAvoidDoubleCountingAndRejectUnknownPredicates() {
         final var reference = IntrinsicLibraryReference.defaults();
         Assert.assertEquals(reference.hitProbability("Dinosaur,Land").orElseThrow(), .55, 1e-9);
         Assert.assertEquals(reference.hitProbability("Creature,Dinosaur,Creature.Elf").orElseThrow(), .30, 1e-9);
         Assert.assertEquals(reference.hitProbability("Land,Land").orElseThrow(), .40, 1e-9);
         Assert.assertEquals(reference.hitProbability("Enchantment,Aura").orElseThrow(), .06, 1e-9);
-        Assert.assertTrue(reference.hitProbability("Creature.cmcLE3").isEmpty());
+        Assert.assertTrue(reference.hitProbability("Creature.cmcLEX").isEmpty());
         Assert.assertTrue(reference.hitProbability("Card.UnknownPredicate").isEmpty());
         final var model = IntrinsicReferenceModel.defaults();
         Assert.assertSame(model.withQuantities(model.quantities()).library(), model.library());
@@ -94,14 +112,87 @@ public class IntrinsicLibrarySelectionTest extends AITest {
     }
 
     @Test
+    public void wholeLibrarySearchKeepsFailureProbabilityAndCapsCardsFound() {
+        final Map<String, Double> composition = Map.of("Land", .4, "Creature", .3, "Artifact", .06,
+                "Enchantment", .06, "Planeswalker", .02, "Instant", .08, "Sorcery", .08);
+        final var library = new IntrinsicLibraryReference(composition, .5, .6, .8,
+                WeightedDistribution.of(new WeightedValue<>(0, .25), new WeightedValue<>(2, .75)));
+        final var counts = library.searchCounts("Land", 1).orElseThrow();
+        Assert.assertEquals(counts.entries().stream().filter(entry -> entry.value() == 1)
+                .mapToDouble(WeightedValue::weight).sum(), .75 * .64, 1e-9);
+        final var search = new AbilityOutcomeDescription("search", "ChangeZone",
+                Map.of("Origin", "Library", "Destination", "Hand", "ChangeType", "Land", "ChangeNum", "1"),
+                List.of(), null, "");
+        final var evaluator = new IntrinsicOutcomeEvaluator();
+        final var state = new IntrinsicDrawOutcomeBackend.State(2, 2);
+        final var plan = new OutcomePlanner<IntrinsicDrawOutcomeBackend.State>()
+                .evaluate(IntrinsicLibrarySearchOutcome.parse(search, library).orElseThrow().outcome("search", evaluator), state);
+        Assert.assertTrue(plan.complete());
+        Assert.assertEquals(plan.value(), .75 * .64 * PlayerResourceValueEvaluator.evaluateCardDraw(2, 1), 1e-9);
+        final var draw = new AbilityOutcomeDescription("after", "Draw", Map.of("Defined", "You", "NumCards", "1"),
+                List.of(), null, "");
+        final var chain = new AbilityOutcomeDescription(search.path(), search.api(), search.parameters(), List.of(), draw, "");
+        final var backend = new IntrinsicDrawOutcomeBackend(IntrinsicEvaluationSettings.defaults(),
+                IntrinsicReferenceModel.PermanentProfile.absent(), script -> java.util.Optional.empty(), library);
+        final var combined = new OutcomePlanner<IntrinsicDrawOutcomeBackend.State>()
+                .evaluate(new OutcomeDescriptionCompiler<>(backend).compile(chain), state);
+        Assert.assertTrue(combined.complete());
+        Assert.assertEquals(combined.value(), .52 * PlayerResourceValueEvaluator.evaluateCardDraw(2, 1)
+                + .48 * PlayerResourceValueEvaluator.evaluateCardDraw(2, 2), 1e-9);
+        final var opposing = new AbilityOutcomeDescription("opposing", "ChangeZone", Map.of("Origin", "Library",
+                "Destination", "Hand", "ChangeType", "Land", "DefinedPlayer", "Opponent"), List.of(), null, "");
+        final var opponentPlan = new OutcomePlanner<IntrinsicDrawOutcomeBackend.State>()
+                .evaluate(new OutcomeDescriptionCompiler<>(backend).compile(opposing), state);
+        Assert.assertEquals(opponentPlan.value(), -plan.value(), 1e-9);
+        Assert.assertTrue(library.searchCounts("Creature.cmcLEX", 1).isEmpty());
+        Assert.assertEquals(library.searchCounts("Card", 8).orElseThrow().entries().stream()
+                .mapToDouble(entry -> entry.value() * entry.weight()).sum(), 1.5, 1e-9);
+    }
+
+    @Test
+    public void alternativeSearchModesDoNotConsumeTheLibraryTwice() {
+        final var artifact = new AbilityOutcomeDescription("artifact", "ChangeZone",
+                Map.of("Origin", "Library", "Destination", "Hand", "ChangeType", "Artifact"), List.of(), null, "");
+        final var creature = new AbilityOutcomeDescription("creature", "ChangeZone",
+                Map.of("Origin", "Library", "Destination", "Hand", "ChangeType", "Creature"), List.of(), null, "");
+        final var options = List.of(artifact, creature);
+        final var chooseOne = new AbilityOutcomeDescription("one", "Charm", Map.of("CharmNum", "1"), options, null, "");
+        Assert.assertTrue(evaluate(chooseOne, 2).complete());
+        Assert.assertEquals(evaluate(chooseOne, 2).value(), Math.max(evaluate(artifact, 2).value(), evaluate(creature, 2).value()), 1e-9);
+        for (final var repeated : List.of(
+                new AbilityOutcomeDescription("two", "Charm", Map.of("CharmNum", "2"), options, null, ""),
+                new AbilityOutcomeDescription("repeat", "Charm", Map.of("CharmNum", "2", "CanRepeatModes", "True"),
+                        List.of(artifact), null, ""),
+                new AbilityOutcomeDescription("after", "Charm", Map.of(), options, artifact, ""))) {
+            Assert.assertFalse(evaluate(repeated, 2).complete());
+        }
+    }
+
+    @Test
+    public void primaryTypePredicatesShareEligibilityAcrossSearchAndGenericCardSubsets() {
+        final var library = IntrinsicLibraryReference.defaults();
+        Assert.assertEquals(library.hitProbability("Card.nonLand").orElseThrow(), .6, 1e-9);
+        Assert.assertEquals(library.hitProbability("Card.nonCreature+nonLand").orElseThrow(), .3, 1e-9);
+        Assert.assertEquals(library.hitProbability("Card.Creature,Card.Land").orElseThrow(), .7, 1e-9);
+        Assert.assertEquals(library.hitProbability("Artifact,Creature,Artifact").orElseThrow(), .36, 1e-9);
+        Assert.assertEquals(library.hitProbability("Creature.nonCreature").orElseThrow(), 0.0);
+        Assert.assertTrue(library.hitProbability("Creature.Artifact").isEmpty(), "Secondary-type intersections are not known impossible");
+        Assert.assertTrue(library.hitProbability("Card.nonLand+cmcLEX").isEmpty());
+        Assert.assertTrue(library.hitProbability("Card.nonLand+YouOwn").isEmpty());
+        final var search = new AbilityOutcomeDescription("search", "ChangeZone", Map.of("Origin", "Library",
+                "Destination", "Hand", "ChangeType", "Card.nonCreature+nonLand"), List.of(), null, "");
+        Assert.assertTrue(evaluate(search, 2).complete());
+    }
+
+    @Test
     public void unknownLibrarySemanticsStayUnsupportedAndDefinitionSupportIsStructural() {
-        for (final var node : List.of(dig("Creature.cmcLE3", "7", "1"), dig("Card", "99", "All"),
+        for (final var node : List.of(dig("Creature.cmcLEX", "7", "1"), dig("Card", "99", "All"),
                 new AbilityOutcomeDescription("battlefield", "Dig", Map.of("DigNum", "5", "DestinationZone", "Battlefield"),
                         List.of(), null, ""))) {
             Assert.assertFalse(evaluate(node, 2).complete());
         }
         final var evaluator = new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
-        for (final String name : List.of("Commune with Dinosaurs", "Adventurous Impulse")) {
+        for (final String name : List.of("Commune with Dinosaurs", "Adventurous Impulse", "Fabricate", "Demonic Tutor", "Eladamri's Call", "Once Upon a Time")) {
             final var spell = evaluator.evaluateDefinition(FModel.getMagicDb().getCommonCards().getCard(name),
                     CardStateName.Original).get(0);
             Assert.assertEquals(spell.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED, name);

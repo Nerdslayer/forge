@@ -45,6 +45,26 @@ public class PlayerResourceValueEvaluatorTest extends AITest {
     }
 
     @Test
+    public void restrictedChosenDiscardDiscountUsesEligibleAlternativesAndPreservesLegacyMetric() {
+        for (int hand = 0; hand <= 10; hand++) {
+            for (int amount = 0; amount <= 12; amount++) {
+                final int discarded = Math.min(hand, amount);
+                final int expected = discarded == 0 ? 0
+                        : (int) Math.round(PlayerResourceValueEvaluator.evaluateRandomDiscard(hand, discarded) * (.5 + .5 * discarded / hand));
+                Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(hand, amount), expected);
+                Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(hand, amount, hand + 5), expected);
+            }
+        }
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(7, 1, 1),
+                PlayerResourceValueEvaluator.evaluateRandomDiscard(7, 1));
+        Assert.assertTrue(PlayerResourceValueEvaluator.evaluateChosenDiscard(7, 1, 2)
+                > PlayerResourceValueEvaluator.evaluateChosenDiscard(7, 1));
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(7, 3, 1),
+                PlayerResourceValueEvaluator.evaluateRandomDiscard(7, 1));
+        Assert.assertEquals(PlayerResourceValueEvaluator.evaluateChosenDiscard(7, 1, 0), 0);
+    }
+
+    @Test
     public void testManaUsesSharedPermanentEvaluationScale() {
         Assert.assertEquals(PlayerResourceValueEvaluator.evaluateMana(1), 25);
         Assert.assertEquals(PlayerResourceValueEvaluator.evaluateMana(3), 75);

@@ -60,12 +60,18 @@ public final class PlayerResourceValueEvaluator {
      * discard value because there is no useful selection left.
      */
     public static int evaluateChosenDiscard(final int currentHandSize, final int amount) {
+        return evaluateChosenDiscard(currentHandSize, amount, currentHandSize);
+    }
+
+    /** Restricted affected-player choice has fewer eligible alternatives, but the same hand-value curve. */
+    public static int evaluateChosenDiscard(final int currentHandSize, final int amount, final int eligibleCards) {
         final int handSize = Math.max(0, currentHandSize);
-        final int discarded = Math.min(handSize, Math.max(0, amount));
+        final int eligible = Math.min(handSize, Math.max(0, eligibleCards));
+        final int discarded = Math.min(eligible, Math.max(0, amount));
         if (discarded == 0) {
             return 0;
         }
-        final double choiceMultiplier = 0.5 + 0.5 * discarded / handSize;
+        final double choiceMultiplier = 0.5 + 0.5 * discarded / eligible;
         return saturatedRound(evaluateRandomDiscard(handSize, discarded) * choiceMultiplier);
     }
 

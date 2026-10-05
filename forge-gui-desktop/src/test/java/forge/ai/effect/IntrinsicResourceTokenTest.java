@@ -36,6 +36,36 @@ public class IntrinsicResourceTokenTest extends AITest {
     }
 
     @Test
+    public void variableCreatureTokenPrototypesRequireResolvedOverridesAndReuseBodyValue() {
+        final String script = "g_x_x_phyrexian_horror";
+        final var definition = resolver().resolveToken(script).orElseThrow();
+        Assert.assertTrue(definition.requiresPowerOverride());
+        Assert.assertTrue(definition.requiresToughnessOverride());
+        Assert.assertTrue(resolver().apply(script).isEmpty(), "Profile-only clients must not see a fake 0/0");
+        final var state = new State(2, 2);
+        final var utility = new IntrinsicOutcomeEvaluator(SETTINGS);
+        for (final String owner : List.of("You", "Opponent")) {
+            for (final int size : List.of(1, 3, 7)) {
+                final var parameters = new java.util.HashMap<>(token(script, owner, false).parameters());
+                parameters.put("TokenPower", Integer.toString(size));
+                parameters.put("TokenToughness", Integer.toString(size));
+                final var value = evaluate(new AbilityOutcomeDescription("variable", "Token", parameters, List.of(), null, ""), state);
+                Assert.assertTrue(value.complete());
+                final var profile = new PermanentProfile(true, PermanentKind.TOKEN, "You".equals(owner), size, size, Set.of());
+                Assert.assertEquals(value.value(), (double) utility.evaluatePermanent(profile) * ("You".equals(owner) ? 1 : -1), 1e-9);
+                Assert.assertEquals(value.state().creatureCount("You".equals(owner)), state.creatureCount("You".equals(owner)) + 1);
+            }
+        }
+        for (final var overrides : List.of(Map.<String, String>of(), Map.of("TokenPower", "3"),
+                Map.of("TokenToughness", "3"), Map.of("TokenPower", "3", "TokenToughness", "0"),
+                Map.of("TokenPower", "X", "TokenToughness", "X"))) {
+            final var parameters = new java.util.HashMap<>(token(script, "You", false).parameters());
+            parameters.putAll(overrides);
+            Assert.assertFalse(evaluate(new AbilityOutcomeDescription("unknown", "Token", parameters, List.of(), null, ""), state).complete());
+        }
+    }
+
+    @Test
     public void supportedConsumableTokensAreNotCountedAsCreaturesOrImmediatelyConsumed() {
         for (final String script : List.of("c_a_treasure_sac", "c_a_gold_sac", "c_a_clue_draw", "c_a_food_sac")) {
             final var definition = resolver().resolveToken(script).orElseThrow();
@@ -68,6 +98,21 @@ public class IntrinsicResourceTokenTest extends AITest {
                 evaluate(token("c_a_clue_draw", "You", false), initial).value());
         Assert.assertTrue(evaluate(token("c_a_food_sac", "You", false), initial).value()
                 > evaluate(token("c_a_food_sac", "You", false), initial.withLife(true, 20)).value());
+    }
+
+    @Test
+    public void knownResourceOptionsRequestOnlyTheDimensionsTheyRead() {
+        final var backend = new IntrinsicDrawOutcomeBackend(SETTINGS, SOURCE, resolver());
+        for (final String owner : List.of("You", "Opponent")) {
+            final String hand = "You".equals(owner) ? IntrinsicDrawOutcomeBackend.CONTROLLER_HAND : IntrinsicDrawOutcomeBackend.OPPONENT_HAND;
+            final String life = "You".equals(owner) ? IntrinsicDrawOutcomeBackend.CONTROLLER_LIFE : IntrinsicDrawOutcomeBackend.OPPONENT_LIFE;
+            Assert.assertEquals(backend.referenceDimensions(token("c_a_clue_draw", owner, false)), Set.of(hand));
+            Assert.assertEquals(backend.referenceDimensions(token("c_a_food_sac", owner, false)), Set.of(life));
+            Assert.assertTrue(backend.referenceDimensions(token("c_a_treasure_sac", owner, false)).isEmpty());
+        }
+        final IntrinsicTokenResolver.ResourceValue custom = (hand, life, tapped) -> hand + life;
+        Assert.assertTrue(custom.usesHandSize());
+        Assert.assertTrue(custom.usesLifeTotal());
     }
 
     @Test

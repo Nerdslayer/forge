@@ -41,6 +41,11 @@ final class IntrinsicOutcomeQuantityBinder {
         final var prepared = canonicalSourceConditions(outcome, variables, 0);
         final Map<String, IntrinsicQuantityResolver.Binding> bindings = new LinkedHashMap<>();
         collect(prepared, variables, model, source, bindings, 0);
+        if (OutcomeDescriptionMultiplicity.maximumOccurrences(prepared, IntrinsicOutcomeQuantityBinder::mayChangeSourceLoyalty, 1) > 0) {
+            // TODO: Read mutable source loyalty at each instruction's resolution. A cost-paid
+            // snapshot is safe for ordinary token creation, not after a loyalty/zone transition.
+            bindings.entrySet().removeIf(entry -> "Count$CardCounters.LOYALTY".equals(entry.getValue().identity()));
+        }
         List<WeightedValue<Map<String, Integer>>> cases = List.of(new WeightedValue<>(Map.copyOf(existingQuantities), 1));
         final Map<String, IntrinsicQuantityResolver.Binding> identities = new LinkedHashMap<>();
         bindings.values().forEach(binding -> identities.putIfAbsent(binding.identity(), binding));
@@ -65,6 +70,13 @@ final class IntrinsicOutcomeQuantityBinder {
         }
         return cases.stream().map(reference -> new WeightedValue<>(new BoundCase(rewrite(prepared, bindings,
                 reference.value(), 0), reference.value()), reference.weight())).toList();
+    }
+
+    private static boolean mayChangeSourceLoyalty(final AbilityOutcomeDescription node) {
+        return Set.of("Destroy", "DestroyAll", "ChangeZone", "ChangeZoneAll", "Sacrifice", "SacrificeAll",
+                "SetState", "CopyPermanent", "Animate", "AnimateAll").contains(node.api())
+                || Set.of("PutCounter", "PutCounterAll", "RemoveCounter", "RemoveCounterAll", "MultiplyCounter", "MoveCounter")
+                        .contains(node.api()) && "LOYALTY".equalsIgnoreCase(node.parameters().getOrDefault("CounterType", ""));
     }
 
     private static AbilityOutcomeDescription canonicalSourceConditions(final AbilityOutcomeDescription node,

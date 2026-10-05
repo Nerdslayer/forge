@@ -41,6 +41,31 @@ public class IntrinsicCasterRecipientTest extends forge.ai.AITest {
     }
 
     @Test
+    public void eventControllerBindingsCoverTokenOwnersAndSearchPlayersWithoutTouchingObjectFields() {
+        final var parameters = Map.of("Defined", "TriggeredCardController", "TokenOwner", "TriggeredCardController",
+                "DefinedPlayer", "TriggeredCardController", "ValidTgts", "TriggeredCardController",
+                "DamageSource", "TriggeredCard", "TokenScript", "TriggeredCardControllerToken");
+        final var bound = IntrinsicTriggerBindingNormalizer.bindRecipientParameters(parameters, "Opponent",
+                java.util.Set.of("TriggeredCardController"));
+        for (final String field : List.of("Defined", "TokenOwner", "DefinedPlayer")) {
+            Assert.assertEquals(bound.get(field), "Opponent");
+            Assert.assertEquals(parameters.get(field), "TriggeredCardController");
+        }
+        for (final String field : List.of("ValidTgts", "DamageSource", "TokenScript")) {
+            Assert.assertEquals(bound.get(field), parameters.get(field));
+        }
+        final var token = new AbilityOutcomeDescription("token", "Token",
+                Map.of("TokenOwner", "TriggeredCardController", "TokenScript", "g_1_1_saproling"), List.of(), null, "");
+        final var normalized = IntrinsicTriggerBindingNormalizer.normalize(trigger(Map.of("Mode", "ChangesZone",
+                "Origin", "Battlefield", "Destination", "Graveyard", "ValidCard", "Card.Self"), token));
+        Assert.assertEquals(normalized.outcome().parameters().get("TokenOwner"), "You");
+        final var delayed = new AbilityOutcomeDescription("delayed", "DelayedTrigger", token.parameters(), List.of(), token, "");
+        final var nested = IntrinsicTriggerBindingNormalizer.normalize(trigger(Map.of("Mode", "ChangesZone",
+                "Origin", "Battlefield", "Destination", "Graveyard", "ValidCard", "Card.Self"), delayed));
+        Assert.assertSame(nested.outcome(), delayed);
+    }
+
+    @Test
     public void targetedSpellAbilityControllerIsNotItsSourceCardController() {
         for (final String mode : List.of("BecomesTarget", "BecomesTargetOnce")) {
             final var outcome = draw("You & TriggeredSourceSAController", draw("TriggeredSourceController", null));

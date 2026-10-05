@@ -59,6 +59,11 @@ public final class IntrinsicOutcomeEvaluator {
                 recipientIsController);
     }
 
+    public int evaluateChosenDiscard(final int currentHandSize, final int amount, final int eligibleCards,
+            final boolean recipientIsController) {
+        return orient(-PlayerResourceValueEvaluator.evaluateChosenDiscard(currentHandSize, amount, eligibleCards), recipientIsController);
+    }
+
     /** Values immediately usable unrestricted mana. */
     public int evaluateMana(final int amount, final boolean recipientIsController) {
         return orient(PlayerResourceValueEvaluator.evaluateMana(amount), recipientIsController);

@@ -60,14 +60,7 @@ final class IntrinsicSourceProfileResolver {
             }
         }
         if (!characteristic && power.matches("\\d+") && toughness.matches("\\d+")) {
-            final int counters = startingP1p1(state);
-            if (counters > 0) {
-                return Optional.of(List.of(new WeightedValue<>(new SourceCase(withSize(base,
-                        EffectMath.add(base.power(), counters), EffectMath.add(base.toughness(), counters)),
-                        Map.of(IntrinsicDrawOutcomeBackend.SOURCE_P1P1, counters,
-                                IntrinsicDrawOutcomeBackend.SOURCE_INITIAL_P1P1, counters)), 1)));
-            }
-            return Optional.of(List.of(new WeightedValue<>(new SourceCase(base, Map.of()), 1)));
+            return startingP1p1Cases(state, base, model);
         }
         final var powerBinding = IntrinsicQuantityResolver.resolve(power, state.getSVars(), model, base).orElse(null);
         final var toughnessBinding = IntrinsicQuantityResolver.resolve(toughness, state.getSVars(), model, base).orElse(null);
@@ -93,18 +86,40 @@ final class IntrinsicSourceProfileResolver {
         return Optional.of(List.copyOf(profiles));
     }
 
-    private static int startingP1p1(final CardState state) {
-        int count = 0;
+    private static Optional<List<WeightedValue<SourceCase>>> startingP1p1Cases(final CardState state,
+            final PermanentProfile base, final IntrinsicReferenceModel model) {
+        List<WeightedValue<SourceCase>> cases = List.of(new WeightedValue<>(new SourceCase(base, Map.of()), 1));
         for (final var keyword : state.getIntrinsicKeywords()) {
             final String[] parts = keyword.getOriginal().split(":", -1);
-            if (parts.length == 3 && "etbCounter".equals(parts[0]) && "P1P1".equals(parts[1]) && parts[2].matches("\\d+")) {
-                try { count = Math.addExact(count, Integer.parseInt(parts[2])); }
-                catch (final ArithmeticException | NumberFormatException invalid) { return 0; }
+            if (parts.length != 3 || !"etbCounter".equals(parts[0]) || !"P1P1".equals(parts[1])) { continue; }
+            final var binding = IntrinsicQuantityResolver.resolve(parts[2], state.getSVars(), model, base).orElse(null);
+            if (binding == null || !binding.identity().startsWith("literal:") && !"X_PAID".equals(binding.identity())
+                    || binding.values().entries().stream().anyMatch(entry -> entry.value() < 0 || entry.value() > 1024)) {
+                return Optional.empty();
             }
+            final List<WeightedValue<SourceCase>> expanded = new java.util.ArrayList<>();
+            for (final var reference : cases) {
+                final var current = reference.value();
+                final List<WeightedValue<Integer>> amounts = current.quantities().containsKey(binding.identity())
+                        ? List.of(new WeightedValue<>(current.quantities().get(binding.identity()), 1)) : binding.referenceValues().entries();
+                if (expanded.size() + amounts.size() > 256) { return Optional.empty(); }
+                for (final var amount : amounts) {
+                    final int count = EffectMath.add(current.quantities().getOrDefault(IntrinsicDrawOutcomeBackend.SOURCE_INITIAL_P1P1, 0),
+                            binding.at(amount.value()));
+                    final Map<String, Integer> quantities = new java.util.LinkedHashMap<>(current.quantities());
+                    if (!binding.identity().startsWith("literal:")) { quantities.put(binding.identity(), amount.value()); }
+                    quantities.put(IntrinsicDrawOutcomeBackend.SOURCE_P1P1, count);
+                    quantities.put(IntrinsicDrawOutcomeBackend.SOURCE_INITIAL_P1P1, count);
+                    expanded.add(new WeightedValue<>(new SourceCase(withSize(base, EffectMath.add(base.power(), count),
+                            EffectMath.add(base.toughness(), count)), quantities), reference.weight() * amount.weight()));
+                }
+            }
+            cases = expanded;
         }
-        // TODO: Conditional/variable ETB counters, entry replacements and counter-dependent CDAs
-        // need shared initial-state resolution. This is a known starting count, not later growth.
-        return count;
+        // TODO: Conditional entries, other initial quantities/counters, entry replacements,
+        // counter-dependent CDAs and later growth. X paid is shared with all ability quantities;
+        // it is not independently resampled for each counter keyword or outcome amount.
+        return Optional.of(List.copyOf(cases));
     }
 
     private static PermanentProfile withSize(final PermanentProfile base, final int power, final int toughness) {

@@ -109,7 +109,9 @@ public final class IntrinsicQuantityResolver {
         case "Count$CardCounters.P1P1" -> Quantity.P1P1_COUNTERS;
         case "Count$CardCounters.LEVEL" -> Quantity.LEVEL_COUNTERS;
         case "Count$xPaid" -> Quantity.X_PAID;
-        case "Count$YourStartingLife" -> Quantity.STARTING_LIFE;
+        // The generic reference is 1v1 with equal starting life, not a read of either live player.
+        // TODO: Distinct multiplayer/team starting totals and target-specific reference binding.
+        case "Count$YourStartingLife", "TargetedPlayer$StartingLife" -> Quantity.STARTING_LIFE;
         case "Count$Valid Land.YouCtrl" -> Quantity.LANDS_CONTROLLED;
         case "Count$ValidGraveyard Card.YouOwn", "Count$ValidGraveyard Card.YouCtrl" -> Quantity.GRAVEYARD_CARDS;
         case "Count$ValidGraveyard Creature.YouOwn", "Count$ValidGraveyard Creature.YouCtrl" -> Quantity.GRAVEYARD_CREATURES;
@@ -167,6 +169,11 @@ public final class IntrinsicQuantityResolver {
         if ("Count$CardPower".equals(expression) || "Count$CardToughness".equals(expression)) {
             final int value = expression.endsWith("CardPower") ? source.power() : source.toughness();
             return Optional.of(new Binding(expression, WeightedDistribution.of(new WeightedValue<>(value, 1))));
+        }
+        if ("Count$CardCounters.LOYALTY".equals(expression)) {
+            // Definition-level loyalty evaluation supplies the cost-paid source profile.
+            // Outcome sequences that modify it must retain a live read instead (binder guard).
+            return Optional.of(new Binding(expression, WeightedDistribution.of(new WeightedValue<>(source.loyalty(), 1))));
         }
         // TODO: Independent multi-quantity operands, resolution-time mutable quantities, other Forge
         // arithmetic, typed populations, target/event/LKI quantities and correlations with

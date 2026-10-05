@@ -10,7 +10,7 @@ import forge.ai.effect.IntrinsicReferenceModel.PermanentKind;
 import forge.ai.effect.IntrinsicReferenceModel.PermanentProfile;
 
 /** A watched entering or dying creature is distinct from the host and generic removal targets. */
-record IntrinsicWatchedCreatureBinding(PermanentProfile creature) {
+record IntrinsicWatchedCreatureBinding(PermanentProfile creature, boolean battlefieldRecipient) {
     static boolean needed(final AbilityDescription ability, final Map<String, String> variables) {
         return variables.values().stream().anyMatch(IntrinsicWatchedCreatureBinding::quantity)
                 || needsBinding(ability.outcome());
@@ -20,9 +20,30 @@ record IntrinsicWatchedCreatureBinding(PermanentProfile creature) {
         return expression != null && expression.matches("TriggeredCard\\$Card(Power|Toughness)(/.*)?");
     }
 
+    static boolean unresolvedMutableCharacteristics(final AbilityOutcomeDescription node, final Map<String, String> variables) {
+        // TODO: Read normal TriggeredCard characteristics from projected state at resolution.
+        // A frozen snapshot is only safe while the outcome leaves those characteristics intact.
+        return modifiesWatchedCreature(node) && (variables.values().stream().anyMatch(IntrinsicWatchedCreatureBinding::quantity)
+                || readsCharacteristics(node));
+    }
+
+    private static boolean readsCharacteristics(final AbilityOutcomeDescription node) {
+        return node != null && (node.parameters().values().stream().anyMatch(IntrinsicWatchedCreatureBinding::quantity)
+                || node.choices().stream().anyMatch(IntrinsicWatchedCreatureBinding::readsCharacteristics)
+                || readsCharacteristics(node.next()));
+    }
+
+    private static boolean modifiesWatchedCreature(final AbilityOutcomeDescription node) {
+        return node != null && (Set.of("TriggeredCard", "TriggeredCardLKICopy").contains(node.parameters().getOrDefault("Defined", ""))
+                && Set.of("PutCounter", "RemoveCounter", "MultiplyCounter", "Pump", "Debuff").contains(node.api())
+                || node.choices().stream().anyMatch(IntrinsicWatchedCreatureBinding::modifiesWatchedCreature)
+                || modifiesWatchedCreature(node.next()));
+    }
+
     private static boolean needsBinding(final AbilityOutcomeDescription node) {
         return node != null && (node.parameters().values().stream().anyMatch(value ->
-                "TriggeredCard".equals(value) || "TriggeredCardController".equals(value) || quantity(value))
+                "TriggeredCard".equals(value) || "TriggeredCardLKICopy".equals(value)
+                        || "TriggeredCardController".equals(value) || quantity(value))
                 || node.choices().stream().anyMatch(IntrinsicWatchedCreatureBinding::needsBinding)
                 || needsBinding(node.next()));
     }
@@ -61,7 +82,7 @@ record IntrinsicWatchedCreatureBinding(PermanentProfile creature) {
             if (profile.hexproof()) { keywords.add("Hexproof"); }
             if (profile.indestructible()) { keywords.add("Indestructible"); }
             return controllerCases.stream().map(controller -> new WeightedValue<>(new IntrinsicWatchedCreatureBinding(new PermanentProfile(true,
-                    PermanentKind.CREATURE, controller.value() == 0, profile.power(), profile.toughness(), keywords)),
+                    PermanentKind.CREATURE, controller.value() == 0, profile.power(), profile.toughness(), keywords), !death),
                     entry.weight() / total * controller.weight()));
         }).toList());
     }
@@ -74,12 +95,10 @@ record IntrinsicWatchedCreatureBinding(PermanentProfile creature) {
 
     AbilityOutcomeDescription bindOutcome(final AbilityOutcomeDescription node) {
         if (node == null || Set.of("ImmediateTrigger", "DelayedTrigger").contains(node.api())) { return node; }
-        final Map<String, String> parameters = new java.util.LinkedHashMap<>(node.parameters());
+        final Map<String, String> parameters = IntrinsicTriggerBindingNormalizer.bindRecipientParameters(node.parameters(),
+                creature.controlledByAi() ? "You" : "Opponent", Set.of("TriggeredCardController"));
         parameters.replaceAll((name, expression) -> bindQuantity(expression));
-        if ("TriggeredCardController".equals(parameters.get("Defined"))) {
-            parameters.put("Defined", creature.controlledByAi() ? "You" : "Opponent");
-        }
-        // TODO: Batch/event-object targets, mutable resolution-time characteristics, LKI, entry
+        // TODO: Batch/event-object targets, mutable resolution-time characteristics, entry
         // replacements and delayed event scopes require explicit object state, not this snapshot.
         return new AbilityOutcomeDescription(node.path(), node.api(), parameters,
                 node.choices().stream().map(this::bindOutcome).toList(), bindOutcome(node.next()), node.issue());

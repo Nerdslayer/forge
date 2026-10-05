@@ -9,8 +9,7 @@ import java.util.Set;
 final class IntrinsicTypedDiscardTriggerAdapter {
     private static final Set<String> PARAMETERS = Set.of("Mode", "ValidCard", "ValidPlayer",
             "Execute", "TriggerZones", "TriggerDescription", "Secondary");
-    private static final Set<String> TYPES = Set.of("Land", "Creature", "Artifact", "Enchantment",
-            "Planeswalker", "Instant", "Sorcery");
+    private static final Set<String> TYPES = IntrinsicPrimaryTypeFilter.TYPES;
 
     private IntrinsicTypedDiscardTriggerAdapter() { }
 

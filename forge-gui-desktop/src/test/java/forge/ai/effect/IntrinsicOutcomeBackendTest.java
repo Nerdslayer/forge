@@ -105,6 +105,47 @@ public class IntrinsicOutcomeBackendTest {
     }
 
     @Test
+    public void fixedPlayerSetsAffectEachDistinctPlayerRatherThanChoosingOne() {
+        final var initial = new State(1, 5).withLife(true, 5).withLife(false, 15);
+        final var utility = new IntrinsicOutcomeEvaluator();
+        for (final String defined : List.of("Player", "Players", "You & Opponent", "Player & You & Player.Opponent")) {
+            for (final String mode : List.of("Random", "TgtChoose", "Hand")) {
+                final var node = leaf("Discard", Map.of("Defined", defined, "Mode", mode, "NumCards", "3"));
+                final var plan = evaluate(node, initial);
+                Assert.assertTrue(plan.complete());
+                final int requested = "Hand".equals(mode) ? Integer.MAX_VALUE : 3;
+                final double expected = "TgtChoose".equals(mode)
+                        ? utility.evaluateChosenDiscard(1, requested, true) + utility.evaluateChosenDiscard(5, requested, false)
+                        : utility.evaluateRandomDiscard(1, requested, true) + utility.evaluateRandomDiscard(5, requested, false);
+                Assert.assertEquals(plan.value(), expected, 1e-9);
+                Assert.assertEquals(plan.state().controllerHand(), 0);
+                Assert.assertEquals(plan.state().opponentHand(), "Hand".equals(mode) ? 0 : 2);
+                Assert.assertEquals(backend().referenceDimensions(node), Set.of(IntrinsicDrawOutcomeBackend.CONTROLLER_HAND,
+                        IntrinsicDrawOutcomeBackend.OPPONENT_HAND));
+            }
+            for (final String api : List.of("GainLife", "LoseLife")) {
+                final var node = leaf(api, Map.of("Defined", defined, "LifeAmount", "3"));
+                final var plan = evaluate(node, initial);
+                Assert.assertTrue(plan.complete());
+                Assert.assertEquals(plan.value(), (double) ("GainLife".equals(api)
+                        ? utility.evaluateLifeGain(5, 3, true) + utility.evaluateLifeGain(15, 3, false)
+                        : utility.evaluateLifeLoss(5, 3, true) + utility.evaluateLifeLoss(15, 3, false)), 1e-9);
+                Assert.assertEquals(plan.state().controllerLife(), "GainLife".equals(api) ? 8 : 2);
+                Assert.assertEquals(plan.state().opponentLife(), "GainLife".equals(api) ? 18 : 12);
+                Assert.assertEquals(backend().referenceDimensions(node), Set.of(IntrinsicDrawOutcomeBackend.CONTROLLER_LIFE,
+                        IntrinsicDrawOutcomeBackend.OPPONENT_LIFE));
+            }
+        }
+        Assert.assertEquals(evaluate(leaf("Discard", Map.of("Defined", "Opponent", "Mode", "TgtChoose")), initial)
+                .state().opponentHand(), 4, "Omitted NumCards uses Forge's one-card default");
+        final var targeted = evaluate(leaf("Discard", Map.of("ValidTgts", "Player", "Mode", "TgtChoose")), initial);
+        Assert.assertTrue(targeted.complete());
+        Assert.assertEquals(targeted.state().controllerHand(), 1);
+        Assert.assertEquals(targeted.state().opponentHand(), 4);
+        Assert.assertFalse(evaluate(leaf("Discard", Map.of("Defined", "Player.Unknown", "Mode", "TgtChoose")), initial).complete());
+    }
+
+    @Test
     public void fixedCreatureTokensAndPlayerDamageAreEvaluatedWithOwnerPerspective() {
         final IntrinsicDrawOutcomeBackend tokenBackend = new IntrinsicDrawOutcomeBackend(
                 IntrinsicEvaluationSettings.defaults(), SOURCE, script ->
@@ -505,6 +546,62 @@ public class IntrinsicOutcomeBackendTest {
         Assert.assertEquals(backend().referenceDimensions(leaf("Destroy", Map.of("ValidTgts", "Creature"))), Set.of(
                 IntrinsicDrawOutcomeBackend.CONTROLLER_CREATURE,
                 IntrinsicDrawOutcomeBackend.OPPONENT_CREATURE));
+    }
+
+    @Test
+    public void creatureRemovalUsesSharedCharacteristicPredicatesOnOneProfile() {
+        for (final int power : List.of(3, 5)) {
+            for (final boolean flying : List.of(false, true)) {
+                final var opponent = new CreatureProfile(true, power, 4,
+                        flying ? Set.of("Flying") : Set.of(), false, false);
+                final var initial = state(CREATURE, opponent, SOURCE);
+                final var result = evaluate(leaf("Destroy", Map.of("ValidTgts", "Creature.OppCtrl+powerGE4+withFlying")), initial);
+                Assert.assertEquals(result.complete(), power >= 4 && flying);
+                Assert.assertEquals(result.unavailable(), power < 4 || !flying);
+                final var grounded = evaluate(leaf("ChangeZone", Map.of("ValidTgts", "Creature.OppCtrl+withoutFlying",
+                        "Origin", "Battlefield", "Destination", "Exile")), initial);
+                Assert.assertEquals(grounded.complete(), !flying);
+            }
+        }
+        for (final String unknown : List.of("Creature.OppCtrl+powerGEX", "Creature.OppCtrl+withUnknownAbility",
+                "Creature.OppCtrl+counters_GE1_P1P1", "Artifact,Creature.withFlying")) {
+            Assert.assertEquals(evaluate(leaf("Destroy", Map.of("ValidTgts", unknown)), state(CREATURE, CREATURE, SOURCE))
+                    .completeness(), Completeness.UNSUPPORTED, unknown);
+        }
+    }
+
+    @Test
+    public void typedPermanentRemovalFiltersKindsBeforeChoosingTargets() {
+        for (final PermanentKind kind : List.of(PermanentKind.CREATURE, PermanentKind.ARTIFACT,
+                PermanentKind.ENCHANTMENT, PermanentKind.PLANESWALKER, PermanentKind.LAND)) {
+            final var opponent = new PermanentProfile(true, kind, false, 3, 3, Set.of(), false, 4);
+            final var initial = state(CREATURE, CREATURE, SOURCE).withPermanent(false, opponent);
+            final var union = evaluate(leaf("Destroy", Map.of("ValidTgts", "Artifact.OppCtrl,Enchantment.OppCtrl")), initial);
+            final boolean eligible = kind == PermanentKind.ARTIFACT || kind == PermanentKind.ENCHANTMENT;
+            Assert.assertEquals(union.complete(), eligible, kind.name());
+            Assert.assertEquals(union.unavailable(), !eligible, kind.name());
+            if (eligible) {
+                Assert.assertTrue(union.value() > 0);
+                Assert.assertFalse(union.state().opponentPermanent().present());
+            } else {
+                Assert.assertEquals(union.value(), 0.0);
+                Assert.assertEquals(union.state(), initial);
+            }
+            final var nonland = evaluate(leaf("Destroy", Map.of("ValidTgts", "Permanent.nonland+OppCtrl")), initial);
+            Assert.assertEquals(nonland.unavailable(), kind == PermanentKind.LAND);
+        }
+        final var friendly = new PermanentProfile(true, PermanentKind.ARTIFACT, true, 0, 0, Set.of());
+        final var opposing = new PermanentProfile(true, PermanentKind.ENCHANTMENT, false, 0, 0, Set.of("Hexproof"));
+        final var initial = state(CREATURE, CREATURE, SOURCE).withPermanent(true, friendly).withPermanent(false, opposing);
+        final var protectedOpponent = evaluate(leaf("Destroy", Map.of("ValidTgts", "Enchantment.OppCtrl")), initial);
+        Assert.assertTrue(protectedOpponent.unavailable());
+        final var own = evaluate(leaf("Destroy", Map.of("ValidTgts", "Artifact.YouCtrl")), initial);
+        Assert.assertTrue(own.complete());
+        Assert.assertTrue(own.value() < 0);
+        final var unknown = evaluate(leaf("Destroy", Map.of("ValidTgts", "Artifact.withUnknownAbility")), initial);
+        Assert.assertEquals(unknown.completeness(), Completeness.UNSUPPORTED);
+        Assert.assertTrue(IntrinsicPermanentTargetFilter.parse("Artifact.YouCtrl,Enchantment.OppCtrl").isEmpty());
+        Assert.assertTrue(IntrinsicPermanentTargetFilter.parse("Artifact.cmcGE4").isEmpty());
     }
 
     @Test

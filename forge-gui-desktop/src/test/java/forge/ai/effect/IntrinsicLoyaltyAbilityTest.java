@@ -48,6 +48,54 @@ public class IntrinsicLoyaltyAbilityTest extends AITest {
     }
 
     @Test
+    public void loyaltySizedTokensReadTheCostPaidSourceAndKeepUnknownUltimateExplicit() {
+        final var card = forge.model.FModel.getMagicDb().getCommonCards().getCard("Nissa, Ascended Animist");
+        final var values = new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                .evaluateDefinition(card, CardStateName.Original);
+        final var plus = values.stream().filter(value -> value.path().endsWith("ability:0")).findFirst().orElseThrow();
+        Assert.assertTrue(plus.contribution().value() > 0);
+        Assert.assertNotEquals(plus.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.UNSUPPORTED);
+        Assert.assertFalse(plus.contribution().complete(), "Unsupported ultimate remains an unresolved legal alternative");
+        final var source = new IntrinsicReferenceModel.PermanentProfile(true,
+                IntrinsicReferenceModel.PermanentKind.PLANESWALKER, true, 0, 0, java.util.Set.of(), false, 4);
+        Assert.assertEquals(IntrinsicQuantityResolver.resolve("L", java.util.Map.of("L", "Count$CardCounters.LOYALTY"),
+                IntrinsicReferenceModel.defaults(), source).orElseThrow().values().entries().get(0).value(), Integer.valueOf(4));
+        final var token = new AbilityOutcomeDescription("token", "Token", java.util.Map.of("TokenScript", "g_x_x_phyrexian_horror",
+                "TokenPower", "L", "TokenToughness", "L"), List.of(), null, "");
+        final var variables = java.util.Map.of("L", "Count$CardCounters.LOYALTY");
+        final var bound = IntrinsicOutcomeQuantityBinder.bind(token, variables, IntrinsicReferenceModel.defaults(), source).get(0).value();
+        Assert.assertEquals(bound.parameters().get("TokenPower"), "4");
+        Assert.assertEquals(bound.parameters().get("TokenToughness"), "4");
+        final var modify = new AbilityOutcomeDescription("modify", "PutCounter",
+                java.util.Map.of("Defined", "Self", "CounterType", "LOYALTY", "CounterNum", "1"), List.of(), token, "");
+        final var unresolved = IntrinsicOutcomeQuantityBinder.bind(modify, variables,
+                IntrinsicReferenceModel.defaults(), source).get(0).value();
+        Assert.assertEquals(unresolved.next().parameters().get("TokenPower"), "L", "Do not freeze a mutable loyalty read");
+        final var resolver = IntrinsicTokenProfileResolver.forSource(card, IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults());
+        final var backend = new IntrinsicDrawOutcomeBackend(IntrinsicEvaluationSettings.defaults(), source, resolver);
+        final var plan = new OutcomePlanner<IntrinsicDrawOutcomeBackend.State>().evaluate(new OutcomeDescriptionCompiler<>(backend).compile(bound),
+                new IntrinsicDrawOutcomeBackend.State(3, 3).withSourcePermanent(source));
+        Assert.assertTrue(plan.complete());
+        final var profile = new IntrinsicReferenceModel.PermanentProfile(true,
+                IntrinsicReferenceModel.PermanentKind.TOKEN, true, 4, 4, java.util.Set.of());
+        Assert.assertEquals(plan.value(), (double) new IntrinsicOutcomeEvaluator().evaluatePermanent(profile), 1e-9);
+    }
+
+    @Test
+    public void fixedAllPlayerDiscardIsAvailableForSharedLoyaltyBuilding() {
+        final var values = evaluate("AB$ Discard | Cost$ AddCounter<2/LOYALTY> | Planeswalker$ True | Defined$ Player | Mode$ TgtChoose | NumCards$ 0",
+                "AB$ Draw | Cost$ SubCounter<5/LOYALTY> | Planeswalker$ True | NumCards$ 2");
+        Assert.assertTrue(values.stream().allMatch(value -> value.contribution().complete()));
+        Assert.assertTrue(values.get(1).contribution().value() > 0);
+        Assert.assertEquals(values.get(1).currentTurnUses(), 0.0);
+        final var liliana = new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                .evaluateDefinition(forge.model.FModel.getMagicDb().getCommonCards().getCard("Liliana of the Veil"), CardStateName.Original);
+        final var discard = liliana.stream().filter(value -> value.path().endsWith("ability:0")).findFirst().orElseThrow();
+        Assert.assertNotEquals(discard.outcomeStatus(), IntrinsicAbilityEvaluator.SupportStatus.UNSUPPORTED);
+        Assert.assertFalse(discard.contribution().complete(), "Unknown ultimate stays explicit");
+    }
+
+    @Test
     public void costsRequireLiteralSelfLoyaltyWithoutAdditionalResources() {
         Assert.assertEquals(IntrinsicLoyaltyAbilityEvaluator.loyaltyChange("AddCounter<2/LOYALTY>").orElseThrow(), 2);
         Assert.assertEquals(IntrinsicLoyaltyAbilityEvaluator.loyaltyChange("SubCounter<3/LOYALTY>").orElseThrow(), -3);

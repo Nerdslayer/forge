@@ -111,10 +111,18 @@ final class IntrinsicTriggerBindingNormalizer {
     private static AbilityOutcomeDescription bindRecipient(final AbilityOutcomeDescription node,
             final String recipient, final java.util.Set<String> aliases, final int depth) {
         if (node == null || depth > 24 || "ImmediateTrigger".equals(node.api()) || "DelayedTrigger".equals(node.api())) { return node; }
-        final Map<String, String> parameters = new LinkedHashMap<>(node.parameters());
+        final Map<String, String> parameters = bindRecipientParameters(node.parameters(), recipient, aliases);
+        return new AbilityOutcomeDescription(node.path(), node.api(), parameters,
+                node.choices().stream().map(choice -> bindRecipient(choice, recipient, aliases, depth + 1)).toList(),
+                bindRecipient(node.next(), recipient, aliases, depth + 1), node.issue());
+    }
+
+    static Map<String, String> bindRecipientParameters(final Map<String, String> original,
+            final String recipient, final java.util.Set<String> aliases) {
+        final Map<String, String> parameters = new LinkedHashMap<>(original);
         // These are player-recipient fields. Never substitute an event card/ability object,
         // a validity expression, or a scalar just because it contains an alias as a substring.
-        for (final String key : java.util.List.of("Defined", "TokenOwner")) {
+        for (final String key : java.util.List.of("Defined", "TokenOwner", "DefinedPlayer")) {
             final String defined = parameters.get(key);
             if (defined == null) { continue; }
             final String[] parts = defined.split("&", -1);
@@ -125,9 +133,7 @@ final class IntrinsicTriggerBindingNormalizer {
                         .collect(java.util.stream.Collectors.joining(" & ")));
             }
         }
-        return new AbilityOutcomeDescription(node.path(), node.api(), parameters,
-                node.choices().stream().map(choice -> bindRecipient(choice, recipient, aliases, depth + 1)).toList(),
-                bindRecipient(node.next(), recipient, aliases, depth + 1), node.issue());
+        return parameters;
     }
 
     private static AbilityOutcomeDescription bindDamagedPlayer(final AbilityOutcomeDescription node,
@@ -139,20 +145,10 @@ final class IntrinsicTriggerBindingNormalizer {
 
     private static AbilityOutcomeDescription bindController(final AbilityOutcomeDescription node,
             final String recipient, final boolean drawer, final int depth) {
-        if (node == null || depth > 24) { return node; }
-        if ("ImmediateTrigger".equals(node.api()) || "DelayedTrigger".equals(node.api())) {
-            return node; // These introduce a new event scope, not the watched draw's controller.
-        }
-        final Map<String, String> parameters = new LinkedHashMap<>(node.parameters());
-        if ("TriggeredCardController".equals(parameters.get("Defined"))
-                || drawer && "TriggeredPlayer".equals(parameters.get("Defined"))) {
-            parameters.put("Defined", recipient);
-        }
         // TODO: Generic/all-player draws need separate recipient cases; card-type/history filters,
         // ownership-changing draw replacements, watched targets, nested new events and LKI must
         // be bound explicitly, not globally substituted as this reference drawer.
-        return new AbilityOutcomeDescription(node.path(), node.api(), parameters,
-                node.choices().stream().map(choice -> bindController(choice, recipient, drawer, depth + 1)).toList(),
-                bindController(node.next(), recipient, drawer, depth + 1), node.issue());
+        return bindRecipient(node, recipient, drawer ? java.util.Set.of("TriggeredCardController", "TriggeredPlayer")
+                : java.util.Set.of("TriggeredCardController"), depth);
     }
 }

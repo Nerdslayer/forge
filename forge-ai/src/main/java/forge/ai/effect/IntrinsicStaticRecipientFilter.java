@@ -34,6 +34,9 @@ final class IntrinsicStaticRecipientFilter {
         boolean restricted = false;
         final IntrinsicCounterPredicates.Filter counter = IntrinsicCounterPredicates.parse(affected).orElse(null);
         if (counter != null) {
+            // Characteristic-only clients have no counter inventory/reference distribution.
+            // Retain the original predicate for rejection instead of stripping its meaning.
+            if (model == null) { return new Filter(affected, 1); }
             probability = model.quantities().distribution(counter.quantity()).entries().stream()
                     .filter(entry -> counter.matches().test(entry.value())).mapToDouble(WeightedValue::weight).sum();
             normalized = counter.base();

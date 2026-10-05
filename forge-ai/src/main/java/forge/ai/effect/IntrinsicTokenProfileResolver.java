@@ -47,12 +47,22 @@ final class IntrinsicTokenProfileResolver {
                         new IntrinsicTokenResolver.Definition(new PermanentProfile(true, PermanentKind.ARTIFACT,
                                 true, 0, 0, Set.of()), value));
             }
-            if (face.getIntPower() < 0 || face.getIntToughness() < 0) {
+            final boolean variablePower = !face.getPower().matches("-?\\d+");
+            final boolean variableToughness = !face.getToughness().matches("-?\\d+");
+            if ((variablePower || variableToughness) && face.getStaticAbilities().iterator().hasNext()) {
+                // TODO: Explicit P/T overrides do not suppress characteristic-defining statics.
+                // Layered variable-token characteristics require their own projection.
                 return Optional.empty();
             }
-            // TODO: Add creature-token abilities without duplicating body/keyword credit.
+            if (!variablePower && face.getIntPower() < 0 || !variableToughness && face.getIntToughness() < 0) {
+                return Optional.empty();
+            }
+            // Variable prototype dimensions are placeholders, never valued without explicit
+            // overrides. TODO: Characteristic-defining token abilities and negative/zero
+            // toughness/SBA timing, without duplicating body/keyword credit.
             return Optional.of(new IntrinsicTokenResolver.Definition(new PermanentProfile(true, PermanentKind.TOKEN, true,
-                    face.getIntPower(), face.getIntToughness(), keywords(face), false), null));
+                    variablePower ? 0 : face.getIntPower(), variableToughness ? 0 : face.getIntToughness(), keywords(face), false),
+                    null, variablePower, variableToughness));
         } catch (final RuntimeException ignored) {
             return Optional.empty();
         }

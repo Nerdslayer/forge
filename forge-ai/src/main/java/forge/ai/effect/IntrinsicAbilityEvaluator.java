@@ -253,6 +253,11 @@ public final class IntrinsicAbilityEvaluator {
             }
         }
         final AbilityDescription normalized = IntrinsicTriggerBindingNormalizer.normalize(ability);
+        if (watchedCreatureBinding != null
+                && IntrinsicWatchedCreatureBinding.unresolvedMutableCharacteristics(normalized.outcome(), variables)) {
+            return unsupported(ability, "Watched-object characteristic read after projected modification",
+                    SupportStatus.NOT_EVALUATED, SupportStatus.UNSUPPORTED);
+        }
         final boolean selfDeath = normalized.origin() == CardAbilityTraversal.Origin.TRIGGER
                 && IntrinsicSelfDeathTriggerAdapter.bindableSourceEvent(AbilityOptionality.triggerParameters(normalized.parameters()));
         final Map<String, String> boundVariables = watchedCreatureBinding != null ? watchedCreatureBinding.bindVariables(variables)
@@ -548,7 +553,9 @@ public final class IntrinsicAbilityEvaluator {
             final Function<String, Optional<PermanentProfile>> tokenProfileResolver,
             final SupportStatus triggerStatus, final boolean canDecline) {
         final IntrinsicDrawOutcomeBackend backend = new IntrinsicDrawOutcomeBackend(settings,
-                source, tokenProfileResolver, model.library(), watchedCreatureBinding == null ? null : watchedCreatureBinding.creature());
+                source, tokenProfileResolver, model.library(), watchedCreatureBinding == null ? null : watchedCreatureBinding.creature(),
+                model.referenceIntegers("CAST_SPELL_MANA_VALUE",
+                        model.quantities().distribution(IntrinsicReferenceQuantities.Quantity.CAST_SPELL_MANA_VALUE)));
         if (outcomeDescription == null) {
             return unsupported(ability, "missing intrinsic outcome", triggerStatus, SupportStatus.UNSUPPORTED);
         }
@@ -595,7 +602,12 @@ public final class IntrinsicAbilityEvaluator {
                             source.toughness(), source.keywords(), source.basicLand(), source.loyalty()) : source;
             // The departing source is no longer a legal battlefield recipient, but its LKI
             // remains available to the supported source-damage and bound quantity evaluators.
-            final State state = referenceState(reference, battlefieldSource);
+            State state = referenceState(reference, battlefieldSource);
+            if (watchedCreatureBinding != null) {
+                final PermanentProfile watched = watchedCreatureBinding.creature();
+                state = state.withWatchedCreature(new PermanentProfile(watchedCreatureBinding.battlefieldRecipient(),
+                        watched.kind(), watched.controlledByAi(), watched.power(), watched.toughness(), watched.keywords()));
+            }
             final OutcomePlan<State> plan = new OutcomePlanner<State>(settings.maximumOutcomeSearchBudget())
                     .evaluate(outcome, state);
             // Repeated uses share a per-resolution expectation, not projected later hand sizes.

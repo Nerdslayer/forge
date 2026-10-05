@@ -46,25 +46,34 @@ final class IntrinsicConsumableAbilityEvaluator {
                 oneUseOpportunity(action.manaCost(), model, settings, action.tapCost()))).toList();
         // Keep hand/life conditional on the planner's projected state, not an independently
         // pre-averaged token price. A preceding draw can change the value of a Clue option.
-        return Optional.of((hand, life, tapped) -> {
-            double best = 0;
-            for (final Option option : options) {
-                final Action action = option.action();
-                final int benefit = switch (action.api()) {
-                case "Draw" -> utility.evaluateCardDraw(hand, action.amount(), true);
-                case "GainLife" -> utility.evaluateLifeGain(life, action.amount(), true);
-                default -> utility.evaluateMana(action.amount(), true);
-                };
-                // This values an optional resource conversion, not selecting a spell to
-                // cast. Account for the activation's investment, but never a card cost:
-                // the token itself is precisely the option whose creation we are valuing.
-                final int net = Math.max(0, benefit - PlayerResourceValueEvaluator.evaluateManaInvestment(action.manaCost()));
-                best = Math.max(best, net * (tapped ? option.tappedOpportunity() : option.readyOpportunity()));
+        return Optional.of(new IntrinsicTokenResolver.ResourceValue() {
+            @Override
+            public boolean usesHandSize() { return actions.stream().anyMatch(action -> "Draw".equals(action.api())); }
+
+            @Override
+            public boolean usesLifeTotal() { return actions.stream().anyMatch(action -> "GainLife".equals(action.api())); }
+
+            @Override
+            public double evaluate(final int hand, final int life, final boolean tapped) {
+                double best = 0;
+                for (final Option option : options) {
+                    final Action action = option.action();
+                    final int benefit = switch (action.api()) {
+                    case "Draw" -> utility.evaluateCardDraw(hand, action.amount(), true);
+                    case "GainLife" -> utility.evaluateLifeGain(life, action.amount(), true);
+                    default -> utility.evaluateMana(action.amount(), true);
+                    };
+                    // This values an optional resource conversion, not selecting a spell to
+                    // cast. Account for the activation's investment, but never a card cost:
+                    // the token itself is precisely the option whose creation we are valuing.
+                    final int net = Math.max(0, benefit - PlayerResourceValueEvaluator.evaluateManaInvestment(action.manaCost()));
+                    best = Math.max(best, net * (tapped ? option.tappedOpportunity() : option.readyOpportunity()));
+                }
+                // TODO: Blood/Map, extra costs, chains, creature-token abilities, granted text, artifact
+                // synergies and replacement effects require richer reference bindings. Do not silently
+                // value only the supported part of a token with additional unsupported abilities.
+                return best;
             }
-            // TODO: Blood/Map, extra costs, chains, creature-token abilities, granted text, artifact
-            // synergies and replacement effects require richer reference bindings. Do not silently
-            // value only the supported part of a token with additional unsupported abilities.
-            return best;
         });
     }
 
