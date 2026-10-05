@@ -115,11 +115,13 @@ public class CombatValuationFoundationTest extends AITest {
         final Player opponent = game.getPlayers().get(0);
         ai.setTeam(0);
         opponent.setTeam(1);
+        // Tribal entry/death triggers are supported now; Metalcraft is a real engine condition
+        // whose intrinsic occurrence is not yet modeled. Keep these fixtures genuinely unknown.
         final List<String> unknowns = List.of(
                 "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Human.Other+YouCtrl"
-                        + " | TriggerZones$ Battlefield | Execute$ AddCounter",
+                        + " | TriggerZones$ Battlefield | Metalcraft$ True | Execute$ AddCounter",
                 "T:Mode$ ChangesZone | Origin$ Any | Destination$ Graveyard | ValidCard$ Human.Other+YouCtrl"
-                        + " | TriggerZones$ Battlefield | Execute$ AddCounter",
+                        + " | TriggerZones$ Battlefield | Metalcraft$ True | Execute$ AddCounter",
                 "SVar:AddCounter:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1");
         for (final int mana : List.of(0, 1, 4, 6)) {
             final Card friendly = addDefinition(ai, "Unknown Friendly " + mana, Integer.toString(mana), unknowns);
@@ -141,7 +143,7 @@ public class CombatValuationFoundationTest extends AITest {
         opponent.setTeam(1);
         final Card engine = addDefinition(ai, "Unknown Engine", "0", List.of(
                 "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield"
-                        + " | ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ AddCounter",
+                        + " | ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Metalcraft$ True | Execute$ AddCounter",
                 "SVar:AddCounter:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1"));
         final PreparedCombatValuation snapshot = CombatValuationEvaluator.prepare(
                 ValuationContext.forCombat(ai, ValuationDecision.BLOCK, 0, 100));

@@ -135,8 +135,8 @@ public class CreatureValueCalibrationTest extends AITest {
         Assert.assertEquals(printedValue.contextAdjustment(), 0);
     }
 
-    @Test(dataProvider = "grantedAbilityControllers")
-    public void unsupportedTriggerGetsOneManaValueFallbackButVanillaDoesNot(final boolean friendly) {
+    @Test(dataProvider = "entryTriggerCoverage")
+    public void entryTriggersOnlyReceiveFallbackWhenUnsupported(final boolean friendly, final boolean supported) {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(1);
         final Player opponent = game.getPlayers().get(0);
@@ -147,13 +147,16 @@ public class CreatureValueCalibrationTest extends AITest {
         final Card vanilla = addDefinition(CardRules.fromScript(List.of(
                 "Name:Test Vanilla Human", "ManaCost:1 W", "Types:Creature Human Soldier", "PT:1/1")),
                 owner);
+        // Metalcraft remains an unmodeled intrinsic condition; unconditional tribal entry
+        // triggers are supported and must not also receive the unknown-ability allowance.
+        final String condition = supported ? "" : " | Metalcraft$ True";
         final Card engine = addDefinition(CardRules.fromScript(List.of(
                 "Name:Test Human Engine", "ManaCost:1 W", "Types:Creature Human Soldier", "PT:1/1",
                 "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | "
-                        + "ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ TrigCounter",
+                        + "ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ TrigCounter" + condition,
                 "SVar:TrigCounter:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1",
                 "T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | "
-                        + "ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ TrigCounterTwo",
+                        + "ValidCard$ Human.Other+YouCtrl | TriggerZones$ Battlefield | Execute$ TrigCounterTwo" + condition,
                 "SVar:TrigCounterTwo:DB$ PutCounter | CounterType$ P1P1 | CounterNum$ 1")), owner);
         final ValuationContext context = ValuationContext.forRemoval(ai, 100, 100);
 
@@ -162,9 +165,18 @@ public class CreatureValueCalibrationTest extends AITest {
         Assert.assertEquals(UnifiedCardValueEvaluator.evaluatePermanent(vanilla, context)
                 .currentPresenceValue(), 56);
         final CardValueBreakdown engineValue = UnifiedCardValueEvaluator.evaluatePermanent(engine, context);
-        Assert.assertEquals(engineValue.currentPresenceValue(), 66);
-        Assert.assertTrue(engineValue.reasons().stream()
-                .anyMatch(reason -> reason.contains("Unevaluated ability fallback")), engineValue.toString());
+        Assert.assertEquals(engineValue.currentPresenceValue(), supported ? 56 : 66);
+        Assert.assertEquals(engineValue.reasons().stream()
+                .anyMatch(reason -> reason.contains("Unevaluated ability fallback")), !supported, engineValue.toString());
+        if (supported) {
+            final var combat = CombatValuationEvaluator.prepare(ValuationContext.forCombat(ai, ValuationDecision.BLOCK, 0, 100));
+            Assert.assertEquals(combat.permanents().get(engine.getId()).unknownAbilityLossValue(), 0);
+        }
+    }
+
+    @DataProvider(name = "entryTriggerCoverage")
+    public Object[][] entryTriggerCoverage() {
+        return new Object[][] {{false, false}, {true, false}, {false, true}, {true, true}};
     }
 
     @DataProvider(name = "grantedAbilityControllers")
