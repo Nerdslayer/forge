@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import forge.ai.PlayerControllerAi;
+import forge.ai.AiProfileUtil;
+import forge.ai.AiProps;
 import forge.ai.effect.ValuationDecision;
 import forge.game.card.Card;
 import forge.game.combat.Combat;
@@ -54,8 +56,17 @@ public final class CombatBlockPlanner {
             return new Plan(Optional.of(snapshot), Optional.empty(), false,
                     List.of("Shared combat budget exhausted during readiness preparation"), fixed);
         }
-        final CombatBlockSearch.Result result = CombatBlockSearch.searchWithPressure(snapshot, values, budget,
-                readiness.orElseThrow(), fixed);
+        final CombatBlockSearch.Result result;
+        if (AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_BLOCK_DEFENSIVE_FORECAST)) {
+            final var defensive = CombatDefensiveForecastEvaluator.search(snapshot, values, readiness.orElseThrow(), fixed,
+                    budget, CombatDefensiveForecastEvaluator.MAX_ADDITIONAL_NODES,
+                    AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_COMBAT_SURVIVAL_HORIZON)
+                            ? Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.COMBAT_SURVIVAL_EXTRA_TURN_VALUE)) : 0);
+            result = defensive.search();
+            reasons.addAll(defensive.reasons());
+        } else {
+            result = CombatBlockSearch.searchWithPressure(snapshot, values, budget, readiness.orElseThrow(), fixed);
+        }
         reasons.addAll(result.reasons());
         // A bounded search can still apply its best supported legal defense, even when every
         // explored assignment loses. Requiring exhaustive search here falls back instead of

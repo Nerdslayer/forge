@@ -29,11 +29,16 @@ public class CombatBlockPlannerTest extends AITest {
     public void combatRolloutIsEnabledOnlyInMastermind() {
         final Fixture f = fixture();
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
+        Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_BLOCK_DEFENSIVE_FORECAST));
+        Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_SURVIVAL_HORIZON));
+        Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_SURVIVAL_EXTRA_TURN_VALUE), 150);
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
         Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_MAX_NODES), 50000);
         Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_TIMEOUT_MS), 500);
         ((LobbyPlayerAi) f.defender().getLobbyPlayer()).setAiProfile("Default");
         Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));
+        Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_BLOCK_DEFENSIVE_FORECAST));
+        Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_SURVIVAL_HORIZON));
         Assert.assertFalse(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_ATTACK_PLANNING));
         Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_MAX_NODES), 5000);
         Assert.assertEquals(AiProfileUtil.getIntProperty(f.defender(), AiProps.COMBAT_PLANNING_TIMEOUT_MS), 100);
@@ -356,6 +361,44 @@ public class CombatBlockPlannerTest extends AITest {
             Assert.assertTrue(f.combat().getBlockers(small).isEmpty());
             Assert.assertNull(CombatUtil.validateBlocks(f.combat(), f.defender()));
         }
+    }
+
+    @Test
+    public void realFutureReadinessIncludesAnOpposingSummoningSickThreatWithoutReadingHiddenCards() {
+        final Fixture f = fixture();
+        final Card small = creature(f.attacker(), 2, 1, List.of());
+        final Card threat = creature(f.attacker(), 9, 9, List.of("K:Flying"));
+        final Card flyer = creature(f.defender(), 1, 1, List.of("K:Flying"));
+        threat.setSickness(true);
+        f.defender().setLife(16, null);
+        f.combat().addAttacker(small, f.defender());
+        final var plan = CombatBlockPlanner.plan(f.defender(), f.combat(), new CombatSearchBudget(50000));
+        Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+        Assert.assertTrue(plan.reasons().stream().anyMatch(reason -> reason.startsWith("Next-opponent-attack defensive forecast applied")));
+        final var baseline = plan.search().orElseThrow().unblocked().orElseThrow().followUp().orElseThrow();
+        Assert.assertTrue(baseline.defensiveDetails().isPresent());
+        Assert.assertTrue(baseline.defensiveDetails().orElseThrow().opponentAttackers().contains(threat.getId()));
+        Assert.assertTrue(threat.isSick(), "Read-only prediction must not clear live summoning sickness");
+        Assert.assertFalse(flyer.isTapped());
+        Assert.assertTrue(f.combat().getAllBlockers().isEmpty());
+        final var snapshot = plan.snapshot().orElseThrow();
+        final var readiness = PublicCombatReadiness.capture(f.defender(), snapshot);
+        Assert.assertTrue(readiness.canAttackNextTurn().contains(threat.getId()));
+        Assert.assertEquals(readiness.forActivePlayer(f.attacker().getId()).nextActivePlayerId(), f.attacker().getId());
+        final var selected = plan.search().orElseThrow().best().orElseThrow().assignment().blockersByAttacker();
+        Assert.assertTrue(selected.isEmpty(), "Buying another turn against the 9/9 is better than trading for the 2/1");
+        Assert.assertEquals(baseline.survivalOpportunity().orElseThrow().horizon().attacksSurvived(), 2);
+        final var originalValues = CombatPlanningPreparation.values(f.defender(), forge.ai.effect.ValuationDecision.BLOCK,
+                new CombatSearchBudget(50000)).orElseThrow();
+        final var evaluator = new CombatDefensiveForecastEvaluator(snapshot, originalValues, readiness, new CombatSearchBudget(50000), 150);
+        final var trade = evaluator.evaluate(CombatOutcomePredictor.predict(snapshot,
+                new CombatAssignment(snapshot.attackersToDefenders(), java.util.Map.of(small.getId(), List.of(flyer.getId())))));
+        Assert.assertTrue(trade.usable(), trade.reasons().toString());
+        Assert.assertEquals(trade.survivalOpportunity().orElseThrow().horizon().attacksSurvived(), 1);
+        Assert.assertEquals(CombatSafetyEvaluator.survivalDelta(trade, baseline), 150);
+        Assert.assertEquals(CombatSafetyEvaluator.discountedFollowUpValue(150), 105);
+        Assert.assertTrue(CombatBlockPlanner.tryDeclare(f.defender(), f.defender(), f.combat(), new CombatSearchBudget(50000)));
+        Assert.assertEquals(f.combat().getBlockers(small).stream().map(Card::getId).toList(), selected.getOrDefault(small.getId(), List.of()));
     }
 
     private Fixture fixture() {

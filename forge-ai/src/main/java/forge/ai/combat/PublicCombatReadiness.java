@@ -31,6 +31,12 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
         this(nextActivePlayerId, canAttackNextTurn, blockPairsNextTurn, unsupportedReasons, List.of());
     }
 
+    /** Ordinary alternating two-player turns only. Eligibility is frozen for both controllers;
+     * projected tapping and casualties are filtered by the turn-transition builder. */
+    PublicCombatReadiness forActivePlayer(final int playerId) {
+        return new PublicCombatReadiness(playerId, canAttackNextTurn, blockPairsNextTurn, unsupportedReasons, ignoredEffects);
+    }
+
     public static PublicCombatReadiness capture(final Player observer, final PublicCombatSnapshot snapshot) {
         return captureComplete(observer, snapshot, () -> true);
     }

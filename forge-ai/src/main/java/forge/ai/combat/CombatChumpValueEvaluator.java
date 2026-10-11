@@ -57,7 +57,7 @@ final class CombatChumpValueEvaluator {
         if (savedDamage <= 0 || savedDamage >= after) { return new Evaluation(0, true); }
         // Anchor at the actual ending life so lifelink/life-gain benefits are not also discounted.
         final int savedLifeValue = PlayerResourceValueEvaluator.evaluateLifeChange((int) (after - savedDamage), after);
-        final int discount = (int) Math.round(savedLifeValue * 0.5);
+        final int discount = (int) Math.round(savedLifeValue * 0.3);
         return new Evaluation(snapshot.observingPlayerId() == defender ? -discount : discount, true);
     }
 

@@ -60,6 +60,15 @@ public final class CombatSearchBudget {
 
     public int used() { return usage.used; }
 
+    /** Optional work shares accounting and uses at most half of the caller's remaining time. */
+    public CombatSearchBudget childAllowance(final int additionalNodes) {
+        if (additionalNodes < 0) { throw new IllegalArgumentException("Nonnegative child allowance required"); }
+        final long elapsed = Math.max(0, usage.clock.getAsLong() - usage.started);
+        final long childDeadline = elapsed >= emergencyNanos ? emergencyNanos
+                : elapsed + (emergencyNanos - elapsed) / 2;
+        return new CombatSearchBudget(usage.used + Math.min(remaining(), additionalNodes), childDeadline, usage);
+    }
+
     public int remaining() {
         return usage.clock.getAsLong() - usage.started >= emergencyNanos ? 0 : Math.max(0, limit - usage.used);
     }

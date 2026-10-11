@@ -14,6 +14,17 @@ import java.util.Set;
 public final class CombatBlockSearch {
     private CombatBlockSearch() { }
 
+    record LeafAdjustment(int value, boolean complete, List<String> reasons) {
+        LeafAdjustment { reasons = List.copyOf(reasons); }
+    }
+
+    static Result searchWithLeafAdjustment(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget, final java.util.function.Function<CombatProjection, LeafAdjustment> adjustment) {
+        final Search search = new Search(snapshot, values, budget, 16, null, null);
+        search.leafAdjustment = adjustment;
+        return search.run();
+    }
+
     public record Candidate(CombatAssignment assignment, CombatProjection projection,
             CombatTransitionValueEvaluator.Score score, Optional<CombatDamagePlan> damagePlan,
             int pressureValue, int exchangePreference, Optional<CombatSafetyEvaluator.FollowUp> followUp, int chumpLifeAdjustment) {
@@ -59,6 +70,39 @@ public final class CombatBlockSearch {
         return new Search(snapshot, values, budget, 16, readiness, null, fixedBlocks).run();
     }
 
+    /** Optional two-future-combat policy. The caller discards the whole result if coverage fails. */
+    static Result searchWithDefensiveForecast(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget, final PublicCombatReadiness readiness,
+            final Map<Integer, List<Integer>> fixedBlocks,
+            final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> forecast) {
+        if (snapshot.observingPlayerId() != snapshot.defendingPlayerId() || readiness == null || forecast == null) {
+            throw new IllegalArgumentException("Defensive forecast requires an observing defender and readiness");
+        }
+        final Search search = new Search(snapshot, values, budget, 16, readiness, null, fixedBlocks);
+        search.defensiveEstimator = forecast;
+        return search.run();
+    }
+
+    /** Combined future increments are discounted once by the outer blocking decision, not here. */
+    static Result searchWithUndiscountedReply(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget,
+            final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> forecast) {
+        return searchWithUndiscountedReply(snapshot, values, budget, forecast, null);
+    }
+
+    static Result searchWithUndiscountedReply(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget,
+            final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> forecast,
+            final CombatSurvivalHorizonEvaluator.Opportunity reference) {
+        if (snapshot.observingPlayerId() != snapshot.attackingPlayerId() || forecast == null) {
+            throw new IllegalArgumentException("Combined continuation requires an observing attacker");
+        }
+        final Search search = new Search(snapshot, values, budget, 16, null, forecast);
+        search.undiscountedReply = true;
+        search.replyOpportunityReference = reference;
+        return search.run();
+    }
+
     /** Adversarial blocks consider reply safety before nonterminal utility, with no recursive policy. */
     public static Result searchWithReplySafety(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
             final CombatSearchBudget budget, final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> replyEstimator) {
@@ -89,6 +133,10 @@ public final class CombatBlockSearch {
         private final Set<String> reasons = new LinkedHashSet<>();
         private final Comparator<Candidate> ordering;
         private final PublicCombatReadiness readiness;
+        private java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> defensiveEstimator;
+        private boolean undiscountedReply;
+        private CombatSurvivalHorizonEvaluator.Opportunity replyOpportunityReference;
+        private java.util.function.Function<CombatProjection, LeafAdjustment> leafAdjustment;
         private final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> replyEstimator;
         private final java.util.function.Function<CombatProjection, CombatTwoTurnPressureEvaluator.Forecast> continuationEstimator;
         private final Map<CombatProjection, CombatTwoTurnPressureEvaluator.Forecast> continuations = new HashMap<>();
@@ -419,18 +467,34 @@ public final class CombatBlockSearch {
         }
 
         private int pressure(final CombatProjection projection) {
+            if (leafAdjustment != null) {
+                final var adjustment = leafAdjustment.apply(projection);
+                domainComplete &= adjustment.complete();
+                reasons.addAll(adjustment.reasons());
+                return adjustment.complete() ? adjustment.value() : 0;
+            }
             if (replyEstimator != null) {
                 final var reply = estimateReply(projection);
-                // For attack responses, compare immediate + half-weight ordinary reply utility. The
+                if (reply == null || !reply.usable()) { return 0; }
+                // For attack responses, compare immediate + 70%-weight ordinary reply utility. The
                 // no-attack constant is subtracted once by the outer declaration search.
-                return reply == null || !reply.usable() ? 0
-                        : CombatOutcomePredictor.add(CombatSafetyEvaluator.discountedFollowUpValue(reply.nonterminalUtility()),
+                final var opportunity = reply.survivalOpportunity().orElse(null);
+                if (replyOpportunityReference == null) {
+                    replyOpportunityReference = opportunity;
+                }
+                final int opportunityValue = opportunity == null || replyOpportunityReference == null ? 0
+                        : opportunity.delta(replyOpportunityReference);
+                return CombatOutcomePredictor.add(undiscountedReply
+                                ? CombatOutcomePredictor.add(reply.nonterminalUtility(), opportunityValue)
+                                : CombatSafetyEvaluator.discountedFollowUpValue(reply.nonterminalUtility()),
                                 continuationPressure(projection));
             }
             if (readiness != null && projection.terminal() == CombatProjection.Terminal.NONE
                     && (!baselineEvaluated || pressureEnabled)) {
                 final CombatSafetyEvaluator.FollowUp forecast = forecasts.computeIfAbsent(projection,
-                        state -> CombatSafetyEvaluator.nextAttack(snapshot, state, readiness, values, budget));
+                        state -> defensiveEstimator == null
+                                ? CombatSafetyEvaluator.nextAttack(snapshot, state, readiness, values, budget)
+                                : defensiveEstimator.apply(state));
                 reasons.addAll(forecast.reasons());
                 if (!forecast.usable()) {
                     // Do not compare a complete baseline with an optimistic partial reply.

@@ -8,6 +8,25 @@ import org.testng.annotations.Test;
 /** Shared node/time caps and validation headroom, independent of machine speed. */
 public class CombatSearchBudgetTest {
     @Test
+    public void optionalChildSharesWorkAndLeavesRecoveryAndValidationCapacity() {
+        final AtomicLong clock = new AtomicLong();
+        final var total = new CombatSearchBudget(100, 100, clock::get);
+        final var planning = total.planningAllowance();
+        final var optional = planning.childAllowance(20);
+        for (int index = 0; index < 20; index++) { Assert.assertTrue(optional.tryConsume()); }
+        Assert.assertFalse(optional.tryConsume());
+        Assert.assertEquals(planning.used(), 20);
+        Assert.assertEquals(planning.remaining(), 60);
+        Assert.assertEquals(total.remaining(), 80);
+        final var nextChild = planning.childAllowance(20);
+        clock.set(40_000_000);
+        Assert.assertFalse(nextChild.tryConsume());
+        Assert.assertTrue(planning.tryConsume(), "Parent can still recover the original policy before validation");
+        clock.set(80_000_000);
+        Assert.assertFalse(planning.tryConsume());
+        Assert.assertTrue(total.tryConsume());
+    }
+    @Test
     public void searchExhaustionLeavesReservedNodesWithoutResettingAccounting() {
         final AtomicLong clock = new AtomicLong();
         final var total = new CombatSearchBudget(10, 100, clock::get);

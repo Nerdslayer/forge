@@ -51,16 +51,16 @@ public class CombatSafetyEvaluatorTest {
     public void pressureDiscountsOrdinaryValueButPreservesLethalAndIncompleteForecastFallback() {
         final var baseline = new CombatSafetyEvaluator.FollowUp(true, true, 0, false, List.of(), List.of());
         final var better = new CombatSafetyEvaluator.FollowUp(true, true, 10000, true, List.of(), List.of());
-        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(baseline, better), 5500);
-        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(better, baseline), -5500);
+        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(baseline, better), 7500);
+        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(better, baseline), -7500);
         final var ordinary = new CombatSafetyEvaluator.FollowUp(true, true, 100, false, List.of(), List.of());
-        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(baseline, ordinary), 50);
-        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(ordinary, baseline), -50);
+        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(baseline, ordinary), 70);
+        Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(ordinary, baseline), -70);
         final var lethalOnly = new CombatSafetyEvaluator.FollowUp(true, true, 0, true, List.of(), List.of());
         Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(baseline, lethalOnly), 500);
         Assert.assertEquals(CombatSafetyEvaluator.incrementalPressure(lethalOnly, baseline), -500);
-        Assert.assertEquals(CombatSafetyEvaluator.discountedFollowUpValue(10), 5);
-        Assert.assertEquals(CombatSafetyEvaluator.discountedFollowUpValue(-10), -5);
+        Assert.assertEquals(CombatSafetyEvaluator.discountedFollowUpValue(10), 7);
+        Assert.assertEquals(CombatSafetyEvaluator.discountedFollowUpValue(-10), -7);
         final PublicCombatSnapshot snapshot = fiveCreatures(false, 20);
         final var result = CombatBlockSearch.searchWithPressure(snapshot, values(snapshot, List.of()),
                 new CombatSearchBudget(3), readiness(snapshot));

@@ -51,6 +51,9 @@ public enum AiProps {
     ENABLE_RANDOM_FAVORABLE_TRADES_ON_BLOCK ("true"),
     // Rollout gates: execution bridge exists; new declaration consumers are still being built.
     ENABLE_COMBAT_BLOCK_PLANNING ("false"),
+    ENABLE_BLOCK_DEFENSIVE_FORECAST ("false"),
+    ENABLE_COMBAT_SURVIVAL_HORIZON ("false"),
+    COMBAT_SURVIVAL_EXTRA_TURN_VALUE ("150"),
     ENABLE_COMBAT_ATTACK_PLANNING ("false"),
     COMBAT_PLANNING_MAX_NODES ("5000"),
     COMBAT_PLANNING_TIMEOUT_MS ("100"),

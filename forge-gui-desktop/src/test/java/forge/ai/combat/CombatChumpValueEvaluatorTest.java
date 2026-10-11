@@ -20,13 +20,13 @@ public class CombatChumpValueEvaluatorTest {
             final var projection = CombatOutcomePredictor.predict(board, assignment);
             final var adjustment = new CombatChumpValueEvaluator(board, new CombatSearchBudget(100))
                     .evaluate(assignment, projection, Map.of());
-            final int half = (int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(12, 20) * 0.5);
+            final int discount = (int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(12, 20) * 0.3);
             Assert.assertTrue(adjustment.complete());
-            Assert.assertEquals(adjustment.adjustment(), observer == 2 ? -half : half);
+            Assert.assertEquals(adjustment.adjustment(), observer == 2 ? -discount : discount);
             final var selected = CombatBlockSearch.search(board, values(board), new CombatSearchBudget(1000));
             Assert.assertTrue(selected.outcomeDomainComplete());
-            Assert.assertTrue(selected.best().orElseThrow().assignment().blockersByAttacker().isEmpty(),
-                    "100-point blocker is worth more than half of the saved life, but less than its full value");
+            Assert.assertTrue(selected.best().orElseThrow().assignment().blockersByAttacker().containsKey(10),
+                    "100-point blocker is worth less than 70% of the saved life");
         }
     }
 
@@ -58,7 +58,7 @@ public class CombatChumpValueEvaluatorTest {
         Assert.assertEquals(projection.playerLifeAfter().get(2).intValue(), 14, "Seven trample damage and one lifelink life");
         final var adjustment = new CombatChumpValueEvaluator(board, new CombatSearchBudget(100))
                 .evaluate(assignment, projection, Map.of());
-        Assert.assertEquals(adjustment.adjustment(), -(int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(13, 14) * 0.5));
+        Assert.assertEquals(adjustment.adjustment(), -(int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(13, 14) * 0.3));
         Assert.assertTrue(adjustment.complete());
     }
 
@@ -85,7 +85,7 @@ public class CombatChumpValueEvaluatorTest {
         final var adjustment = new CombatChumpValueEvaluator(board, new CombatSearchBudget(100))
                 .evaluate(assignment, projection, Map.of());
         Assert.assertTrue(adjustment.complete());
-        Assert.assertEquals(adjustment.adjustment(), -(int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(12, 20) * 0.5));
+        Assert.assertEquals(adjustment.adjustment(), -(int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(12, 20) * 0.3));
     }
 
     @Test
@@ -104,7 +104,7 @@ public class CombatChumpValueEvaluatorTest {
         final var adjustment = new CombatChumpValueEvaluator(board, new CombatSearchBudget(100))
                 .evaluate(candidate.assignment(), candidate.projection(), Map.of(), candidate.damagePlan());
         Assert.assertTrue(adjustment.complete());
-        Assert.assertEquals(adjustment.adjustment(), -(int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(12, 20) * 0.5));
+        Assert.assertEquals(adjustment.adjustment(), -(int) Math.round(PlayerResourceValueEvaluator.evaluateLifeChange(12, 20) * 0.3));
     }
 
     private static PublicCombatSnapshot board(final int observer, final int life,

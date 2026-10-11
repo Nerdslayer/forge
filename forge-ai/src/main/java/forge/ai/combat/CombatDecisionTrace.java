@@ -86,7 +86,8 @@ public final class CombatDecisionTrace {
             text.append("\nFixed blocks: ").append(plan.fixedBlocks());
             search.unblocked().ifPresent(candidate -> text.append("\nLegal block baseline: ").append(candidate.assignment().blockersByAttacker())
                     .append(", value=").append(candidate.score().total())
-                    .append(", terminal=").append(candidate.projection().terminal()));
+                    .append(", terminal=").append(candidate.projection().terminal())
+                    .append(", public follow-up=").append(candidate.followUp()));
             search.best().ifPresent(candidate -> text.append("\nChosen blocks: ").append(candidate.assignment().blockersByAttacker())
                     .append("\nLoss components: ").append(candidate.score().permanentLoss())
                     .append("\nLife utility: ").append(candidate.score().lifeUtility())
@@ -100,6 +101,17 @@ public final class CombatDecisionTrace {
                     .append(", equal-exchange preference=").append(candidate.exchangePreference())
                     .append(", nonlethal chump life adjustment=").append(candidate.chumpLifeAdjustment())
                     .append(", public follow-up=").append(candidate.followUp()));
+            if (search.unblocked().isPresent() && search.best().isPresent()) {
+                final var baseline = search.unblocked().orElseThrow().followUp();
+                final var selected = search.best().orElseThrow().followUp();
+                if (baseline.isPresent() && selected.isPresent() && selected.orElseThrow().survivalOpportunity().isPresent()) {
+                    final int raw = CombatSafetyEvaluator.survivalDelta(baseline.orElseThrow(), selected.orElseThrow());
+                    final long ordinary = (long) selected.orElseThrow().nonterminalUtility() - baseline.orElseThrow().nonterminalUtility();
+                    text.append("\nSurvival opportunity delta: raw=").append(raw)
+                            .append(", weighted contribution=").append(CombatSafetyEvaluator.discountedFollowUpValue(ordinary + raw)
+                                    - CombatSafetyEvaluator.discountedFollowUpValue(ordinary));
+                }
+            }
         });
         Logger.info(text.toString());
     }
