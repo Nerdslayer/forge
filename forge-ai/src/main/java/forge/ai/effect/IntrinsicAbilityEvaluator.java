@@ -434,13 +434,19 @@ public final class IntrinsicAbilityEvaluator {
             return unsupported(ability, "self attack/tap-as-attacker requires a creature reference source",
                     SupportStatus.UNSUPPORTED, outcomeStatusBeforeEvaluation(ability));
         }
+        final boolean unconditional = ability.parameters().keySet().stream().noneMatch(key -> Set.of(
+                "OptionalDecider", "Condition", "CheckSVar", "IsPresent", "LifeTotal").contains(key));
+        final AbilityOccurrenceMode occurrenceMode = unconditional
+                && SourceDeparturePolicy.necessarilyDeparts(ability.outcome(),
+                        source.keywords().stream().anyMatch("Indestructible"::equalsIgnoreCase))
+                ? AbilityOccurrenceMode.SINGLE_OCCURRENCE : AbilityOccurrenceMode.REPEATABLE;
         final double occurrences;
         if (schedule != null) {
             final IntrinsicScheduledTrigger trigger = new IntrinsicScheduledTrigger(
                     IntrinsicScheduledTrigger.Schedule.valueOf(schedule.timing().name()),
                     IntrinsicScheduledTrigger.PlayerScope.valueOf(schedule.playerScope().name()));
             occurrences = IntrinsicScheduledTriggerEstimator
-                    .estimate(trigger, source, model, settings, timing).expectedOccurrences();
+                    .estimate(trigger, source, model, settings, timing, occurrenceMode).expectedOccurrences();
         } else {
             final IntrinsicEventTrigger trigger = IntrinsicEventTriggerAdapter
                     .describe(triggerParameters, model, source).orElse(null);
@@ -449,7 +455,7 @@ public final class IntrinsicAbilityEvaluator {
                         outcomeStatusBeforeEvaluation(ability));
             }
             final IntrinsicEventTriggerEstimate estimate = IntrinsicEventTriggerEstimator
-                    .estimate(trigger, source, model, settings, timing);
+                    .estimate(trigger, source, model, settings, timing, occurrenceMode);
             if (!estimate.supported()) {
                 return unsupported(ability, estimate.reason(), SupportStatus.UNSUPPORTED,
                         outcomeStatusBeforeEvaluation(ability));

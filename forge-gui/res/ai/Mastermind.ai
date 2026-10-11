@@ -334,6 +334,8 @@ EFFECT_SYNERGY_WEIGHT=100
 ENABLE_INTRINSIC_REMOVAL_ANALYSIS=true
 # Percentage applied to admitted intrinsic future potential, separately from relationships.
 INTRINSIC_REMOVAL_WEIGHT=100
+# Lifetime usefulness reduction for unconditional "when targeted, sacrifice this" drawbacks.
+TARGETING_FRAGILITY_DISCOUNT_PERCENT=30
 # Use full-hand card valuation when a targeted discard effect exposes the opponent's hand.
 ENABLE_TARGETED_DISCARD_ANALYSIS=true
 # Use known-card valuation only to break exact ties in the existing own-discard heuristic.

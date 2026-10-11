@@ -27,6 +27,36 @@ public class CombatAttackPlannerTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent, Combat combat) { }
 
     @Test
+    public void selfSacrificeDrawbackDoesNotInviteAStatReducedAttackerIntoAFreeKill() {
+        final Fixture f = fixture();
+        f.ai().setLife(7, null);
+        f.opponent().setLife(31, null);
+        final Card fragile = addCard("Phantom Beast", f.ai());
+        fragile.setSickness(false);
+        final Card flyer = creature(f.ai(), 6, 7, List.of("K:Flying"));
+        final Card reach = creature(f.opponent(), 3, 5, List.of("K:Reach"));
+        final Card large = creature(f.opponent(), 3, 7, List.of(
+                "S:Mode$ Continuous | Affected$ Creature.OppCtrl | AddPower$ -2 | AddToughness$ -2"));
+        f.game().getAction().checkStaticAbilities();
+        Assert.assertEquals(fragile.getNetPower(), 2);
+        Assert.assertEquals(fragile.getNetToughness(), 3);
+        Assert.assertEquals(flyer.getNetPower(), 4);
+        final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(1000000));
+        Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+        Assert.assertTrue(plan.search().orElseThrow().best().orElseThrow().attackers().isEmpty(),
+                "Both attacks can be blocked without losing a blocker or taking damage");
+        final var snapshot = plan.snapshot().orElseThrow();
+        final var values = forge.ai.effect.CombatValuationEvaluator.prepare(
+                forge.ai.effect.ValuationContext.forCombat(f.ai(), forge.ai.effect.ValuationDecision.ATTACK, 0, 100));
+        final var attack = CombatAttackCandidates.select(snapshot, List.of(fragile.getId(), flyer.getId()));
+        final var response = CombatBlockSearch.search(attack, values, new CombatSearchBudget(100000));
+        Assert.assertTrue(response.searchExhaustive(), response.reasons().toString());
+        Assert.assertEquals(response.best().orElseThrow().assignment().blockersByAttacker(),
+                java.util.Map.of(fragile.getId(), List.of(large.getId()), flyer.getId(), List.of(reach.getId())));
+        Assert.assertTrue(response.best().orElseThrow().score().total() < 0);
+    }
+
+    @Test
     public void menaceAttackIgnoresAnOtherwiseProfitableButIllegalSoloBlock() {
         final Fixture f = fixture();
         final Card attacker = creature(f.ai(), 2, 2, List.of("K:Menace"));

@@ -47,6 +47,12 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         return evaluateCreature(c, true, true);
     }
     public int evaluateCreature(final Card c, final boolean considerPT, final boolean considerCMC) {
+        return evaluateCreature(c, considerPT, considerCMC, true);
+    }
+
+    /** Allows composed lifetime valuation to replace, rather than stack with, the old penalty. */
+    public int evaluateCreature(final Card c, final boolean considerPT, final boolean considerCMC,
+            final boolean includeTargetingDrawback) {
         //Card shouldn't be null and AI shouldn't crash since this is just score
         if (c == null)
             return 0;
@@ -262,7 +268,7 @@ public class CreatureEvaluator implements Function<Card, Integer> {
         if (c.hasSVar("DestroyWhenDamaged")) {
             value -= subValue((toughness - 1) * 9, "dies-to-dmg");
         }
-        if (c.getSVar("Targeting").equals("Dies")) {
+        if (includeTargetingDrawback && c.getSVar("Targeting").equals("Dies")) {
             value -= subValue(25, "dies");
         }
 

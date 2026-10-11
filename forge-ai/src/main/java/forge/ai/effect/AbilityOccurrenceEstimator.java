@@ -14,6 +14,12 @@ final class AbilityOccurrenceEstimator {
     private AbilityOccurrenceEstimator() {
     }
 
+    /** Convert an event rate to the probability of at least one event (Poisson approximation).
+     * Counts must not simply be clamped to one: that would make a mean of one certain. */
+    static double atLeastOneProbability(final double eventRate) {
+        return -Math.expm1(-nonNegative(eventRate));
+    }
+
     static AbilityOccurrenceEstimate estimateTriggered(final Card source, final Trigger trigger,
             final AbilityOccurrenceContext context) {
         if (context == null) {

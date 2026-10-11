@@ -249,10 +249,18 @@ public final class UnifiedCardValueEvaluator {
             reasons.add("Unevaluated ability fallback: mana value x 5 = "
                     + unevaluatedAbilityBonus);
         }
+        final int discount = TargetingFragilityEvaluator.discountPercent(ai, candidate);
+        int presence = add(discount > 0 ? UnifiedPermanentValueEvaluator.evaluateWithoutTargetingDrawback(ai, candidate)
+                : UnifiedPermanentValueEvaluator.evaluate(ai, candidate), unevaluatedAbilityBonus);
+        if (discount > 0) {
+            presence = TargetingFragilityEvaluator.discountBenefit(presence, discount);
+            // PermanentAbilityValueEvaluator already discounts beneficial future contributions
+            // individually, leaving drawbacks and current relationship benefits unchanged.
+            reasons.add("Targeting fragility: " + discount + "% lifetime usefulness discount (once)");
+        }
         final ValuationCompleteness completeness = weightedFuture == 0 && reasons.isEmpty()
                 ? ValuationCompleteness.COMPLETE : ValuationCompleteness.PARTIAL;
-        return new CardValueBreakdown(add(UnifiedPermanentValueEvaluator.evaluate(ai, candidate),
-                unevaluatedAbilityBonus), weightedFuture,
+        return new CardValueBreakdown(presence, weightedFuture,
                 0, 0, 0, completeness, reasons);
     }
 

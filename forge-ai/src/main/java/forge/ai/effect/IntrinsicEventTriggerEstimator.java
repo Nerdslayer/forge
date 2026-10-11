@@ -12,8 +12,15 @@ public final class IntrinsicEventTriggerEstimator {
     public static IntrinsicEventTriggerEstimate estimate(final IntrinsicEventTrigger trigger,
             final PermanentProfile source, final IntrinsicReferenceModel model,
             final IntrinsicEvaluationSettings settings, final EntryTiming entryTiming) {
+        return estimate(trigger, source, model, settings, entryTiming, AbilityOccurrenceMode.REPEATABLE);
+    }
+
+    public static IntrinsicEventTriggerEstimate estimate(final IntrinsicEventTrigger trigger,
+            final PermanentProfile source, final IntrinsicReferenceModel model,
+            final IntrinsicEvaluationSettings settings, final EntryTiming entryTiming,
+            final AbilityOccurrenceMode occurrenceMode) {
         if (trigger == null || source == null || model == null || settings == null
-                || entryTiming == null) {
+                || entryTiming == null || occurrenceMode == null) {
             throw new IllegalArgumentException("Event trigger inputs are required");
         }
         final WeightedDistribution<Double> distribution = model.eventRates(trigger.eventType());
@@ -29,6 +36,14 @@ public final class IntrinsicEventTriggerEstimator {
         final List<IntrinsicEventTriggerEstimate.Opportunity> opportunities = new ArrayList<>();
         final int maximum = settings.maximumExpectedOccurrencesPerAbility();
         double expected = 0;
+        double noEarlierEvent = 1;
+        // Convert each reference rate before averaging; E[P(event)] != P(E[event count]).
+        final double oneEventProbability = occurrenceMode != AbilityOccurrenceMode.SINGLE_OCCURRENCE ? 0
+                : distribution.entries().stream().mapToDouble(entry ->
+                trigger.minimumEventAmount() != null && entry.value() < trigger.minimumEventAmount() ? 0
+                        : entry.weight() * (trigger.atMostOncePerTurn()
+                                ? Math.min(1, Math.min(1, entry.value()) * trigger.occurrenceMultiplier())
+                                : AbilityOccurrenceEstimator.atLeastOneProbability(entry.value() * trigger.occurrenceMultiplier()))).sum();
         for (final SurvivalCheckpoint checkpoint : SurvivalCheckpoint.values()) {
             if (!checkpoint.isTurnEnd() || !matchesTurn(trigger.turnScope(), checkpoint, entryTiming)
                     || expected >= maximum) {
@@ -42,13 +57,17 @@ public final class IntrinsicEventTriggerEstimator {
             }
             final double horizonDiscount = AbilityOccurrenceEstimator.turnDiscount(
                     opportunityTurn);
-            final double contribution = Math.min(maximum - expected,
-                    eventRate * survivalProbability * horizonDiscount);
+            final double contribution = occurrenceMode == AbilityOccurrenceMode.SINGLE_OCCURRENCE
+                    ? noEarlierEvent * oneEventProbability * survivalProbability * horizonDiscount
+                    : Math.min(maximum - expected, eventRate * survivalProbability * horizonDiscount);
+            if (occurrenceMode == AbilityOccurrenceMode.SINGLE_OCCURRENCE) { noEarlierEvent *= 1 - oneEventProbability; }
             expected += contribution;
             opportunities.add(new IntrinsicEventTriggerEstimate.Opportunity(checkpoint,
                     eventRate, survivalProbability, horizonDiscount, contribution));
         }
-        return new IntrinsicEventTriggerEstimate(expected, true, "reference event rate",
+        // TODO: Event rates correlated across turns and recursion/reanimation reset policies.
+        return new IntrinsicEventTriggerEstimate(expected, true,
+                occurrenceMode == AbilityOccurrenceMode.SINGLE_OCCURRENCE ? "single-event likelihood" : "reference event rate",
                 opportunities);
     }
 
