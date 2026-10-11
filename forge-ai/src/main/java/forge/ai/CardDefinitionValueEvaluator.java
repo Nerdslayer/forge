@@ -8,6 +8,7 @@ import forge.ai.effect.IntrinsicOutcomeEvaluator;
 import forge.ai.effect.IntrinsicReferenceAggregate;
 import forge.ai.effect.IntrinsicReferenceModel;
 import forge.ai.effect.ValuationCompleteness;
+import forge.ai.effect.TargetingFragilityEvaluator;
 import forge.card.CardEdition;
 import forge.card.CardRarity;
 import forge.card.CardRules;
@@ -96,14 +97,14 @@ public final class CardDefinitionValueEvaluator {
         final ICardFace face = rules.getMainPart();
         final List<Contribution> contributions = new ArrayList<>();
         final List<String> warnings = new ArrayList<>();
-        addIntrinsicAbilityContributions(rules, editionCode, face, contributions, warnings);
+        final int fragilityDiscount = addIntrinsicAbilityContributions(rules, editionCode, face, contributions, warnings);
 
         if (!face.getType().isCreature()) {
             addNonCreaturePermanentContribution(face, contributions);
             if (rules.getOtherPart() != null || rules.getAllFaces().size() > 1) {
                 warnings.add("Only single-faced cards are fully evaluated.");
             }
-            return finish(contributions, warnings, face.getManaCost().getCMC());
+            return finish(contributions, warnings, face.getManaCost().getCMC(), fragilityDiscount);
         }
         if (rules.getOtherPart() != null || rules.getAllFaces().size() > 1) {
             warnings.add("Only single-faced cards are fully evaluated.");
@@ -159,7 +160,7 @@ public final class CardDefinitionValueEvaluator {
             }
         }
 
-        return finish(contributions, warnings, face.getManaCost().getCMC());
+        return finish(contributions, warnings, face.getManaCost().getCMC(), fragilityDiscount);
     }
 
     /**
@@ -205,10 +206,10 @@ public final class CardDefinitionValueEvaluator {
                 ? IntrinsicReferenceModel.PermanentKind.PERMANENT : null;
     }
 
-    private static void addIntrinsicAbilityContributions(final CardRules rules, final String editionCode,
+    private static int addIntrinsicAbilityContributions(final CardRules rules, final String editionCode,
             final ICardFace face, final List<Contribution> contributions, final List<String> warnings) {
         if (!hasAbilityRecords(face)) {
-            return;
+            return 0;
         }
 
         final String edition = editionCode == null || editionCode.isBlank()
@@ -221,7 +222,7 @@ public final class CardDefinitionValueEvaluator {
             // Keep the definition evaluator useful when Forge cannot materialize an unusual card
             // definition. It is better to report an unsupported ability than to invent a value.
             addFallbackAbilityWarnings(warnings, face);
-            return;
+            return 0;
         }
 
         final Map<String, CardAbilityTraversal.AbilityDescription> byPath = new HashMap<>();
@@ -239,6 +240,11 @@ public final class CardDefinitionValueEvaluator {
                 // granted abilities are not intrinsic to this definition. Avoid counting either.
                 continue;
             }
+            if (TargetingFragilityEvaluator.isTargetingSacrifice(description)) {
+                // The composed lifetime discount owns this drawback. Do not also subtract a
+                // hypothetical body sacrifice as an independent outcome penalty.
+                continue;
+            }
 
             final IntrinsicReferenceAggregate aggregate = value.contribution();
             if (value.triggerStatus() != IntrinsicAbilityEvaluator.SupportStatus.SUPPORTED
@@ -252,6 +258,8 @@ public final class CardDefinitionValueEvaluator {
                 add(contributions, "Intrinsic ability", intrinsicLabel(description, value), valuePoints);
             }
         }
+        return TargetingFragilityEvaluator.hasTargetingSacrifice(intrinsic.descriptions())
+                ? TargetingFragilityEvaluator.DEFAULT_DISCOUNT_PERCENT : 0;
     }
 
     /** Returns whether an ability has a non-mana cost that the intrinsic model does not price. */
@@ -440,6 +448,16 @@ public final class CardDefinitionValueEvaluator {
 
     private static Evaluation finish(final List<Contribution> contributions, final List<String> warnings,
             final int manaValue) {
+        return finish(contributions, warnings, manaValue, 0);
+    }
+
+    private static Evaluation finish(final List<Contribution> contributions, final List<String> warnings,
+            final int manaValue, final int fragilityDiscount) {
+        if (fragilityDiscount > 0) {
+            final int useful = contributions.stream().mapToInt(contribution -> Math.max(0, contribution.value())).sum();
+            add(contributions, "Lifetime drawback", "Targeting fragility (" + fragilityDiscount + "%, once)",
+                    TargetingFragilityEvaluator.discountBenefit(useful, fragilityDiscount) - useful);
+        }
         final int battlefield = contributions.stream().mapToInt(Contribution::value).sum();
         final int cardCost = CardResourceValueEvaluator.evaluateCardOpportunityCost();
         final int manaCost = CardResourceValueEvaluator.evaluateManaInvestment(manaValue);

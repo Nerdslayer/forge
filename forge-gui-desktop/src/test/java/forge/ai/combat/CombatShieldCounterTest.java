@@ -27,6 +27,27 @@ import forge.item.PaperCard;
 public class CombatShieldCounterTest extends AITest {
     private record Fixture(Game game, Player attacker, Player defender, Combat combat, Card source, List<Card> blockers) { }
 
+    @Test
+    public void lifetimeBodyRetentionPersistsThroughSurvivorChangesAndContinuation() {
+        final var f = fixture(2, 4, List.of(), List.of(List.of("PT:1/3")));
+        final Card blocker = f.blockers().get(0);
+        blocker.setCounters(CounterEnumType.SHIELD, 1);
+        final var before = PublicCombatSnapshot.capture(f.attacker(), f.combat());
+        final var result = CombatOutcomePredictor.predict(before, assignment(f, before));
+        Assert.assertTrue(result.survivors().containsKey(blocker.getId()));
+        final var base = values(before);
+        final var cards = new LinkedHashMap<>(base.permanents());
+        final var value = cards.get(blocker.getId());
+        cards.put(blocker.getId(), new PreparedCombatValuation.PermanentValue(value.cardId(), value.controllerId(),
+                value.bodyLossValue(), value.unknownAbilityLossValue(), value.futureAbilityLossValue(), value.reasons(), 70));
+        final var retained = new PreparedCombatValuation(cards, base.relationships(), base.completeness(), base.reasons());
+        Assert.assertEquals(retained.survivorCounterUtility(before, result), 14,
+                "The opponent's spent shield is worth 70% of its ordinary 20 points");
+        final var continuation = retained.afterCombat(before, result).permanents().get(blocker.getId());
+        Assert.assertEquals(continuation.bodyLossValue(), value.bodyLossValue() - 14);
+        Assert.assertEquals(continuation.bodyRetentionPercent(), 70);
+    }
+
     @DataProvider(name = "strikes")
     public Object[][] strikes() {
         return new Object[][] {{1, List.of(), 0, 0, 0}, {1, List.of("K:Double strike", "K:Lifelink"), 0, 2, 2},

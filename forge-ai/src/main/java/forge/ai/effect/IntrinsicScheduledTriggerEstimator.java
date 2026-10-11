@@ -21,7 +21,14 @@ public final class IntrinsicScheduledTriggerEstimator {
             final IntrinsicScheduledTrigger trigger, final PermanentProfile source,
             final IntrinsicReferenceModel model, final IntrinsicEvaluationSettings settings,
             final EntryTiming entryTiming) {
-        if (trigger == null || model == null || settings == null || entryTiming == null) {
+        return estimate(trigger, source, model, settings, entryTiming, AbilityOccurrenceMode.REPEATABLE);
+    }
+
+    public static IntrinsicScheduledTriggerEstimate estimate(
+            final IntrinsicScheduledTrigger trigger, final PermanentProfile source,
+            final IntrinsicReferenceModel model, final IntrinsicEvaluationSettings settings,
+            final EntryTiming entryTiming, final AbilityOccurrenceMode occurrenceMode) {
+        if (trigger == null || model == null || settings == null || entryTiming == null || occurrenceMode == null) {
             throw new IllegalArgumentException("Scheduled trigger inputs are required");
         }
         final PermanentSurvivalEstimate survival = new PermanentSurvivalEstimator(model)
@@ -41,6 +48,9 @@ public final class IntrinsicScheduledTriggerEstimator {
             final double contribution = survivalProbability * horizonDiscount;
             opportunities.add(new IntrinsicScheduledTriggerEstimate.Opportunity(
                     checkpoint, survivalProbability, horizonDiscount, contribution));
+            // An unconditional source-consuming trigger can resolve only at its first scheduled
+            // opportunity. Death before then makes it unavailable, not eligible on a later turn.
+            if (occurrenceMode == AbilityOccurrenceMode.SINGLE_OCCURRENCE) { break; }
         }
         final double expected = opportunities.stream()
                 .mapToDouble(IntrinsicScheduledTriggerEstimate.Opportunity::expectedContribution)

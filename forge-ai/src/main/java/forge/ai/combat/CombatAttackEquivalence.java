@@ -32,7 +32,7 @@ final class CombatAttackEquivalence {
                     card.trample(), card.lifelink(), card.vigilance(), card.tapped(), card.minimumBlockers(), card.maximumBlockers(),
                     card.stunCounters(), card.shieldCounters());
             final List<Object> loss = List.of(value.controllerId(), value.bodyLossValue(), value.unknownAbilityLossValue(),
-                    value.futureAbilityLossValue(), value.reasons());
+                    value.futureAbilityLossValue(), value.reasons(), value.bodyRetentionPercent());
             final Set<Integer> incoming = readiness.blockPairsNextTurn().entrySet().stream()
                     .filter(entry -> entry.getValue().contains(id)).map(Map.Entry::getKey).collect(Collectors.toSet());
             final Key key = new Key(mechanics, loss, snapshot.attackersToDefenders().get(id), snapshot.legalBlockers().getOrDefault(id, Set.of()),

@@ -57,7 +57,7 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
             final PermanentValue source = adjusted.get(entry.getKey().sourceId());
             if (source == null) { throw new IllegalArgumentException("Opportunity source is outside the ledger"); }
             adjusted.put(source.cardId(), new PermanentValue(source.cardId(), source.controllerId(), source.bodyLossValue(),
-                    source.unknownAbilityLossValue(), saturated((long) source.futureAbilityLossValue() - retired), source.reasons()));
+                    source.unknownAbilityLossValue(), saturated((long) source.futureAbilityLossValue() - retired), source.reasons(), source.bodyRetentionPercent()));
             remaining.put(entry.getKey(), new OpportunityValue(saturated((long) value.remainingLossValue() - retired), value.perUseLossValue()));
         }
         return new PreparedCombatValuation(adjusted, relationships, completeness, reasons, remaining);
@@ -80,7 +80,7 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
             final var before = snapshot.creatures().get(entry.getKey());
             final int spent = forge.ai.CreatureEvaluator.shieldCounterValue(before.shieldCounters(), before.indestructible())
                     - forge.ai.CreatureEvaluator.shieldCounterValue(entry.getValue().shieldCounters(), before.indestructible());
-            result += before.controllerId() == snapshot.observingPlayerId() ? -spent : spent;
+            result += bodyDelta(entry.getKey(), before.controllerId() == snapshot.observingPlayerId() ? -spent : spent);
         }
         return saturated(result);
     }
@@ -91,7 +91,8 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
         for (final int id : projection.survivors().keySet()) {
             final var changed = world.get(id);
             if (changed != null) {
-                result += (long) changed.bodyDelta() * (snapshot.creatures().get(id).controllerId() == snapshot.observingPlayerId() ? 1 : -1);
+                result += bodyDelta(id, (long) changed.bodyDelta()
+                        * (snapshot.creatures().get(id).controllerId() == snapshot.observingPlayerId() ? 1 : -1));
             }
         }
         return saturated(result);
@@ -112,7 +113,8 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
             final int staticDelta = world.containsKey(entry.getKey()) ? world.get(entry.getKey()).bodyDelta() : 0;
             final int staticLossDelta = before.controllerId() == snapshot.observingPlayerId() ? -staticDelta : staticDelta;
             adjusted.put(entry.getKey(), new PermanentValue(value.cardId(), value.controllerId(),
-                    saturated((long) value.bodyLossValue() + reduction + staticLossDelta), value.unknownAbilityLossValue(), value.futureAbilityLossValue(), value.reasons()));
+                    saturated((long) value.bodyLossValue() + bodyDelta(entry.getKey(), (long) reduction + staticLossDelta)),
+                    value.unknownAbilityLossValue(), value.futureAbilityLossValue(), value.reasons(), value.bodyRetentionPercent()));
         }
         // TODO: Characteristic/static changes beyond fixed additive P/T and counter-dependent relationships.
         return new PreparedCombatValuation(adjusted, remaining.relationships(), remaining.completeness(), remaining.reasons(), remaining.opportunities());
@@ -120,8 +122,22 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
 
     /** All three loss values are AI utility, not unsigned permanent value or threat ranking. */
     public record PermanentValue(int cardId, int controllerId, int bodyLossValue,
-            int unknownAbilityLossValue, int futureAbilityLossValue, List<String> reasons) {
-        public PermanentValue { reasons = List.copyOf(reasons); }
+            int unknownAbilityLossValue, int futureAbilityLossValue, List<String> reasons, int bodyRetentionPercent) {
+        public PermanentValue {
+            reasons = List.copyOf(reasons);
+            if (bodyRetentionPercent < 0 || bodyRetentionPercent > 100) { throw new IllegalArgumentException("Invalid body retention"); }
+        }
+        public PermanentValue(final int cardId, final int controllerId, final int bodyLossValue,
+                final int unknownAbilityLossValue, final int futureAbilityLossValue, final List<String> reasons) {
+            this(cardId, controllerId, bodyLossValue, unknownAbilityLossValue, futureAbilityLossValue, reasons, 100);
+        }
+    }
+
+    /** Preserve the source's lifetime scale when a projected survivor changes characteristics. */
+    private int bodyDelta(final int id, final long delta) {
+        final var value = permanents.get(id);
+        final int retained = value == null ? 100 : value.bodyRetentionPercent();
+        return saturated(Long.signum(delta) * Math.round(Math.abs((double) delta) * retained / 100.0));
     }
 
     /** Identity includes both endpoints and distinguishes real batches, not just script paths. */

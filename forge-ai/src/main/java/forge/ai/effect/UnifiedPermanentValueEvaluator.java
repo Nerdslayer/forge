@@ -17,4 +17,9 @@ final class UnifiedPermanentValueEvaluator {
         return card.isCreature() ? CREATURE_EVALUATOR.evaluateCreature(card)
                 : ComputerUtilCard.evaluatePermanent(evaluatingAi, card);
     }
+
+    static int evaluateWithoutTargetingDrawback(final Player evaluatingAi, final Card card) {
+        return card.isCreature() ? CREATURE_EVALUATOR.evaluateCreature(card, true, true, false)
+                : ComputerUtilCard.evaluatePermanent(evaluatingAi, card);
+    }
 }

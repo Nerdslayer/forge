@@ -33,6 +33,7 @@ public final class CombatValuationEvaluator {
             if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
             if (card.getController() == null) { continue; }
             final int lossSign = card.getController().isOpponentOf(context.evaluatingAi()) ? 1 : -1;
+            final int discount = TargetingFragilityEvaluator.discountPercent(context.evaluatingAi(), card);
             final List<String> reasons = new ArrayList<>();
             int future = 0;
             int unknown = 0;
@@ -45,7 +46,8 @@ public final class CombatValuationEvaluator {
                 reasons.addAll(abilities.reasons());
                 for (final AbilityValueContribution contribution : abilities.contributions()) {
                     if (contribution.counted()) {
-                        future = EffectMath.add(future, contribution.value());
+                        future = EffectMath.add(future, lossSign
+                                * TargetingFragilityEvaluator.discountBenefit(lossSign * contribution.value(), discount));
                         byAbility.merge(contribution.sourceAbility(), contribution.value(), EffectMath::add);
                     }
                     if (contribution.reason() != null) { reasons.add(contribution.reason()); }
@@ -68,10 +70,21 @@ public final class CombatValuationEvaluator {
                     unknown = lossSign * Math.max(10, EffectMath.multiply(Math.max(0, card.getCMC()), 5));
                 }
             }
+            int body = lossSign * (discount > 0
+                    ? UnifiedPermanentValueEvaluator.evaluateWithoutTargetingDrawback(context.evaluatingAi(), card)
+                    : UnifiedPermanentValueEvaluator.evaluate(context.evaluatingAi(), card));
+            if (discount > 0) {
+                body = lossSign * TargetingFragilityEvaluator.discountBenefit(lossSign * body, discount);
+                unknown = lossSign * TargetingFragilityEvaluator.discountBenefit(lossSign * unknown, discount);
+                opportunities.replaceAll((key, value) -> key.sourceId() != card.getId() ? value
+                        : new PreparedCombatValuation.OpportunityValue(
+                                lossSign * TargetingFragilityEvaluator.discountBenefit(lossSign * value.remainingLossValue(), discount),
+                                lossSign * TargetingFragilityEvaluator.discountBenefit(lossSign * value.perUseLossValue(), discount)));
+                reasons.add("Targeting fragility: " + discount + "% lifetime usefulness discount (once)");
+            }
             values.put(card.getId(), new PreparedCombatValuation.PermanentValue(card.getId(),
-                    card.getController().getId(), EffectMath.multiply(lossSign,
-                            UnifiedPermanentValueEvaluator.evaluate(context.evaluatingAi(), card)),
-                    unknown, future, reasons));
+                    card.getController().getId(), body,
+                    unknown, future, reasons, 100 - discount));
             // TODO: Propagate cancellation inside a single intrinsic/reference outcome evaluation.
             // Between-card checks bound repeated work, not the latency of one complex script.
             if (!checkpoint.getAsBoolean()) { return Optional.empty(); }

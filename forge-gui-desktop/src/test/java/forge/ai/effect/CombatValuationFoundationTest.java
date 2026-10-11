@@ -21,6 +21,69 @@ import forge.item.PaperCard;
 
 /** Signed loss, identity, snapshot and information-boundary regressions for combat preparation. */
 public class CombatValuationFoundationTest extends AITest {
+    @DataProvider(name = "sourceDepartureOutcomes")
+    public Object[][] sourceDepartureOutcomes() {
+        return new Object[][] {
+            {"DB$ Sacrifice"},
+            {"DB$ Sacrifice | SacValid$ Self"},
+            {"DB$ Destroy | Defined$ Self"},
+            {"DB$ ChangeZone | Defined$ Self | Origin$ Battlefield | Destination$ Exile"},
+            {"DB$ ChangeZone | Defined$ Self | Origin$ Battlefield | Destination$ Hand"},
+            {"DB$ Draw | Defined$ You | NumCards$ 1 | SubAbility$ Depart"},
+            {"DB$ Charm | Choices$ Depart,Draw | CharmNum$ 1"}
+        };
+    }
+
+    @Test(dataProvider = "sourceDepartureOutcomes")
+    public void sourceDepartureCannotRefundBodyLossForEitherController(final String outcome) {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        ai.setTeam(0);
+        opponent.setTeam(1);
+        for (final Player owner : List.of(ai, opponent)) {
+            final Card source = addDefinition(owner, "Source Departure " + owner.getId() + outcome, "2", List.of(
+                    "T:Mode$ BecomesTarget | ValidTarget$ Card.Self | Execute$ Effect | TriggerZones$ Battlefield",
+                    "SVar:Effect:" + outcome,
+                    "SVar:Depart:DB$ Sacrifice | SacValid$ Self",
+                    "SVar:Draw:DB$ Draw | Defined$ You | NumCards$ 1"));
+            final var removal = PermanentAbilityValueEvaluator.evaluateRemovalAbilities(ai, List.of(source),
+                    EffectAnalysisTrace.disabled()).get(source);
+            Assert.assertEquals(removal.intrinsicValue(), 0, removal.toString());
+            Assert.assertTrue(removal.reasons().stream().anyMatch(reason -> reason.contains("no avoided body-loss refund")),
+                    removal.toString());
+            final var ledger = CombatValuationEvaluator.prepare(ValuationContext.forCombat(ai, ValuationDecision.BLOCK, 0, 100));
+            Assert.assertEquals(ledger.permanents().get(source.getId()).futureAbilityLossValue(), 0);
+            Assert.assertEquals(ledger.permanents().get(source.getId()).unknownAbilityLossValue(), 0,
+                    "A known excluded drawback must not receive an unknown beneficial-ability bonus");
+            final int body = UnifiedPermanentValueEvaluator.evaluate(ai, source);
+            Assert.assertEquals(ledger.evaluateLosses(List.of(source.getId())).total(), owner == ai ? -body : body);
+        }
+    }
+
+    @Test
+    public void intrinsicDrawbackRemainsNegativeButStatReducedCasualtyGetsNoRefund() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        final Player opponent = game.getPlayers().get(0);
+        ai.setTeam(0);
+        opponent.setTeam(1);
+        for (final String name : List.of("Phantom Beast", "Labyrinth Guardian")) {
+            final Card source = addCard(name, ai);
+            final var intrinsic = new IntrinsicAbilityEvaluator(IntrinsicReferenceModel.defaults(), IntrinsicEvaluationSettings.defaults())
+                    .evaluateDefinition(source.getPaperCard(), CardStateName.Original);
+            Assert.assertTrue(intrinsic.stream().anyMatch(value -> value.contribution().value() < 0), name);
+        }
+        addCard("Elesh Norn, Grand Cenobite", opponent);
+        game.getAction().checkStaticAbilities();
+        final var ledger = CombatValuationEvaluator.prepare(ValuationContext.forCombat(ai, ValuationDecision.BLOCK, 0, 100));
+        for (final var value : ledger.permanents().values()) {
+            if (value.controllerId() != ai.getId()) { continue; }
+            Assert.assertEquals(value.futureAbilityLossValue(), 0);
+            Assert.assertTrue(ledger.evaluateLosses(List.of(value.cardId())).total() < 0);
+        }
+    }
+
     @Test
     public void everyPreparationCheckpointCancelsWithoutPublishingAPartialLedgerOrChangingGameState() {
         final Game game = initAndCreateGame();

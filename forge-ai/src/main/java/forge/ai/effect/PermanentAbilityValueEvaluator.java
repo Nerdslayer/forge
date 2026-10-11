@@ -97,9 +97,12 @@ public final class PermanentAbilityValueEvaluator {
                                 applyRelationshipCredit ? relationshipEntries : List.of(), effectiveTrace));
                 hasUnevaluatedAbility = intrinsic.hasUnevaluatedAbility();
                 reasons.addAll(intrinsic.reasons());
+                final int discount = TargetingFragilityEvaluator.discountPercent(ai, candidate);
+                final int lossSign = candidate.getController().isOpponentOf(ai) ? 1 : -1;
                 for (final AbilityValueContribution contribution : intrinsic.contributions()) {
                     if (contribution.counted()) {
-                        intrinsicValue = EffectMath.add(intrinsicValue, contribution.value());
+                        intrinsicValue = EffectMath.add(intrinsicValue, lossSign
+                                * TargetingFragilityEvaluator.discountBenefit(lossSign * contribution.value(), discount));
                     }
                     addReason(reasons, contribution);
                 }
@@ -301,6 +304,16 @@ public final class PermanentAbilityValueEvaluator {
                 // through concrete departure/action projection with correct event credit/sign.
                 hasUnevaluatedAbility = true;
                 addSkipped(destination, candidate, value.path(), "self-death benefit requires concrete departure projection");
+                continue;
+            }
+            if (SourceDeparturePolicy.containsDeparture(description.outcome())) {
+                // The standalone reference value may include losing this source's entire printed
+                // body. That loss is not an avoided future cost when this permanent is itself
+                // removed: casualty/departure evaluation already charges its live body once.
+                // TODO: Split source-consuming benefits/costs and model self-removal drawbacks as
+                // survival/opportunity limits, including dynamic targets and broader group forms.
+                addSkipped(destination, candidate, value.path(),
+                        "source-departure outcome requires concrete departure projection; no avoided body-loss refund");
                 continue;
             }
             if (!aggregate.complete() || aggregate.unresolvedRandomProbability() != 0) {
