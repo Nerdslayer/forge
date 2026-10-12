@@ -50,6 +50,15 @@ public final class CombatOutcomePredictor {
         if (!assignment.attackersToDefenders().equals(snapshot.attackersToDefenders())) {
             return CombatProjection.rejected(true, List.of("Attack declaration differs from frozen snapshot"));
         }
+        for (final int key : assignment.attackersToDefenders().values()) {
+            final var destination = CombatAttackDestination.fromKey(key);
+            if (destination.kind() == CombatAttackDestination.Kind.PLANESWALKER
+                    ? !snapshot.planeswalkers().containsKey(destination.id())
+                            || snapshot.planeswalkers().get(destination.id()).controllerId() != snapshot.defendingPlayerId()
+                    : destination.id() != snapshot.defendingPlayerId()) {
+                return CombatProjection.rejected(true, List.of("Unknown or nonopposing attack destination"));
+            }
+        }
         if (plan != null && (!assignment.attackersToDefenders().keySet().containsAll(plan.firstStrike().keySet())
                 || !assignment.attackersToDefenders().keySet().containsAll(plan.regular().keySet()))) {
             return CombatProjection.rejected(true, List.of("Damage plan references an undeclared attacker"));
@@ -89,6 +98,8 @@ public final class CombatOutcomePredictor {
         final Set<Integer> deathtouched = new HashSet<>();
         final Set<Integer> lost = new HashSet<>();
         final Map<Integer, Integer> life = new LinkedHashMap<>();
+        final Map<Integer, Integer> loyalty = new LinkedHashMap<>();
+        snapshot.planeswalkers().forEach((id, walker) -> loyalty.put(id, walker.loyalty()));
         snapshot.creatures().forEach((id, creature) -> {
             damage.put(id, creature.markedDamage());
             shields.put(id, creature.shieldCounters());
@@ -105,6 +116,7 @@ public final class CombatOutcomePredictor {
             if (!first && firstStrikeOnly) { break; }
             final Map<Integer, Integer> cardHits = new HashMap<>();
             final Map<Integer, Integer> playerHits = new HashMap<>();
+            final Map<Integer, Integer> walkerHits = new HashMap<>();
             final Map<Integer, Integer> gains = new HashMap<>();
             final List<CombatEventBatch.Event> events = new ArrayList<>();
             final Map<Integer, Integer> lifeBefore = Map.copyOf(life);
@@ -138,8 +150,8 @@ public final class CombatOutcomePredictor {
                                 hit(attacker, assigned.getKey(), assigned.getValue(), cardHits, gains, events,
                                         CombatEventBatch.Recipient.CREATURE);
                             }
-                            hit(attacker, snapshot.defendingPlayerId(), allocation.defenderDamage(), playerHits, gains,
-                                    events, CombatEventBatch.Recipient.PLAYER);
+                            hitDestination(snapshot, assignment, attacker, allocation.defenderDamage(), loyalty,
+                                    playerHits, walkerHits, gains, events);
                         } else {
                             final int blockerId = survivingBlockers.get(0);
                             if (survivingBlockers.size() > 1 || attacker.trample() && snapshot.creatures().get(blockerId).indestructible()) {
@@ -148,8 +160,8 @@ public final class CombatOutcomePredictor {
                             final int toBlocker = attacker.trample() ? Math.min(power, targets.get(0).lethalDamage()) : power;
                             hit(attacker, blockerId, toBlocker, cardHits, gains, events, CombatEventBatch.Recipient.CREATURE);
                             if (attacker.trample()) {
-                                hit(attacker, snapshot.defendingPlayerId(), power - toBlocker, playerHits, gains,
-                                        events, CombatEventBatch.Recipient.PLAYER);
+                                hitDestination(snapshot, assignment, attacker, power - toBlocker, loyalty,
+                                        playerHits, walkerHits, gains, events);
                             }
                         }
                     } else if (group.isEmpty() || attacker.trample()) {
@@ -157,8 +169,8 @@ public final class CombatOutcomePredictor {
                         if (allocation != null && (!allocation.creatureDamage().isEmpty() || allocation.defenderDamage() != power)) {
                             return CombatProjection.rejected(true, List.of("Illegal unblocked damage allocation for attacker " + id));
                         }
-                        hit(attacker, snapshot.defendingPlayerId(), power, playerHits, gains,
-                                events, CombatEventBatch.Recipient.PLAYER);
+                        hitDestination(snapshot, assignment, attacker, power, loyalty,
+                                playerHits, walkerHits, gains, events);
                     } else if (allocation != null && (!allocation.creatureDamage().isEmpty() || allocation.defenderDamage() != 0)) {
                         return CombatProjection.rejected(true, List.of("Blocked nontrampler has no remaining damage recipient"));
                     }
@@ -171,9 +183,11 @@ public final class CombatOutcomePredictor {
                     }
                 }
             }
-            if (cardHits.isEmpty() && playerHits.isEmpty()) { continue; }
+            if (cardHits.isEmpty() && playerHits.isEmpty() && walkerHits.isEmpty()) { continue; }
             preventShieldDamage(snapshot, events, cardHits, gains, shields, deathtouched, lost);
             cardHits.forEach((id, amount) -> damage.merge(id, amount, CombatOutcomePredictor::add));
+            walkerHits.forEach((id, amount) -> loyalty.put(id, Math.max(0, loyalty.get(id) - amount)));
+            loyalty.forEach((id, remaining) -> { if (remaining == 0) { lost.add(id); } });
             gains.entrySet().removeIf(entry -> !snapshot.players().get(entry.getKey()).canGainLife());
             lifeEvents(snapshot, playerHits, events);
             for (final var entry : snapshot.players().entrySet()) {
@@ -230,10 +244,26 @@ public final class CombatOutcomePredictor {
             }
         });
         // TODO: Bind the frozen event batches and LKI to shared projected outcomes;
-        // support planeswalkers, poison/commander damage and broader replacement/prevention.
+        // support planeswalker LKI/death triggers, poison/commander damage and broader replacement/prevention.
         // Supported here means the approximate model can be evaluated, not that every
         // printed ability has been simulated. Preserve omissions for callers and diagnostics.
-        return new CombatProjection(true, true, snapshot.ignoredEffects(), lost, survivors, life, batches, terminal, eventBatches, outcomes);
+        final Set<Integer> lostCreatures = lost.stream().filter(snapshot.creatures()::containsKey)
+                .collect(java.util.stream.Collectors.toSet());
+        return new CombatProjection(true, true, snapshot.ignoredEffects(), lostCreatures, survivors, life, batches, terminal, eventBatches, outcomes, loyalty);
+    }
+
+    private static void hitDestination(final PublicCombatSnapshot snapshot, final CombatAssignment assignment,
+            final PublicCombatSnapshot.Creature attacker, final int amount, final Map<Integer, Integer> loyalty,
+            final Map<Integer, Integer> playerHits, final Map<Integer, Integer> walkerHits,
+            final Map<Integer, Integer> gains, final List<CombatEventBatch.Event> events) {
+        final var destination = CombatAttackDestination.fromKey(assignment.attackersToDefenders().get(attacker.id()));
+        if (destination.kind() == CombatAttackDestination.Kind.PLANESWALKER) {
+            // A departed defender never redirects damage to its controller, including double strike.
+            if (!snapshot.planeswalkers().containsKey(destination.id()) || loyalty.get(destination.id()) <= 0) { return; }
+            hit(attacker, destination.id(), amount, walkerHits, gains, events, CombatEventBatch.Recipient.PLANESWALKER);
+        } else {
+            hit(attacker, destination.id(), amount, playerHits, gains, events, CombatEventBatch.Recipient.PLAYER);
+        }
     }
 
     private static boolean dealsDamage(final PublicCombatSnapshot.Creature creature, final boolean first) {

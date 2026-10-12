@@ -28,7 +28,7 @@ public record CombatEventBatch(Stage stage, Map<Integer, CardState> battlefieldB
     public record BecomesBlocked(int attackerId, List<Integer> blockerIds) implements Event {
         public BecomesBlocked { blockerIds = List.copyOf(blockerIds); }
     }
-    public enum Recipient { CREATURE, PLAYER }
+    public enum Recipient { CREATURE, PLAYER, PLANESWALKER }
     public record Damage(int sourceId, int recipientId, Recipient recipient, int amount) implements Event { }
     /** One lifelink gain per damage source, including damage to several recipients. */
     public record LifeGain(int sourceId, int playerId, int amount) implements Event { }

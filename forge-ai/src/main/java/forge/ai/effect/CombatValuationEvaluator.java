@@ -37,11 +37,20 @@ public final class CombatValuationEvaluator {
             final List<String> reasons = new ArrayList<>();
             int future = 0;
             int unknown = 0;
+            boolean abilitiesComplete = false;
             if (context.intrinsicWeightPercent() > 0) {
                 final PermanentAbilityValueEvaluator.FutureAbilityEvaluation abilities =
                         PermanentAbilityValueEvaluator.evaluateFutureAbilities(context.evaluatingAi(),
                                 card, List.of(), EffectAnalysisTrace.disabled(),
                                 PermanentAbilityValueEvaluator.FutureAbilityMode.REFERENCE_ONLY);
+                // Per-source coverage, not the aggregate combat ledger's intentionally partial status.
+                // TODO: Propagate structured static/replacement coverage; do not mark skipped forms complete.
+                abilitiesComplete = abilities.evaluationAvailable() && !abilities.hasUnevaluatedAbility()
+                        && card.getStaticAbilities().stream().noneMatch(ability -> !ability.isSuppressed())
+                        && card.getHiddenStaticAbilities().stream().noneMatch(ability -> !ability.isSuppressed())
+                        && card.getReplacementEffects().stream().noneMatch(effect -> !effect.isSuppressed()
+                                && !(effect.getMode() == forge.game.replacement.ReplacementType.Moved
+                                        && "Battlefield".equals(effect.getMapParams().get("Destination"))));
                 final Map<AbilityIdentity, Integer> byAbility = new LinkedHashMap<>();
                 reasons.addAll(abilities.reasons());
                 for (final AbilityValueContribution contribution : abilities.contributions()) {
@@ -84,7 +93,7 @@ public final class CombatValuationEvaluator {
             }
             values.put(card.getId(), new PreparedCombatValuation.PermanentValue(card.getId(),
                     card.getController().getId(), body,
-                    unknown, future, reasons, 100 - discount));
+                    unknown, future, reasons, 100 - discount, abilitiesComplete));
             // TODO: Propagate cancellation inside a single intrinsic/reference outcome evaluation.
             // Between-card checks bound repeated work, not the latency of one complex script.
             if (!checkpoint.getAsBoolean()) { return Optional.empty(); }

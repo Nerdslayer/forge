@@ -13,6 +13,11 @@ public final class CombatAttackSearch {
             Optional<CombatSafetyEvaluator.FollowUp> reply, int replyAdjustment, boolean certifiedWin,
             Optional<CombatTwoTurnPressureEvaluator.Forecast> twoTurnPressure) {
         public Candidate { attackers = List.copyOf(attackers); }
+        public java.util.Map<Integer, CombatAttackDestination> destinations() {
+            final java.util.Map<Integer, CombatAttackDestination> result = new java.util.LinkedHashMap<>();
+            combat.assignment().attackersToDefenders().forEach((id, target) -> result.put(id, CombatAttackDestination.fromKey(target)));
+            return java.util.Map.copyOf(result);
+        }
         public int total() {
             return CombatOutcomePredictor.add(CombatOutcomePredictor.add(combat.score().total(), replyAdjustment),
                     twoTurnPressure.map(CombatTwoTurnPressureEvaluator.Forecast::value).orElse(0));
@@ -63,7 +68,7 @@ public final class CombatAttackSearch {
         return new Result(Optional.empty(), Optional.empty(), false, false, 0, List.copyOf(reasons), false, 0);
     }
 
-    private static final class Evaluation {
+    static final class Evaluation {
         private final PublicCombatSnapshot alternatives;
         private final PreparedCombatValuation values;
         private final PublicCombatReadiness readiness;
@@ -74,7 +79,7 @@ public final class CombatAttackSearch {
         private Candidate baseline;
         private boolean supported = true;
 
-        private Evaluation(final PublicCombatSnapshot alternatives0, final PreparedCombatValuation values0,
+        Evaluation(final PublicCombatSnapshot alternatives0, final PreparedCombatValuation values0,
                 final PublicCombatReadiness readiness0, final CombatSearchBudget budget0, final Set<String> reasons0) {
             alternatives = alternatives0;
             values = values0;
@@ -88,12 +93,17 @@ public final class CombatAttackSearch {
         }
 
         private Candidate evaluate(final List<Integer> group) {
+            return evaluate(CombatAttackCandidates.select(alternatives, group));
+        }
+
+        Candidate evaluate(final PublicCombatSnapshot current) {
             if (!budget.tryConsume()) { supported = false; reasons.add("Shared attack search budget exhausted"); return null; }
-            final PublicCombatSnapshot current = CombatAttackCandidates.select(alternatives, group);
+            boolean candidateSupported = true;
+            final List<Integer> group = current.attackersToDefenders().keySet().stream().sorted().toList();
             final CombatBlockSearch.Result blocks = CombatBlockSearch.searchWithReplySafety(current, values, budget,
                     forecasts::reply, forecasts::pressure);
             reasons.addAll(blocks.reasons());
-            supported &= blocks.outcomeDomainComplete() && blocks.searchExhaustive();
+            candidateSupported &= blocks.outcomeDomainComplete() && blocks.searchExhaustive();
             if (blocks.best().isEmpty()) { supported = false; return null; }
             final var combat = blocks.best().orElseThrow();
             Optional<CombatSafetyEvaluator.FollowUp> reply = Optional.empty();
@@ -102,7 +112,11 @@ public final class CombatAttackSearch {
                 final var forecast = combat.followUp().orElseThrow();
                 reply = Optional.of(forecast);
                 reasons.addAll(forecast.reasons());
-                supported &= forecast.usable();
+                candidateSupported &= forecast.usable();
+                if (baseline != null && (baseline.reply().isEmpty() || !baseline.reply().orElseThrow().usable())) {
+                    candidateSupported = false;
+                    reasons.add("Missing comparable no-attack continuation; not zero reply danger");
+                }
                 if (baseline != null && forecast.usable() && baseline.reply().isPresent()) {
                     final long delta = (long) forecast.nonterminalUtility() - baseline.reply().orElseThrow().nonterminalUtility();
                     // Immediate casualties are already excluded from the reply ledger. Discount
@@ -110,7 +124,7 @@ public final class CombatAttackSearch {
                     adjustment = CombatSafetyEvaluator.discountedFollowUpValue(delta);
                 }
             } else if (!blocks.searchExhaustive()) {
-                supported = false;
+                candidateSupported = false;
                 reasons.add("A terminal attack result requires exhaustive opposing block responses");
             }
             final boolean certifiedWin = alternatives.ignoredEffects().isEmpty() && blocks.outcomeDomainComplete() && blocks.searchExhaustive()
@@ -118,12 +132,23 @@ public final class CombatAttackSearch {
             final Candidate candidate = new Candidate(group, combat, reply, adjustment, certifiedWin,
                     forecasts.cachedPressure(combat.projection()));
             if (baseline == null) { baseline = candidate; }
+            supported &= candidateSupported;
             // Incomplete opposing searches never contribute an optimistic singleton ranking.
-            return supported || certifiedWin ? candidate : null;
+            return candidateSupported || certifiedWin ? candidate : null;
+        }
+
+        /** Independent current-combat safeguard; future uncertainty cannot poison terminal scoring. */
+        Candidate immediateWin(final PublicCombatSnapshot current, final CombatSearchBudget allowance) {
+            final var blocks = CombatBlockSearch.search(current, values, allowance);
+            if (!blocks.outcomeDomainComplete() || !blocks.searchExhaustive() || blocks.best().isEmpty()) { return null; }
+            final var combat = blocks.best().orElseThrow();
+            if (combat.projection().terminal() != CombatProjection.Terminal.WIN) { return null; }
+            return new Candidate(current.attackersToDefenders().keySet().stream().sorted().toList(), combat,
+                    Optional.empty(), 0, current.ignoredEffects().isEmpty(), Optional.empty());
         }
     }
 
-    private static int compare(final Candidate left, final Candidate right) {
+    static int compare(final Candidate left, final Candidate right) {
         if (left.certifiedWin() != right.certifiedWin()) { return left.certifiedWin() ? 1 : -1; }
         if (left.combat().projection().terminal() != right.combat().projection().terminal()) {
             return CombatTransitionValueEvaluator.compare(left.combat().score(), right.combat().score());

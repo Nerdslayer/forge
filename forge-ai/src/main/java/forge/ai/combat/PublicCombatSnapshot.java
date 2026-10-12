@@ -28,7 +28,8 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         List<String> unavailableReasons, List<String> unsupportedReasons, boolean legacyDamageOrder,
         Map<Integer, CombatPlayerResources> resources, List<CombatTriggerDescription> triggers,
         Set<Integer> observedAttackers, Set<Integer> observedBlockers, List<CombatDamagePreventionRule> preventionRules,
-        PreparedCombatStaticWorlds staticWorlds, List<String> ignoredEffects) {
+        PreparedCombatStaticWorlds staticWorlds, List<String> ignoredEffects,
+        Map<Integer, Planeswalker> planeswalkers, boolean singletonPermutationSafe) {
     public PublicCombatSnapshot {
         creatures = Map.copyOf(creatures);
         players = Map.copyOf(players);
@@ -40,11 +41,59 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         unsupportedReasons = List.copyOf(unsupportedReasons);
         ignoredEffects = List.copyOf(ignoredEffects);
         resources = Map.copyOf(resources);
+        planeswalkers = Map.copyOf(planeswalkers);
         triggers = List.copyOf(triggers);
         observedAttackers = Set.copyOf(observedAttackers);
         observedBlockers = Set.copyOf(observedBlockers);
         preventionRules = List.copyOf(preventionRules);
         if (staticWorlds == null) { throw new IllegalArgumentException("Explicit static coverage required"); }
+    }
+
+    /** Without explicit capture metadata, unknown effects conservatively forbid reuse. */
+    public PublicCombatSnapshot(final int observingPlayerId, final int attackingPlayerId, final int defendingPlayerId,
+            final Map<Integer, Creature> creatures, final Map<Integer, LifeState> players,
+            final Map<Integer, Integer> attackersToDefenders, final Map<Integer, Set<Integer>> legalBlockers,
+            final List<String> unavailableReasons, final List<String> unsupportedReasons, final boolean legacyDamageOrder,
+            final Map<Integer, CombatPlayerResources> resources, final List<CombatTriggerDescription> triggers,
+            final Set<Integer> observedAttackers, final Set<Integer> observedBlockers,
+            final List<CombatDamagePreventionRule> preventionRules, final PreparedCombatStaticWorlds staticWorlds,
+            final List<String> ignoredEffects, final Map<Integer, Planeswalker> planeswalkers) {
+        this(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players, attackersToDefenders,
+                legalBlockers, unavailableReasons, unsupportedReasons, legacyDamageOrder, resources, triggers,
+                observedAttackers, observedBlockers, preventionRules, staticWorlds, ignoredEffects, planeswalkers, ignoredEffects.isEmpty());
+    }
+
+    /** Player-only compatibility, including existing synthetic tests. */
+    public PublicCombatSnapshot(final int observingPlayerId, final int attackingPlayerId, final int defendingPlayerId,
+            final Map<Integer, Creature> creatures, final Map<Integer, LifeState> players,
+            final Map<Integer, Integer> attackersToDefenders, final Map<Integer, Set<Integer>> legalBlockers,
+            final List<String> unavailableReasons, final List<String> unsupportedReasons, final boolean legacyDamageOrder,
+            final Map<Integer, CombatPlayerResources> resources, final List<CombatTriggerDescription> triggers,
+            final Set<Integer> observedAttackers, final Set<Integer> observedBlockers,
+            final List<CombatDamagePreventionRule> preventionRules, final PreparedCombatStaticWorlds staticWorlds,
+            final List<String> ignoredEffects) {
+        this(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players, attackersToDefenders,
+                legalBlockers, unavailableReasons, unsupportedReasons, legacyDamageOrder, resources, triggers,
+                observedAttackers, observedBlockers, preventionRules, staticWorlds, ignoredEffects, Map.of());
+    }
+
+    public record Planeswalker(int id, int controllerId, String name, int loyalty, int ultimateThreshold, int urgencyValue,
+            int manaValue, PlaneswalkerUltimateThreatEvaluator.Threat ultimateThreat) {
+        public Planeswalker {
+            if (id < 0 || controllerId < 0 || name == null || loyalty < 0 || urgencyValue < 0 || manaValue < 0 || ultimateThreat == null) {
+                throw new IllegalArgumentException("Public nonnegative planeswalker state required");
+            }
+        }
+        public Planeswalker(final int id, final int controllerId, final String name, final int loyalty,
+                final int ultimateThreshold, final int urgencyValue) {
+            this(id, controllerId, name, loyalty, ultimateThreshold, urgencyValue, 0,
+                    new PlaneswalkerUltimateThreatEvaluator.Threat(ultimateThreshold, ultimateThreshold > 0 && loyalty >= ultimateThreshold, List.of()));
+        }
+        public Planeswalker withLoyalty(final int remaining) {
+            return new Planeswalker(id, controllerId, name, remaining, ultimateThreshold, urgencyValue, manaValue,
+                    new PlaneswalkerUltimateThreatEvaluator.Threat(ultimateThreshold, ultimateThreat.potential()
+                            && (ultimateThreshold < 0 || remaining >= ultimateThreshold), ultimateThreat.reasons()));
+        }
     }
 
     /** Compatibility for explicitly understood synthetic snapshots. */
@@ -190,7 +239,9 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         final List<String> reasons = new ArrayList<>();
         final List<String> ignored = new ArrayList<>();
         final List<String> unavailable = new ArrayList<>();
+        boolean permutationSafe = true;
         final Map<Integer, Creature> creatures = new LinkedHashMap<>();
+        final Map<Integer, Planeswalker> walkers = new LinkedHashMap<>();
         final Map<Integer, LifeState> players = new LinkedHashMap<>();
         final Map<Integer, Integer> attacks = new LinkedHashMap<>();
         final Map<Integer, Set<Integer>> blocks = new LinkedHashMap<>();
@@ -217,7 +268,18 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         for (final Card card : observer.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES)) {
             if (!checkpoint.getAsBoolean()) { return null; }
             if (card.isPhasedOut()) { continue; }
+            final int ignoredBefore = ignored.size();
             auditPublicEffects(card, reasons, ignored);
+            if (ignored.size() != ignoredBefore && !inertWalkerBookkeeping(card)) { permutationSafe = false; }
+            if (card.isInPlay() && card.isPlaneswalker() && !card.isCreature()) {
+                final boolean enabled = forge.ai.AiProfileUtil.getBoolProperty(observer,
+                        forge.ai.AiProps.ENABLE_COMBAT_ATTACK_DESTINATION_PLANNING);
+                final var threat = PlaneswalkerUltimateThreatEvaluator.describe(card);
+                walkers.put(card.getId(), new Planeswalker(card.getId(), card.getController().getId(), card.getName(),
+                        card.getCounters(CounterEnumType.LOYALTY), threat.threshold(),
+                        enabled ? Math.max(0, forge.ai.AiProfileUtil.getIntProperty(observer,
+                                forge.ai.AiProps.COMBAT_PLANESWALKER_ULTIMATE_PREVENTION_VALUE)) : 0, Math.max(0, card.getCMC()), threat));
+            }
             if (card.isInPlay() && card.isCreature()) {
                 final Player recipient = observer.getGame().getPlayers().stream()
                         .filter(player -> player.isOpponentOf(card.getController())).findFirst().orElse(null);
@@ -250,16 +312,30 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         }
         for (final Card attacker : declaration.getAttackers()) {
             if (!checkpoint.getAsBoolean()) { return null; }
-            if (defending == null || declaration.getDefenderByAttacker(attacker) != defending
+            final var destination = declaration.getDefenderByAttacker(attacker);
+            final boolean walker = destination instanceof Card target && walkers.containsKey(target.getId())
+                    && defending != null && target.getController() == defending;
+            if (defending == null || destination != defending && !walker
                     || attacker.getController() != attacking || !creatures.containsKey(attacker.getId())) {
-                reasons.add("Only creature attacks against the opposing player are supported");
+                reasons.add("Only ordinary creature attacks against the opposing player/planeswalkers are supported");
                 continue;
             }
-            attacks.put(attacker.getId(), defending.getId());
+            attacks.put(attacker.getId(), walker
+                    ? new CombatAttackDestination(CombatAttackDestination.Kind.PLANESWALKER, ((Card) destination).getId()).key()
+                    : defending.getId());
+            if (walker) {
+                final Card target = (Card) destination;
+                // TODO: Shield/protection and destination-specific damage replacements, walker
+                // LKI/death triggers, and special trample-over-planeswalker keywords.
+                if (target.getCounters(CounterEnumType.LOYALTY) <= 0 || target.getCounters(CounterEnumType.SHIELD) > 0
+                        || PlaneswalkerUltimateThreatEvaluator.hasCombatReplacement(target)) {
+                    reasons.add("Planeswalker damage/replacement mechanics need projection: " + target.getId());
+                }
+            }
             if (!execution && declaration.isBlocked(attacker) && declaration.getBlockers(attacker).isEmpty()) {
                 reasons.add("Previously blocked attacker with no remaining blocker: " + attacker.getId());
             }
-            if (CombatUtil.getAttackCost(observer.getGame(), attacker, defending) != null) {
+            if (CombatUtil.getAttackCost(observer.getGame(), attacker, destination) != null) {
                 reasons.add("Unprojected attack payment: " + attacker.getId());
             }
             final Set<Integer> eligible = new LinkedHashSet<>();
@@ -276,7 +352,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
             }
             blocks.put(attacker.getId(), eligible);
         }
-        // TODO: Capture richer whole-declaration constraints and planeswalker destinations,
+        // TODO: Capture richer whole-declaration constraints and hybrid/Battle destinations,
         // special group restrictions, static recipient transitions, concrete triggers and prevention/replacements.
         final Map<Integer, CombatPlayerResources> resources = new LinkedHashMap<>();
         for (final Player player : observer.getGame().getPlayers()) {
@@ -323,7 +399,19 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         if (!checkpoint.getAsBoolean()) { return null; }
         return new PublicCombatSnapshot(observer.getId(), attacking.getId(), defending == null ? -1 : defending.getId(),
                 creatures, players, attacks, blocks, unavailable, reasons, observer.getGame().getRules().hasOrderCombatants(),
-                resources, triggers, observedAttacks, observedBlocks, preventionRules, staticWorlds, ignored);
+                resources, triggers, observedAttacks, observedBlocks, preventionRules, staticWorlds, ignored, walkers, permutationSafe);
+    }
+
+    /** Structured admission, independent of diagnostic wording and lethal certification. */
+    private static boolean inertWalkerBookkeeping(final Card card) {
+        // TODO: Audit broader opaque effects before allowing their creature-ID permutations.
+        return card.isInPlay() && card.isPlaneswalker() && !card.isCreature() && !card.isFaceDown()
+                && !card.isCommander() && !card.isGoaded() && card.getPreventNextDamageTotalShields() == 0
+                && card.getKeywords().isEmpty() && card.getTriggers().isEmpty()
+                && card.getStaticAbilities().isEmpty() && card.getHiddenStaticAbilities().isEmpty()
+                && card.getSpellAbilities().stream().noneMatch(ability -> ability.isActivatedAbility())
+                && card.getCounters().entrySet().stream().allMatch(entry -> entry.getElement() == CounterEnumType.LOYALTY)
+                && !PlaneswalkerUltimateThreatEvaluator.hasCombatReplacement(card);
     }
 
     private static void auditPublicEffects(final Card card, final List<String> reasons, final List<String> ignored) {

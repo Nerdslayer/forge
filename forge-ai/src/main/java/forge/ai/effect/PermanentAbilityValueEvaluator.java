@@ -117,7 +117,8 @@ public final class PermanentAbilityValueEvaluator {
     }
 
     record FutureAbilityEvaluation(List<AbilityValueContribution> contributions,
-            boolean hasUnevaluatedAbility, List<String> reasons, Map<AbilityIdentity, Integer> referenceResolutionValues) {
+            boolean hasUnevaluatedAbility, List<String> reasons, Map<AbilityIdentity, Integer> referenceResolutionValues,
+            boolean evaluationAvailable) {
         FutureAbilityEvaluation {
             contributions = List.copyOf(contributions);
             reasons = List.copyOf(reasons);
@@ -125,7 +126,7 @@ public final class PermanentAbilityValueEvaluator {
         }
         FutureAbilityEvaluation(final List<AbilityValueContribution> contributions,
                 final boolean hasUnevaluatedAbility, final List<String> reasons) {
-            this(contributions, hasUnevaluatedAbility, reasons, Map.of());
+            this(contributions, hasUnevaluatedAbility, reasons, Map.of(), true);
         }
     }
 
@@ -175,7 +176,7 @@ public final class PermanentAbilityValueEvaluator {
         if (ai == null || candidate == null || candidate.getController() == null
                 || !isInspectableBattlefieldPermanent(candidate)) {
             return new FutureAbilityEvaluation(List.of(), false,
-                    List.of("Future ability value unavailable for this public permanent"));
+                    List.of("Future ability value unavailable for this public permanent"), Map.of(), false);
         }
         final SituationalAnalysisSession session = SituationalAnalysisSession.current(ai);
         return session == null ? prepareFutureAbilities(ai, candidate, relationshipEntries, trace, mode)
@@ -189,18 +190,19 @@ public final class PermanentAbilityValueEvaluator {
         final List<AbilityValueContribution> contributions = new ArrayList<>();
         final List<String> reasons = new ArrayList<>();
         final Map<AbilityIdentity, Integer> referenceResolutionValues = new HashMap<>();
+        final boolean[] evaluationAvailable = {true};
         collectStaticFutureAllowances(ai, candidate, contributions, reasons);
         final boolean hasUnevaluatedPrintedAbility = collectIntrinsicAbilities(ai, candidate,
-                relationshipEntries, contributions, reasons, trace, mode, referenceResolutionValues);
+                relationshipEntries, contributions, reasons, trace, mode, referenceResolutionValues, evaluationAvailable);
         final boolean hasUnevaluatedGrantedAbility = hasUnevaluatedGrantedAbility(ai, candidate,
-                relationshipEntries, reasons, trace, mode);
+                relationshipEntries, reasons, trace, mode, evaluationAvailable);
         final boolean hasUnevaluatedAbility = hasUnevaluatedPrintedAbility || hasUnevaluatedGrantedAbility;
-        return new FutureAbilityEvaluation(contributions, hasUnevaluatedAbility, reasons, referenceResolutionValues);
+        return new FutureAbilityEvaluation(contributions, hasUnevaluatedAbility, reasons, referenceResolutionValues, evaluationAvailable[0]);
     }
 
     private static boolean hasUnevaluatedGrantedAbility(final Player ai, final Card candidate,
             final List<AbilityValueContribution> relationships, final List<String> reasons,
-            final EffectAnalysisTrace trace, final FutureAbilityMode mode) {
+            final EffectAnalysisTrace trace, final FutureAbilityMode mode, final boolean[] evaluationAvailable) {
         // TODO: Value granted triggers/activations directly instead of using the coarse fallback.
         // Unsupported static/replacement abilities still need their own coverage policy. Do not
         // treat keyword expansion or mana production already scored by the body as unknown value.
@@ -210,6 +212,7 @@ public final class PermanentAbilityValueEvaluator {
         } catch (final RuntimeException unavailable) {
             SituationalAnalysisSession.noteFailure(ai);
             reasons.add(candidate.getName() + ": granted ability fallback skipped (live inventory unavailable)");
+            evaluationAvailable[0] = false;
             return false;
         }
         for (final CardAbilityTraversal.AbilityDescription description : liveDescriptions) {
@@ -242,9 +245,10 @@ public final class PermanentAbilityValueEvaluator {
             final List<AbilityValueContribution> relationshipEntries,
             final List<AbilityValueContribution> destination, final List<String> reasons,
             final EffectAnalysisTrace trace, final FutureAbilityMode mode,
-            final Map<AbilityIdentity, Integer> referenceResolutionValues) {
+            final Map<AbilityIdentity, Integer> referenceResolutionValues, final boolean[] evaluationAvailable) {
         if (candidate.getPaperCard() == null) {
             reasons.add(candidate.getName() + ": intrinsic value skipped (no public definition)");
+            evaluationAvailable[0] = false;
             return false;
         }
         final List<CardAbilityTraversal.AbilityDescription> descriptions;
@@ -260,6 +264,7 @@ public final class PermanentAbilityValueEvaluator {
         } catch (final RuntimeException failure) {
             SituationalAnalysisSession.noteFailure(ai);
             reasons.add(candidate.getName() + ": intrinsic value skipped (definition unavailable)");
+            evaluationAvailable[0] = false;
             return false;
         }
         boolean hasUnevaluatedAbility = false;

@@ -133,6 +133,12 @@ public final class CombatSafetyEvaluator {
             return new Forecast(rejected("Survival horizon reference incomplete: " + reference.horizon().reasons()), Optional.empty());
         }
         final CombatSurvivalHorizonEvaluator.Opportunity[] attackReference = new CombatSurvivalHorizonEvaluator.Opportunity[1];
+        // Arbitrary continuation/horizon callbacks may distinguish public identities. TODO:
+        // Audit their role-sensitive symmetries before admitting equivalent singleton reuse.
+        final var representatives = continuation == null && horizon == null
+                ? CombatAttackEquivalence.representatives(alternatives, survivingValues, readiness, eligible) : Map.<Integer, Integer>of();
+        reasons.add("Equivalent future singleton rankings reused: " + (representatives.isEmpty() ? 0
+                : eligible.size() - representatives.values().stream().distinct().count()));
         final var selection = GreedyAttackCandidates.select(List.of(), eligible, group -> {
             if (!budget.tryConsume()) { reasons.add("Follow-up shared budget exhausted"); return null; }
             final PublicCombatSnapshot next = CombatAttackCandidates.select(alternatives, group);
@@ -168,8 +174,7 @@ public final class CombatSafetyEvaluator {
                 }
             }
             return observingAttacker ? comparison : -comparison;
-        }, id -> id);
-        // TODO: Reuse permutation-equivalent future singleton scores once future-role keys are audited.
+        }, id -> representatives.getOrDefault(id, id));
         // Greedy search may miss non-prefix combinations; no-lethal is an estimate, not a safety certificate.
         reasons.add("Greedy future singleton/addition search with independent all-out candidate; not a global optimum certificate");
         reasons.add("Greedy future declarations evaluated: " + selection.evaluations());

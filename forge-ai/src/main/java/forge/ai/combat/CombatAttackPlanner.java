@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import forge.ai.effect.ValuationDecision;
 import forge.game.card.Card;
@@ -20,11 +21,12 @@ public final class CombatAttackPlanner {
 
     public record Plan(Optional<PublicCombatSnapshot> snapshot, Optional<PublicCombatReadiness> readiness,
             Optional<CombatAttackSearch.Result> search, boolean applicable, List<String> reasons,
-            Map<Integer, Integer> fixedAttackers) {
-        public Plan { reasons = List.copyOf(reasons); fixedAttackers = Map.copyOf(fixedAttackers); }
+            Map<Integer, Integer> fixedAttackers, Map<Integer, Set<Integer>> legalDestinations) {
+        public Plan { reasons = List.copyOf(reasons); fixedAttackers = Map.copyOf(fixedAttackers); legalDestinations = Map.copyOf(legalDestinations); }
     }
 
-    private record Capture(PublicCombatSnapshot snapshot, PublicCombatReadiness readiness, Map<Integer, Integer> fixedAttackers) { }
+    private record Capture(PublicCombatSnapshot snapshot, PublicCombatReadiness readiness, Map<Integer, Integer> fixedAttackers,
+            Map<Integer, Set<Integer>> legalDestinations) { }
 
     /** Read-only: hypothetical attacks never publish live combat/card views or consume card IDs. */
     public static Plan plan(final Player ai, final Combat combat, final CombatSearchBudget budget) {
@@ -35,16 +37,20 @@ public final class CombatAttackPlanner {
         final Capture capture = capture(ai, combat, reasons, budget);
         if (capture == null) { return rejected(List.of("Shared combat budget exhausted during snapshot preparation")); }
         if (!reasons.isEmpty()) {
-            return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.empty(), false, reasons, capture.fixedAttackers());
+            return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.empty(), false, reasons, capture.fixedAttackers(), capture.legalDestinations());
         }
         final var prepared = CombatPlanningPreparation.values(ai, ValuationDecision.ATTACK, budget);
         if (prepared.isEmpty()) {
             return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.empty(), false,
-                    List.of("Shared combat budget exhausted during valuation preparation"), capture.fixedAttackers());
+                    List.of("Shared combat budget exhausted during valuation preparation"), capture.fixedAttackers(), capture.legalDestinations());
         }
         final PreparedCombatValuation values = prepared.orElseThrow();
-        final CombatAttackSearch.Result search = CombatAttackSearch.search(capture.snapshot(), values, capture.readiness(), budget,
-                capture.fixedAttackers().keySet());
+        final boolean destinations = forge.ai.AiProfileUtil.getBoolProperty(ai, forge.ai.AiProps.ENABLE_COMBAT_ATTACK_DESTINATION_PLANNING)
+                && capture.snapshot().planeswalkers().values().stream().anyMatch(walker -> walker.controllerId() == capture.snapshot().defendingPlayerId());
+        final CombatAttackSearch.Result search = destinations
+                ? CombatAttackDestinationSearch.search(capture.snapshot(), values, capture.readiness(), budget,
+                        capture.fixedAttackers(), capture.legalDestinations())
+                : CombatAttackSearch.search(capture.snapshot(), values, capture.readiness(), budget, capture.fixedAttackers().keySet());
         reasons.addAll(search.reasons());
         // Greedy declaration coverage need not enumerate every subset. Opposing responses must
         // still be complete; an incomplete counterattack must never become "zero threat".
@@ -52,7 +58,7 @@ public final class CombatAttackPlanner {
         final boolean applicable = search.best().isPresent() && (search.best().orElseThrow().certifiedWin()
                 || search.outcomeDomainComplete() && search.candidateSearchComplete());
         if (!applicable) { reasons.add("No sufficiently supported, verified attack/reply result"); }
-        return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.of(search), applicable, reasons, capture.fixedAttackers());
+        return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.of(search), applicable, reasons, capture.fixedAttackers(), capture.legalDestinations());
     }
 
     /** A real own declaration only; rejected plans leave all live assignments untouched. */
@@ -71,7 +77,8 @@ public final class CombatAttackPlanner {
             return false;
         }
         if (!stale.isEmpty() || !plan.snapshot().orElseThrow().equals(fresh.snapshot())
-                || !plan.readiness().orElseThrow().equals(fresh.readiness()) || !plan.fixedAttackers().equals(fresh.fixedAttackers())) {
+                || !plan.readiness().orElseThrow().equals(fresh.readiness()) || !plan.fixedAttackers().equals(fresh.fixedAttackers())
+                || !plan.legalDestinations().equals(fresh.legalDestinations())) {
             CombatDecisionTrace.attacks(ai, plan, false, "Public alternatives/readiness or declarations changed", budget);
             return false;
         }
@@ -81,7 +88,14 @@ public final class CombatAttackPlanner {
                 .filter(player -> player.getId() == fresh.snapshot().defendingPlayerId()).findFirst().orElseThrow();
         final var selected = plan.search().orElseThrow().best().orElseThrow();
         final Combat detached = new Combat(ai);
-        selected.attackers().forEach(id -> detached.addAttackerForValidation(cards.get(id), defender));
+        for (final var entry : selected.destinations().entrySet()) {
+            final var target = resolveDestination(ai, defender, entry.getValue());
+            if (target == null) {
+                CombatDecisionTrace.attacks(ai, plan, false, "Chosen destination no longer exists", budget);
+                return false;
+            }
+            detached.addAttackerForValidation(cards.get(entry.getKey()), target);
+        }
         if (!CombatUtil.validateAttackers(detached)) {
             CombatDecisionTrace.attacks(ai, plan, false, "Chosen whole attack declaration is no longer legal", budget);
             return false;
@@ -97,7 +111,7 @@ public final class CombatAttackPlanner {
             return false;
         }
         selected.attackers().stream().filter(id -> !plan.fixedAttackers().containsKey(id))
-                .forEach(id -> combat.addAttacker(cards.get(id), defender));
+                .forEach(id -> combat.addAttacker(cards.get(id), resolveDestination(ai, defender, selected.destinations().get(id))));
         if (ai.getController() instanceof forge.ai.PlayerControllerAi controller) {
             controller.requestCombatExecutionPlan(combat);
         }
@@ -120,8 +134,12 @@ public final class CombatAttackPlanner {
             reasons.add("Attack planning cannot change a declaration after blocks");
         }
         for (final Card card : combat.getAttackers()) {
-            if (!(combat.getDefenderByAttacker(card) instanceof Player target) || target == ai) {
-                reasons.add("Fixed attacks require an opposing player destination");
+            final var target = combat.getDefenderByAttacker(card);
+            final boolean supportedWalker = forge.ai.AiProfileUtil.getBoolProperty(ai, forge.ai.AiProps.ENABLE_COMBAT_ATTACK_DESTINATION_PLANNING)
+                    && target instanceof Card walker && walker.isPlaneswalker() && !walker.isCreature()
+                    && walker.getController().isOpponentOf(ai);
+            if (!(target instanceof Player player && player.isOpponentOf(ai)) && !supportedWalker) {
+                reasons.add("Fixed attacks require an opposing supported destination");
             }
         }
         if (ai.getGame().getPlayers().size() != 2) { reasons.add("Only ordinary opposing two-player attacks are supported"); }
@@ -133,20 +151,35 @@ public final class CombatAttackPlanner {
         final Combat all = new Combat(ai);
         final Combat fixed = new Combat(ai);
         final Map<Integer, Integer> fixedIds = new LinkedHashMap<>();
+        final Map<Integer, Set<Integer>> legal = new LinkedHashMap<>();
+        final boolean enabled = forge.ai.AiProfileUtil.getBoolProperty(ai, forge.ai.AiProps.ENABLE_COMBAT_ATTACK_DESTINATION_PLANNING);
+        final List<forge.game.GameEntity> targets = new ArrayList<>(List.of(defender));
+        if (enabled) { targets.addAll(defender.getPlaneswalkersInPlay()); }
         combat.getAttackers().forEach(card -> {
-            if (combat.getDefenderByAttacker(card) == defender) {
-                fixed.addAttackerForValidation(card, defender);
-                fixedIds.put(card.getId(), defender.getId());
-            }
+            final var target = combat.getDefenderByAttacker(card);
+            fixed.addAttackerForValidation(card, target);
+            fixedIds.put(card.getId(), destination(target).key());
         });
         for (final Card card : ai.getCreaturesInPlay()) {
             if (!budget.tryConsume()) { return null; }
-            if (!CombatUtil.canAttack(card, defender)) { continue; }
-            if (CombatUtil.getAttackCost(ai.getGame(), card, defender) != null) {
-                reasons.add("Attack payment needs explicit planning: " + card.getId());
-                continue;
+            final Set<Integer> options = new java.util.LinkedHashSet<>();
+            for (final var target : targets) {
+                if (targets.size() > 1 && !budget.tryConsume()) { return null; }
+                if (target instanceof Card walker && walker.isCreature()) {
+                    reasons.add("Creature/planeswalker destination needs explicit mechanics: " + walker.getId());
+                    continue;
+                }
+                if (!CombatUtil.canAttack(card, target)) { continue; }
+                if (CombatUtil.getAttackCost(ai.getGame(), card, target) != null) {
+                    reasons.add("Attack payment needs explicit planning: " + card.getId());
+                    continue;
+                }
+                options.add(destination(target).key());
             }
-            all.addAttackerForValidation(card, defender);
+            if (options.isEmpty()) { continue; }
+            legal.put(card.getId(), Set.copyOf(options));
+            final int initial = fixedIds.getOrDefault(card.getId(), options.iterator().next());
+            all.addAttackerForValidation(card, resolveDestination(ai, defender, CombatAttackDestination.fromKey(initial)));
         }
         if (!CombatUtil.validateAttackers(fixed)) { reasons.add("Incomplete mandatory attacks need a constraint-preserving adapter"); }
         if (!all.getAttackers().stream().map(Card::getId).toList().containsAll(fixedIds.keySet())) {
@@ -162,11 +195,25 @@ public final class CombatAttackPlanner {
         reasons.addAll(snapshot.unavailableReasons());
         // Future-only uncertainty must not prevent certifying an immediate actual win.
         // The search reports it when a continuing combat needs a reply forecast.
-        // TODO: Defender alternatives/planeswalkers, attack maxima, forced splits and taxes.
-        return new Capture(snapshot, readiness, Map.copyOf(fixedIds));
+        // TODO: Battles/multiplayer destinations, attack maxima, forced splits and taxes.
+        return new Capture(snapshot, readiness, Map.copyOf(fixedIds), Map.copyOf(legal));
+    }
+
+    private static CombatAttackDestination destination(final forge.game.GameEntity target) {
+        return new CombatAttackDestination(target instanceof Player ? CombatAttackDestination.Kind.PLAYER
+                : CombatAttackDestination.Kind.PLANESWALKER, target.getId());
+    }
+
+    private static forge.game.GameEntity resolveDestination(final Player ai, final Player defender,
+            final CombatAttackDestination destination) {
+        if (destination.kind() == CombatAttackDestination.Kind.PLAYER) {
+            return destination.id() == defender.getId() ? defender : null;
+        }
+        return ai.getGame().getCardsIn(ZoneType.Battlefield).stream().filter(card -> card.getId() == destination.id()
+                && card.isPlaneswalker() && !card.isCreature() && card.getController() == defender).findFirst().orElse(null);
     }
 
     private static Plan rejected(final List<String> reasons) {
-        return new Plan(Optional.empty(), Optional.empty(), Optional.empty(), false, reasons, Map.of());
+        return new Plan(Optional.empty(), Optional.empty(), Optional.empty(), false, reasons, Map.of(), Map.of());
     }
 }

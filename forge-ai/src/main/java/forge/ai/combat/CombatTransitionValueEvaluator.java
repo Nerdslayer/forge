@@ -40,7 +40,7 @@ public final class CombatTransitionValueEvaluator {
         }
         if (!projection.outcomes().supported()) { throw new IllegalArgumentException("Incomplete outcomes cannot be scored"); }
         final PreparedCombatValuation.LossValue casualties = values.retireOpportunities(projection.outcomes().resolutions())
-                .evaluateLosses(projection.lostCreatures());
+                .evaluateLosses(projection.lostPermanents());
         final PreparedCombatValuation.LossValue loss = new PreparedCombatValuation.LossValue(
                 CombatOutcomePredictor.add(casualties.body(), values.survivorBodyUtility(snapshot, projection)),
                 casualties.unknownAbility(), casualties.futureAbility(), casualties.relationships(), casualties.completeness(), casualties.reasons());
@@ -62,6 +62,25 @@ public final class CombatTransitionValueEvaluator {
         // TODO: Survivor changes beyond fixed additive P/T/shields and broader immediate outcome ownership. Tactical future
         // adjustments are intentionally composed by the search, not embedded in raw transitions.
         // Terminal is a separate ordering class: do not rely on total points to prioritize wins.
-        return new Score(loss, lifeUtility, projection.outcomes().utility(), terminal, projection.terminal(), ValuationCompleteness.PARTIAL, reasons);
+        final int walkerUtility = planeswalkerUtility(snapshot, projection);
+        return new Score(loss, lifeUtility, CombatOutcomePredictor.add(projection.outcomes().utility(), walkerUtility),
+                terminal, projection.terminal(), ValuationCompleteness.PARTIAL, reasons);
+    }
+
+    /** Destruction owns the full loss ledger; only survivors earn separate loyalty damage. */
+    static int planeswalkerUtility(final PublicCombatSnapshot snapshot, final CombatProjection projection) {
+        int result = 0;
+        for (final var walker : snapshot.planeswalkers().values()) {
+            final int after = projection.planeswalkerLoyaltyAfter().getOrDefault(walker.id(), walker.loyalty());
+            int value = after > 0 ? 10 * Math.max(0, walker.loyalty() - after) : 0;
+            if (walker.ultimateThreat().potential() && (after == 0
+                    || PlaneswalkerUltimateThreatEvaluator.damageRequired(walker.loyalty(), walker.ultimateThreshold()) > 0
+                            && after < walker.ultimateThreshold())) {
+                // One tactical urgency credit, even when several ultimates exist or the source dies.
+                value = CombatOutcomePredictor.add(value, walker.urgencyValue());
+            }
+            result = CombatOutcomePredictor.add(result, walker.controllerId() == snapshot.observingPlayerId() ? -value : value);
+        }
+        return result;
     }
 }

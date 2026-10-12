@@ -39,6 +39,8 @@ public final class CombatDecisionTrace {
                 .append("\nNodes: ").append(budget.used()).append(", elapsedMs=").append(budget.elapsedMillis())
                 .append("\nPlan reasons: ").append(plan.reasons()).append("\nExecution: ").append(executionReason);
         plan.snapshot().ifPresent(snapshot -> text.append("\nPublic attack alternatives: ").append(snapshot.attackersToDefenders())
+                .append("\nPublic planeswalkers (loyalty, ultimate threshold, urgency): ").append(snapshot.planeswalkers())
+                .append("\nLegal attack destinations: ").append(plan.legalDestinations())
                 .append("\nPublic creature IDs: ").append(publicLabels(ai, snapshot))
                 .append("\nIgnored effects (approximate model): ").append(snapshot.ignoredEffects()));
         plan.search().ifPresent(search -> {
@@ -50,6 +52,12 @@ public final class CombatDecisionTrace {
             search.noAttack().ifPresent(candidate -> text.append("\nNo additional attacks: ").append(candidate.total())
                     .append(", public reply=").append(candidate.reply()));
             search.best().ifPresent(candidate -> text.append("\nChosen attackers: ").append(candidate.attackers())
+                    .append(", destinations=").append(candidate.destinations())
+                    .append(", planeswalker loyalty after=").append(candidate.combat().projection().planeswalkerLoyaltyAfter())
+                    .append(", planeswalker utility=").append(CombatTransitionValueEvaluator.planeswalkerUtility(plan.snapshot().orElseThrow(), candidate.combat().projection()))
+                    .append(", walker goals=").append(walkerGoals(plan.snapshot().orElseThrow(), candidate.combat().projection()))
+                    .append(", uncommitted attackers=").append(plan.legalDestinations().keySet().stream()
+                            .filter(id -> !candidate.attackers().contains(id)).sorted().toList())
                     .append(", predicted blocks=").append(candidate.combat().assignment().blockersByAttacker())
                     .append(", blocker chump life adjustment=").append(candidate.combat().chumpLifeAdjustment())
                     .append("\nLoss components: ").append(candidate.combat().score().permanentLoss())
@@ -65,6 +73,18 @@ public final class CombatDecisionTrace {
                     .append("\nTwo-turn pressure: ").append(candidate.twoTurnPressure()));
         });
         Logger.info(text.toString());
+    }
+
+    private static java.util.Map<Integer, String> walkerGoals(final PublicCombatSnapshot snapshot, final CombatProjection projection) {
+        final java.util.Map<Integer, String> result = new java.util.LinkedHashMap<>();
+        snapshot.planeswalkers().values().stream().sorted(java.util.Comparator.comparingInt(PublicCombatSnapshot.Planeswalker::id)).forEach(walker -> {
+            final int after = projection.planeswalkerLoyaltyAfter().getOrDefault(walker.id(), walker.loyalty());
+            final String goal = after == 0 ? "predicted kill" : walker.ultimateThreat().potential()
+                    && walker.ultimateThreshold() > 0 && after < walker.ultimateThreshold() ? "predicted ultimate denial"
+                            : after < walker.loyalty() ? "loyalty reduced" : "unchanged";
+            result.put(walker.id(), goal);
+        });
+        return result;
     }
 
     public static void blocks(final Player ai, final CombatBlockPlanner.Plan plan, final boolean applied,
@@ -83,6 +103,8 @@ public final class CombatDecisionTrace {
         plan.search().ifPresent(search -> {
             text.append("\nSearch exhaustive: ").append(search.searchExhaustive())
                     .append(", outcome domain supported: ").append(search.outcomeDomainComplete());
+            text.append(", fresh block evaluations: ").append(search.evaluations())
+                    .append(", exact block cache hits: ").append(search.cacheHits());
             text.append("\nFixed blocks: ").append(plan.fixedBlocks());
             search.unblocked().ifPresent(candidate -> text.append("\nLegal block baseline: ").append(candidate.assignment().blockersByAttacker())
                     .append(", value=").append(candidate.score().total())

@@ -16,7 +16,8 @@ import forge.game.zone.ZoneType;
 
 /** Public next-turn eligibility, frozen before search; no controller/hand prediction calls. */
 public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAttackNextTurn,
-        Map<Integer, Set<Integer>> blockPairsNextTurn, List<String> unsupportedReasons, List<String> ignoredEffects) {
+        Map<Integer, Set<Integer>> blockPairsNextTurn, List<String> unsupportedReasons, List<String> ignoredEffects,
+        boolean singletonPermutationSafe) {
     public PublicCombatReadiness {
         canAttackNextTurn = Set.copyOf(canAttackNextTurn);
         final Map<Integer, Set<Integer>> pairs = new LinkedHashMap<>();
@@ -27,6 +28,11 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
     }
 
     public PublicCombatReadiness(final int nextActivePlayerId, final Set<Integer> canAttackNextTurn,
+            final Map<Integer, Set<Integer>> blockPairsNextTurn, final List<String> unsupportedReasons, final List<String> ignoredEffects) {
+        this(nextActivePlayerId, canAttackNextTurn, blockPairsNextTurn, unsupportedReasons, ignoredEffects, ignoredEffects.isEmpty());
+    }
+
+    public PublicCombatReadiness(final int nextActivePlayerId, final Set<Integer> canAttackNextTurn,
             final Map<Integer, Set<Integer>> blockPairsNextTurn, final List<String> unsupportedReasons) {
         this(nextActivePlayerId, canAttackNextTurn, blockPairsNextTurn, unsupportedReasons, List.of());
     }
@@ -34,7 +40,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
     /** Ordinary alternating two-player turns only. Eligibility is frozen for both controllers;
      * projected tapping and casualties are filtered by the turn-transition builder. */
     PublicCombatReadiness forActivePlayer(final int playerId) {
-        return new PublicCombatReadiness(playerId, canAttackNextTurn, blockPairsNextTurn, unsupportedReasons, ignoredEffects);
+        return new PublicCombatReadiness(playerId, canAttackNextTurn, blockPairsNextTurn, unsupportedReasons, ignoredEffects, singletonPermutationSafe);
     }
 
     public static PublicCombatReadiness capture(final Player observer, final PublicCombatSnapshot snapshot) {
@@ -117,6 +123,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
             blocks.put(attacker.getId(), eligible);
         }
         if (!checkpoint.getAsBoolean()) { return null; }
-        return new PublicCombatReadiness(observer.getGame().getPhaseHandler().getNextTurn().getId(), attacks, blocks, reasons, ignored);
+        return new PublicCombatReadiness(observer.getGame().getPhaseHandler().getNextTurn().getId(), attacks, blocks, reasons, ignored,
+                snapshot.singletonPermutationSafe() && ignored.size() == snapshot.ignoredEffects().size());
     }
 }

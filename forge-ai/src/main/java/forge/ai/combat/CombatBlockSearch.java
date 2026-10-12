@@ -38,8 +38,13 @@ public final class CombatBlockSearch {
      * unblocked is the no-additional-blocks baseline, which may contain fixed blocks.
      */
     public record Result(Optional<Candidate> best, Optional<Candidate> unblocked,
-            boolean searchExhaustive, boolean outcomeDomainComplete, int nodes, List<String> reasons) {
+            boolean searchExhaustive, boolean outcomeDomainComplete, int nodes, List<String> reasons,
+            int evaluations, int cacheHits) {
         public Result { reasons = List.copyOf(reasons); }
+        public Result(final Optional<Candidate> best, final Optional<Candidate> unblocked,
+                final boolean searchExhaustive, final boolean outcomeDomainComplete, final int nodes, final List<String> reasons) {
+            this(best, unblocked, searchExhaustive, outcomeDomainComplete, nodes, reasons, 0, 0);
+        }
     }
 
     public static Result search(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
@@ -49,8 +54,15 @@ public final class CombatBlockSearch {
 
     public static Result search(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
             final CombatSearchBudget budget, final int beamWidth) {
+        return search(snapshot, values, budget, beamWidth, true);
+    }
+
+    /** Package-local reference path for functional cache parity/performance regressions. */
+    static Result search(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget, final int beamWidth, final boolean reuse) {
         if (beamWidth <= 0) { throw new IllegalArgumentException("Positive beam width required"); }
         final Search search = new Search(snapshot, values, budget, beamWidth, null, null);
+        search.reuse = reuse;
         return search.run();
     }
 
@@ -64,10 +76,18 @@ public final class CombatBlockSearch {
     public static Result searchWithPressure(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
             final CombatSearchBudget budget, final PublicCombatReadiness readiness,
             final Map<Integer, List<Integer>> fixedBlocks) {
+        return searchWithPressure(snapshot, values, budget, readiness, fixedBlocks, true);
+    }
+
+    static Result searchWithPressure(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget, final PublicCombatReadiness readiness,
+            final Map<Integer, List<Integer>> fixedBlocks, final boolean reuse) {
         if (snapshot.observingPlayerId() != snapshot.defendingPlayerId() || readiness == null) {
             throw new IllegalArgumentException("Pressure requires an observing defender and frozen readiness");
         }
-        return new Search(snapshot, values, budget, 16, readiness, null, fixedBlocks).run();
+        final Search search = new Search(snapshot, values, budget, 16, readiness, null, fixedBlocks);
+        search.reuse = reuse;
+        return search.run();
     }
 
     /** Optional two-future-combat policy. The caller discards the whole result if coverage fails. */
@@ -148,6 +168,17 @@ public final class CombatBlockSearch {
         private boolean domainComplete = true;
         private boolean interrupted;
         private boolean groupsOmitted;
+        private boolean reuse = true;
+        private int evaluations;
+        private int cacheHits;
+        private record ScoringContext(boolean baselineEvaluated, CombatSafetyEvaluator.FollowUp baseline,
+                boolean pressureEnabled, CombatSurvivalHorizonEvaluator.Opportunity replyReference) { }
+        private record EvaluationKey(CombatAssignment assignment, ScoringContext context) { }
+        private final Map<EvaluationKey, Candidate> evaluated = new HashMap<>();
+
+        private ScoringContext scoringContext() {
+            return new ScoringContext(baselineEvaluated, baselineFollowUp, pressureEnabled, replyOpportunityReference);
+        }
 
         private Search(final PublicCombatSnapshot snapshot0, final PreparedCombatValuation values0,
                 final CombatSearchBudget budget0, final int width, final PublicCombatReadiness readiness0,
@@ -292,7 +323,7 @@ public final class CombatBlockSearch {
 
         private Result result(final Candidate unblocked, final boolean exhaustive) {
             return new Result(Optional.ofNullable(best), Optional.ofNullable(unblocked), exhaustive,
-                    domainComplete, budget.used() - startingNodes, List.copyOf(reasons));
+                    domainComplete, budget.used() - startingNodes, List.copyOf(reasons), evaluations, cacheHits);
         }
 
         /** Counts every expanded prefix, conservatively ignoring used-blocker pruning. */
@@ -403,6 +434,14 @@ public final class CombatBlockSearch {
             if (blocks.entrySet().stream().anyMatch(entry -> !snapshot.creatures().get(entry.getKey())
                     .permitsBlockerCount(entry.getValue().size()))) { return null; }
             CombatAssignment assignment = new CombatAssignment(snapshot.attackersToDefenders(), blocks);
+            final EvaluationKey key = new EvaluationKey(assignment, scoringContext());
+            final Candidate cached = reuse ? evaluated.get(key) : null;
+            if (cached != null) {
+                cacheHits++;
+                if (best == null || ordering.compare(cached, best) < 0) { best = cached; }
+                return cached;
+            }
+            evaluations++;
             CombatProjection projection;
             Optional<CombatDamagePlan> damagePlan = Optional.empty();
             final boolean allocationNeeded = blocks.entrySet().stream().anyMatch(entry -> entry.getValue().size() > 1
@@ -437,6 +476,12 @@ public final class CombatBlockSearch {
                     CombatTransitionValueEvaluator.evaluate(snapshot, values, projection), damagePlan, pressure,
                     exchangePreference(projection), followUp, chumpAdjustment(assignment, projection, damagePlan.orElse(null)));
             if (best == null || ordering.compare(candidate, best) < 0) { best = candidate; }
+            // Allocation ranking itself reads pressure/reference state. Setup evaluations and
+            // incomplete work must never masquerade as stable, completed cached candidates.
+            // TODO: Explicit deterministic-rejection caching; only complete successes are kept.
+            if (reuse && domainComplete && !interrupted && key.context().equals(scoringContext())) {
+                evaluated.put(key, candidate);
+            }
             return candidate;
         }
 

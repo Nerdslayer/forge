@@ -130,23 +130,24 @@ public final class CombatExecutionPlan {
             invalidate(); return false;
         }
         final Set<Integer> lost = regular ? afterFirstStrike.lostCreatures() : Set.of();
+        final Set<Integer> lostProviders = regular ? afterFirstStrike.lostPermanents() : Set.of();
         // Later callbacks belong to a new live boundary, not the earlier search's expired clock.
         final CombatSearchBudget budget = CombatPlanningPreparation.budget(observer);
         final var captured = PublicCombatSnapshot.captureForExecution(observer, combat, budget::tryConsume);
         if (captured.isEmpty()) { invalidate(); return false; }
         final PublicCombatSnapshot current = captured.orElseThrow();
         final Map<Integer, Identity> expectedIdentities = new HashMap<>(publicIdentities);
-        lost.forEach(expectedIdentities::remove);
-        final PreparedCombatStaticWorlds expectedStatics = before.staticWorlds().surviving(lost);
+        lostProviders.forEach(expectedIdentities::remove);
+        final PreparedCombatStaticWorlds expectedStatics = before.staticWorlds().surviving(lostProviders);
         if (!current.unsupportedReasons().isEmpty() || !current.unavailableReasons().isEmpty()
                 || current.legacyDamageOrder() != before.legacyDamageOrder()
                 || !before.triggers().isEmpty() && !current.resources().equals(regular
                         ? afterFirstStrike.outcomes().resourcesAfter() : before.resources())
-                || !current.triggers().equals(before.triggers().stream().filter(trigger -> !lost.contains(trigger.ability().sourceId())).toList())
-                || !current.preventionRules().equals(before.preventionRules().stream().filter(rule -> !lost.contains(rule.providerId())).toList())
+                || !current.triggers().equals(before.triggers().stream().filter(trigger -> !lostProviders.contains(trigger.ability().sourceId())).toList())
+                || !current.preventionRules().equals(before.preventionRules().stream().filter(rule -> !lostProviders.contains(rule.providerId())).toList())
                 || !current.staticWorlds().providers().equals(expectedStatics.providers())
                 || !expectedStatics.providers().isEmpty() && !current.staticWorlds().equals(expectedStatics)
-                || !expectedIdentities.equals(identities(lost, budget::tryConsume))
+                || !expectedIdentities.equals(identities(lostProviders, budget::tryConsume))
                 || current.creatures().size() != before.creatures().size() - lost.size()) { invalidate(); return false; }
         for (final var entry : before.players().entrySet()) {
             if (!budget.tryConsume()) { invalidate(); return false; }
@@ -155,10 +156,19 @@ public final class CombatExecutionPlan {
                     entry.getValue().canGainLife(), entry.getValue().cannotLoseAtZero(), entry.getValue().cannotWin());
             if (!expected.equals(current.players().get(entry.getKey()))) { invalidate(); return false; }
         }
+        final Map<Integer, PublicCombatSnapshot.Planeswalker> expectedWalkers = new HashMap<>();
+        for (final var walker : before.planeswalkers().values()) {
+            if (!budget.tryConsume()) { invalidate(); return false; }
+            final int loyalty = regular ? afterFirstStrike.planeswalkerLoyaltyAfter().getOrDefault(walker.id(), walker.loyalty()) : walker.loyalty();
+            if (loyalty > 0) {
+                expectedWalkers.put(walker.id(), walker.withLoyalty(loyalty));
+            }
+        }
+        if (!expectedWalkers.equals(current.planeswalkers())) { invalidate(); return false; }
         for (final var entry : before.creatures().entrySet()) {
             if (!budget.tryConsume()) { invalidate(); return false; }
             if (lost.contains(entry.getKey())) { continue; }
-            final PublicCombatSnapshot.Creature old = before.creatureAfterLosses(entry.getKey(), lost);
+            final PublicCombatSnapshot.Creature old = before.creatureAfterLosses(entry.getKey(), lostProviders);
             final PublicCombatSnapshot.Creature now = current.creatures().get(entry.getKey());
             if (now == null) { invalidate(); return false; }
             final int marked = regular ? afterFirstStrike.survivors().get(entry.getKey()).markedDamage() : old.markedDamage();

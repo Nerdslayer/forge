@@ -68,9 +68,9 @@ public final class CombatTwoTurnPressureEvaluator {
         // Hypothetical removals are a resilience allowance, not scored extra casualties.
         // nextAttack drops their bodies/edges from the future ledger before scoring.
         final var stressed = new CombatProjection(true, true, List.of(), lost, survivors,
-                replyState.playerLifeAfter(), replyState.batches(), CombatProjection.Terminal.NONE, List.of(), replyState.outcomes());
-        final var nextReadiness = new PublicCombatReadiness(before.observingPlayerId(), readiness.canAttackNextTurn(),
-                readiness.blockPairsNextTurn(), readiness.unsupportedReasons());
+                replyState.playerLifeAfter(), replyState.batches(), CombatProjection.Terminal.NONE, List.of(), replyState.outcomes(),
+                replyState.planeswalkerLoyaltyAfter());
+        final var nextReadiness = readiness.forActivePlayer(before.observingPlayerId());
         final var next = CombatSafetyEvaluator.forecastNextAttack(board, stressed, nextReadiness, continuation.values(), budget);
         final Optional<CombatSafetyEvaluator.Continuation> result = next.continuation();
         final int nextDamage = result.map(state -> playerDamage(state.projection(), opponent)).orElse(0);

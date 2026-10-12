@@ -8,15 +8,32 @@ import java.util.Set;
 public record CombatProjection(boolean supported, boolean available, List<String> reasons,
         Set<Integer> lostCreatures, Map<Integer, Survivor> survivors,
         Map<Integer, Integer> playerLifeAfter, List<DamageBatch> batches, Terminal terminal,
-        List<CombatEventBatch> eventBatches, CombatOutcomeResolution outcomes) {
+        List<CombatEventBatch> eventBatches, CombatOutcomeResolution outcomes,
+        Map<Integer, Integer> planeswalkerLoyaltyAfter) {
     public CombatProjection {
         reasons = List.copyOf(reasons);
         lostCreatures = Set.copyOf(lostCreatures);
         survivors = Map.copyOf(survivors);
         playerLifeAfter = Map.copyOf(playerLifeAfter);
         batches = List.copyOf(batches);
+        planeswalkerLoyaltyAfter = Map.copyOf(planeswalkerLoyaltyAfter);
         eventBatches = List.copyOf(eventBatches);
         if (outcomes == null) { throw new IllegalArgumentException("Explicit outcome coverage required"); }
+    }
+
+    public CombatProjection(final boolean supported, final boolean available, final List<String> reasons,
+            final Set<Integer> lostCreatures, final Map<Integer, Survivor> survivors,
+            final Map<Integer, Integer> playerLifeAfter, final List<DamageBatch> batches, final Terminal terminal,
+            final List<CombatEventBatch> eventBatches, final CombatOutcomeResolution outcomes) {
+        this(supported, available, reasons, lostCreatures, survivors, playerLifeAfter, batches, terminal,
+                eventBatches, outcomes, Map.of());
+    }
+
+    /** Creature-only consumers keep their contract; source-loss consumers use this union. */
+    public Set<Integer> lostPermanents() {
+        final Set<Integer> result = new java.util.LinkedHashSet<>(lostCreatures);
+        planeswalkerLoyaltyAfter.forEach((id, loyalty) -> { if (loyalty == 0) { result.add(id); } });
+        return Set.copyOf(result);
     }
 
     /** Synthetic continuations without concrete provenance must not invent combat events. */

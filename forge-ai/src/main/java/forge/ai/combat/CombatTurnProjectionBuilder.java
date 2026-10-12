@@ -30,7 +30,7 @@ final class CombatTurnProjectionBuilder {
         final int defending = before.attackingPlayerId();
         final Map<Integer, PublicCombatSnapshot.Creature> creatures = new LinkedHashMap<>();
         current.survivors().forEach((id, survivor) -> {
-            final PublicCombatSnapshot.Creature card = before.creatureAfterLosses(id, current.lostCreatures());
+            final PublicCombatSnapshot.Creature card = before.creatureAfterLosses(id, current.lostPermanents());
             // The next active player untaps; the other side does not. Combat damage clears.
             final boolean attemptsUntap = card.controllerId() == active && survivor.tapped();
             final boolean tapped = survivor.tapped() && (!attemptsUntap || card.stunCounters() > 0);
@@ -46,6 +46,13 @@ final class CombatTurnProjectionBuilder {
         final PreparedCombatValuation survivingValues = values.afterCombat(before, current);
         final Map<Integer, CombatPlayerResources> resources = new LinkedHashMap<>(current.outcomes().resourcesAfter().isEmpty()
                 ? before.resources() : current.outcomes().resourcesAfter());
+        final Map<Integer, PublicCombatSnapshot.Planeswalker> walkers = new LinkedHashMap<>();
+        before.planeswalkers().forEach((id, walker) -> {
+            final int loyalty = current.planeswalkerLoyaltyAfter().getOrDefault(id, walker.loyalty());
+            if (loyalty > 0) {
+                walkers.put(id, walker.withLoyalty(loyalty));
+            }
+        });
         if (!before.triggers().isEmpty() && !resources.isEmpty()) {
             final CombatPlayerResources nextPlayer = resources.get(active);
             if (nextPlayer == null || nextPlayer.librarySize() < 1) {
@@ -69,9 +76,10 @@ final class CombatTurnProjectionBuilder {
         }
         final PublicCombatSnapshot alternatives = new PublicCombatSnapshot(before.observingPlayerId(), active, defending,
                 creatures, players, attacks, blockers, List.of(), List.of(), before.legacyDamageOrder(), resources,
-                before.triggers().stream().filter(trigger -> creatures.containsKey(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
-                before.preventionRules().stream().filter(rule -> !current.lostCreatures().contains(rule.providerId())).toList(),
-                before.staticWorlds().surviving(current.lostCreatures()), readiness.ignoredEffects());
+                before.triggers().stream().filter(trigger -> !current.lostPermanents().contains(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
+                before.preventionRules().stream().filter(rule -> !current.lostPermanents().contains(rule.providerId())).toList(),
+                before.staticWorlds().surviving(current.lostPermanents()), readiness.ignoredEffects(), walkers,
+                before.singletonPermutationSafe() && readiness.singletonPermutationSafe());
         return new Result(Optional.of(new Turn(alternatives, survivingValues)), readiness.ignoredEffects());
     }
 }
