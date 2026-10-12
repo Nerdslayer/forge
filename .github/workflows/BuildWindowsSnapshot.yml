@@ -1,0 +1,108 @@
+name: Build Fork Windows Snapshot
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration
+
+concurrency:
+  group: fork-windows-snapshot
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.repository == 'Nerdslayer/forge' && github.ref == 'refs/heads/integration'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+
+      - name: Install virtual display
+        run: command -v Xvfb >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y xvfb; }
+
+      - name: Configure fork snapshot URL
+        shell: bash
+        run: |
+          snapshot_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/fork-windows-snapshot/"
+          printf '%s\n' "$snapshot_url" > forge-gui-desktop/filters/snapshot-url.txt
+          printf '%s\n' "$snapshot_url" > forge-gui-mobile-dev/filters/snapshot-url.txt
+
+      - name: Build Windows installer
+        shell: bash
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 &
+          export DISPLAY=:99
+          mvn -U -B clean -P windows-linux install -T 1C -DskipTests
+
+      - name: Prepare fork snapshot files
+        shell: bash
+        run: |
+          release_dir="forge-installer/target/fork-windows-snapshot"
+          expected_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/fork-windows-snapshot/"
+          version_file="forge-gui-desktop/target/classes/version.txt"
+          build_file="forge-gui-desktop/target/classes/build.txt"
+          version="$(tr -d '\r\n' < "$version_file")"
+          installer="$(find forge-installer/target -maxdepth 1 -type f -name 'forge-installer-*.jar' -print -quit)"
+          desktop_jar="$(find forge-gui-desktop/target -maxdepth 1 -type f -name '*-jar-with-dependencies.jar' -print -quit)"
+          adventure_jar="$(find forge-gui-mobile-dev/target -maxdepth 1 -type f -name '*-jar-with-dependencies.jar' -print -quit)"
+
+          test -n "$version"
+          test -f "$build_file"
+          test -n "$installer"
+          test -f "$installer"
+          test -f "$desktop_jar"
+          test -f "$adventure_jar"
+          test "$(unzip -p "$desktop_jar" snapshot-url.txt | tr -d '\r\n')" = "$expected_url"
+          test "$(unzip -p "$adventure_jar" snapshot-url.txt | tr -d '\r\n')" = "$expected_url"
+
+          mkdir -p "$release_dir"
+          cp "$version_file" "$release_dir/version.txt"
+          cp "$build_file" "$release_dir/build.txt"
+          cp "$installer" "$release_dir/forge-installer-${version}.jar"
+
+      - name: Upload fork snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-windows-fork-snapshot
+          path: forge-installer/target/fork-windows-snapshot/*
+          if-no-files-found: error
+
+      - name: Publish fork Windows snapshot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="fork-windows-snapshot"
+          title="Fork Windows Snapshot"
+          notes="Windows snapshot built from ${GITHUB_REPOSITORY}@${GITHUB_SHA}."
+          release_dir="forge-installer/target/fork-windows-snapshot"
+
+          git tag --force "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag" --force
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release view "$tag" --json assets --jq '.assets[].name' |
+              while IFS= read -r asset; do
+                gh release delete-asset "$tag" "$asset" --yes
+              done
+            gh release upload "$tag" "$release_dir"/*
+            gh release edit "$tag" --title "$title" --notes "$notes" --prerelease
+          else
+            gh release create "$tag" "$release_dir"/* \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes "$notes" \
+              --prerelease
+          fi
