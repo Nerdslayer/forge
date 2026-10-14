@@ -35,7 +35,7 @@ final class EffectEventMatchUtils {
             final EffectConsequence consequence, final Map<AbilityKey, Object> runParams) {
         final Trigger trigger = consequence.trigger();
         try {
-            return trigger.checkActivationLimit()
+            return trigger.limitByActivations(1) > 0
                     && !StaticAbilityDisableTriggers.disabled(
                             consequence.source().getGame(), trigger, runParams)
                     && trigger.performTest(runParams);
@@ -47,7 +47,7 @@ final class EffectEventMatchUtils {
     private static boolean passesCommon(final EffectConsequence consequence,
             final Trigger trigger, final Map<AbilityKey, Object> runParams) {
         try {
-            return trigger.checkActivationLimit()
+            return trigger.limitByActivations(1) > 0
                     && trigger.meetsRequirementsOnTriggeredObjects(
                             consequence.source().getGame(), runParams)
                     && !StaticAbilityDisableTriggers.disabled(

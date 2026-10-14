@@ -19,7 +19,7 @@ final class IntrinsicStaticAbilityEvaluator {
     // TODO(effect analysis): Add validated adapters for unsupported static keywords, restrictions,
     // dynamic predicates, characteristic-defining abilities, permissions, and multi-effect text.
     private static final Set<String> ALLOWED_PARAMS = Set.of(
-            "Mode", "Affected", "AddPower", "AddToughness", "SetPower", "SetToughness",
+            "Mode", "Affected", "AffectedDefined", "AddPower", "AddToughness", "SetPower", "SetToughness",
             "AddKeyword", "RemoveKeyword", "AIEffectValue", "Description");
     private static final Set<String> SUPPORTED_KEYWORDS = Set.of(
             "flying", "reach", "first strike", "double strike", "menace", "fear", "intimidate",
@@ -43,8 +43,16 @@ final class IntrinsicStaticAbilityEvaluator {
             return unsupported("unsupported intrinsic static parameters");
         }
 
+        String affectedFilter = ability.parameters().get("Affected");
+        if (ability.parameters().containsKey("AffectedDefined")) {
+            // TODO: Other defined recipients require explicit reference resolution.
+            if (affectedFilter != null || !"Self".equals(ability.parameters().get("AffectedDefined"))) {
+                return unsupported("unsupported intrinsic static defined recipients");
+            }
+            affectedFilter = "Card.Self";
+        }
         final IntrinsicStaticRecipientFilter.Filter recipients = IntrinsicStaticRecipientFilter.describe(
-                ability.parameters().get("Affected"), model);
+                affectedFilter, model);
         final String affected = recipients.affected();
         final StaticAbilityScope scope = StaticAbilityScope.parse(affected);
         if (scope == null) {

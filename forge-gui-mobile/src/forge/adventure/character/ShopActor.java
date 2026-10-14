@@ -58,7 +58,7 @@ public class ShopActor extends MapActor {
     }
 
     public String getDescription() {
-        return shopData.description;
+        return shopData.getDescription();
     }
 
     public int getRestockPrice() {

@@ -45,6 +45,7 @@ import static forge.adventure.data.RewardData.generateAllCards;
 public class CardUtil {
     private static final CardDb.CardArtPreference DEFAULT_CARD_ART_PREFERENCE =
             CardDb.CardArtPreference.ORIGINAL_ART_ALL_EDITIONS;
+    private static final HashMap<String, Pattern> patternMap = new HashMap<>(256);
 
     public static final class CardPredicate implements Predicate<PaperCard> {
         enum ColorType {
@@ -213,17 +214,23 @@ public class CardUtil {
 
             if (!this.deckNeeds.isEmpty()) {
                 boolean found = false;
-                for (String need : this.deckNeeds) {
-                    // FormatExpected: X$Y, where X is DeckHints.Type and Y is a string descriptor
-                    String[] parts = need.split("\\$");
+                int needsSize = this.deckNeeds.size();
+                for (int i = 0; i < needsSize; i++) {
+                    String need = this.deckNeeds.get(i);
+                    if (need == null) continue;
 
-                    if (parts.length != 2) {
+                    int dollarIdx = need.indexOf('$');
+                    if (dollarIdx == -1 || dollarIdx == 0 || dollarIdx == need.length() - 1) {
                         continue;
                     }
-                    DeckHints.Type t = DeckHints.Type.valueOf(parts[0].toUpperCase());
+
+                    String part0 = need.substring(0, dollarIdx);
+                    String part1 = need.substring(dollarIdx + 1);
+
+                    DeckHints.Type t = DeckHints.Type.valueOf(part0.toUpperCase());
 
                     DeckHints hints = card.getRules().getAiHints().getDeckHints();
-                    if (hints != null && hints.contains(t, parts[1])) {
+                    if (hints != null && hints.contains(t, part1)) {
                         found = true;
                         break;
                     }
@@ -238,8 +245,16 @@ public class CardUtil {
         private Pattern getPattern(RewardData type) {
             if (type.cardText == null || type.cardText.isEmpty())
                 return null;
+
+            Pattern cachedPattern = patternMap.get(type.cardText);
+            if (cachedPattern != null) {
+                return cachedPattern;
+            }
+
             try {
-                return Pattern.compile(type.cardText, Pattern.CASE_INSENSITIVE);
+                Pattern compiled = Pattern.compile(type.cardText, Pattern.CASE_INSENSITIVE);
+                patternMap.put(type.cardText, compiled);
+                return compiled;
             } catch (Exception e) {
                 System.err.println("[" + type.cardName + "|" + type.itemName + "]\n" + e);
                 return null;
@@ -344,6 +359,7 @@ public class CardUtil {
      */
     public static void clearPriceCache() {
         priceData = null;
+        AdventureReadPriceList.clearPriceDataInstance();
     }
 
     private static AdventureReadPriceList.PriceData getPriceData() {

@@ -74,6 +74,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
     private final HashMap<String, Long> equippedItems = new HashMap<>();
     private final ArrayList<HashMap<String, Long>> deckLoadouts = new ArrayList<>();
     private final List<AdventureQuestData> quests = new ArrayList<>();
+    private transient AdventureQuestHistory questHistory = new AdventureQuestHistory();
     private final List<AdventureEventData> events = new ArrayList<>();
     private final Set<PaperCard> unsupportedCards = new HashSet<>();
     private final Predicate<PaperCard> isUnsupported = pc -> pc != null && pc.getRules() != null && pc.getRules().isUnsupported();
@@ -135,6 +136,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         characterFlags.clear();
         questFlags.clear();
         quests.clear();
+        questHistory.clear();
         events.clear();
         cards.clear();
         statistic.clear();
@@ -396,6 +398,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         boolean migration = false;
         clear(); // Reset player data.
         this.statistic.load(data.readSubData("statistic"));
+        questHistory.load(data.readSubData("questHistory"));
         this.difficultyData.startingLife = data.readInt("startingLife");
         // Support for old typo
         if (data.containsKey("staringMoney")) {
@@ -598,6 +601,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
                     quests.add((AdventureQuestData) itsReallyAQuest);
             }
         }
+        AdventureQuestEligibility.current().reconcile(quests);
         if (data.containsKey("events")) {
             events.clear();
             Object[] q = (Object[]) data.readObject("events");
@@ -799,6 +803,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         SaveFileData data = new SaveFileData();
 
         data.store("statistic", this.statistic.save());
+        data.store("questHistory", questHistory.save());
         data.store("startingLife", this.difficultyData.startingLife);
         data.store("startingMoney", this.difficultyData.startingMoney);
         data.store("startingDifficulty", this.difficultyData.startingDifficulty);
@@ -1513,8 +1518,20 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         return (int) questFlags.getOrDefault(key, (byte) 0);
     }
 
+    /**
+     * Character flags that exist only to stop a quest from being offered twice. Data checks them
+     * with checkCharacterFlag, so they survive a quest wipe unless cleared here: "noQuest" is the
+     * New Game+ "skip the main quest" choice and hides the intro mage's main quest option, and
+     * "dungeonMasterQuestGiven" gates the lair-clearing quest offered in dungeons.
+     */
+    private static final String[] QUEST_GATE_CHARACTER_FLAGS = {"noQuest", "dungeonMasterQuestGiven"};
+
+    /** Forget all global quest progress so every quest can be offered again (New Game+, resetQuests) */
     public void resetQuestFlags() {
         questFlags.clear();
+        for (String flag : QUEST_GATE_CHARACTER_FLAGS) {
+            setCharacterFlag(flag, 0);
+        }
     }
 
     public void addQuest(String questID, boolean isNewGame) {
@@ -1539,12 +1556,19 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
                 break;
             }
         }
-        quests.add(q);
+        if (!AdventureQuestEligibility.current().accept(q, quests, questHistory,
+                AdventureQuestEligibility.current()::isTargetEnemyDefeated)) {
+            return;
+        }
         if (noTrackedQuests || q.autoTrack)
             AdventureQuestController.trackQuest(q);
         q.activateNextStages();
         if (!isNewGame)
             AdventureQuestController.instance().showQuestDialogs(MapStage.getInstance());
+    }
+
+    public AdventureQuestHistory getQuestHistory() {
+        return questHistory;
     }
 
     public List<AdventureQuestData> getQuests() {

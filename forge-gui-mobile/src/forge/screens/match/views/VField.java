@@ -2,7 +2,6 @@ package forge.screens.match.views;
 
 import java.util.*;
 
-import forge.Forge;
 import forge.game.card.CardView;
 import forge.game.card.CardView.CardStateView;
 import forge.game.player.PlayerView;
@@ -26,6 +25,9 @@ public class VField extends FContainer {
     private float commandZoneWidth;
     private float fieldModifier;
     private final boolean stackNonTokenCreatures;
+    private final List<CardView> creatures = new ArrayList<>();
+    private final List<CardView> lands = new ArrayList<>();
+    private final List<CardView> otherPermanents = new ArrayList<>();
 
     public VField(PlayerView player0) {
         player = player0;
@@ -65,6 +67,9 @@ public class VField extends FContainer {
         @Override
         public void run() {
             clear();
+            creatures.clear();
+            lands.clear();
+            otherPermanents.clear();
 
             FCollectionView<CardView> battlefield = player.getBattlefield();
             if (battlefield.isEmpty()) {
@@ -81,10 +86,7 @@ public class VField extends FContainer {
                 cardPanel.setPrevPanelInStack(null);
             }
 
-            List<CardView> creatures = new ArrayList<>();
-            List<CardView> lands = new ArrayList<>();
             List<CardView> contraptions = null; //Usually not used; create on demand.
-            List<CardView> otherPermanents = new ArrayList<>();
 
             for (CardView card : model) {
                 CardAreaPanel cardPanel = CardAreaPanel.get(card);
@@ -251,13 +253,8 @@ public class VField extends FContainer {
             y1 = 0;
             y2 = cardSize;
         }
-        if (Forge.isHorizontalTabLayout()) {
-            row1.setBounds(0, y1, width, cardSize);
-            row2.setBounds(0, y2, width, cardSize);
-        } else {
-            row1.setBounds(0, y1, width - fieldModifier, cardSize);
-            row2.setBounds(0, y2, (width - commandZoneWidth) - fieldModifier, cardSize);
-        }
+        row1.setBounds(0, y1, width - fieldModifier, cardSize);
+        row2.setBounds(0, y2, (width - commandZoneWidth) - fieldModifier, cardSize);
     }
 
     public class FieldRow extends VCardDisplayArea {
@@ -267,6 +264,9 @@ public class VField extends FContainer {
         private FieldRow() {
             setVisible(true); //make visible by default unlike other display areas
         }
+
+        @Override
+        protected boolean animateEntry() { return true; }
 
         @Override
         protected float getCardWidth(float cardHeight) {

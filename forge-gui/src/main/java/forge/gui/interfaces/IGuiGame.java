@@ -25,8 +25,8 @@ import forge.interfaces.IGameController;
 import forge.item.PaperCard;
 import forge.localinstance.skin.FSkinProp;
 import forge.player.PlayerZoneUpdate;
-import forge.player.PlayerZoneUpdates;
 import forge.trackable.TrackableCollection;
+import forge.trackable.TrackableObject;
 import forge.util.FSerializableFunction;
 import forge.util.ITriggerEvent;
 import forge.util.Localizer;
@@ -34,10 +34,13 @@ import forge.util.collect.FCollectionView;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 public interface IGuiGame {
+
     record OrderResult<T>(List<T> ordered, boolean rememberDecision) implements Serializable {}
 
     /**
@@ -84,30 +87,36 @@ public interface IGuiGame {
     }
     void updateButtons(PlayerView owner, String label1, String label2, boolean enable1, boolean enable2, boolean focus1);
 
-    void flashIncorrectAction();
+    /** Plays a coin flip animation and blocks until it finishes. No-op by default. */
+    default void showCoinFlip(boolean heads, String caption, boolean waitForTap) {}
+    default void showFlipOntoBattlefield(CardView flipped, CardView target, List<CardView> hit, List<CardView> battlefield, int timesFlipped) {}
+    default void endFlipOntoBattlefield(CardView flipped) {}
 
+    void flashIncorrectAction();
     void alertUser();
 
-    void updatePhase(boolean saveState);
+    default void updatePhase(boolean saveState) {}
+    default void updateTurn(PlayerView player) {}
 
-    void updateTurn(PlayerView player);
+    default void updatePlayerControl() {}
 
-    void updatePlayerControl();
-
-    void enableOverlay();
-    void disableOverlay();
+    default void enableOverlay() {}
+    default void disableOverlay() {}
 
     void finishGame();
 
-    void showManaPool(PlayerView player);
-    void hideManaPool(PlayerView player);
+    default void showManaPool(PlayerView player) {}
+    default void hideManaPool(PlayerView player) {}
 
-    void updateStack();
+    default void updateStack() {}
 
-    void notifyStackAddition(final GameEventSpellAbilityCast event);
-    void notifyStackRemoval(final GameEventSpellRemovedFromStack event);
+    /** The game was rewound in place by undo: drop any animation/transient UI state tied to the old timeline. Called on the EDT before the refresh. */
+    default void onSnapshotRestored() {}
 
-    void handleLandPlayed(CardView land);
+    default void notifyStackAddition(final GameEventSpellAbilityCast event) {}
+    default void notifyStackRemoval(final GameEventSpellRemovedFromStack event) {}
+
+    default void handleLandPlayed(CardView land) {}
 
     void handleGameEvent(GameEvent event);
     default void handleGameEvents(List<GameEvent> events) {
@@ -116,31 +125,28 @@ public interface IGuiGame {
         }
     }
 
-    Iterable<PlayerZoneUpdate> tempShowZones(PlayerView controller, Iterable<PlayerZoneUpdate> zonesToUpdate);
+    default void updateZones(Iterable<PlayerZoneUpdate> zonesToUpdate) {}
 
-    void hideZones(PlayerView controller, Iterable<PlayerZoneUpdate> zonesToUpdate);
-
-    void updateZones(Iterable<PlayerZoneUpdate> zonesToUpdate);
-
-    void updateSingleCard(CardView card);
-
-    void updateCards(Iterable<CardView> cards);
+    default void updateCard(final CardView card) {
+        updateCards(Collections.singleton(card));
+    }
+    default void updateCards(Iterable<CardView> cards) {}
     default void updateCardsNetSafe(FCollectionView<CardView> cards) { updateCards(isNetGame() ? cards.threadSafeIterable() : cards); }
 
     void updateRevealedCards(TrackableCollection<CardView> collection);
 
-    void refreshCardDetails(Iterable<CardView> cards);
-
-    void refreshField();
+    default void refreshCardDetails(Iterable<CardView> cards) {}
+    default void refreshField() {}
 
     GameState getGamestate();
 
-    void updateManaPool(Iterable<PlayerView> manaPoolUpdate);
+    default void updateManaPool(Iterable<PlayerView> manaPoolUpdate) {}
+    default void updateLives(Iterable<PlayerView> livesUpdate) {}
 
-    void updateLives(Iterable<PlayerView> livesUpdate);
-    void updateShards(Iterable<PlayerView> shardsUpdate);
+    // adventure only
+    default void updateShards(Iterable<PlayerView> shardsUpdate) {}
 
-    void updateDependencies();
+    default void updateDependencies() {}
 
     void setPanelSelection(CardView hostCard);
 
@@ -258,23 +264,39 @@ public interface IGuiGame {
 
     void setPlayerAvatar(LobbyPlayer player, IHasIcon ihi);
 
-    PlayerZoneUpdates openZones(PlayerView controller, Collection<ZoneType> zones, Map<PlayerView, Object> players, boolean backupLastZones);
+    default void openZones(PlayerView controller, Collection<ZoneType> zones, Map<PlayerView, Object> players) {}
 
-    void restoreOldZones(PlayerView playerView, PlayerZoneUpdates playerZoneUpdates);
-
-    void setHighlighted(Iterable<GameEntityView> entities, boolean b);
+    void setHighlighted(Iterable<? extends TrackableObject> objects, boolean b);
 
     /**
      * Mark {@code cards} as selectable and publish the active selection's
      * minimum / maximum required count for client-side use (e.g.,
-     * select-min hotkeys). Callers without a known range pass {@code (0, 0)}.
+     * select-min hotkeys). A maximum of {@code 0} marks display-only highlighting, for which the GUI opens no zones.
      */
     void setSelectables(Iterable<CardView> cards, int min, int max);
+    /**
+     * Marks players and stack items as valid targets of the active prompt, replacing earlier marks (cards go through
+     * {@link #setSelectables}); {@link #clearSelectables()} removes them.
+     */
+    default void setSelectableTargets(Iterable<? extends TrackableObject> targets) {}
+    /**
+     * Whether this GUI lets the player pick stack items as targets by tapping or clicking them in its stack view (and
+     * implements the two methods above). Otherwise targets on the stack are chosen in a dialog. A GUI that forwards
+     * these calls to a remote client returns true only if that client can handle them.
+     */
+    default boolean canPickStackTargets() { return false; }
     void clearSelectables();
     boolean isSelecting();
 
     void setWeaklySelectable(final Iterable<CardView> cards);
     void clearWeaklySelectable();
+
+    /**
+     * Cards revealed to the player for the current prompt, until {@link #hideRevealedCards()}; the GUI chooses how
+     * to display them. Unrelated to {@link #updateRevealedCards}, which records the match's reveal history.
+     */
+    default void showRevealedCards(Iterable<CardView> cards) {}
+    default void hideRevealedCards() {}
 
     boolean isGamePaused();
     void setGamePause(boolean pause);
@@ -288,26 +310,32 @@ public interface IGuiGame {
     void awaitNextInput();
     void cancelAwaitNextInput();
 
-    /** Signal to start a client-side elapsed timer for waiting display. */
-    void showWaitingTimer(PlayerView forPlayer, String waitingForPlayerName);
-
-    boolean isUiSetToSkipPhase(PlayerView playerTurn, PhaseType phase);
-
     void updateAutoPassPrompt();
 
     void setCurrentPlayer(PlayerView player);
 
-    /**
-     * Apply a delta update packet to the local game state.
-     * @param packet the delta packet containing changes
-     */
-    void applyDelta(DeltaPacket packet);
+    boolean isUiSetToSkipPhase(PlayerView playerTurn, PhaseType phase);
 
     /** Repaint marker chevron / stack-yield UI for the given player. */
     default void refreshYieldUi(PlayerView player) {}
-
     /** Apply an authoritative yield-state change. {@link forge.gamemodes.match.AbstractGuiGame} routes to the local {@link forge.interfaces.IGameController}; {@link forge.gamemodes.net.server.RemoteClientGuiGame} forwards over the wire. */
     void applyYieldUpdate(YieldUpdate update);
+
+    /**
+     * Apply a delta update packet to the local game state.
+     * No-op for offline games - network implementation is in {@link NetworkGuiGame}.
+     * @param packet the delta packet containing changes
+     */
+    default void applyDelta(DeltaPacket packet) {}
+
+    /**
+     * Blocks the game thread until a synchronized input is done. Answers normally arrive on
+     * another thread. A GUI whose peer can only answer on this thread (a single-threaded host)
+     * overrides this to take those answers here until {@code done} opens.
+     */
+    default void awaitInput(final CountDownLatch done) throws InterruptedException {
+        done.await();
+    }
 
     /** Returns true if this game instance is a network game. */
     boolean isNetGame();
