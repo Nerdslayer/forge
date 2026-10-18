@@ -564,17 +564,21 @@ public class EffectAi extends SpellAbilityAi {
                             } else {
                                 attackers = CardLists.filter(ai.getCreaturesInPlay(), c -> CombatUtil.canAttack(c, opp));
                             }
-                            List<Card> creatureList = CardLists.filter(list, CardPredicates.possibleBlockerForAtLeastOne(attackers));
-
-                            // TODO check if own creature would be forced to attack and we want to keep it alive
+                            // Combat compatibility does not check controller ownership. Only
+                            // consider opposing creatures for this harmful restriction.
+                            List<Card> creatureList = CardLists.filter(oppCreatures, CardPredicates.possibleBlockerForAtLeastOne(attackers));
 
                             if (!attackers.isEmpty() && !creatureList.isEmpty()) {
                                 choice = ComputerUtilCard.getBestCreatureAI(creatureList);
                             } else if (sa.isTrigger() || ComputerUtil.castSpellInMain1(ai, sa)) {
-                                choice = ComputerUtilCard.getMostExpensivePermanentAI(list);
+                                List<Card> fallbackTargets = new ArrayList<>(oppCreatures);
+                                if (cantActivate) {
+                                    fallbackTargets.addAll(oppWithAbilities);
+                                }
+                                choice = ComputerUtilCard.getMostExpensivePermanentAI(fallbackTargets);
                             }
                         }
-                    } // TODO add logic to tap non creatures with activated abilities if cantActivate is true
+                    } // TODO: Handle activation-only targets without requiring opposing creatures.
 
                     if (choice == null) { // can't find anything left
                         if (!sa.isMinTargetChosen() || sa.isZeroTargets()) {
@@ -589,6 +593,7 @@ public class EffectAi extends SpellAbilityAi {
 
                     list.remove(choice);
                     oppCreatures.remove(choice);
+                    oppWithAbilities.remove(choice);
                     sa.getTargets().add(choice);
                 }
                 return new AiAbilityDecision(100, AiPlayDecision.WillPlay);
