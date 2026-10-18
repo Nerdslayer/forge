@@ -81,6 +81,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static forge.ai.ComputerUtilMana.getAvailableManaEstimate;
@@ -195,7 +196,15 @@ public class AiController {
         if (predictedCombat == null) {
             AiAttackController aiAtk = new AiAttackController(player);
             predictedCombat = new Combat(player);
-            aiAtk.declareAttackers(predictedCombat);
+            boolean predicted = false;
+            try {
+                aiAtk.declareAttackers(predictedCombat);
+                predicted = true;
+            } finally {
+                if (!predicted) {
+                    predictedCombat = null; // cut short (AITimeoutTracker.Expired): do not serve a partial combat to trigger decisions
+                }
+            }
             // ignoring attack costs for performance
         }
         return predictedCombat;
@@ -205,7 +214,15 @@ public class AiController {
         if (predictedCombatNextTurn == null) {
             AiAttackController aiAtk = new AiAttackController(player, true);
             predictedCombatNextTurn = new Combat(player);
-            aiAtk.declareAttackers(predictedCombatNextTurn);
+            boolean predicted = false;
+            try {
+                aiAtk.declareAttackers(predictedCombatNextTurn);
+                predicted = true;
+            } finally {
+                if (!predicted) {
+                    predictedCombatNextTurn = null; // cut short: do not keep a partial combat
+                }
+            }
         }
         return predictedCombatNextTurn;
     }
@@ -274,11 +291,14 @@ public class AiController {
             card.setCastSA(sa);
             reset = true;
         }
-        boolean result = checkETBEffectsPreparedCard(card, sa, api);
-        if (reset) {
-            card.setCastSA(null);
+        try {
+            return checkETBEffectsPreparedCard(card, sa, api);
+        } finally {
+            // also when AITimeoutTracker.Expired is thrown from a nested check(): a real card must never keep a hypothetical castSA
+            if (reset) {
+                card.setCastSA(null);
+            }
         }
-        return result;
     }
 
     private boolean checkETBEffectsPreparedCard(final Card card, final SpellAbility sa, final ApiType api) {
@@ -876,6 +896,7 @@ public class AiController {
 
     private AiPlayDecision canPlayAndPayFor(final SpellAbility sa,
             final boolean allowValuedLoyaltyActivation) {
+        AITimeoutTracker.check();
         final Card host = sa.getHostCard();
 
         if (sa instanceof Spell sp) {
@@ -1055,7 +1076,9 @@ public class AiController {
         }
 
         int damage = 0;
-        if (!sa.isLandAbility() && !player.cantLoseForZeroOrLessLife() && player.canLoseLife()) {
+        Supplier<Boolean> loseCheck = () -> !player.cantLoseForZeroOrLessLife() && player.canLoseLife();
+        if (!sa.isLandAbility() && loseCheck.get()) {
+            loseCheck = () -> true;
             damage = ComputerUtil.getDamageForPlaying(player, sa);
             if (damage >= player.getLife()) {
                 // TODO even if it doesn't kill AI lower the score
@@ -1063,14 +1086,16 @@ public class AiController {
             }
         }
 
-        if (!sa.isSpell() && !sa.isLandAbility()) {
+        if (!sa.isLandAbility() && !sa.isSpell()) {
             return AiPlayDecision.WillPlay;
         }
 
         if (card.isPermanent() && !sa.isMutate()) {
-            damage += ComputerUtil.getDamageFromETB(player, card);
-            if (damage >= player.getLife()) {
-                return AiPlayDecision.BadEtbEffects;
+            if (loseCheck.get()) {
+                damage += ComputerUtil.getDamageFromETB(player, card);
+                if (damage >= player.getLife()) {
+                    return AiPlayDecision.BadEtbEffects;
+                }
             }
             if (!sa.isLandAbility() && !checkETBEffects(card, sa, null)) {
                 return AiPlayDecision.BadEtbEffects;
@@ -1387,12 +1412,32 @@ public class AiController {
 
     // declares blockers for given defender in a given combat
     public void declareBlockersFor(Player defender, Combat combat) {
-        if (AiProfileUtil.getBoolProperty(player, AiProps.ENABLE_COMBAT_BLOCK_PLANNING)
-                && forge.ai.combat.CombatBlockPlanner.tryDeclare(player, defender, combat,
-                        forge.ai.combat.CombatPlanningPreparation.budget(player))) { return; }
-        AiBlockController block = new AiBlockController(defender, defender != player);
-        // When player != defender, AI should declare blockers for its benefit.
-        block.assignBlockersForCombat(combat);
+        final long id = AITimeoutTracker.key(game.getId(), player.getId());
+        final long timeoutNanos = TimeUnit.SECONDS.toNanos(game.getAITimeout());
+        AITimeoutTracker.begin(id, timeoutNanos);
+        Object limit = null;
+        try {
+            if (AiProfileUtil.getBoolProperty(player, AiProps.ENABLE_COMBAT_BLOCK_PLANNING)
+                    && forge.ai.combat.CombatBlockPlanner.tryDeclare(player, defender, combat,
+                            forge.ai.combat.CombatPlanningPreparation.budget(player))) { return; }
+            // constructed before arming and inside the try: a throwing constructor can no longer leak begin()/arm()
+            final AiBlockController block = new AiBlockController(defender, defender != player);
+            limit = AITimeoutTracker.arm(AITimeoutTracker.deadlineNanos(id, timeoutNanos), false);
+            try {
+                // When player != defender, AI should declare blockers for its benefit.
+                block.assignBlockersForCombat(combat);
+            } catch (AITimeoutTracker.Expired e) {
+                // out of time: keep the blocks decided so far (each block is added atomically, so combat stays consistent)
+                AITimeoutTracker.disarm(limit); // the fallback below must not be cut short again
+                limit = null;
+                block.completeRequiredBlocks(combat); // creatures that must block still do
+            }
+        } finally {
+            if (limit != null) {
+                AITimeoutTracker.disarm(limit);
+            }
+            AITimeoutTracker.end(id);
+        }
     }
 
     public void declareAttackers(Player attacker, Combat combat) {
@@ -1406,13 +1451,28 @@ public class AiController {
             return;
         }
         // 12/2/10(sol) the decision making here has moved to getAttackers()
-        AiAttackController aiAtk = new AiAttackController(attacker);
-        lastAttackAggression = aiAtk.declareAttackers(combat);
+        final AiAttackController aiAtk = new AiAttackController(attacker);
+        final long id = AITimeoutTracker.key(game.getId(), player.getId());
+        final long timeoutNanos = TimeUnit.SECONDS.toNanos(game.getAITimeout());
+        AITimeoutTracker.begin(id, timeoutNanos);
+        Object limit = null;
+        try {
+            limit = AITimeoutTracker.arm(AITimeoutTracker.deadlineNanos(id, timeoutNanos), false);
+            lastAttackAggression = aiAtk.declareAttackers(combat);
 
-        aiAtk.reinforceWithBanding(combat);
+            aiAtk.reinforceWithBanding(combat);
+        } catch (AITimeoutTracker.Expired e) {
+            // out of time: attack with what was decided so far; the validity check below repairs an illegal declaration
+        } finally {
+            if (limit != null) {
+                AITimeoutTracker.disarm(limit);
+            }
+            AITimeoutTracker.end(id);
+        }
 
         // Per CR 508.1d, the decision to pay attack costs (e.g. Propaganda)
         // is made at declaration time. Remove attackers the AI can't pay for.
+        // Correctness-critical and cheap, so it also runs when the deadline fired (outside the armed region).
         removeUnpayableAttackers(combat);
 
         // if invalid: just try an attack declaration that we know to be legal
@@ -1452,7 +1512,26 @@ public class AiController {
         return Lists.newArrayList(sa);
     }
 
+    /**
+     * One "thinking session" per priority: every nested AI step shares the same deadline and gives up
+     * (= the AI passes priority) the moment the timer runs out.
+     */
     public List<SpellAbility> chooseSpellAbilityToPlay() {
+        final long id = AITimeoutTracker.key(game.getId(), player.getId());
+        final long timeoutNanos = TimeUnit.SECONDS.toNanos(game.getAITimeout());
+        AITimeoutTracker.begin(id, timeoutNanos);
+        final Object limit = AITimeoutTracker.arm(AITimeoutTracker.deadlineNanos(id, timeoutNanos), false);
+        try {
+            return chooseSpellAbilityToPlayImpl();
+        } catch (AITimeoutTracker.Expired e) {
+            return null; // out of time: pass priority
+        } finally {
+            AITimeoutTracker.disarm(limit);
+            AITimeoutTracker.end(id);
+        }
+    }
+
+    private List<SpellAbility> chooseSpellAbilityToPlayImpl() {
         AiCache.clear();
         // Reset cached predicted combat, as it may be stale. It will be
         // re-created if needed and used for any AI logic that needs it.
@@ -1705,223 +1784,240 @@ public class AiController {
             Sentry.captureMessage(ex.getMessage() + "\nAssertionError [verifyTransitivity]: " + assertex);
         }
 
-        FutureTask<SpellAbility> future = new FutureTask<>(() -> withSituationalAnalysis(() -> {
-            //avoid ComputerUtil.aiLifeInDanger in loops as it slows down a lot.. call this outside loops will generally be fast...
-            boolean isLifeInDanger = useLivingEnd && ComputerUtil.aiLifeInDanger(player, true, 0);
-            final List<SpellAbility> playableAbilities =
-                    ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player);
-            playableAbilities.removeIf(this::isFailedActionSuppressed);
-            final boolean actionCombinationConfigured =
-                    getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
-                            || getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
-                            || getBoolProperty(AiProps.ENABLE_PLANESWALKER_LOYALTY_ACTION_SELECTION);
-            final ActionDecisionSnapshot actionDecisionSnapshot = actionCombinationConfigured
-                    && !useLivingEnd ? ActionDecisionSnapshot.capture(player) : null;
-            final boolean actionCombinationWindow = actionDecisionSnapshot != null
-                    && actionDecisionSnapshot.allowsProactiveCombination();
-            final boolean actionCombinationResourcesComplete = actionDecisionSnapshot != null
-                    && actionDecisionSnapshot.manaResourcesComplete();
-            final boolean actionCombinationEnabled =
-                    getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
-                            && !useLivingEnd && actionCombinationWindow
-                            && actionCombinationResourcesComplete;
-            final boolean planeswalkerLoyaltySelectionEnabled =
-                    getBoolProperty(AiProps.ENABLE_PLANESWALKER_LOYALTY_ACTION_SELECTION)
-                            && actionCombinationEnabled;
-            final boolean useActionCombinationShadow =
-                    getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
-                            && !useLivingEnd && actionCombinationWindow
-                            && actionCombinationResourcesComplete;
-            final boolean analyzeActionCombination = actionCombinationEnabled
-                    || useActionCombinationShadow;
-            if (actionCombinationConfigured && actionCombinationWindow
-                    && !actionCombinationResourcesComplete) {
-                ManaActionCombinationSelector.logSkipped(actionDecisionSnapshot,
-                        "mana_source_model_incomplete");
-            }
-            final Map<SpellAbility, LegacyActionAssessment> legacyAssessments =
-                    new IdentityHashMap<>();
-            final Predicate<SpellAbility> legacyCandidateFilter =
-                    ability -> legacyAssessments.computeIfAbsent(ability,
-                            this::assessLegacyAction).willingNow();
-            final Predicate<SpellAbility> combinationCandidateFilter =
-                    ability -> legacyCandidateFilter.test(ability)
-                            || planeswalkerLoyaltySelectionEnabled
-                                    && PlaneswalkerActivationSupport.isLoyaltyAction(ability);
-            final SpellAbility legacyFirstAction = analyzeActionCombination
-                    ? findLegacyFirstAction(playableAbilities, skipCounter, legacyCandidateFilter) : null;
-            final LegacyActionAssessment legacyFirstAssessment = legacyFirstAction == null
-                    ? null : legacyAssessments.get(legacyFirstAction);
-            // An incomplete legacy assessment already forbids an active override. Keep shadow
-            // mode analyzing for diagnostics, but avoid candidate valuation when it can only
-            // produce the existing legacy choice.
-            final boolean skipUnsafeActiveCombinationAnalysis = actionCombinationEnabled
-                    && !useActionCombinationShadow && legacyFirstAssessment != null
-                    && !legacyFirstAssessment.assessmentComplete()
-                    && !PlaneswalkerActivationSupport.isLoyaltyAction(legacyFirstAction);
-            final ManaActionCombinationSelector.Selection combinationSelection;
-            final ManaActionCombinationSelector.Selection legacyPlan;
-            boolean actionCombinationOverride = false;
-            SpellAbility valuedLoyaltyOverride = null;
-            String actionCombinationOverrideReason = "not_analyzed";
-            String actionCombinationDiagnostics = "not available";
-            if (analyzeActionCombination && !skipUnsafeActiveCombinationAnalysis) {
-                // The loyalty parameter admits only fully supported planeswalker candidates in
-                // the selector. All other actions still need complete legacy willingness.
-                final ManaActionCombinationSelector.Comparison comparison =
-                        ManaActionCombinationSelector.compare(player, playableAbilities,
-                                skipCounter, legacyFirstAction, actionDecisionSnapshot,
-                                combinationCandidateFilter,
-                                ability -> legacyAssessmentReason(
-                                        legacyAssessments.get(ability)));
-                combinationSelection = comparison.proposed();
-                legacyPlan = comparison.legacy();
-                actionCombinationDiagnostics = comparison.diagnosticSummary();
-                final boolean legacyTimingConstraint = legacyAssessments.values().stream()
-                        .anyMatch(LegacyActionAssessment::blocksCombination);
-                final boolean legacyAssessmentIncomplete = legacyAssessments.values().stream()
-                        .filter(assessment -> !PlaneswalkerActivationSupport.isLoyaltyAction(
-                                assessment.original()))
-                        .anyMatch(assessment -> !assessment.assessmentComplete());
-                final int minimumAdvantage = Math.max(0, getIntProperty(
-                        AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE));
-                final ActionCombinationOverrideGate.Decision gate =
-                        ActionCombinationOverrideGate.evaluate(legacyFirstAction, legacyPlan,
-                                combinationSelection,
-                                actionDecisionSnapshot != null
-                                        && actionDecisionSnapshot.manaResourcesComplete(),
-                                legacyAssessmentIncomplete, legacyTimingConstraint,
-                                hasProtectedLegacyPriority(legacyFirstAction), minimumAdvantage);
-                actionCombinationOverrideReason = gate.reason();
-                actionCombinationOverride = actionCombinationEnabled
-                        && gate.shouldOverride();
-                if (actionCombinationOverride) {
-                    ManaActionCombinationSelector.reorder(playableAbilities,
-                            combinationSelection);
-                    if (planeswalkerLoyaltySelectionEnabled
-                            && PlaneswalkerActivationSupport.isLoyaltyAction(
-                                    combinationSelection.firstAction())) {
-                        valuedLoyaltyOverride = combinationSelection.firstAction();
+        final long aiId = AITimeoutTracker.key(game.getId(), player.getId());
+        final long timeoutNanos = TimeUnit.SECONDS.toNanos(game.getAITimeout());
+        AITimeoutTracker.begin(aiId, timeoutNanos);
+        final long deadlineNanos = AITimeoutTracker.deadlineNanos(aiId, timeoutNanos);
+        FutureTask<SpellAbility> future = new FutureTask<>(() -> {
+            final Object evalLimit = AITimeoutTracker.arm(deadlineNanos, true);
+            try {
+                return withSituationalAnalysis(() -> {
+                    //avoid ComputerUtil.aiLifeInDanger in loops as it slows down a lot.. call this outside loops will generally be fast...
+                    boolean isLifeInDanger = useLivingEnd && ComputerUtil.aiLifeInDanger(player, true, 0);
+                    final List<SpellAbility> playableAbilities =
+                            ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player);
+                    playableAbilities.removeIf(this::isFailedActionSuppressed);
+                    final boolean actionCombinationConfigured =
+                            getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
+                                    || getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
+                                    || getBoolProperty(AiProps.ENABLE_PLANESWALKER_LOYALTY_ACTION_SELECTION);
+                    final ActionDecisionSnapshot actionDecisionSnapshot = actionCombinationConfigured
+                            && !useLivingEnd ? ActionDecisionSnapshot.capture(player) : null;
+                    final boolean actionCombinationWindow = actionDecisionSnapshot != null
+                            && actionDecisionSnapshot.allowsProactiveCombination();
+                    final boolean actionCombinationResourcesComplete = actionDecisionSnapshot != null
+                            && actionDecisionSnapshot.manaResourcesComplete();
+                    final boolean actionCombinationEnabled =
+                            getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
+                                    && !useLivingEnd && actionCombinationWindow
+                                    && actionCombinationResourcesComplete;
+                    final boolean planeswalkerLoyaltySelectionEnabled =
+                            getBoolProperty(AiProps.ENABLE_PLANESWALKER_LOYALTY_ACTION_SELECTION)
+                                    && actionCombinationEnabled;
+                    final boolean useActionCombinationShadow =
+                            getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)
+                                    && !useLivingEnd && actionCombinationWindow
+                                    && actionCombinationResourcesComplete;
+                    final boolean analyzeActionCombination = actionCombinationEnabled
+                            || useActionCombinationShadow;
+                    if (actionCombinationConfigured && actionCombinationWindow
+                            && !actionCombinationResourcesComplete) {
+                        ManaActionCombinationSelector.logSkipped(actionDecisionSnapshot,
+                                "mana_source_model_incomplete");
                     }
-                }
-                if (actionCombinationEnabled && !useActionCombinationShadow) {
-                    ManaActionCombinationSelector.logSelection(combinationSelection);
-                }
-            } else {
-                combinationSelection = null;
-                legacyPlan = null;
-                if (skipUnsafeActiveCombinationAnalysis) {
-                    actionCombinationOverrideReason = "legacy_assessment_incomplete";
-                    actionCombinationDiagnostics = legacyAssessmentReason(legacyFirstAssessment);
-                    ManaActionCombinationSelector.logSkipped(actionDecisionSnapshot,
-                            actionCombinationOverrideReason);
-                }
-            }
-            boolean shadowLogged = false;
-            for (final SpellAbility sa : playableAbilities) {
-                if (Thread.currentThread().isInterrupted()) {
-                    break;
-                }
-
-                // Don't add Counterspells to the "normal" playcard lookups
-                if (skipCounter && sa.getApi() == ApiType.Counter) {
-                    continue;
-                }
-
-                if (sa.getHostCard().hasKeyword(Keyword.STORM)
-                        && sa.getApi() != ApiType.Counter // AI would suck at trying to deliberately proc a Storm counterspell
-                        && player.getZone(ZoneType.Hand).contains(
-                                Predicate.not(CardPredicates.LANDS.or(CardPredicates.hasKeyword("Storm")))
-                    )) {
-                    if (game.getView().getStormCount() < this.getIntProperty(AiProps.MIN_COUNT_FOR_STORM_SPELLS)) {
-                        // skip evaluating Storm unless we reached the minimum Storm count
-                        continue;
-                    }
-                }
-
-                // living end AI decks
-                // TODO: generalize the implementation so that superfluous logic-specific checks for life, library size, etc. aren't needed
-                AiPlayDecision aiPlayDecision = AiPlayDecision.CantPlaySa;
-                if (useLivingEnd) {
-                    if (sa.isCycling() && sa.canCastTiming(player)
-                            && player.getCardsIn(ZoneType.Library).size() >= 10) {
-                        if (ComputerUtilCost.canPayCost(sa, player, sa.isTrigger())) {
-                            if (sa.getPayCosts() != null && sa.getPayCosts().hasSpecificCostType(CostPayLife.class)
-                                    && !player.cantLoseForZeroOrLessLife() && player.getLife() <= sa.getPayCosts()
-                                            .getCostPartByType(CostPayLife.class).getAbilityAmount(sa) * 2) {
-                                aiPlayDecision = AiPlayDecision.CantAfford;
-                            } else {
-                                aiPlayDecision = AiPlayDecision.WillPlay;
+                    final Map<SpellAbility, LegacyActionAssessment> legacyAssessments =
+                            new IdentityHashMap<>();
+                    final Predicate<SpellAbility> legacyCandidateFilter =
+                            ability -> legacyAssessments.computeIfAbsent(ability,
+                                    this::assessLegacyAction).willingNow();
+                    final Predicate<SpellAbility> combinationCandidateFilter =
+                            ability -> legacyCandidateFilter.test(ability)
+                                    || planeswalkerLoyaltySelectionEnabled
+                                            && PlaneswalkerActivationSupport.isLoyaltyAction(ability);
+                    final SpellAbility legacyFirstAction = analyzeActionCombination
+                            ? findLegacyFirstAction(playableAbilities, skipCounter, legacyCandidateFilter) : null;
+                    final LegacyActionAssessment legacyFirstAssessment = legacyFirstAction == null
+                            ? null : legacyAssessments.get(legacyFirstAction);
+                    // An incomplete legacy assessment already forbids an active override. Keep shadow
+                    // mode analyzing for diagnostics, but avoid candidate valuation when it can only
+                    // produce the existing legacy choice.
+                    final boolean skipUnsafeActiveCombinationAnalysis = actionCombinationEnabled
+                            && !useActionCombinationShadow && legacyFirstAssessment != null
+                            && !legacyFirstAssessment.assessmentComplete()
+                            && !PlaneswalkerActivationSupport.isLoyaltyAction(legacyFirstAction);
+                    final ManaActionCombinationSelector.Selection combinationSelection;
+                    final ManaActionCombinationSelector.Selection legacyPlan;
+                    boolean actionCombinationOverride = false;
+                    SpellAbility valuedLoyaltyOverride = null;
+                    String actionCombinationOverrideReason = "not_analyzed";
+                    String actionCombinationDiagnostics = "not available";
+                    if (analyzeActionCombination && !skipUnsafeActiveCombinationAnalysis) {
+                        // The loyalty parameter admits only fully supported planeswalker candidates in
+                        // the selector. All other actions still need complete legacy willingness.
+                        final ManaActionCombinationSelector.Comparison comparison =
+                                ManaActionCombinationSelector.compare(player, playableAbilities,
+                                        skipCounter, legacyFirstAction, actionDecisionSnapshot,
+                                        combinationCandidateFilter,
+                                        ability -> legacyAssessmentReason(
+                                                legacyAssessments.get(ability)));
+                        combinationSelection = comparison.proposed();
+                        legacyPlan = comparison.legacy();
+                        actionCombinationDiagnostics = comparison.diagnosticSummary();
+                        final boolean legacyTimingConstraint = legacyAssessments.values().stream()
+                                .anyMatch(LegacyActionAssessment::blocksCombination);
+                        final boolean legacyAssessmentIncomplete = legacyAssessments.values().stream()
+                                .filter(assessment -> !PlaneswalkerActivationSupport.isLoyaltyAction(
+                                        assessment.original()))
+                                .anyMatch(assessment -> !assessment.assessmentComplete());
+                        final int minimumAdvantage = Math.max(0, getIntProperty(
+                                AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE));
+                        final ActionCombinationOverrideGate.Decision gate =
+                                ActionCombinationOverrideGate.evaluate(legacyFirstAction, legacyPlan,
+                                        combinationSelection,
+                                        actionDecisionSnapshot != null
+                                                && actionDecisionSnapshot.manaResourcesComplete(),
+                                        legacyAssessmentIncomplete, legacyTimingConstraint,
+                                        hasProtectedLegacyPriority(legacyFirstAction), minimumAdvantage);
+                        actionCombinationOverrideReason = gate.reason();
+                        actionCombinationOverride = actionCombinationEnabled
+                                && gate.shouldOverride();
+                        if (actionCombinationOverride) {
+                            ManaActionCombinationSelector.reorder(playableAbilities,
+                                    combinationSelection);
+                            if (planeswalkerLoyaltySelectionEnabled
+                                    && PlaneswalkerActivationSupport.isLoyaltyAction(
+                                            combinationSelection.firstAction())) {
+                                valuedLoyaltyOverride = combinationSelection.firstAction();
                             }
                         }
-                    } else if (sa.getHostCard().hasKeyword(Keyword.CASCADE)) {
-                        if (isLifeInDanger) { // needs more tune up for certain conditions
-                            aiPlayDecision = player.getCreaturesInPlay().size() >= 4 ? AiPlayDecision.CantPlaySa
-                                    : AiPlayDecision.WillPlay;
-                        } else if (CardLists
-                                .filter(player.getZone(ZoneType.Graveyard).getCards(), CardPredicates.CREATURES)
-                                .size() > 4) {
-                            if (player.getCreaturesInPlay().size() >= 4) // it's good minimum
-                                continue;
-                            else if (!sa.getHostCard().isPermanent() && sa.canCastTiming(player)
-                                    && ComputerUtilCost.canPayCost(sa, player, sa.isTrigger()))
-                                aiPlayDecision = AiPlayDecision.WillPlay;
-                            // needs tuneup for bad matchups like reanimator and other things to check on opponent graveyard
-                        } else {
-                            continue;
+                        if (actionCombinationEnabled && !useActionCombinationShadow) {
+                            ManaActionCombinationSelector.logSelection(combinationSelection);
+                        }
+                    } else {
+                        combinationSelection = null;
+                        legacyPlan = null;
+                        if (skipUnsafeActiveCombinationAnalysis) {
+                            actionCombinationOverrideReason = "legacy_assessment_incomplete";
+                            actionCombinationDiagnostics = legacyAssessmentReason(legacyFirstAssessment);
+                            ManaActionCombinationSelector.logSkipped(actionDecisionSnapshot,
+                                    actionCombinationOverrideReason);
                         }
                     }
-                }
+                    boolean shadowLogged = false;
+                    for (final SpellAbility sa : playableAbilities) {
+                        AITimeoutTracker.check();
+                        if (Thread.currentThread().isInterrupted()) {
+                            break;
+                        }
 
-                sa.setActivatingPlayer(player);
-                SpellAbility root = sa.getRootAbility();
+                        // Don't add Counterspells to the "normal" playcard lookups
+                        if (skipCounter && sa.getApi() == ApiType.Counter) {
+                            continue;
+                        }
 
-                if (root.isSpell() || root.isTrigger() || root.isReplacementAbility()) {
-                    sa.setLastStateBattlefield(game.getLastStateBattlefield());
-                    sa.setLastStateGraveyard(game.getLastStateGraveyard());
-                }
-                //override decision for living end player
-                AiPlayDecision opinion;
-                if (sa == valuedLoyaltyOverride
-                        && PlaneswalkerActivationSupport.prepareAnnouncementTargets(sa, player)) {
-                    opinion = canPlayAndPayFor(sa, true);
-                } else {
-                    opinion = useLivingEnd && AiPlayDecision.WillPlay.equals(aiPlayDecision)
-                            ? aiPlayDecision : canPlayAndPayFor(sa);
-                }
+                        if (sa.getHostCard().hasKeyword(Keyword.STORM)
+                                && sa.getApi() != ApiType.Counter // AI would suck at trying to deliberately proc a Storm counterspell
+                                && player.getZone(ZoneType.Hand).contains(
+                                        Predicate.not(CardPredicates.LANDS.or(CardPredicates.hasKeyword("Storm")))
+                            )) {
+                            if (game.getView().getStormCount() < this.getIntProperty(AiProps.MIN_COUNT_FOR_STORM_SPELLS)) {
+                                // skip evaluating Storm unless we reached the minimum Storm count
+                                continue;
+                            }
+                        }
 
-                // reset LastStateBattlefield
-                sa.clearLastState();
-                // PhaseHandler ph = game.getPhaseHandler();
-                // System.out.printf("Ai thinks '%s' of %s -> %s @ %s %s >>> \n", opinion, sa.getHostCard(), sa, Lang.getInstance().getPossesive(ph.getPlayerTurn().getName()), ph.getPhase());
+                        // living end AI decks
+                        // TODO: generalize the implementation so that superfluous logic-specific checks for life, library size, etc. aren't needed
+                        AiPlayDecision aiPlayDecision = AiPlayDecision.CantPlaySa;
+                        if (useLivingEnd) {
+                            if (sa.isCycling() && sa.canCastTiming(player)
+                                    && player.getCardsIn(ZoneType.Library).size() >= 10) {
+                                if (ComputerUtilCost.canPayCost(sa, player, sa.isTrigger())) {
+                                    if (sa.getPayCosts() != null && sa.getPayCosts().hasSpecificCostType(CostPayLife.class)
+                                            && !player.cantLoseForZeroOrLessLife() && player.getLife() <= sa.getPayCosts()
+                                                    .getCostPartByType(CostPayLife.class).getAbilityAmount(sa) * 2) {
+                                        aiPlayDecision = AiPlayDecision.CantAfford;
+                                    } else {
+                                        aiPlayDecision = AiPlayDecision.WillPlay;
+                                    }
+                                }
+                            } else if (sa.getHostCard().hasKeyword(Keyword.CASCADE)) {
+                                if (isLifeInDanger) { // needs more tune up for certain conditions
+                                    aiPlayDecision = player.getCreaturesInPlay().size() >= 4 ? AiPlayDecision.CantPlaySa
+                                            : AiPlayDecision.WillPlay;
+                                } else if (CardLists
+                                        .filter(player.getZone(ZoneType.Graveyard).getCards(), CardPredicates.CREATURES)
+                                        .size() > 4) {
+                                    if (player.getCreaturesInPlay().size() >= 4) // it's good minimum
+                                        continue;
+                                    else if (!sa.getHostCard().isPermanent() && sa.canCastTiming(player)
+                                            && ComputerUtilCost.canPayCost(sa, player, sa.isTrigger()))
+                                        aiPlayDecision = AiPlayDecision.WillPlay;
+                                    // needs tuneup for bad matchups like reanimator and other things to check on opponent graveyard
+                                } else {
+                                    continue;
+                                }
+                            }
+                        }
 
-                if (opinion != AiPlayDecision.WillPlay) {
-                    continue;
-                }
+                        sa.setActivatingPlayer(player);
+                        SpellAbility root = sa.getRootAbility();
 
-                if (useActionCombinationShadow && !shadowLogged) {
-                    ManaActionCombinationSelector.logShadowComparison(legacyFirstAction,
-                            legacyPlan, combinationSelection, actionCombinationOverride,
-                            legacyFirstAction == null ? "NONE"
-                                    : legacyAssessments.get(legacyFirstAction).timingDisposition().name(),
-                            Math.max(0, getIntProperty(
-                                    AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE)),
-                            actionDecisionSnapshot, actionCombinationOverrideReason,
-                            actionCombinationDiagnostics);
-                    shadowLogged = true;
-                }
+                        if (root.isSpell() || root.isTrigger() || root.isReplacementAbility()) {
+                            sa.setLastStateBattlefield(game.getLastStateBattlefield());
+                            sa.setLastStateGraveyard(game.getLastStateGraveyard());
+                        }
+                        //override decision for living end player
+                        final AiPlayDecision opinion;
+                        try {
+                            if (sa == valuedLoyaltyOverride
+                                    && PlaneswalkerActivationSupport.prepareAnnouncementTargets(sa, player)) {
+                                opinion = canPlayAndPayFor(sa, true);
+                            } else {
+                                opinion = useLivingEnd && AiPlayDecision.WillPlay.equals(aiPlayDecision)
+                                        ? aiPlayDecision : canPlayAndPayFor(sa);
+                            }
+                        } finally {
+                            // Clear probe state even when upstream's shared deadline expires.
+                            sa.clearLastState();
+                        }
+                        // PhaseHandler ph = game.getPhaseHandler();
+                        // System.out.printf("Ai thinks '%s' of %s -> %s @ %s %s >>> \n", opinion, sa.getHostCard(), sa, Lang.getInstance().getPossesive(ph.getPlayerTurn().getName()), ph.getPhase());
 
-                // TODO could continue to try find another with higher rating (weighted by priority ordering)
-                return sa;
+                        if (opinion != AiPlayDecision.WillPlay) {
+                            continue;
+                        }
+
+                        if (useActionCombinationShadow && !shadowLogged) {
+                            ManaActionCombinationSelector.logShadowComparison(legacyFirstAction,
+                                    legacyPlan, combinationSelection, actionCombinationOverride,
+                                    legacyFirstAction == null ? "NONE"
+                                            : legacyAssessments.get(legacyFirstAction).timingDisposition().name(),
+                                    Math.max(0, getIntProperty(
+                                            AiProps.ACTION_COMBINATION_VALUE_SELECTION_MIN_ADVANTAGE)),
+                                    actionDecisionSnapshot, actionCombinationOverrideReason,
+                                    actionCombinationDiagnostics);
+                            shadowLogged = true;
+                        }
+
+                        // TODO could continue to try find another with higher rating (weighted by priority ordering)
+                        return sa;
+                    }
+
+                    return null;
+                });
+            } catch (AITimeoutTracker.Expired e) {
+                return null;
+            } finally {
+                AITimeoutTracker.disarm(evalLimit);
             }
-
-            return null;
-        }));
+        });
         Thread t = new Thread(future, "Game AI Eval");
         t.setDaemon(true);
         t.start();
         try {
-            return future.get(game.getAITimeout(), TimeUnit.SECONDS);
+            // wait only for what is left of the shared deadline (not a fresh full timeout per call)
+            return future.get(Math.max(0, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             e.printStackTrace();
             if (e instanceof TimeoutException) {
@@ -1938,7 +2034,11 @@ public class AiController {
             // Thread.stop() mid-evaluation can leave partially mutated shared state behind
             future.cancel(true);
             try {
-                t.join(2000); //2 seconds wait
+                // join returns as soon as the eval thread exits, so the common case costs nothing. The full 2 s only matters
+                // for a thread inside code without check() (mana payment, threat prediction, simulation): giving up earlier
+                // just starts the stop() fallback sooner, and on Java 20+/Android stop() throws, so the thread would keep
+                // running next to the game thread
+                t.join(2000); // 2 seconds wait
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             }
@@ -1953,6 +2053,8 @@ public class AiController {
             }
             // TODO mark some as skipped to increase chance to find something playable next priority
             return null;
+        } finally {
+            AITimeoutTracker.end(aiId);
         }
     }
 

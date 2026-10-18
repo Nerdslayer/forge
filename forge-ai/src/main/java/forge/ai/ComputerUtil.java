@@ -3050,6 +3050,8 @@ public class ComputerUtil {
             }
         }
 
+        // TODO remember most painful card for priority removal
+
         return damage;
     }
 
