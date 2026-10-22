@@ -60,8 +60,8 @@ public final class CombatAttackSearch {
         reasons.add("Greedy singleton/addition search with an independent all-out candidate; not a global optimum certificate");
         if (!complete) { reasons.add("Greedy attack candidates or opposing responses were not completely evaluated"); }
         // TODO: Nested reply searches still enumerate admitted subsets; optimize them without weakening lethal protection.
-        return new Result(selection.best(), selection.baseline(), exhaustive, evaluation.supported,
-                budget.used() - evaluation.startingNodes, List.copyOf(reasons), complete, selection.evaluations());
+        return CombatAttackDecisionPolicy.select(new Result(selection.best(), selection.baseline(), exhaustive, evaluation.supported,
+                budget.used() - evaluation.startingNodes, List.copyOf(reasons), complete, selection.evaluations()));
     }
 
     private static Result rejected(final Set<String> reasons) {
@@ -121,7 +121,11 @@ public final class CombatAttackSearch {
                     final long delta = (long) forecast.nonterminalUtility() - baseline.reply().orElseThrow().nonterminalUtility();
                     // Immediate casualties are already excluded from the reply ledger. Discount
                     // ordinary future changes; compare() still gives lethal reply risk priority.
-                    adjustment = CombatSafetyEvaluator.discountedFollowUpValue(delta);
+                    if (CombatAttackDecisionPolicy.bothRepliesLethal(baseline.reply().orElseThrow(), forecast)) {
+                        reasons.add("Ordinary reply adjustment suppressed between usable predicted lethal continuations");
+                    } else {
+                        adjustment = CombatSafetyEvaluator.discountedFollowUpValue(delta);
+                    }
                 }
             } else if (!blocks.searchExhaustive()) {
                 candidateSupported = false;

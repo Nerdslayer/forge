@@ -26,6 +26,27 @@ public class CombatAttackDestinationTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent, Combat combat) { }
 
     @Test
+    public void walkerKillAndUltimateDenialDoNotJustifyAnAttackThatStillLosesNextTurn() {
+        for (final int loyalty : List.of(2, 6)) {
+            final Fixture f = fixture();
+            f.ai().setLife(1, null);
+            f.opponent().setLife(35, null);
+            creature(f.ai(), 2, List.of("K:Flying"));
+            creature(f.opponent(), 8, List.of());
+            creature(f.opponent(), 8, List.of());
+            final Card target = walker(f.opponent(), 6, loyalty, true);
+            final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000));
+            Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+            final var result = plan.search().orElseThrow();
+            Assert.assertTrue(result.noAttack().orElseThrow().reply().orElseThrow().lethalOpportunity());
+            Assert.assertEquals(result.best(), result.noAttack());
+            Assert.assertTrue(CombatAttackPlanner.tryDeclare(f.ai(), f.ai(), f.combat(), new CombatSearchBudget(100000)));
+            Assert.assertTrue(f.combat().getAttackers().isEmpty());
+            Assert.assertEquals(target.getCounters(CounterEnumType.LOYALTY), loyalty);
+        }
+    }
+
+    @Test
     public void namespacesAndUltimateThresholdAreExplicit() {
         final var player = new CombatAttackDestination(CombatAttackDestination.Kind.PLAYER, 1);
         final var walker = new CombatAttackDestination(CombatAttackDestination.Kind.PLANESWALKER, 1);

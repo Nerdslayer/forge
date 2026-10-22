@@ -27,6 +27,69 @@ public class CombatAttackPlannerTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent, Combat combat) { }
 
     @Test
+    public void holdsInsteadOfTakingPointlessDamageWhenBothContinuationsPredictLethal() {
+        for (final boolean fixedAttack : List.of(false, true)) {
+            final Fixture f = fixture();
+            f.ai().setLife(1, null);
+            f.opponent().setLife(35, null);
+            final Card optional = creature(f.ai(), 2, 2, List.of("K:Flying"));
+            creature(f.opponent(), 8, 8, List.of());
+            creature(f.opponent(), 8, 8, List.of());
+            final Card fixed = fixedAttack ? creature(f.ai(), 0, 4, List.of("K:Flying")) : null;
+            if (fixed != null) { f.combat().addAttacker(fixed, f.opponent()); }
+            final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000));
+            Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+            final var result = plan.search().orElseThrow();
+            Assert.assertTrue(result.noAttack().orElseThrow().reply().orElseThrow().lethalOpportunity());
+            Assert.assertEquals(result.best(), result.noAttack());
+            Assert.assertEquals(result.best().orElseThrow().attackers(), fixed == null ? List.of() : List.of(fixed.getId()));
+            Assert.assertTrue(CombatAttackPlanner.tryDeclare(f.ai(), f.ai(), f.combat(), new CombatSearchBudget(100000)),
+                    "Choosing hold is an applied Mastermind decision, not a legacy fallback");
+            Assert.assertEquals(f.combat().getAttackers(), fixed == null ? List.of() : List.of(fixed));
+            Assert.assertFalse(optional.getView().isAttacking() || optional.isTapped());
+            Assert.assertTrue(CombatUtil.validateAttackers(f.combat()));
+        }
+    }
+
+    @Test
+    public void lifelinkAttackThatEscapesAnOtherwiseLethalReplyStillAttacks() {
+        final Fixture f = fixture();
+        f.ai().setLife(1, null);
+        final Card attacker = creature(f.ai(), 4, 1, List.of("K:Flying", "K:Lifelink"));
+        // Blocking dies to first strike before gaining life; attacking gains enough to survive both.
+        creature(f.opponent(), 2, 2, List.of("K:First strike"));
+        creature(f.opponent(), 2, 2, List.of("K:First strike"));
+        final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000));
+        Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+        final var result = plan.search().orElseThrow();
+        Assert.assertTrue(result.noAttack().orElseThrow().reply().orElseThrow().lethalOpportunity());
+        Assert.assertFalse(result.best().orElseThrow().reply().orElseThrow().lethalOpportunity());
+        Assert.assertEquals(result.best().orElseThrow().attackers(), List.of(attacker.getId()));
+    }
+
+    @Test
+    public void combinedImmediateWinIsStillFoundWhenHoldingAndSingletonsPredictLethal() {
+        for (final boolean approximate : List.of(false, true)) {
+            final Fixture f = fixture();
+            f.ai().setLife(1, null);
+            f.opponent().setLife(3, null);
+            final var extras = new ArrayList<>(List.of("K:Flying"));
+            if (approximate) { extras.add("A:AB$ Pump | Cost$ U | NumAtt$ 1 | NumDef$ 0 | Defined$ Self"); }
+            final Card first = creature(f.ai(), 2, 2, extras);
+            final Card second = creature(f.ai(), 2, 2, List.of("K:Flying"));
+            for (int i = 0; i < 3; i++) { creature(f.opponent(), 1, 1, List.of()); }
+            final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000));
+            Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+            final var result = plan.search().orElseThrow();
+            Assert.assertTrue(result.noAttack().orElseThrow().reply().orElseThrow().lethalOpportunity());
+            Assert.assertEquals(java.util.Set.copyOf(result.best().orElseThrow().attackers()),
+                    java.util.Set.of(first.getId(), second.getId()));
+            Assert.assertEquals(result.best().orElseThrow().combat().projection().terminal(), CombatProjection.Terminal.WIN);
+            Assert.assertEquals(result.best().orElseThrow().certifiedWin(), !approximate);
+        }
+    }
+
+    @Test
     public void selfSacrificeDrawbackDoesNotInviteAStatReducedAttackerIntoAFreeKill() {
         final Fixture f = fixture();
         f.ai().setLife(7, null);

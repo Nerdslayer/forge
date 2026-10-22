@@ -199,8 +199,8 @@ final class CombatAttackDestinationSearch {
         }
 
         private CombatAttackSearch.Result result(final CombatAttackSearch.Candidate best, final CombatAttackSearch.Candidate baseline) {
-            return new CombatAttackSearch.Result(Optional.ofNullable(best), Optional.ofNullable(baseline), false, complete,
-                    budget.used() - start, List.copyOf(reasons), complete, cache.size() + safeguardEvaluations);
+            return CombatAttackDecisionPolicy.select(new CombatAttackSearch.Result(Optional.ofNullable(best), Optional.ofNullable(baseline), false, complete,
+                    budget.used() - start, List.copyOf(reasons), complete, cache.size() + safeguardEvaluations));
         }
     }
 

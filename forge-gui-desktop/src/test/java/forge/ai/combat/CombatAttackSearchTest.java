@@ -12,6 +12,53 @@ import forge.ai.effect.ValuationCompleteness;
 
 public class CombatAttackSearchTest {
     @Test
+    public void harmlessAttackDoesNotEarnCreditForReducingCasualtiesInAnAlreadyLethalReply() {
+        final var all = snapshot(1, 35, Map.of(10, creature(10, 1, 2, 2),
+                20, creature(20, 2, 1, 3), 21, creature(21, 2, 8, 8)));
+        // A flying attacker can be blocked by the reach creature, but not the large ground creature.
+        final var board = new PublicCombatSnapshot(1, 1, 2, all.creatures(), all.players(),
+                all.attackersToDefenders(), Map.of(10, Set.of(20)), List.of(), List.of(), false);
+        final var values = new PreparedCombatValuation(Map.of(
+                10, new PreparedCombatValuation.PermanentValue(10, 1, -100, 0, 0, List.of()),
+                20, new PreparedCombatValuation.PermanentValue(20, 2, 100, 0, 0, List.of()),
+                21, new PreparedCombatValuation.PermanentValue(21, 2, 100, 0, 0, List.of())),
+                List.of(), ValuationCompleteness.PARTIAL, List.of());
+        final var readiness = new PublicCombatReadiness(2, Set.of(20, 21),
+                Map.of(20, Set.of(10), 21, Set.of(10)), List.of());
+        final var evaluation = new CombatAttackSearch.Evaluation(board, values, readiness,
+                new CombatSearchBudget(100000), new java.util.LinkedHashSet<>());
+        final var hold = evaluation.evaluate(CombatAttackCandidates.select(board, List.of()));
+        final var attack = evaluation.evaluate(board);
+        Assert.assertTrue(hold.reply().orElseThrow().lethalOpportunity());
+        Assert.assertTrue(attack.reply().orElseThrow().lethalOpportunity());
+        Assert.assertTrue(attack.reply().orElseThrow().nonterminalUtility() > hold.reply().orElseThrow().nonterminalUtility(),
+                "The ordinary reply difference used to incorrectly reward attacking");
+        Assert.assertEquals(attack.replyAdjustment(), 0);
+        Assert.assertEquals(attack.combat().score().total(), 0);
+        Assert.assertEquals(attack.combat().assignment().blockersByAttacker(), Map.of(10, List.of(20)));
+        final var result = CombatAttackSearch.search(board, values, readiness, new CombatSearchBudget(100000));
+        Assert.assertTrue(result.candidateSearchComplete(), result.reasons().toString());
+        Assert.assertEquals(result.best(), result.noAttack());
+
+        final var completed = new CombatAttackSearch.Result(java.util.Optional.of(attack), java.util.Optional.of(hold),
+                true, true, 0, List.of(), true, 2);
+        Assert.assertEquals(CombatAttackDecisionPolicy.select(completed).best(), completed.noAttack());
+        for (final boolean domainComplete : List.of(false, true)) {
+            final var incomplete = new CombatAttackSearch.Result(completed.best(), completed.noAttack(), false,
+                    domainComplete, 0, List.of(), false, 2);
+            Assert.assertSame(CombatAttackDecisionPolicy.select(incomplete), incomplete,
+                    "Incomplete searches must retain their explicit fallback status");
+        }
+        final var unknown = new CombatSafetyEvaluator.FollowUp(true, false, 0, true, List.of(), List.of(), false);
+        final var uncertainAttack = new CombatAttackSearch.Candidate(attack.attackers(), attack.combat(),
+                java.util.Optional.of(unknown), 0, false, attack.twoTurnPressure());
+        final var unknownResult = new CombatAttackSearch.Result(java.util.Optional.of(uncertainAttack), completed.noAttack(),
+                false, true, 0, List.of(), true, 2);
+        Assert.assertSame(CombatAttackDecisionPolicy.select(unknownResult), unknownResult,
+                "A lethal flag without a usable forecast cannot establish a doomed continuation");
+    }
+
+    @Test
     public void opponentMayForgoAnImmediateTradeToOpenALethalCounterattack() {
         final var all = snapshot(2, 20, Map.of(10, creature(10, 1, 2, 2), 11, creature(11, 1, 0, 3),
                 20, creature(20, 2, 2, 2), 21, creature(21, 2, 2, 2)));
