@@ -54,13 +54,24 @@ public final class CombatAttackSearch {
         final Evaluation evaluation = new Evaluation(alternatives, values, readiness, budget, reasons);
         final var representatives = CombatAttackEquivalence.representatives(alternatives, values, readiness, optional);
         final var selection = GreedyAttackCandidates.select(fixed, optional, evaluation::evaluate,
-                CombatAttackSearch::compare, id -> representatives.get(id));
+                CombatAttackSearch::compare, CombatAttackSearch::compareSelection, id -> representatives.get(id));
         final boolean complete = selection.complete() && evaluation.supported;
         final boolean exhaustive = complete && optional.size() <= 2;
         reasons.add("Greedy singleton/addition search with an independent all-out candidate; not a global optimum certificate");
         if (!complete) { reasons.add("Greedy attack candidates or opposing responses were not completely evaluated"); }
-        // TODO: Nested reply searches still enumerate admitted subsets; optimize them without weakening lethal protection.
-        return CombatAttackDecisionPolicy.select(new Result(selection.best(), selection.baseline(), exhaustive, evaluation.supported,
+        Optional<Candidate> best = selection.best();
+        if (complete && best.isPresent() && budget.remaining() > 0
+                && best.orElseThrow().combat().projection().terminal() == CombatProjection.Terminal.NONE) {
+            final var allowance = budget.childAllowance(Math.min(4000, budget.remaining() / 4));
+            final var refinement = evaluation.withBudget(allowance);
+            best = Optional.of(CombatAttackRefiner.refine(best.orElseThrow(),
+                    alternatives.attackersToDefenders().entrySet().stream().filter(e -> fixedAttackers.contains(e.getKey()))
+                            .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue)),
+                    assignments -> refinement.evaluate(CombatAttackCandidates.assign(alternatives, assignments)),
+                    CombatAttackSearch::compare, allowance, reasons));
+            reasons.add("Attack refinement completed-assignment cache hits: " + refinement.cacheHits);
+        }
+        return CombatAttackDecisionPolicy.select(new Result(best, selection.baseline(), exhaustive, evaluation.supported,
                 budget.used() - evaluation.startingNodes, List.copyOf(reasons), complete, selection.evaluations()));
     }
 
@@ -78,6 +89,8 @@ public final class CombatAttackSearch {
         private final CombatAttackForecasts forecasts;
         private Candidate baseline;
         private boolean supported = true;
+        private int cacheHits;
+        private final java.util.Map<java.util.Map<Integer, Integer>, Candidate> completed = new java.util.HashMap<>();
 
         Evaluation(final PublicCombatSnapshot alternatives0, final PreparedCombatValuation values0,
                 final PublicCombatReadiness readiness0, final CombatSearchBudget budget0, final Set<String> reasons0) {
@@ -92,12 +105,29 @@ public final class CombatAttackSearch {
             forecasts = new CombatAttackForecasts(alternatives, readiness, values, budget);
         }
 
+        private Evaluation(final Evaluation source, final CombatSearchBudget allowance) {
+            alternatives = source.alternatives;
+            values = source.values;
+            readiness = source.readiness;
+            budget = allowance;
+            reasons = new LinkedHashSet<>();
+            startingNodes = budget.used();
+            forecasts = source.forecasts.withBudget(allowance);
+            baseline = source.baseline;
+            completed.putAll(source.completed);
+        }
+
+        Evaluation withBudget(final CombatSearchBudget allowance) { return new Evaluation(this, allowance); }
+        int cacheHits() { return cacheHits; }
+
         private Candidate evaluate(final List<Integer> group) {
             return evaluate(CombatAttackCandidates.select(alternatives, group));
         }
 
         Candidate evaluate(final PublicCombatSnapshot current) {
             if (!budget.tryConsume()) { supported = false; reasons.add("Shared attack search budget exhausted"); return null; }
+            final var cached = completed.get(current.attackersToDefenders());
+            if (cached != null) { cacheHits++; return cached; }
             boolean candidateSupported = true;
             final List<Integer> group = current.attackersToDefenders().keySet().stream().sorted().toList();
             final CombatBlockSearch.Result blocks = CombatBlockSearch.searchWithReplySafety(current, values, budget,
@@ -137,6 +167,7 @@ public final class CombatAttackSearch {
                     forecasts.cachedPressure(combat.projection()));
             if (baseline == null) { baseline = candidate; }
             supported &= candidateSupported;
+            if (candidateSupported || certifiedWin) { completed.put(current.attackersToDefenders(), candidate); }
             // Incomplete opposing searches never contribute an optimistic singleton ranking.
             return candidateSupported || certifiedWin ? candidate : null;
         }
@@ -162,5 +193,9 @@ public final class CombatAttackSearch {
         if (leftRisk != rightRisk) { return leftRisk ? -1 : 1; }
         final int value = Integer.compare(left.total(), right.total());
         return value;
+    }
+
+    static int compareSelection(final Candidate left, final Candidate right) {
+        return CombatAttackRefiner.preferSmaller(left, right, compare(left, right));
     }
 }

@@ -26,6 +26,23 @@ public class CombatAttackDestinationTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent, Combat combat) { }
 
     @Test
+    public void walkerAndPlayerAllocationLeavesARedundantOptionalLooterBack() {
+        final Fixture f = fixture();
+        f.opponent().setLife(20, null);
+        final Card looter = creature(f.ai(), 0, List.of("A:AB$ Draw | Cost$ T | Defined$ You | NumCards$ 1"));
+        creature(f.ai(), 2, List.of());
+        creature(f.ai(), 2, List.of());
+        final Card target = walker(f.opponent(), 4, 2, false);
+        final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000, 30000, () -> 0L));
+        Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+        final var chosen = plan.search().orElseThrow().best().orElseThrow();
+        Assert.assertFalse(chosen.attackers().contains(looter.getId()));
+        Assert.assertEquals(chosen.attackers().size(), 2);
+        Assert.assertEquals(chosen.combat().projection().planeswalkerLoyaltyAfter().get(target.getId()).intValue(), 0);
+        Assert.assertTrue(chosen.destinations().values().stream().anyMatch(d -> d.kind() == CombatAttackDestination.Kind.PLAYER));
+    }
+
+    @Test
     public void walkerKillAndUltimateDenialDoNotJustifyAnAttackThatStillLosesNextTurn() {
         for (final int loyalty : List.of(2, 6)) {
             final Fixture f = fixture();

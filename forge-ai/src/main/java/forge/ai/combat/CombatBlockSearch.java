@@ -14,6 +14,68 @@ import java.util.Set;
 public final class CombatBlockSearch {
     private CombatBlockSearch() { }
 
+    record Seeds(Result floor, List<CombatAssignment> assignments) {
+        Seeds { assignments = List.copyOf(assignments); }
+    }
+
+    /** Verify independent proposals with the normal immediate evaluator, never an optimistic partial allocation. */
+    static Seeds verifySeeds(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget, final Map<Integer, List<Integer>> fixed, final List<CombatAssignment> proposals) {
+        final Search comparison = new Search(snapshot, values, budget, 16, null, null, fixed);
+        Candidate baseline = null;
+        Candidate best = null;
+        final List<CombatAssignment> verified = new ArrayList<>();
+        final List<String> reasons = new ArrayList<>();
+        final int started = budget.used();
+        int evaluations = 0;
+        for (final var proposal : proposals) {
+            if (budget.remaining() == 0) { break; }
+            final Search trial = new Search(snapshot, values, budget, 16, null, null, fixed);
+            final var candidate = trial.evaluate(proposal.blockersByAttacker());
+            evaluations++;
+            if (candidate == null || !trial.domainComplete || trial.interrupted) {
+                reasons.add("Immediate defensive seed verification incomplete: " + trial.reasons);
+                if (baseline == null) { break; }
+                continue;
+            }
+            if (baseline == null) { baseline = candidate; }
+            verified.add(candidate.assignment());
+            if (best == null || comparison.ordering.compare(candidate, best) < 0) { best = candidate; }
+        }
+        reasons.add("Immediate defensive seeds: verified=" + verified.size() + ", proposals=" + proposals.size()
+                + ", nodes=" + (budget.used() - started) + ", selected=" + (best == null ? "none" : best.assignment().blockersByAttacker())
+                + (best == null ? "" : ", terminal=" + best.projection().terminal() + ", lifeAfter=" + best.projection().playerLifeAfter()));
+        return new Seeds(new Result(Optional.ofNullable(best), Optional.ofNullable(baseline), false, best != null,
+                budget.used() - started, reasons, evaluations, 0, best != null), verified);
+    }
+
+    /** A surviving verified floor is never replaced by a losing/unsupported advanced search. */
+    static Result preserveFloor(final PublicCombatSnapshot snapshot, final Result advanced, final Seeds seeds) {
+        if (seeds.floor().best().isEmpty()) { return advanced; }
+        final var floor = seeds.floor().best().orElseThrow();
+        final var chosen = advanced.best().orElse(null);
+        boolean recover = !advanced.outcomeDomainComplete() || !advanced.selectedAllocationComplete() || chosen == null;
+        if (chosen != null && floor.projection().terminal() != chosen.projection().terminal()) {
+            recover |= CombatTransitionValueEvaluator.compare(floor.score(), chosen.score()) > 0;
+        }
+        if (chosen != null && chosen.projection().terminal() == CombatProjection.Terminal.LOSS) {
+            recover |= floor.projection().terminal() != CombatProjection.Terminal.LOSS
+                    || incomingDamage(floor.projection(), snapshot.defendingPlayerId()) < incomingDamage(chosen.projection(), snapshot.defendingPlayerId())
+                    || incomingDamage(floor.projection(), snapshot.defendingPlayerId()) == incomingDamage(chosen.projection(), snapshot.defendingPlayerId())
+                            && floor.projection().playerLifeAfter().get(snapshot.defendingPlayerId()) > chosen.projection().playerLifeAfter().get(snapshot.defendingPlayerId());
+        }
+        if (!recover) { return advanced; }
+        final List<String> reasons = new ArrayList<>(advanced.reasons());
+        reasons.addAll(seeds.floor().reasons());
+        reasons.add("Immediate-only defensive floor selected; no incomplete forecast treated as zero danger");
+        return new Result(seeds.floor().best(), seeds.floor().unblocked(), false, true,
+                advanced.nodes(), reasons, advanced.evaluations(), advanced.cacheHits(), true);
+    }
+
+    private static long incomingDamage(final CombatProjection projection, final int defender) {
+        return projection.batches().stream().mapToLong(batch -> batch.playerDamage().getOrDefault(defender, 0)).sum();
+    }
+
     record LeafAdjustment(int value, boolean complete, List<String> reasons) {
         LeafAdjustment { reasons = List.copyOf(reasons); }
     }
@@ -39,8 +101,13 @@ public final class CombatBlockSearch {
      */
     public record Result(Optional<Candidate> best, Optional<Candidate> unblocked,
             boolean searchExhaustive, boolean outcomeDomainComplete, int nodes, List<String> reasons,
-            int evaluations, int cacheHits) {
+            int evaluations, int cacheHits, boolean selectedAllocationComplete) {
         public Result { reasons = List.copyOf(reasons); }
+        public Result(final Optional<Candidate> best, final Optional<Candidate> unblocked,
+                final boolean exhaustive, final boolean complete, final int nodes, final List<String> reasons,
+                final int evaluations, final int cacheHits) {
+            this(best, unblocked, exhaustive, complete, nodes, reasons, evaluations, cacheHits, exhaustive);
+        }
         public Result(final Optional<Candidate> best, final Optional<Candidate> unblocked,
                 final boolean searchExhaustive, final boolean outcomeDomainComplete, final int nodes, final List<String> reasons) {
             this(best, unblocked, searchExhaustive, outcomeDomainComplete, nodes, reasons, 0, 0);
@@ -87,6 +154,16 @@ public final class CombatBlockSearch {
         }
         final Search search = new Search(snapshot, values, budget, 16, readiness, null, fixedBlocks);
         search.reuse = reuse;
+        return search.run();
+    }
+
+    static Result searchWithSeeds(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final CombatSearchBudget budget, final PublicCombatReadiness readiness,
+            final Map<Integer, List<Integer>> fixed, final List<CombatAssignment> seeds,
+            final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> forecast) {
+        final Search search = new Search(snapshot, values, budget, 16, readiness, null, fixed);
+        search.seeds = seeds;
+        search.defensiveEstimator = forecast;
         return search.run();
     }
 
@@ -169,12 +246,14 @@ public final class CombatBlockSearch {
         private boolean interrupted;
         private boolean groupsOmitted;
         private boolean reuse = true;
+        private List<CombatAssignment> seeds = List.of();
         private int evaluations;
         private int cacheHits;
         private record ScoringContext(boolean baselineEvaluated, CombatSafetyEvaluator.FollowUp baseline,
                 boolean pressureEnabled, CombatSurvivalHorizonEvaluator.Opportunity replyReference) { }
         private record EvaluationKey(CombatAssignment assignment, ScoringContext context) { }
         private final Map<EvaluationKey, Candidate> evaluated = new HashMap<>();
+        private final Set<Candidate> verifiedAllocations = new HashSet<>();
 
         private ScoringContext scoringContext() {
             return new ScoringContext(baselineEvaluated, baselineFollowUp, pressureEnabled, replyOpportunityReference);
@@ -247,12 +326,21 @@ public final class CombatBlockSearch {
             }
             final boolean needsCompletion = fixedBlocks.entrySet().stream().anyMatch(entry ->
                     !snapshot.creatures().get(entry.getKey()).permitsBlockerCount(entry.getValue().size()));
-            Candidate unblocked = needsCompletion ? null : evaluate(fixedBlocks);
+            Candidate unblocked = needsCompletion && !seeds.isEmpty() ? evaluate(seeds.get(0).blockersByAttacker())
+                    : needsCompletion ? null : evaluate(fixedBlocks);
+            if (needsCompletion && unblocked != null) { baselineEvaluated = true; }
             if (!needsCompletion && unblocked == null) {
                 if (budget.remaining() == 0) { reasons.add("Shared search budget exhausted"); }
                 return result(null, false);
             }
             if (!needsCompletion) { baselineEvaluated = true; }
+            // Baseline first: seed forecasts use the same reference as subsequent assignments.
+            if (unblocked != null) {
+                for (final var seed : seeds) {
+                    if (budget.remaining() == 0) { interrupted = true; break; }
+                    evaluate(seed.blockersByAttacker());
+                }
+            }
             for (final int attacker : attackers) {
                 final List<Integer> required = fixedBlocks.getOrDefault(attacker, List.of());
                 final List<Integer> eligible = snapshot.legalBlockers().getOrDefault(attacker, Set.of()).stream()
@@ -281,7 +369,7 @@ public final class CombatBlockSearch {
                 groups.put(attacker, List.copyOf(choices));
                 if (maximum >= minimum && maximum > Math.max(ordinaryLimit, minimum)) { groupsOmitted = true; }
             }
-            if (needsCompletion) {
+            if (needsCompletion && unblocked == null) {
                 // Use a real legal completion as the pressure reference. An impossible
                 // fixed-only/no-block declaration is never projected as a strategic option.
                 unblocked = findCompletion(0, new HashMap<>(fixedBlocks), new HashSet<>(reservedBlockers));
@@ -323,7 +411,8 @@ public final class CombatBlockSearch {
 
         private Result result(final Candidate unblocked, final boolean exhaustive) {
             return new Result(Optional.ofNullable(best), Optional.ofNullable(unblocked), exhaustive,
-                    domainComplete, budget.used() - startingNodes, List.copyOf(reasons), evaluations, cacheHits);
+                    domainComplete, budget.used() - startingNodes, List.copyOf(reasons), evaluations, cacheHits,
+                    best != null && verifiedAllocations.contains(best));
         }
 
         /** Counts every expanded prefix, conservatively ignoring used-blocker pruning. */
@@ -444,6 +533,7 @@ public final class CombatBlockSearch {
             evaluations++;
             CombatProjection projection;
             Optional<CombatDamagePlan> damagePlan = Optional.empty();
+            boolean allocationComplete = true;
             final boolean allocationNeeded = blocks.entrySet().stream().anyMatch(entry -> entry.getValue().size() > 1
                     || snapshot.creatures().get(entry.getKey()).trample()
                     && entry.getValue().stream().anyMatch(id -> snapshot.creatures().get(id).indestructible()));
@@ -452,6 +542,7 @@ public final class CombatBlockSearch {
                         candidate -> CombatOutcomePredictor.add(CombatOutcomePredictor.add(pressure(candidate.projection()), exchangePreference(candidate.projection())),
                                 chumpAdjustment(candidate.assignment(), candidate.projection(), candidate.damagePlan())), this::replyPriority);
                 interrupted |= !allocations.exhaustive();
+                allocationComplete = allocations.exhaustive();
                 domainComplete &= allocations.outcomeSupported();
                 reasons.addAll(allocations.reasons());
                 if (allocations.best().isEmpty()) { return null; }
@@ -475,6 +566,7 @@ public final class CombatBlockSearch {
             final Candidate candidate = new Candidate(assignment, projection,
                     CombatTransitionValueEvaluator.evaluate(snapshot, values, projection), damagePlan, pressure,
                     exchangePreference(projection), followUp, chumpAdjustment(assignment, projection, damagePlan.orElse(null)));
+            if (allocationComplete) { verifiedAllocations.add(candidate); }
             if (best == null || ordering.compare(candidate, best) < 0) { best = candidate; }
             // Allocation ranking itself reads pressure/reference state. Setup evaluations and
             // incomplete work must never masquerade as stable, completed cached candidates.

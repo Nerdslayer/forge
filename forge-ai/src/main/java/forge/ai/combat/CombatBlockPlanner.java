@@ -51,22 +51,33 @@ public final class CombatBlockPlanner {
                     List.of("Shared combat budget exhausted during valuation preparation"), fixed);
         }
         final PreparedCombatValuation values = prepared.orElseThrow();
+        final int seedStarted = budget.used();
+        final var seedAllowance = budget.childAllowance(Math.min(4000, budget.remaining() / 4));
+        final var proposals = CombatDefenseSeedBuilder.build(snapshot, values, fixed, seedAllowance);
+        final var seeds = CombatBlockSearch.verifySeeds(snapshot, values, seedAllowance, fixed, proposals);
+        reasons.addAll(seeds.floor().reasons());
+        reasons.add("Whole-board defense prepared before optional forecasts; nodes=" + (budget.used() - seedStarted));
         final var readiness = PublicCombatReadiness.capture(ai, snapshot, budget::tryConsume);
         if (readiness.isEmpty()) {
+            if (seeds.floor().best().isPresent()) {
+                reasons.add("Immediate-only defensive floor selected; readiness preparation exhausted its allowance");
+                return new Plan(Optional.of(snapshot), Optional.of(seeds.floor()), true, reasons, fixed);
+            }
             return new Plan(Optional.of(snapshot), Optional.empty(), false,
                     List.of("Shared combat budget exhausted during readiness preparation"), fixed);
         }
-        final CombatBlockSearch.Result result;
+        final CombatBlockSearch.Result explored;
         if (AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_BLOCK_DEFENSIVE_FORECAST)) {
             final var defensive = CombatDefensiveForecastEvaluator.search(snapshot, values, readiness.orElseThrow(), fixed,
                     budget, CombatDefensiveForecastEvaluator.MAX_ADDITIONAL_NODES,
                     AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_COMBAT_SURVIVAL_HORIZON)
-                            ? Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.COMBAT_SURVIVAL_EXTRA_TURN_VALUE)) : 0);
-            result = defensive.search();
+                            ? Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.COMBAT_SURVIVAL_EXTRA_TURN_VALUE)) : 0, seeds.assignments());
+            explored = defensive.search();
             reasons.addAll(defensive.reasons());
         } else {
-            result = CombatBlockSearch.searchWithPressure(snapshot, values, budget, readiness.orElseThrow(), fixed);
+            explored = CombatBlockSearch.searchWithSeeds(snapshot, values, budget, readiness.orElseThrow(), fixed, seeds.assignments(), null);
         }
+        final CombatBlockSearch.Result result = CombatBlockSearch.preserveFloor(snapshot, explored, seeds);
         reasons.addAll(result.reasons());
         // A bounded search can still apply its best supported legal defense, even when every
         // explored assignment loses. Requiring exhaustive search here falls back instead of

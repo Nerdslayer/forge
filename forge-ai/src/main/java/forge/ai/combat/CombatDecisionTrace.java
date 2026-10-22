@@ -98,6 +98,10 @@ public final class CombatDecisionTrace {
             text.append("\nAttacking player: ").append(snapshot.attackingPlayerId())
                     .append(", defending player: ").append(snapshot.defendingPlayerId());
             text.append("\nPublic creature IDs: ").append(publicLabels(ai, snapshot));
+            text.append("\nPublic combat characteristics: ").append(snapshot.creatures());
+            text.append("\nPublic player life: ").append(snapshot.players());
+            text.append("\nAttacker destinations: ").append(snapshot.attackersToDefenders());
+            text.append("\nAvailable legal blocking pairs: ").append(snapshot.legalBlockers());
             text.append("\nIgnored effects (approximate model): ").append(snapshot.ignoredEffects());
         });
         plan.search().ifPresent(search -> {

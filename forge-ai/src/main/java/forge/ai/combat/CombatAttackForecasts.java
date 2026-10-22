@@ -21,6 +21,13 @@ final class CombatAttackForecasts {
         budget = budget0;
     }
 
+    CombatAttackForecasts withBudget(final CombatSearchBudget allowance) {
+        final var result = new CombatAttackForecasts(snapshot, readiness, values, allowance);
+        replies.forEach((key, value) -> { if (value.evaluation().usable()) { result.replies.put(key, value); } });
+        pressure.forEach((key, value) -> { if (value.usable()) { result.pressure.put(key, value); } });
+        return result;
+    }
+
     CombatSafetyEvaluator.FollowUp reply(final CombatProjection state) {
         return detailedReply(state).evaluation();
     }

@@ -18,6 +18,12 @@ final class GreedyAttackCandidates {
     static <T> Selection<T> select(final List<Integer> fixed, final List<Integer> optional,
             final Function<List<Integer>, T> evaluator, final Comparator<T> ordering,
             final IntUnaryOperator representative) {
+        return select(fixed, optional, evaluator, ordering, ordering, representative);
+    }
+
+    static <T> Selection<T> select(final List<Integer> fixed, final List<Integer> optional,
+            final Function<List<Integer>, T> evaluator, final Comparator<T> ordering,
+            final Comparator<T> selectionOrdering, final IntUnaryOperator representative) {
         final Map<List<Integer>, T> cache = new HashMap<>();
         final Function<List<Integer>, T> evaluate = group -> cache.computeIfAbsent(group, evaluator);
         final List<Integer> combined = new ArrayList<>(fixed);
@@ -32,16 +38,16 @@ final class GreedyAttackCandidates {
             final T candidate = evaluate.apply(add(fixed, representative.applyAsInt(id)));
             if (candidate == null) {
                 final T safeguard = evaluate.apply(all);
-                if (safeguard != null && ordering.compare(safeguard, best) > 0) { best = safeguard; }
+                if (safeguard != null && selectionOrdering.compare(safeguard, best) > 0) { best = safeguard; }
                 return new Selection<>(Optional.of(best), Optional.of(baseline), false, cache.size());
             }
             singles.put(id, candidate);
-            if (ordering.compare(candidate, best) > 0) { best = candidate; }
+            if (selectionOrdering.compare(candidate, best) > 0) { best = candidate; }
         }
         // Always try the overload/lethal safeguard, even when every singleton is a bad attack.
         final T allOut = evaluate.apply(all);
         if (allOut == null) { return new Selection<>(Optional.of(best), Optional.of(baseline), false, cache.size()); }
-        if (ordering.compare(allOut, best) > 0) { best = allOut; }
+        if (selectionOrdering.compare(allOut, best) > 0) { best = allOut; }
 
         final List<Integer> ranked = optional.stream().sorted((left, right) -> {
             final int comparison = ordering.compare(singles.get(right), singles.get(left));
@@ -59,7 +65,7 @@ final class GreedyAttackCandidates {
                 chosen = group;
                 current = candidate;
             }
-            if (ordering.compare(candidate, best) > 0) { best = candidate; }
+            if (selectionOrdering.compare(candidate, best) > 0) { best = candidate; }
         }
         // TODO: Local swaps/pair additions can recover useful non-prefix combinations this heuristic misses.
         return new Selection<>(Optional.of(best), Optional.of(baseline), true, cache.size());

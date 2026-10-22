@@ -27,6 +27,44 @@ public class CombatAttackPlannerTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent, Combat combat) { }
 
     @Test
+    public void redundantLooterStaysHomeButFixedAndUsefulZeroPowerAttackersRemain() {
+        for (final boolean fixed : List.of(false, true)) {
+            for (final boolean usefulTrigger : List.of(false, true)) {
+                final Fixture f = fixture();
+                final List<String> extras = usefulTrigger ? List.of(
+                        "T:Mode$ Attacks | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ Draw",
+                        "SVar:Draw:DB$ Draw | Defined$ You | NumCards$ 1") : List.of(
+                        "A:AB$ Draw | Cost$ T | NumCards$ 1 | Defined$ You");
+                final Card zero = creature(f.ai(), 0, 2, extras);
+                final Card first = creature(f.ai(), 2, 4, List.of("K:Flying"));
+                final Card second = creature(f.ai(), 2, 2, List.of());
+                creature(f.opponent(), 0, 5, List.of("K:Reach"));
+                if (fixed) { f.combat().addAttacker(zero, f.opponent()); }
+                final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(200000, 30000, () -> 0L));
+                Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+                final var selected = plan.search().orElseThrow().best().orElseThrow();
+                Assert.assertEquals(selected.attackers().contains(zero.getId()), fixed || usefulTrigger);
+                Assert.assertTrue(selected.attackers().containsAll(List.of(first.getId(), second.getId())));
+                Assert.assertTrue(CombatAttackPlanner.tryDeclare(f.ai(), f.ai(), f.combat(), new CombatSearchBudget(200000, 30000, () -> 0L)));
+                Assert.assertEquals(f.combat().getAttackers().contains(zero), fixed || usefulTrigger);
+                Assert.assertFalse(zero.isTapped(), "The planner does not perform rules-engine tapping");
+            }
+        }
+    }
+
+    @Test
+    public void positivePowerAttackerAlsoStaysHomeWhenItDoesNotImproveAnUnblockedAttack() {
+        final Fixture f = fixture();
+        final Card redundant = creature(f.ai(), 2, 2, List.of());
+        final Card flyer = creature(f.ai(), 2, 2, List.of("K:Flying"));
+        creature(f.opponent(), 0, 4, List.of());
+        final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000, 500, () -> 0L));
+        Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+        Assert.assertEquals(plan.search().orElseThrow().best().orElseThrow().attackers(), List.of(flyer.getId()));
+        Assert.assertFalse(redundant.isTapped());
+    }
+
+    @Test
     public void holdsInsteadOfTakingPointlessDamageWhenBothContinuationsPredictLethal() {
         for (final boolean fixedAttack : List.of(false, true)) {
             final Fixture f = fixture();

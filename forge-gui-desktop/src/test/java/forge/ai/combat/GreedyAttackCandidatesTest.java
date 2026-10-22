@@ -11,6 +11,22 @@ public class GreedyAttackCandidatesTest {
     private record Option(List<Integer> attackers, int score) { }
 
     @Test
+    public void smallerWinnerPreferenceDoesNotPruneANeutralBridgeToAUsefulCombination() {
+        final var strategic = java.util.Comparator.comparingInt(Option::score);
+        final var selection = strategic.thenComparing(java.util.Comparator.comparingInt((Option value) -> value.attackers().size()).reversed());
+        final var result = GreedyAttackCandidates.select(List.of(), List.of(1, 2, 3, 4), group -> {
+            final int score = group.contains(4) ? -100 : group.containsAll(List.of(1, 2, 3)) ? 20
+                    : group.contains(1) && group.contains(3) && !group.contains(2) ? -10 : group.contains(1) ? 5 : 0;
+            return new Option(group, score);
+        }, strategic, selection, id -> id);
+        Assert.assertTrue(result.complete());
+        Assert.assertEquals(result.best().orElseThrow().attackers(), List.of(1, 2, 3));
+        final var tied = GreedyAttackCandidates.select(List.of(), List.of(1, 2, 3),
+                group -> new Option(group, group.contains(1) ? 5 : 0), strategic, selection, id -> id);
+        Assert.assertEquals(tied.best().orElseThrow().attackers(), List.of(1));
+    }
+
+    @Test
     public void harmfulAdditionIsSkippedAndLaterProfitableAdditionIsStillTried() {
         final Map<List<Integer>, Integer> scores = Map.of(List.of(), 0, List.of(1), 50, List.of(2), 20, List.of(3), 15,
                 List.of(4), -10, List.of(1, 2), 70, List.of(1, 2, 3), 60, List.of(1, 2, 4), 90, List.of(1, 2, 3, 4), 80);

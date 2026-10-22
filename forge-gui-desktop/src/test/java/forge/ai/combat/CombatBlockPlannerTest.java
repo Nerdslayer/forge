@@ -26,6 +26,30 @@ public class CombatBlockPlannerTest extends AITest {
     private record Fixture(Game game, Player attacker, Player defender, Combat combat) { }
 
     @Test
+    public void seededDefenseCoversTheWholeAttackWhenExplorationIsBudgetLimited() {
+        for (final int limit : List.of(2000, 50000)) {
+            final Fixture f = fixture();
+            f.defender().setLife(1, null);
+            for (int i = 0; i < 6; i++) {
+                final Card attacker = creature(f.attacker(), 2, 2, List.of());
+                creature(f.defender(), 3, 3, List.of());
+                f.combat().addAttacker(attacker, f.defender());
+            }
+            final var budget = new CombatSearchBudget(limit, 500, () -> 0L);
+            final var plan = CombatBlockPlanner.plan(f.defender(), f.combat(), budget.planningAllowance());
+            Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+            Assert.assertEquals(plan.search().orElseThrow().best().orElseThrow().projection().terminal(), CombatProjection.Terminal.NONE);
+            Assert.assertEquals(plan.search().orElseThrow().best().orElseThrow().assignment().blockersByAttacker().size(), 6);
+            Assert.assertTrue(budget.remaining() >= limit / 5);
+            Assert.assertTrue(f.combat().getAllBlockers().isEmpty());
+            Assert.assertTrue(CombatBlockPlanner.tryDeclare(f.defender(), f.defender(), f.combat(),
+                    new CombatSearchBudget(limit, 500, () -> 0L)));
+            Assert.assertEquals(f.combat().getAllBlockers().size(), 6);
+            Assert.assertNull(CombatUtil.validateBlocks(f.combat(), f.defender()));
+        }
+    }
+
+    @Test
     public void combatRolloutIsEnabledOnlyInMastermind() {
         final Fixture f = fixture();
         Assert.assertTrue(AiProfileUtil.getBoolProperty(f.defender(), AiProps.ENABLE_COMBAT_BLOCK_PLANNING));

@@ -116,7 +116,7 @@ final class CombatAttackDestinationSearch {
                     routes.addAll(allocate(route.combat().assignment().attackersToDefenders(), snapshot.defendingPlayerId(), null));
                 }
             }
-            CombatAttackSearch.Candidate best = cache.values().stream().filter(java.util.Objects::nonNull).max(CombatAttackDestinationSearch::compare).orElse(baseline);
+            CombatAttackSearch.Candidate best = cache.values().stream().filter(java.util.Objects::nonNull).max(CombatAttackDestinationSearch::compareSelection).orElse(baseline);
             if (complete) { best = trim(best); }
             reasons.add("Priority greedy remaining-attacker allocation; bounded denial/kill/skip routes=" + MAX_ROUTES);
             reasons.add("Walker goals use best predicted blocks, not a forced-kill certificate");
@@ -138,7 +138,7 @@ final class CombatAttackDestinationSearch {
             reasons.add("Equivalent destination singleton rankings reused: "
                     + (optional.size() - representatives.values().stream().distinct().count()));
             final var selection = GreedyAttackCandidates.select(committed.keySet().stream().sorted().toList(), optional,
-                    extension, CombatAttackDestinationSearch::compare, id -> representatives.get(id));
+                    extension, CombatAttackDestinationSearch::compare, CombatAttackDestinationSearch::compareSelection, id -> representatives.get(id));
             complete &= selection.complete();
             final List<CombatAttackSearch.Candidate> result = new ArrayList<>();
             selection.best().ifPresent(result::add);
@@ -162,27 +162,33 @@ final class CombatAttackDestinationSearch {
             final Map<Map<Integer, Integer>, CombatAttackSearch.Candidate> unique = new LinkedHashMap<>();
             candidates.forEach(c -> unique.putIfAbsent(c.combat().assignment().attackersToDefenders(), c));
             final List<CombatAttackSearch.Candidate> result = new ArrayList<>(unique.values().stream()
-                    .sorted((a, b) -> compare(b, a)).limit(MAX_ROUTES - 1).toList());
+                    .sorted((a, b) -> compareSelection(b, a)).limit(MAX_ROUTES - 1).toList());
             if (!result.contains(baseline)) { result.add(baseline); }
             return result;
         }
 
         private CombatAttackSearch.Candidate trim(CombatAttackSearch.Candidate best) {
+            if (best.combat().projection().terminal() != CombatProjection.Terminal.NONE) { return best; }
+            final var allowance = budget.childAllowance(Math.min(4000, budget.remaining() / 4));
+            if (allowance.remaining() == 0) { return best; }
+            final var optional = evaluation.withBudget(allowance);
+            final Function<Map<Integer, Integer>, CombatAttackSearch.Candidate> trial = assignments -> {
+                if (assignments.entrySet().stream().anyMatch(e -> !legal.getOrDefault(e.getKey(), Set.of()).contains(e.getValue()))) { return null; }
+                return optional.evaluate(CombatAttackCandidates.assign(snapshot, assignments));
+            };
+            best = CombatAttackRefiner.refine(best, fixed, trial, CombatAttackDestinationSearch::compare, allowance, reasons);
             for (final int id : best.attackers()) {
-                if (!complete) { break; }
+                if (allowance.remaining() == 0) { break; }
                 if (fixed.containsKey(id)) { continue; }
-                final Map<Integer, Integer> smaller = new LinkedHashMap<>(best.combat().assignment().attackersToDefenders());
-                smaller.remove(id);
-                final var candidate = evaluate(smaller);
-                if (candidate != null && compare(candidate, best) >= 0) { best = candidate; }
                 for (final int target : legal.get(id).stream().sorted().toList()) {
-                    if (!complete) { break; }
+                    if (allowance.remaining() == 0) { break; }
                     final Map<Integer, Integer> redirected = new LinkedHashMap<>(best.combat().assignment().attackersToDefenders());
                     redirected.put(id, target);
-                    final var alternative = evaluate(redirected);
+                    final var alternative = trial.apply(redirected);
                     if (alternative != null && compare(alternative, best) > 0) { best = alternative; }
                 }
             }
+            reasons.add("Optional destination refinement cache hits: " + optional.cacheHits() + ", allowanceRemaining=" + allowance.remaining());
             return best;
         }
 
@@ -215,7 +221,10 @@ final class CombatAttackDestinationSearch {
         final boolean leftRace = left.twoTurnPressure().map(v -> v.usable() && v.lethalOpportunity()).orElse(false);
         final boolean rightRace = right.twoTurnPressure().map(v -> v.usable() && v.lethalOpportunity()).orElse(false);
         if (leftRace != rightRace) { return leftRace ? 1 : -1; }
-        final int value = CombatAttackSearch.compare(left, right);
-        return value != 0 ? value : Integer.compare(right.attackers().size(), left.attackers().size());
+        return CombatAttackSearch.compare(left, right);
+    }
+
+    private static int compareSelection(final CombatAttackSearch.Candidate left, final CombatAttackSearch.Candidate right) {
+        return CombatAttackRefiner.preferSmaller(left, right, compare(left, right));
     }
 }
