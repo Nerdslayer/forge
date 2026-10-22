@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
+import forge.ai.combat.CombatProtectionPreparation;
 import forge.ai.combat.PreparedCombatStaticWorlds;
 import forge.card.CardType;
 import forge.game.StaticEffect;
@@ -83,6 +84,9 @@ public final class CombatStaticProjectionPreparation {
             if (source.isCreature()) { creatures.add(source); }
             for (final StaticAbility ability : source.getStaticAbilities()) {
                 if (ability.isSuppressed() || !"Continuous".equals(ability.getMapParams().get("Mode"))) { continue; }
+                // Independently prepared, persistent self-Protection does not change P/T layers.
+                // Do not discard supported anthem-loss worlds merely because this grant coexists.
+                if (CombatProtectionPreparation.isPersistentSelfGrant(ability)) { continue; }
                 if (!supportsFixedPowerToughness(ability)) {
                     return Optional.of(PreparedCombatStaticWorlds.unsupported("Static applicability/layers need projection: " + source.getId()));
                 }

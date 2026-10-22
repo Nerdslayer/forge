@@ -229,7 +229,7 @@ public class CombatBlockPlannerTest extends AITest {
 
     @Test
     public void structuralDamageMechanicsStillFallBackWithoutChangingBlocks() {
-        for (final String keyword : List.of("Protection:Red", "Infect", "Wither", "Banding", "Absorb:1")) {
+        for (final String keyword : List.of("Protection:Creature.powerGE4:power 4 or greater", "Infect", "Wither", "Banding", "Absorb:1")) {
             final Fixture f = fixture();
             final Card attacker = creature(f.attacker(), 3, 3, List.of("K:" + keyword));
             creature(f.defender(), 2, 2, List.of());

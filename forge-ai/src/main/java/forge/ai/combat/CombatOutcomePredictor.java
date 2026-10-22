@@ -44,6 +44,7 @@ public final class CombatOutcomePredictor {
             return CombatProjection.rejected(false, snapshot.unsupportedReasons());
         }
         if (!snapshot.staticWorlds().supported()) { return CombatProjection.rejected(false, snapshot.staticWorlds().reasons()); }
+        if (!snapshot.protection().unsupportedReasons().isEmpty()) { return CombatProjection.rejected(false, snapshot.protection().unsupportedReasons()); }
         if (!snapshot.unavailableReasons().isEmpty()) {
             return CombatProjection.rejected(true, snapshot.unavailableReasons());
         }
@@ -184,7 +185,7 @@ public final class CombatOutcomePredictor {
                 }
             }
             if (cardHits.isEmpty() && playerHits.isEmpty() && walkerHits.isEmpty()) { continue; }
-            preventShieldDamage(snapshot, events, cardHits, gains, shields, deathtouched, lost);
+            preventDamage(snapshot, events, cardHits, gains, shields, deathtouched, lost);
             cardHits.forEach((id, amount) -> damage.merge(id, amount, CombatOutcomePredictor::add));
             walkerHits.forEach((id, amount) -> loyalty.put(id, Math.max(0, loyalty.get(id) - amount)));
             loyalty.forEach((id, remaining) -> { if (remaining == 0) { lost.add(id); } });
@@ -270,9 +271,14 @@ public final class CombatOutcomePredictor {
         return first ? creature.firstStrike() || creature.doubleStrike() : !creature.firstStrike() || creature.doubleStrike();
     }
 
-    private static void preventShieldDamage(final PublicCombatSnapshot snapshot, final List<CombatEventBatch.Event> events,
+    private static void preventDamage(final PublicCombatSnapshot snapshot, final List<CombatEventBatch.Event> events,
             final Map<Integer, Integer> hits, final Map<Integer, Integer> gains, final Map<Integer, Integer> shields,
             final Set<Integer> deathtouched, final Set<Integer> lostProviders) {
+        // Allocation has already happened (including trample). Protection prevents only the
+        // resulting hits. Its admitted canonical order preserves shields without extra payoffs.
+        events.removeIf(event -> event instanceof CombatEventBatch.Damage hit
+                && snapshot.protection().prevents(hit.sourceId(), hit.recipientId(), hit.recipient())
+                && snapshot.preventionRules().stream().noneMatch(rule -> rule.applies(snapshot.creatures().get(hit.sourceId()), lostProviders)));
         final Set<Integer> protectedTargets = new HashSet<>();
         for (final CombatEventBatch.Event event : events) {
             if (event instanceof CombatEventBatch.Damage hit && hit.recipient() == CombatEventBatch.Recipient.CREATURE

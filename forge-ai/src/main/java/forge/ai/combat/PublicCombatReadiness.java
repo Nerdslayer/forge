@@ -104,7 +104,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
             // TODO: Reconstruct duration/layer changes at cleanup rather than carrying a pump,
             // animation or granted keyword forward as if it were permanent.
             if (!forge.ai.effect.CombatStaticProjectionPreparation.hasOnlyPersistentBoosts(attacker) || !attacker.getSetPTTable().isEmpty()
-                    || !attacker.getChangedCardKeywords().isEmpty() || attacker.getChangedCardTypes().iterator().hasNext()) {
+                    || !CombatProtectionPreparation.persistentKeywordChanges(attacker) || attacker.getChangedCardTypes().iterator().hasNext()) {
                 ignored.add("Cleanup characteristic changes need a duration-aware projection: " + attacker.getId());
             }
             final Set<Integer> eligible = new LinkedHashSet<>();

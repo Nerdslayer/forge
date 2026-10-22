@@ -79,7 +79,7 @@ final class CombatTurnProjectionBuilder {
                 before.triggers().stream().filter(trigger -> !current.lostPermanents().contains(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
                 before.preventionRules().stream().filter(rule -> !current.lostPermanents().contains(rule.providerId())).toList(),
                 before.staticWorlds().surviving(current.lostPermanents()), readiness.ignoredEffects(), walkers,
-                before.singletonPermutationSafe() && readiness.singletonPermutationSafe());
+                before.singletonPermutationSafe() && readiness.singletonPermutationSafe(), before.protection().surviving(current.lostPermanents()));
         return new Result(Optional.of(new Turn(alternatives, survivingValues)), readiness.ignoredEffects());
     }
 }

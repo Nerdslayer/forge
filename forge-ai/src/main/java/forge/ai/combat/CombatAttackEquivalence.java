@@ -72,7 +72,7 @@ final class CombatAttackEquivalence {
         // Avoid whole-board key construction (and destination-map preparation) when no
         // equivalence is possible. TODO: Audit broader source-sensitive permutation support.
         if (candidates.size() < 2 || !snapshot.singletonPermutationSafe() || !readiness.singletonPermutationSafe()
-                || !snapshot.triggers().isEmpty() || !snapshot.preventionRules().isEmpty()
+                || !snapshot.triggers().isEmpty() || !snapshot.preventionRules().isEmpty() || !snapshot.protection().creatures().isEmpty()
                 || !snapshot.staticWorlds().equals(PreparedCombatStaticWorlds.empty())
                 || !snapshot.unsupportedReasons().isEmpty() || !snapshot.unavailableReasons().isEmpty()
                 || !readiness.unsupportedReasons().isEmpty() || !values.relationships().isEmpty() || !values.opportunities().isEmpty()) {

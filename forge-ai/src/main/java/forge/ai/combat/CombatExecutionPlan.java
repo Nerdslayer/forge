@@ -145,6 +145,7 @@ public final class CombatExecutionPlan {
                         ? afterFirstStrike.outcomes().resourcesAfter() : before.resources())
                 || !current.triggers().equals(before.triggers().stream().filter(trigger -> !lostProviders.contains(trigger.ability().sourceId())).toList())
                 || !current.preventionRules().equals(before.preventionRules().stream().filter(rule -> !lostProviders.contains(rule.providerId())).toList())
+                || !current.protection().equals(before.protection().surviving(lostProviders))
                 || !current.staticWorlds().providers().equals(expectedStatics.providers())
                 || !expectedStatics.providers().isEmpty() && !current.staticWorlds().equals(expectedStatics)
                 || !expectedIdentities.equals(identities(lostProviders, budget::tryConsume))
