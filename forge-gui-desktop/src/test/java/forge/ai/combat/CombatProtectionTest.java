@@ -43,6 +43,10 @@ public class CombatProtectionTest extends AITest {
             {"G", "Creature Human", "Protection:Artifact:artifacts", false},
             {"G", "Creature Human", "Protection:Creature.Human:Humans", true},
             {"G", "Creature Elf", "Protection:Creature.Human:Humans", false},
+            {"G", "Creature Human", "Protection:Human", true},
+            {"G", "Creature Elf", "Protection:Human", false},
+            {"6", "Artifact Creature Equipment", "Protection:Equipment", true},
+            {"6", "Artifact Creature Construct", "Protection:Equipment", false},
             {"2 R", "Creature Human", "Protection:Card.cmcEQ3:mana value 3", true},
             {"4 R", "Creature Human", "Protection:Card.cmcEQ3:mana value 3", false}
         };
@@ -149,9 +153,11 @@ public class CombatProtectionTest extends AITest {
         temporary.blocker().addChangedCardKeywords(List.of("Protection from red"), List.of(), false, temporary.game().getNextTimestamp(), null);
         Assert.assertTrue(PublicCombatSnapshot.capture(temporary.attacker(), temporary.combat()).unsupportedReasons().stream()
                 .anyMatch(r -> r.contains("Protection grant")));
-        final var dynamic = fixture("R", "Creature Human", List.of(), List.of("K:Protection:Creature.powerGE4:power 4 or greater"));
-        Assert.assertTrue(PublicCombatSnapshot.capture(dynamic.attacker(), dynamic.combat()).unsupportedReasons().stream()
-                .anyMatch(r -> r.contains("Dynamic Protection quality")));
+        for (final String validity : List.of("Creature.powerGE4", "Human.powerGE4", "Equipment.powerGE4")) {
+            final var dynamic = fixture("R", "Creature Human", List.of(), List.of("K:Protection:" + validity + ":power 4 or greater"));
+            Assert.assertTrue(PublicCombatSnapshot.capture(dynamic.attacker(), dynamic.combat()).unsupportedReasons().stream()
+                    .anyMatch(r -> r.contains("Dynamic Protection quality")));
+        }
         temporary.defender().addChangedKeywords(List.of("Protection from everything"), List.of(), temporary.game().getNextTimestamp(), 0);
         Assert.assertTrue(PublicCombatSnapshot.capture(temporary.attacker(), temporary.combat()).unsupportedReasons().stream()
                 .anyMatch(r -> r.contains("Protected player")));

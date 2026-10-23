@@ -125,7 +125,9 @@ public final class CombatProtectionPreparation {
         if (valid.isEmpty()) { return true; }
         for (final String alternative : valid.split(",")) {
             final String[] pieces = alternative.split("\\.", 2);
-            if (!CardType.isACardType(pieces[0]) && !Set.of("Card", "Permanent", "Emblem").contains(pieces[0])) { return false; }
+            // Engine validity also accepts bare subtypes (e.g. Protection:Human), not just Creature.Human.
+            if (!CardType.isACardType(pieces[0]) && !CardType.isASubType(pieces[0])
+                    && !Set.of("Card", "Permanent", "Emblem").contains(pieces[0])) { return false; }
             if (pieces.length == 1) { continue; }
             for (final String property : pieces[1].split("\\+")) {
                 if (!Set.of("WhiteSource", "BlueSource", "BlackSource", "RedSource", "GreenSource", "ColorlessSource",
