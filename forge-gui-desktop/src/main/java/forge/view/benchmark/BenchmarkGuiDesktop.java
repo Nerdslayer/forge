@@ -46,6 +46,11 @@ final class BenchmarkGuiDesktop implements IGuiBase {
     }
 
     @Override
+    public String getUserAgent() {
+        return "Forge/" + getCurrentVersion() + " (gui-desktop-benchmark)";
+    }
+
+    @Override
     public void invokeInEdtNow(final Runnable runnable) {
         runnable.run();
     }

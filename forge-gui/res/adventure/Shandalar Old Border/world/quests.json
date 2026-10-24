@@ -6090,6 +6090,7 @@
 },
 {
 	"id": 24,
+	"oneTime": true,
 	"isTemplate": true,
 	"name": "Pest Control",
 	"description": "Defeat Xira and her hornets in her hive, and report back.",
@@ -6264,6 +6265,7 @@
 			"POITags": [
 				"Xira"
 			],
+			"requiredEnemy": "Xira",
 			"objective": "Clear",
 			"prologue": {},
 			"epilogue": {},
@@ -6294,6 +6296,7 @@
 },
 {
 	"id": 25,
+	"oneTime": true,
 	"isTemplate": true,
 	"name": "Mechanical Problems",
 	"description": "Defeat Slobad and his artificers in his factory and report back.",
@@ -6470,6 +6473,7 @@
 			"POITags": [
 				"Slobad"
 			],
+			"requiredEnemy": "Slobad",
 			"objective": "Clear",
 			"prologue": {},
 			"epilogue": {},
@@ -6497,6 +6501,7 @@
 },
 {
 	"id": 26,
+	"oneTime": true,
 	"isTemplate": true,
 	"name": "Spores of Death",
 	"description": "Defeat Slimefoot and his fungi in his bog and report back.",
@@ -6668,6 +6673,7 @@
 			"POITags": [
 				"Slimefoot"
 			],
+			"requiredEnemy": "Slimefoot",
 			"objective": "Clear",
 			"prologue": {},
 			"epilogue": {},
@@ -7670,6 +7676,7 @@
 },
 {
 	"id": 35,
+	"oneTime": true,
 	"isTemplate": true,
 	"name": "Empress Galina's Fall",
 	"description": "Defeat Empress Galina and her minions.",
@@ -7849,6 +7856,7 @@
 			"POITags": [
 				"Empress Galina"
 			],
+			"requiredEnemy": "Kiora",
 			"objective": "Clear",
 			"prologue": {},
 			"epilogue": {},
@@ -7878,6 +7886,7 @@
 },
 {
 	"id": 36,
+	"oneTime": true,
 	"isTemplate": true,
 	"name": "Teferi's Fall",
 	"description": "Find and defeat Teferi.",
@@ -8055,6 +8064,7 @@
 			"POITags": [
 				"Teferi"
 			],
+			"requiredEnemy": "Teferi",
 			"objective": "Clear",
 			"prologue": {},
 			"epilogue": {},
