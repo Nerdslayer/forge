@@ -60,6 +60,12 @@ public final class CombatSearchBudget {
 
     public int used() { return usage.used; }
 
+    /** Node-only slice: share usage and the existing deadline without repeatedly halving time. */
+    CombatSearchBudget nodeAllowance(final int additionalNodes) {
+        if (additionalNodes < 0) { throw new IllegalArgumentException("Nonnegative allowance required"); }
+        return new CombatSearchBudget(usage.used + Math.min(remaining(), additionalNodes), emergencyNanos, usage);
+    }
+
     /** Optional work shares accounting and uses at most half of the caller's remaining time. */
     public CombatSearchBudget childAllowance(final int additionalNodes) {
         if (additionalNodes < 0) { throw new IllegalArgumentException("Nonnegative child allowance required"); }

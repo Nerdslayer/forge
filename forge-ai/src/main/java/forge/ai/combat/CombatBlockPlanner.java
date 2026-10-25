@@ -53,8 +53,7 @@ public final class CombatBlockPlanner {
         final PreparedCombatValuation values = prepared.orElseThrow();
         final int seedStarted = budget.used();
         final var seedAllowance = budget.childAllowance(Math.min(4000, budget.remaining() / 4));
-        final var proposals = CombatDefenseSeedBuilder.build(snapshot, values, fixed, seedAllowance);
-        final var seeds = CombatBlockSearch.verifySeeds(snapshot, values, seedAllowance, fixed, proposals);
+        final var seeds = CombatDefenseFloorSearch.prepare(snapshot, values, fixed, seedAllowance);
         reasons.addAll(seeds.floor().reasons());
         reasons.add("Whole-board defense prepared before optional forecasts; nodes=" + (budget.used() - seedStarted));
         final var readiness = PublicCombatReadiness.capture(ai, snapshot, budget::tryConsume);
@@ -83,6 +82,8 @@ public final class CombatBlockPlanner {
         // explored assignment loses. Requiring exhaustive search here falls back instead of
         // minimizing damage; this does not claim that an unsearched survival line is impossible.
         final boolean applicable = result.outcomeDomainComplete() && result.best().isPresent();
+        reasons.add("Selected blocking scoring mode: " + (!applicable ? "unavailable"
+                : result == explored ? "complete advanced mode" : "verified immediate floor"));
         if (!applicable) { reasons.add("No sufficiently supported, verified combat result"); }
         // TODO: Support global mandatory constraints and multiplayer/planeswalker blocks, current static recipient
         // changes and concrete event ownership. Broader reply/pressure support is still pending;

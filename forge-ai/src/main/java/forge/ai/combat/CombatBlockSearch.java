@@ -18,35 +18,55 @@ public final class CombatBlockSearch {
         Seeds { assignments = List.copyOf(assignments); }
     }
 
-    /** Verify independent proposals with the normal immediate evaluator, never an optimistic partial allocation. */
-    static Seeds verifySeeds(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
-            final CombatSearchBudget budget, final Map<Integer, List<Integer>> fixed, final List<CombatAssignment> proposals) {
-        final Search comparison = new Search(snapshot, values, budget, 16, null, null, fixed);
-        Candidate baseline = null;
-        Candidate best = null;
-        final List<CombatAssignment> verified = new ArrayList<>();
-        final List<String> reasons = new ArrayList<>();
-        final int started = budget.used();
-        int evaluations = 0;
-        for (final var proposal : proposals) {
-            if (budget.remaining() == 0) { break; }
-            final Search trial = new Search(snapshot, values, budget, 16, null, null, fixed);
-            final var candidate = trial.evaluate(proposal.blockersByAttacker());
-            evaluations++;
-            if (candidate == null || !trial.domainComplete || trial.interrupted) {
-                reasons.add("Immediate defensive seed verification incomplete: " + trial.reasons);
-                if (baseline == null) { break; }
-                continue;
-            }
-            if (baseline == null) { baseline = candidate; }
-            verified.add(candidate.assignment());
-            if (best == null || comparison.ordering.compare(candidate, best) < 0) { best = candidate; }
+    /** Decision-local immediate scoring. Failed trials cannot poison a previously verified result. */
+    static final class ImmediateEvaluator {
+        private final PublicCombatSnapshot snapshot;
+        private final PreparedCombatValuation values;
+        private final Map<Integer, List<Integer>> fixed;
+        private final Search comparison;
+        private final Map<CombatAssignment, Candidate> completed = new HashMap<>();
+        private final Set<String> failures = new LinkedHashSet<>();
+        private int evaluations;
+        private int cacheHits;
+        private int interrupted;
+        private int unsupported;
+        private int unavailable;
+
+        ImmediateEvaluator(final PublicCombatSnapshot snapshot0, final PreparedCombatValuation values0,
+                final Map<Integer, List<Integer>> fixed0, final CombatSearchBudget budget) {
+            snapshot = snapshot0;
+            values = values0;
+            fixed = fixed0;
+            comparison = new Search(snapshot, values, budget, 16, null, null, fixed);
         }
-        reasons.add("Immediate defensive seeds: verified=" + verified.size() + ", proposals=" + proposals.size()
-                + ", nodes=" + (budget.used() - started) + ", selected=" + (best == null ? "none" : best.assignment().blockersByAttacker())
-                + (best == null ? "" : ", terminal=" + best.projection().terminal() + ", lifeAfter=" + best.projection().playerLifeAfter()));
-        return new Seeds(new Result(Optional.ofNullable(best), Optional.ofNullable(baseline), false, best != null,
-                budget.used() - started, reasons, evaluations, 0, best != null), verified);
+
+        Candidate evaluate(final CombatAssignment assignment, final CombatSearchBudget budget) {
+            if (!budget.tryConsume()) { return null; }
+            final var cached = completed.get(assignment);
+            if (cached != null) { cacheHits++; return cached; }
+            evaluations++;
+            final Search trial = new Search(snapshot, values, budget, 16, null, null, fixed);
+            final var candidate = trial.evaluate(assignment.blockersByAttacker());
+            if (candidate == null || !trial.domainComplete || trial.interrupted
+                    || !trial.verifiedAllocations.contains(candidate)) {
+                if (trial.interrupted) { interrupted++; }
+                else if (!trial.domainComplete) { unsupported++; }
+                else { unavailable++; }
+                // Bounded distinct reasons, not one trace entry for each hypothetical assignment.
+                trial.reasons.stream().limit(4).forEach(reason -> { if (failures.size() < 8) { failures.add(reason); } });
+                return null;
+            }
+            completed.put(assignment, candidate);
+            return candidate;
+        }
+
+        int compare(final Candidate left, final Candidate right) { return comparison.ordering.compare(left, right); }
+        int evaluations() { return evaluations; }
+        int cacheHits() { return cacheHits; }
+        int interrupted() { return interrupted; }
+        int unsupported() { return unsupported; }
+        int unavailable() { return unavailable; }
+        Set<String> failures() { return Set.copyOf(failures); }
     }
 
     /** A surviving verified floor is never replaced by a losing/unsupported advanced search. */

@@ -26,6 +26,72 @@ public class CombatBlockPlannerTest extends AITest {
     private record Fixture(Game game, Player attacker, Player defender, Combat combat) { }
 
     @Test
+    public void safeKillingBlockWithDecoysIsPreparedAndDeclared() {
+        final Fixture f = fixture();
+        f.defender().setLife(12, null);
+        final Card ground = creature(f.attacker(), 2, 3, List.of());
+        final Card flyer = creature(f.attacker(), 1, 1, List.of("K:Flying"));
+        creature(f.defender(), 2, 2, List.of());
+        creature(f.defender(), 2, 1, List.of());
+        final Card strong = creature(f.defender(), 4, 4, List.of());
+        f.combat().addAttacker(ground, f.defender());
+        f.combat().addAttacker(flyer, f.defender());
+        final var captured = PublicCombatSnapshot.capture(f.defender(), f.combat());
+        final var budget = new CombatSearchBudget(2000, 500, () -> 0L);
+        final var prepared = CombatPlanningPreparation.values(f.defender(), forge.ai.effect.ValuationDecision.BLOCK, budget).orElseThrow();
+        final var floor = CombatDefenseFloorSearch.prepare(captured, prepared, java.util.Map.of(), budget.nodeAllowance(400));
+        Assert.assertEquals(floor.floor().best().orElseThrow().assignment().blockersByAttacker(),
+                java.util.Map.of(ground.getId(), List.of(strong.getId())));
+        Assert.assertEquals(floor.floor().best().orElseThrow().projection().playerLifeAfter().get(f.defender().getId()).intValue(), 11);
+        Assert.assertTrue(CombatBlockPlanner.tryDeclare(f.defender(), f.defender(), f.combat(), new CombatSearchBudget(2000, 500, () -> 0L)));
+        Assert.assertEquals(f.combat().getBlockers(ground), new forge.game.card.CardCollection(strong));
+        Assert.assertNull(CombatUtil.validateBlocks(f.combat(), f.defender()));
+    }
+
+    @org.testng.annotations.DataProvider(name = "safeBlockMechanics")
+    public Object[][] safeBlockMechanics() {
+        return new Object[][] {{"K:First strike"}, {"K:Double strike"}, {"K:Indestructible"},
+                {"K:Protection:Creature:creatures"}, {"shield"}};
+    }
+
+    @Test(dataProvider = "safeBlockMechanics")
+    public void floorUsesSharedStrikePreventionAndShieldMechanics(final String mechanic) {
+        final Fixture f = fixture();
+        final Card attacker = creature(f.attacker(), 2, 3, List.of());
+        final Card blocker = creature(f.defender(), 3, 1, mechanic.equals("shield") ? List.of() : List.of(mechanic));
+        if (mechanic.equals("shield")) { blocker.setCounters(forge.game.card.CounterEnumType.SHIELD, 1); }
+        f.combat().addAttacker(attacker, f.defender());
+        final var snapshot = PublicCombatSnapshot.capture(f.defender(), f.combat());
+        final var budget = new CombatSearchBudget(4000, 500, () -> 0L);
+        final var values = CombatPlanningPreparation.values(f.defender(), forge.ai.effect.ValuationDecision.BLOCK, budget).orElseThrow();
+        final var floor = CombatDefenseFloorSearch.prepare(snapshot, values, java.util.Map.of(), budget).floor().best().orElseThrow();
+        Assert.assertEquals(floor.assignment().blockersByAttacker(), java.util.Map.of(attacker.getId(), List.of(blocker.getId())));
+        Assert.assertEquals(floor.projection().lostPermanents(), java.util.Set.of(attacker.getId()));
+        Assert.assertEquals(floor.projection(), CombatOutcomePredictor.predict(snapshot, floor.assignment()));
+        Assert.assertEquals(blocker.getDamage(), 0);
+        if (mechanic.equals("shield")) { Assert.assertEquals(blocker.getCounters(forge.game.card.CounterEnumType.SHIELD), 1); }
+    }
+
+    @Test
+    public void immediateFloorReusesDeathDrawAndPreparedAbilityOwnership() {
+        final Fixture f = fixture();
+        final Card attacker = creature(f.attacker(), 2, 2, List.of());
+        final Card blocker = creature(f.defender(), 2, 2, List.of(
+                "T:Mode$ ChangesZone | ValidCard$ Card.Self | Origin$ Battlefield | Destination$ Graveyard | Execute$ Draw",
+                "SVar:Draw:DB$ Draw | Defined$ You | NumCards$ 1"));
+        f.combat().addAttacker(attacker, f.defender());
+        final var snapshot = PublicCombatSnapshot.capture(f.defender(), f.combat());
+        final var budget = new CombatSearchBudget(4000, 500, () -> 0L);
+        final var values = CombatPlanningPreparation.values(f.defender(), forge.ai.effect.ValuationDecision.BLOCK, budget).orElseThrow();
+        final var floor = CombatDefenseFloorSearch.prepare(snapshot, values, java.util.Map.of(), budget).floor().best().orElseThrow();
+        Assert.assertEquals(floor.assignment().blockersByAttacker(), java.util.Map.of(attacker.getId(), List.of(blocker.getId())));
+        Assert.assertTrue(floor.score().outcomeUtility() > 0);
+        Assert.assertEquals(floor.score().permanentLoss(), values.retireOpportunities(floor.projection().outcomes().resolutions())
+                .evaluateLosses(floor.projection().lostPermanents()));
+        Assert.assertEquals(f.defender().getCardsIn(ZoneType.Hand).size(), 0);
+    }
+
+    @Test
     public void seededDefenseCoversTheWholeAttackWhenExplorationIsBudgetLimited() {
         for (final int limit : List.of(2000, 50000)) {
             final Fixture f = fixture();
@@ -38,7 +104,7 @@ public class CombatBlockPlannerTest extends AITest {
             final var budget = new CombatSearchBudget(limit, 500, () -> 0L);
             final var plan = CombatBlockPlanner.plan(f.defender(), f.combat(), budget.planningAllowance());
             Assert.assertTrue(plan.applicable(), plan.reasons().toString());
-            Assert.assertEquals(plan.search().orElseThrow().best().orElseThrow().projection().terminal(), CombatProjection.Terminal.NONE);
+            Assert.assertEquals(plan.search().orElseThrow().best().orElseThrow().projection().terminal(), CombatProjection.Terminal.NONE, plan.reasons().toString());
             Assert.assertEquals(plan.search().orElseThrow().best().orElseThrow().assignment().blockersByAttacker().size(), 6);
             Assert.assertTrue(budget.remaining() >= limit / 5);
             Assert.assertTrue(f.combat().getAllBlockers().isEmpty());

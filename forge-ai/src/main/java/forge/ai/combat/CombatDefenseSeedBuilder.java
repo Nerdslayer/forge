@@ -13,21 +13,45 @@ import java.util.Set;
 final class CombatDefenseSeedBuilder {
     private CombatDefenseSeedBuilder() { }
 
-    static List<CombatAssignment> build(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+    /** Establish the legal reference before spending capacity scanning optional coverage proposals. */
+    static CombatAssignment baseline(final PublicCombatSnapshot snapshot,
             final Map<Integer, List<Integer>> fixed, final CombatSearchBudget budget) {
         final Map<Integer, List<Integer>> baseline = new LinkedHashMap<>();
         final Set<Integer> used = new HashSet<>();
         for (final var entry : fixed.entrySet()) {
-            if (!budget.tryConsume()) { return List.of(); }
+            if (!budget.tryConsume()) { return null; }
             final var attacker = snapshot.creatures().get(entry.getKey());
             if (attacker == null || !snapshot.attackersToDefenders().containsKey(entry.getKey())
-                    || entry.getValue().size() > Math.min(8, attacker.maximumBlockers())) { return List.of(); }
+                    || entry.getValue().size() > Math.min(8, attacker.maximumBlockers())) { return null; }
             for (final int blocker : entry.getValue()) {
                 if (!budget.tryConsume() || !used.add(blocker)
-                        || !snapshot.legalBlockers().getOrDefault(entry.getKey(), Set.of()).contains(blocker)) { return List.of(); }
+                        || !snapshot.legalBlockers().getOrDefault(entry.getKey(), Set.of()).contains(blocker)) { return null; }
             }
             baseline.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
+        for (final int id : fixed.keySet().stream().sorted().toList()) {
+            final var attacker = snapshot.creatures().get(id);
+            final var group = new ArrayList<>(baseline.get(id));
+            if (attacker.permitsBlockerCount(group.size())) { continue; }
+            if (attacker.minimumBlockers() > Math.min(8, attacker.maximumBlockers())) { return null; }
+            for (final int blocker : snapshot.legalBlockers().getOrDefault(id, Set.of()).stream().sorted().toList()) {
+                if (!budget.tryConsume()) { return null; }
+                if (group.size() >= attacker.minimumBlockers()) { break; }
+                if (used.add(blocker)) { group.add(blocker); }
+            }
+            if (!attacker.permitsBlockerCount(group.size())) { return null; }
+            baseline.put(id, List.copyOf(group));
+        }
+        return new CombatAssignment(snapshot.attackersToDefenders(), baseline);
+    }
+
+    static List<CombatAssignment> build(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final Map<Integer, List<Integer>> fixed, final CombatSearchBudget budget) {
+        final var reference = baseline(snapshot, fixed, budget);
+        if (reference == null) { return List.of(); }
+        final Map<Integer, List<Integer>> baseline = new LinkedHashMap<>(reference.blockersByAttacker());
+        final Set<Integer> used = new HashSet<>();
+        baseline.values().forEach(used::addAll);
         final Map<Integer, Integer> flexibility = new HashMap<>();
         final Map<Integer, Long> loss = new HashMap<>();
         final Map<Integer, Long> preventable = new HashMap<>();
@@ -50,10 +74,6 @@ final class CombatDefenseSeedBuilder {
         final Comparator<Integer> blockerOrder = Comparator.<Integer>comparingInt(id -> flexibility.getOrDefault(id, 0))
                 .thenComparingLong(id -> loss.getOrDefault(id, 0L))
                 .thenComparingInt(Integer::intValue);
-        for (final int id : fixed.keySet().stream().sorted().toList()) {
-            if (!snapshot.creatures().get(id).permitsBlockerCount(baseline.get(id).size())
-                    && !assign(snapshot, id, baseline, used, blockerOrder, budget, true)) { return List.of(); }
-        }
         final List<CombatAssignment> proposals = new ArrayList<>();
         proposals.add(new CombatAssignment(snapshot.attackersToDefenders(), baseline));
         final Comparator<Integer> damageOrder = Comparator.<Integer>comparingLong(id -> preventable.getOrDefault(id, 0L)).reversed()
@@ -131,10 +151,13 @@ final class CombatDefenseSeedBuilder {
         final List<Integer> group = new ArrayList<>(blocks.getOrDefault(id, List.of()));
         final int minimum = Math.max(1, attacker.minimumBlockers());
         if (minimum > Math.min(3, attacker.maximumBlockers())) { return false; }
-        for (final int blocker : snapshot.legalBlockers().getOrDefault(id, Set.of()).stream().sorted(order).toList()) {
+        // Pair coverage was charged above. Do not charge repeated scans over already assigned blockers
+        // again for every attacker: the initial floor slice must still cover broad ordinary attacks.
+        for (final int blocker : snapshot.legalBlockers().getOrDefault(id, Set.of()).stream()
+                .filter(candidate -> !used.contains(candidate)).sorted(order).toList()) {
             if (!budget.tryConsume()) { return false; }
             if (group.size() >= minimum) { break; }
-            if (!used.contains(blocker)) { group.add(blocker); }
+            group.add(blocker);
         }
         if (group.size() < minimum) { return false; }
         if (!completingFixed && attacker.trample()) {
