@@ -38,7 +38,12 @@ public enum GameLossReason {
 
     OpponentWon,
 
-    IntentionalDraw // Not a real "game loss" as such, but a reason not to continue playing.
+    IntentionalDraw, // Not a real "game loss" as such, but a reason not to continue playing.
+
+    // Append new reasons to preserve the ordinals of existing serialized outcomes.
+    MandatoryLoop, // A rules draw, not a player loss or an agreed draw.
+
+    DrawEffect
     ;
 
     /**

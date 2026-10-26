@@ -84,6 +84,10 @@ public class InputPassPriority extends InputSyncronizedBase {
     /** {@inheritDoc} */
     @Override
     public final void showMessage() {
+        if (getController().getYieldController().isStackLoopPaused()) {
+            showNormalPrompt();
+            return;
+        }
         if (!getController().isMacroActive() && !isAlreadyYielding()) {
             // Suppress one prompt after a yield ends — avoids "yielded → ended → yield again?" loop
             if (getController().getYieldController().getBoolPref(FPref.YIELD_SUPPRESS_AFTER_END)

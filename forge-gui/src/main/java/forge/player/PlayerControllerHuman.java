@@ -35,6 +35,7 @@ import forge.game.mana.Mana;
 import forge.game.mana.ManaConversionMatrix;
 import forge.game.mana.ManaCostBeingPaid;
 import forge.game.phase.PhaseType;
+import forge.game.phase.StackLoopWarning;
 import forge.game.player.*;
 import forge.game.player.actions.ActivateAbilityAction;
 import forge.game.player.actions.ColorChoiceAction;
@@ -1777,6 +1778,36 @@ public class PlayerControllerHuman extends PlayerController implements IGameCont
             return Collections.emptyList();     // mainLoopStep just prompts again
         }
         return defaultInput.getChosenSa();
+    }
+
+    @Override
+    public boolean handleStackLoop(final StackLoopWarning warning) {
+        if (getGame().isNoGUIUser() || getGui() == null) {
+            return false;
+        }
+        if (yieldController.isStackLoopPaused()) {
+            return true; // Manual play already exposes every priority window and optional choice.
+        }
+        if (macros != null) {
+            macros.cancelPlayback();
+        }
+        final boolean continueResolving = InputConfirm.confirm(this, (CardView) null,
+                warning.resourcePressure()
+                        ? localizer.getMessage("lblStackResourcePressure", warning.stackSize())
+                        : localizer.getMessage("lblPossibleStackLoop", warning.resolutionsWithoutProgress(), warning.stackSize()),
+                false, Lists.newArrayList(localizer.getMessage("lblContinueResolvingStack"),
+                        localizer.getMessage("lblReturnToManualPlay")));
+        if (!continueResolving) {
+            // This also overrides noninterruptible stack yields and saved per-ability decisions.
+            yieldController.setStackLoopPaused(true);
+            yieldController.clearActiveYieldAndDispatch();
+        }
+        return true;
+    }
+
+    @Override
+    public void resetStackLoopHandling() {
+        yieldController.setStackLoopPaused(false);
     }
 
     @Override
@@ -3992,6 +4023,7 @@ public class PlayerControllerHuman extends PlayerController implements IGameCont
     }
 
     public boolean isUiSetToSkipPhase(final PlayerView turnPlayer, final PhaseType phase) {
+        if (yieldController.isStackLoopPaused()) return false;
         if (macros != null && macros.isReplaying()) {
             return false;
         }
@@ -4036,6 +4068,7 @@ public class PlayerControllerHuman extends PlayerController implements IGameCont
         // Dialog already wrote to FModel; switching APINA on is the only change that can flip mayAutoPass
         // for a sitting prompt, and the budget field saves on every keystroke, so sweeping else is waste
         if (pref != FPref.YIELD_AUTO_PASS_NO_ACTIONS || !Boolean.parseBoolean(value)) return;
+        yieldController.setStackLoopPaused(false);
         refreshAvailableActionsForPrompt();
         tryAutoPassNow();
     }

@@ -63,7 +63,6 @@ import java.util.*;
 public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
     private static final long serialVersionUID = 5207222278370963197L;
     private static final int MAX_AI_PRIORITY_ACTIONS = 200;
-    private static final int MAX_CONSECUTIVE_STACK_RESOLUTIONS = 200;
 
     // used for debugging phase timing
     private final StopWatch sw = new StopWatch();
@@ -95,7 +94,8 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
 
     /** The need to next phase. */
     private boolean givePriorityToPlayer = false;
-    private int consecutiveStackResolutions = 0;
+    private final StackResolutionTracker stackResolutionTracker = new StackResolutionTracker();
+    private String pendingResolutionSignature;
 
     private final transient Game game;
 
@@ -1020,6 +1020,8 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
         if (phase != null) {
             throw new IllegalStateException("Turns already started, call this only once per game");
         }
+        resetStackResolutionTracking();
+        game.getStack().resetResourceWarning();
 
         setPlayerTurn(goesFirst);
         advanceToNextPhase();
@@ -1050,6 +1052,9 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
     }
 
     public void mainLoopStep() {
+        if (handleStackResourcePressure()) {
+            return;
+        }
         if (givePriorityToPlayer) {
             if (DEBUG_PHASES) {
                 sw.start();
@@ -1061,6 +1066,13 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
             do {
                 if (checkStateBasedEffects()) {
                     // state-based effects check could lead to game over
+                    return;
+                }
+                if (handleStackResourcePressure()) {
+                    return;
+                }
+                observeSettledStack();
+                if (handlePossibleStackLoop()) {
                     return;
                 }
                 // CR 117.3 A player receives priority once state-based actions are done, and again after each thing they do
@@ -1097,7 +1109,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
                     final CardZoneTable triggerList = new CardZoneTable(game.getLastStateBattlefield(), game.getLastStateGraveyard());
 
                     if (pPlayerPriority.getController().playChosenSpellAbility(sa)) {
-                        consecutiveStackResolutions = 0;
+                        resetStackResolutionTracking();
                         // 117.3c If a player has priority when they cast a spell, activate an ability, [play a land]
                         // that player receives priority afterward.
                         pFirstPriority = pPlayerPriority; // all opponents have to pass before stack is allowed to resolve
@@ -1149,7 +1161,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
         }
         if (pFirstPriority == nextPlayer) {
             if (game.getStack().isEmpty()) {
-                consecutiveStackResolutions = 0;
+                resetStackResolutionTracking();
                 if (playerTurn.hasLost()) {
                     setPriority(game.getNextPlayerAfter(playerTurn));
                 } else {
@@ -1162,18 +1174,17 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
                 onPhaseBegin();
             }
             else if (!game.getStack().hasSimultaneousStackEntries()) {
-                final SpellAbility nextSa = game.getStack().peekAbility();
-                if (consecutiveStackResolutions >= MAX_CONSECUTIVE_STACK_RESOLUTIONS
-                        && !nextSa.isOptionalTrigger()) {
-                    aiLog.warn("Stack resolved too many times without a priority action; loop continued with: " + nextSa);
+                if (hasVerifiedMandatoryLoop()) {
                     for (final Player p : game.getPlayers()) {
-                        p.intentionalDraw();
+                        p.drawDueToMandatoryLoop();
                     }
                     game.setGameOver(GameEndReason.Draw);
                     return;
                 }
+                stackResolutionTracker.beforeResolution(game.getStack().size());
+                final String signature = StackResolutionTracker.signature(game.getStack().peekAbility());
                 game.getStack().resolveStack();
-                consecutiveStackResolutions++;
+                pendingResolutionSignature = signature;
             }
         } else {
             pPlayerPriority = nextPlayer;
@@ -1181,6 +1192,7 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
 
         // If ever the karn's ultimate resolved
         if (game.getAge() == GameStage.RestartedByKarn) {
+            resetStackResolutionTracking();
             setPhase(null);
             game.updatePhaseForView();
             game.fireEvent(new GameEventGameRestarted(PlayerView.get(playerTurn)));
@@ -1202,10 +1214,6 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
                 return true;
             }
         } while (game.getStack().addAllTriggeredAbilitiesToStack()); //loop so long as something was added to stack
-
-        if (game.getStack().isEmpty()) {
-            game.getStack().clearTriggerRepeats();
-        }
 
         if (!allAffectedCards.isEmpty()) {
             game.fireEvent(new GameEventCardStatsChanged(allAffectedCards));
@@ -1271,6 +1279,8 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
     // this is a hack for the setup game state mode, do not use outside of devSetupGameState code
     // as it avoids calling any of the phase effects that may be necessary in a less enforced context
     public final void devModeSet(final PhaseType phase0, final Player player0, boolean endCombat, int cturn) {
+        resetStackResolutionTracking();
+        game.getStack().resetResourceWarning();
         if (phase0 != null) {
             setPhase(phase0);
         }
@@ -1326,9 +1336,87 @@ public class PhaseHandler implements java.io.Serializable, IHasForgeLog {
         givePriorityToPlayer = true;
     }
 
-    public boolean shouldAiDeclineOptionalTrigger() {
+    public boolean shouldAiDeclineOptionalTrigger(final SpellAbility ability) {
         // TODO: Extend loop escape handling to optional choices inside otherwise mandatory stack objects.
-        return consecutiveStackResolutions >= MAX_CONSECUTIVE_STACK_RESOLUTIONS;
+        return stackResolutionTracker.isRepeating(StackResolutionTracker.signature(ability));
+    }
+
+    private void observeSettledStack() {
+        if (game.getStack().isEmpty()) {
+            resetStackResolutionTracking();
+            return;
+        }
+        if (pendingResolutionSignature != null) {
+            stackResolutionTracker.afterResolution(game.getStack().size(), pendingResolutionSignature);
+            pendingResolutionSignature = null;
+        }
+    }
+
+    private boolean handlePossibleStackLoop() {
+        if (!stackResolutionTracker.warningDue()) {
+            return false;
+        }
+        if (hasVerifiedMandatoryLoop()) {
+            return false; // Still offer every player priority before applying the mandatory-loop draw.
+        }
+        final StackLoopWarning warning = new StackLoopWarning(game.getStack().size(),
+                stackResolutionTracker.getResolutionsWithoutProgress());
+        boolean handled = false;
+        for (final Player p : game.getPlayers()) {
+            handled |= p.getController().handleStackLoop(warning);
+            if (game.isGameOver()) {
+                return true;
+            }
+        }
+        if (!handled && warning.resolutionsWithoutProgress() >= StackResolutionTracker.HEADLESS_RESOLUTION_LIMIT) {
+            // Unsupported cycles remain safety failures; counts cannot prove a mandatory loop.
+            throw new StackResolutionLimitException("Possible repeating stack: "
+                    + warning.resolutionsWithoutProgress() + " resolutions without a new minimum; "
+                    + warning.stackSize() + " objects remain. Execution stopped without declaring a draw.");
+        }
+        stackResolutionTracker.acknowledgeWarning();
+        return false;
+    }
+
+    private boolean handleStackResourcePressure() {
+        if (game.isGameOver() || game.getStack().isFrozen() || game.getStack().isResolving()) {
+            return false;
+        }
+        final int size = game.getStack().getResourceWarningSize();
+        if (size == 0) {
+            return false;
+        }
+        final StackLoopWarning warning = new StackLoopWarning(size,
+                stackResolutionTracker.getResolutionsWithoutProgress(), true);
+        boolean handled = false;
+        for (final Player p : game.getPlayers()) {
+            handled |= p.getController().handleStackLoop(warning);
+            if (game.isGameOver()) {
+                return true;
+            }
+        }
+        if (!handled) {
+            throw new StackResolutionLimitException("Stack resource warning reached (" + size
+                    + " pending objects). Execution stopped at a game-loop boundary without declaring a draw.");
+        }
+        game.getStack().acknowledgeResourceWarning();
+        return false;
+    }
+
+    private boolean hasVerifiedMandatoryLoop() {
+        final SpellAbility next = game.getStack().peekAbility();
+        return next != null && stackResolutionTracker.getResolutionsWithoutProgress()
+                >= StackResolutionTracker.WARNING_INTERVAL
+                && stackResolutionTracker.isRepeating(StackResolutionTracker.signature(next))
+                && MandatoryLoopVerifier.isVerified(game, next);
+    }
+
+    public void resetStackResolutionTracking() {
+        stackResolutionTracker.reset();
+        pendingResolutionSignature = null;
+        for (final Player p : game.getPlayers()) {
+            p.getController().resetStackLoopHandling();
+        }
     }
 
     public void endCombat() {

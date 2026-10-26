@@ -55,6 +55,12 @@ public class TriggerHandler {
         game = gameState;
     }
 
+    /** Pending or delayed rules must be included before proving a resolution cycle is closed. */
+    public boolean hasDelayedOrWaitingTriggers() {
+        return !waitingTriggers.isEmpty() || !delayedTriggers.isEmpty()
+                || !thisTurnDelayedTriggers.isEmpty() || !playerDefinedDelayedTriggers.isEmpty();
+    }
+
     public final void registerDelayedTrigger(final Trigger trig) {
         delayedTriggers.add(trig);
     }

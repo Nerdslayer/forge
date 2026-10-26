@@ -29,6 +29,14 @@ public class PlayerOutcome {
         return new PlayerOutcome(null, GameLossReason.IntentionalDraw, null);
     }
 
+    public static PlayerOutcome mandatoryLoopDraw() {
+        return new PlayerOutcome(null, GameLossReason.MandatoryLoop, null);
+    }
+
+    public static PlayerOutcome effectDraw(final String sourceName) {
+        return new PlayerOutcome(null, GameLossReason.DrawEffect, sourceName);
+    }
+
     public static PlayerOutcome altWin(String sourceName) {
         return new PlayerOutcome(sourceName, null, null);
     }
@@ -76,6 +84,8 @@ public class PlayerOutcome {
             case SpellEffect: return localizer.getMessage("lblLostDueToEffectOfSpell").replace("%s", loseConditionSpell);
             case CommanderDamage: return localizer.getMessage("lblLostDueToAccumulationOf21DamageFromGenerals");
             case IntentionalDraw: return localizer.getMessage("lblAcceptedThatTheGameIsADraw");
+            case MandatoryLoop: return localizer.getMessage("lblDrewDueToMandatoryLoop");
+            case DrawEffect: return localizer.getMessage("lblDrewDueToSpellEffect", loseConditionSpell);
         }
         return localizer.getMessage("lblLostForUnknownReasonBug");
     }

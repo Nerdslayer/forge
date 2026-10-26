@@ -18,7 +18,7 @@ public class GameDrawEffect extends SpellAbilityEffect {
     @Override
     public void resolve(SpellAbility sa) {
         for (Player p : sa.getHostCard().getGame().getPlayers()) {
-            p.intentionalDraw();
+            p.drawDueToEffect(sa.getHostCard().getName());
         }
         sa.getHostCard().getGame().setGameOver(GameEndReason.Draw);
     }

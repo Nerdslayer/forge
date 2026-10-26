@@ -22,6 +22,7 @@ import forge.game.keyword.KeywordInterface;
 import forge.game.mana.Mana;
 import forge.game.mana.ManaConversionMatrix;
 import forge.game.mana.ManaCostBeingPaid;
+import forge.game.phase.StackLoopWarning;
 import forge.game.replacement.ReplacementEffect;
 import forge.game.spellability.*;
 import forge.game.staticability.StaticAbility;
@@ -86,6 +87,15 @@ public abstract class PlayerController {
 
     public boolean isAI() {
         return false;
+    }
+
+    /** Return true if a human has acknowledged a possible stack loop. */
+    public boolean handleStackLoop(final StackLoopWarning warning) {
+        return false;
+    }
+
+    /** Clear temporary automation overrides when a stack episode ends or is restored. */
+    public void resetStackLoopHandling() {
     }
 
     public Game getGame() { return gameView.getGame(); }

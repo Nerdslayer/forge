@@ -493,7 +493,7 @@ public class PlayerControllerAi extends PlayerController {
         if (wrapper.isMandatory()) {
             return true;
         }
-        if (getGame().getPhaseHandler().shouldAiDeclineOptionalTrigger()) {
+        if (getGame().getPhaseHandler().shouldAiDeclineOptionalTrigger(wrapper)) {
             return false;
         }
         // Store/replace target choices more properly to get this SA cleared.

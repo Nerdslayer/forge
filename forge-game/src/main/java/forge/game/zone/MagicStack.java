@@ -31,6 +31,8 @@ import forge.game.event.*;
 import forge.game.keyword.Keyword;
 import forge.game.mana.Mana;
 import forge.game.mana.ManaRefundService;
+import forge.game.phase.StackResolutionLimitException;
+import forge.game.phase.StackResolutionTracker;
 import forge.game.player.Player;
 import forge.game.player.PlayerPredicates;
 import forge.game.spellability.AbilityStatic;
@@ -58,7 +60,6 @@ import java.util.stream.Collectors;
  * @version $Id$
  */
 public class MagicStack /* extends MyObservable */ implements Iterable<SpellAbilityStackInstance> {
-    private static final int MAX_TRIGGER_REPEATS = 50;
 
     private final List<SpellAbility> simultaneousStackEntryList = Lists.newArrayList();
     private final List<SpellAbility> activePlayerSAs = Lists.newArrayList();
@@ -72,13 +73,13 @@ public class MagicStack /* extends MyObservable */ implements Iterable<SpellAbil
     private SpellAbility primaryAbility = null;
     private boolean frozen = false;
     private boolean bResolving = false;
+    private int nextResourceWarning = StackResolutionTracker.STACK_SIZE_WARNING;
 
     private final List<SpellAbility> thisTurnCast = Lists.newArrayList();
     private List<Card> lastTurnCast = Lists.newArrayList();
     private final List<SpellAbility> thisTurnActivated = Lists.newArrayList();
 
     private Card curResolvingCard = null;
-    private final Map<Integer, Integer> triggerRepeats = new HashMap<>();
 
     private final Game game;
 
@@ -98,6 +99,7 @@ public class MagicStack /* extends MyObservable */ implements Iterable<SpellAbil
     public void resetMaxDistinctSources() { maxDistinctSources = 0; }
 
     public final void reset() {
+        resetResourceWarning();
         simultaneousStackEntryList.clear();
         frozen = false;
         primaryAbility = null;
@@ -105,7 +107,6 @@ public class MagicStack /* extends MyObservable */ implements Iterable<SpellAbil
         thisTurnCast.clear();
         thisTurnActivated.clear();
         curResolvingCard = null;
-        triggerRepeats.clear();
         frozenStack.clear();
         clearUndoStack();
         clear();
@@ -211,14 +212,10 @@ public class MagicStack /* extends MyObservable */ implements Iterable<SpellAbil
         }
         Player activator = sp.getActivatingPlayer();
 
-        // Stop infinite loop. E.g. Scalelord Reckoner mirrormatch with only triggering targets is a draw.
-        // CR 104.4b the same goes for a mandatory trigger that keeps coming back before the stack clears
-        if (game.getStack().size() > 999 || (si == null && isRepeatingTrigger(sp))) {
-            for (Player p : game.getPlayers()) {
-                p.intentionalDraw();
-            }
-            game.setGameOver(GameEndReason.Draw);
-            return;
+        // Bound allocation, including abilities queued while the stack is frozen. Size alone
+        // cannot establish a loop, so a resource failure must never become an agreed draw.
+        if (!sp.isManaAbility()) {
+            checkStackResourceLimit();
         }
 
         recordUndoableActions(sp);
@@ -489,27 +486,6 @@ public class MagicStack /* extends MyObservable */ implements Iterable<SpellAbil
             // This is a bit of a hack that forces the update of externally activatable cards in flashback zone (e.g. Lightning Storm).
             game.getPlayers().forEach(Player::updateFlashbackForView);
         }
-    }
-
-    private boolean isRepeatingTrigger(final SpellAbility sp) {
-        if (!sp.isTrigger()) {
-            // a player did something
-            triggerRepeats.clear();
-        }
-        if (!sp.isMandatory() || sp.usesTargeting()) {
-            return false;
-        }
-        final int id = sp.getSourceTrigger();
-        for (final SpellAbilityStackInstance si : stack) {
-            if (si.isStateTrigger(id)) {
-                return false;
-            }
-        }
-        return triggerRepeats.merge(id, 1, Integer::sum) > MAX_TRIGGER_REPEATS;
-    }
-
-    public final void clearTriggerRepeats() {
-        triggerRepeats.clear();
     }
 
     private void recordUndoableActions(SpellAbility sa) {
@@ -842,7 +818,39 @@ public class MagicStack /* extends MyObservable */ implements Iterable<SpellAbil
     }
 
     public final void addSimultaneousStackEntry(final SpellAbility sa) {
+        checkStackResourceLimit();
         simultaneousStackEntryList.add(sa);
+    }
+
+    private void checkStackResourceLimit() {
+        if (pendingStackSize() >= StackResolutionTracker.MAX_STACK_SIZE) {
+            // Emergency allocation cap. Ordinary resource handling runs at a game-loop
+            // boundary first, but one resolving effect can enqueue arbitrarily many triggers.
+            throw new StackResolutionLimitException("Stack resource limit reached ("
+                    + StackResolutionTracker.MAX_STACK_SIZE + " objects). Execution stopped without declaring a draw.");
+        }
+    }
+
+    private int pendingStackSize() {
+        return stack.size() + frozenStack.size() + simultaneousStackEntryList.size();
+    }
+
+    /** Poll only outside resolution/trigger insertion; a size warning is not loop evidence. */
+    public int getResourceWarningSize() {
+        final int size = pendingStackSize();
+        if (size < StackResolutionTracker.STACK_SIZE_WARNING) {
+            nextResourceWarning = StackResolutionTracker.STACK_SIZE_WARNING;
+        }
+        return size >= nextResourceWarning ? size : 0;
+    }
+
+    public void acknowledgeResourceWarning() {
+        // Continuing a large finite stack must not show a dialog on every priority pass.
+        nextResourceWarning = pendingStackSize() + StackResolutionTracker.WARNING_INTERVAL;
+    }
+
+    public void resetResourceWarning() {
+        nextResourceWarning = StackResolutionTracker.STACK_SIZE_WARNING;
     }
 
     public boolean addAllTriggeredAbilitiesToStack() {

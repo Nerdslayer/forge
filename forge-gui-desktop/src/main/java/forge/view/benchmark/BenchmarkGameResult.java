@@ -22,7 +22,8 @@ final class BenchmarkGameResult implements BenchmarkJson.JsonMappable {
         COMPLETED,
         TIMEOUT,
         CRASH,
-        INVALID_INPUT
+        INVALID_INPUT,
+        SAFETY_LIMIT
     }
 
     enum EvaluatedResult {

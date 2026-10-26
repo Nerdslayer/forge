@@ -71,6 +71,16 @@ public class YieldController {
             FPref.UI_SHOW_AUTOTAP_PREVIEW);
 
     private final PlayerControllerHuman owner;
+    private volatile boolean stackLoopPaused;
+
+    /** Temporary safety override; saved yield and trigger preferences remain intact. */
+    public void setStackLoopPaused(final boolean paused) {
+        stackLoopPaused = paused;
+    }
+
+    public boolean isStackLoopPaused() {
+        return stackLoopPaused;
+    }
 
     private boolean autoPassUntilEOT;
     private boolean autoPassUntilStackEmpty;
@@ -109,6 +119,7 @@ public class YieldController {
     }
 
     public synchronized boolean isSkippingPhase(PlayerView turnPlayer, PhaseType phase) {
+        if (stackLoopPaused) return false;
         EnumSet<PhaseType> set = skipPhases.get(turnPlayer);
         return set != null && set.contains(phase);
     }
@@ -132,6 +143,7 @@ public class YieldController {
     // Activating any yield type clears the others — only one yield type may be active at a time (APINA is orthogonal).
     public synchronized void setAutoPassUntilStackEmpty(boolean active, boolean respectsInterrupts) {
         if (active) {
+            stackLoopPaused = false; // Explicitly yielding again resumes automation.
             autoPassUntilEOT = false;
             clearMarker();
         }
@@ -140,6 +152,7 @@ public class YieldController {
     }
     public synchronized void setAutoPassUntilEndOfTurn(boolean active) {
         if (active) {
+            stackLoopPaused = false;
             autoPassUntilStackEmpty = false;
             stackYieldRespectsInterrupts = false;
             clearMarker();
@@ -147,6 +160,7 @@ public class YieldController {
         this.autoPassUntilEOT = active;
     }
     public synchronized void setMarker(PlayerView phaseOwner, PhaseType phase, boolean atOrPastAtClick) {
+        stackLoopPaused = false;
         autoPassUntilEOT = false;
         autoPassUntilStackEmpty = false;
         stackYieldRespectsInterrupts = false;
@@ -170,6 +184,7 @@ public class YieldController {
     }
 
     public boolean shouldAutoYield() {
+        if (stackLoopPaused) return false;
         // A client's controller has no owner, so the host reports when a yield ends
         if (owner == null) return isYieldActive();
         if (autoPassUntilEOT) return true;
@@ -201,6 +216,7 @@ public class YieldController {
     // ---- Auto-yield (per-card/ability) and trigger decisions ----
 
     public boolean shouldAutoYield(String key) {
+        if (stackLoopPaused) return false;
         AutoYieldStore store = activeStore();
         if (store.isDisabled()) return false;
         if (!tierAware()) {
@@ -224,6 +240,7 @@ public class YieldController {
 
     /** Tier-aware user-initiated set. Returns the storage key (stripped if ability-scope) for wire propagation. */
     public String setShouldAutoYield(String key, boolean autoYield, boolean abilityScope) {
+        if (autoYield) stackLoopPaused = false;
         String storageKey = abilityScope ? AutoYieldStore.abilitySuffix(key) : key;
         if (activeModeIsInstall()) {
             PersistentAutoDecisionStore.get().setYield(storageKey, autoYield);
@@ -283,6 +300,7 @@ public class YieldController {
     }
 
     public AutoYieldStore.TriggerDecision getTriggerDecision(String key) {
+        if (stackLoopPaused) return AutoYieldStore.TriggerDecision.ASK;
         AutoYieldStore store = activeStore();
         if (key == null || key.isEmpty() || store.isTriggerDecisionsDisabled()) return AutoYieldStore.TriggerDecision.ASK;
         if (!tierAware()) {
@@ -302,6 +320,7 @@ public class YieldController {
 
     /** Tier-aware user-initiated set. Returns the storage key (stripped if ability-scope) for wire propagation. */
     public String setTriggerDecision(String key, AutoYieldStore.TriggerDecision decision, boolean abilityScope) {
+        if (decision != AutoYieldStore.TriggerDecision.ASK) stackLoopPaused = false;
         String storageKey = abilityScope ? AutoYieldStore.abilitySuffix(key) : key;
         if (activeModeIsInstall()) {
             PersistentAutoDecisionStore.get().setTriggerDecision(storageKey, decision);
@@ -386,8 +405,10 @@ public class YieldController {
             setAutoPassUntilEndOfTurn(u.active());
             return u.active();
         } else if (update instanceof YieldUpdate.CardAutoYield u) {
+            if (u.active()) stackLoopPaused = false;
             activeStore().setYield(AutoYieldStore.Tier.GAME, u.cardKey(), u.active());
         } else if (update instanceof YieldUpdate.TriggerDecision u) {
+            if (u.decision() != AutoYieldStore.TriggerDecision.ASK) stackLoopPaused = false;
             activeStore().setTriggerDecision(AutoYieldStore.Tier.GAME, u.storageKey(), u.decision());
         } else if (update instanceof YieldUpdate.SetDisableYields u) {
             setDisableAutoYields(u.disabled());
@@ -396,6 +417,9 @@ public class YieldController {
         } else if (update instanceof YieldUpdate.SkipPhase u) {
             setSkipPhase(u.turnPlayer(), u.phase(), u.skip());
         } else if (update instanceof YieldUpdate.SetYieldPref u) {
+            if (u.pref() == FPref.YIELD_AUTO_PASS_NO_ACTIONS && Boolean.parseBoolean(u.value())) {
+                stackLoopPaused = false;
+            }
             setPref(u.pref(), u.value());
         } else if (update instanceof YieldUpdate.SeedFromClient u) {
             applyClientSeed(u.snapshot());
@@ -613,6 +637,7 @@ public class YieldController {
 
     /** Per-tick predicate (distinct from one-shot yields). Used by mayAutoPass. */
     public boolean isAutoPassingNoActions(PlayerView player) {
+        if (stackLoopPaused) return false;
         if (!getBoolPref(FPref.YIELD_AUTO_PASS_NO_ACTIONS)) return false;
         if (autoPassInterrupted) return false;
         return player != null && !player.hasAvailableActions();

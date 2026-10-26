@@ -20,6 +20,7 @@ import forge.game.GameOutcome;
 import forge.game.GameRules;
 import forge.game.GameType;
 import forge.game.Match;
+import forge.game.phase.StackResolutionLimitException;
 import forge.game.event.GameEventTurnBegan;
 import forge.game.player.Player;
 import forge.game.player.RegisteredPlayer;
@@ -137,6 +138,12 @@ final class BenchmarkGameWorker {
             result.durationMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             populateOutcome(result, game, evaluated, baseline, recorder);
             return 3;
+        } catch (StackResolutionLimitException e) {
+            result.status = BenchmarkGameResult.Status.SAFETY_LIMIT;
+            result.error = describe(e);
+            result.durationMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+            // No game outcome exists: do not manufacture a draw for a safety termination.
+            return 4;
         } catch (Exception | StackOverflowError e) {
             result.status = BenchmarkGameResult.Status.CRASH;
             result.error = describe(e);

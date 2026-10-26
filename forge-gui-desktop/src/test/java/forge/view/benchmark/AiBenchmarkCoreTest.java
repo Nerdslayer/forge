@@ -98,13 +98,13 @@ public class AiBenchmarkCoreTest {
     public void gameResultRoundTripsEscapedJsonFields() throws Exception {
         final BenchmarkJob job = BenchmarkPlanner.createJobs(List.of(deck("alpha", "Alpha", "a")), 1, 9L).get(0);
         final BenchmarkGameResult expected = BenchmarkGameResult.forJob(job);
-        expected.status = BenchmarkGameResult.Status.CRASH;
+        expected.status = BenchmarkGameResult.Status.SAFETY_LIMIT;
         expected.error = "line one\nquoted \"value\" and slash \\";
         expected.evaluatedProfile = "Experimental";
         expected.baselineProfile = "Default";
         expected.evaluatedProfileSha256 = "eval-profile";
         expected.baselineProfileSha256 = "base-profile";
-        expected.childExitCode = 2;
+        expected.childExitCode = 4;
         final Path resultFile = java.nio.file.Files.createTempFile("forge-ai-benchmark", ".json");
         java.nio.file.Files.writeString(resultFile, expected.toJson());
 
@@ -125,6 +125,7 @@ public class AiBenchmarkCoreTest {
         results.add(result("three", BenchmarkGameResult.Status.COMPLETED, BenchmarkGameResult.EvaluatedResult.DRAW));
         results.add(result("four", BenchmarkGameResult.Status.TIMEOUT, BenchmarkGameResult.EvaluatedResult.NONE));
         results.add(result("five", BenchmarkGameResult.Status.CRASH, BenchmarkGameResult.EvaluatedResult.NONE));
+        results.add(result("six", BenchmarkGameResult.Status.SAFETY_LIMIT, BenchmarkGameResult.EvaluatedResult.NONE));
 
         final BenchmarkSummary.Stats overall = new BenchmarkSummary(results).overall();
 
@@ -133,7 +134,7 @@ public class AiBenchmarkCoreTest {
         Assert.assertEquals(overall.losses, 1);
         Assert.assertEquals(overall.draws, 1);
         Assert.assertEquals(overall.timeouts, 1);
-        Assert.assertEquals(overall.errors, 1);
+        Assert.assertEquals(overall.errors, 2);
         Assert.assertEquals(overall.winRate(), 1.0 / 3.0, 0.000001);
     }
 

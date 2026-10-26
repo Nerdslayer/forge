@@ -20,6 +20,7 @@ import forge.game.GameLogEntryType;
 import forge.game.GameRules;
 import forge.game.GameType;
 import forge.game.Match;
+import forge.game.phase.StackResolutionLimitException;
 import forge.game.player.RegisteredPlayer;
 import forge.gamemodes.tournament.system.AbstractTournament;
 import forge.gamemodes.tournament.system.TournamentBracket;
@@ -247,6 +248,7 @@ public class SimulateMatch {
             g1.AI_FLAT_MONTE_CARLO = flatMonteCarlo;
             g1.AI_FLAT_MONTE_CARLO_MAX = Boolean.TRUE.equals(flatMonteCarloMax);
         }
+        boolean safetyLimited = false;
         // will run match in the same thread
         try {
             TimeLimitedCodeBlock.runWithTimeout(() -> {
@@ -255,13 +257,18 @@ public class SimulateMatch {
             }, mc.getRules().getSimTimeout(), TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             System.out.println("Stopping slow match as draw");
+        } catch (StackResolutionLimitException e) {
+            safetyLimited = true;
+            throw e; // In match mode, returning without an outcome would start another game forever.
         } catch (Exception | StackOverflowError e) {
             e.printStackTrace();
         } finally {
             if (sw.isStarted()) {
                 sw.stop();
             }
-            g1.setGameOver(GameEndReason.Draw);
+            if (!safetyLimited) {
+                g1.setGameOver(GameEndReason.Draw);
+            }
         }
 
         List<GameLogEntry> log;
