@@ -2414,6 +2414,14 @@
     "life": 20,
     "rewards": [
       {
+        "type": "card",
+        "probability": 1,
+        "count": 2,
+        "subTypes": [
+          "Aura"
+        ]
+      },
+      {
         "type": "deckCard",
         "probability": 1,
         "count": 2,
@@ -25132,6 +25140,14 @@
     "speed": 25,
     "life": 20,
     "rewards": [
+      {
+        "type": "card",
+        "probability": 1,
+        "count": 2,
+        "subTypes": [
+          "Aura"
+        ]
+      },
       {
         "type": "deckCard",
         "probability": 1,
