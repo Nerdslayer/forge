@@ -11,6 +11,9 @@ import forge.game.ability.AbilityFactory;
 import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
 import forge.game.spellability.SpellAbility;
+import forge.game.trigger.Trigger;
+import forge.game.trigger.TriggerHandler;
+import forge.game.trigger.WrappedAbility;
 import forge.game.zone.ZoneType;
 import forge.gamemodes.match.YieldController;
 import forge.gui.interfaces.IGuiGame;
@@ -166,9 +169,14 @@ public class StackLoopHandlingTest extends AITest {
         human.getYieldController().setAutoPassUntilStackEmpty(true, false);
         Player player = game.getPlayers().get(1);
         Card source = addCard("Runeclaw Bear", player);
+        Trigger trigger = TriggerHandler.parseTrigger(
+                "Mode$ Phase | Phase$ Upkeep | TriggerZones$ Battlefield", source, true);
+        SpellAbility effect = AbilityFactory.getAbility("DB$ GainLife | Defined$ You | LifeAmount$ 0", source);
+        trigger.setOverridingAbility(effect);
         for (int i = 0; i < StackResolutionTracker.STACK_SIZE_WARNING; i++) {
-            SpellAbility ability = AbilityFactory.getAbility(
-                    "AB$ GainLife | Cost$ 0 | Defined$ You | LifeAmount$ 0", source);
+            // Queue actual triggers: activated abilities copy an ever-growing activation
+            // history into LKI, making a large synthetic batch quadratic in memory.
+            SpellAbility ability = new WrappedAbility(trigger, effect.copy(source, true), null);
             ability.setActivatingPlayer(player);
             game.getStack().add(ability);
         }
@@ -192,11 +200,16 @@ public class StackLoopHandlingTest extends AITest {
         human.getPlayer().dangerouslySetController(human);
         human.getYieldController().setAutoPassUntilStackEmpty(true, false);
         Player player = game.getPlayers().get(1);
-        addCards("Sporemound", 2, player);
-        addCard("Life and Limb", player);
+        // Each token produces two new triggers, then dies. Keep the battlefield
+        // bounded so the test measures stack growth rather than static-rule scaling.
+        addCards("Gremlin Tamer", 2, player);
+        addCard("Secret Arcade", player);
+        addCard("Night of Souls' Betrayal", player);
         game.getAction().checkStateEffects(true);
-        game.getAction().moveToPlay(addCardToZone("Forest", player, ZoneType.Hand), null, AbilityKey.newMap());
-        for (int i = 0; i < 500 && !game.isGameOver(); i++) game.getPhaseHandler().mainLoopStep();
+        game.getAction().moveToPlay(addCardToZone("Sterling Grove", player, ZoneType.Hand), null, AbilityKey.newMap());
+        for (int i = 0; i < 500 && !game.isGameOver() && prompts.get() == 0; i++) {
+            game.getPhaseHandler().mainLoopStep();
+        }
         Assert.assertEquals(prompts.get(), 1);
         Assert.assertTrue(human.getYieldController().isStackLoopPaused());
         Assert.assertTrue(game.getStack().size() > 200);

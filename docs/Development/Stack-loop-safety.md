@@ -52,8 +52,8 @@ Only an actual agreed draw uses the existing agreement wording.
 
 - Finite batches of 201 and 1,500 abilities, extra finite triggers, and 256 Scute
   Swarm landfall triggers producing 512 Scute Swarms.
-- Constant, oscillating, and growing stacks; a growing Sporemound/Life and Limb
-  token chain; and two- and three-player Gremlin birth/death cycles.
+- Constant, oscillating, and growing stacks; a growing token birth/death chain
+  with two Gremlin Tamers; and two- and three-player Gremlin birth/death cycles.
 - Human continuation/manual recovery, preserved decisions, snapshot restoration,
   explicit yield resumption, resource warnings, and emergency frozen-queue limits.
 - Optional blink escape, verified mandatory draws, a priority response breaking
