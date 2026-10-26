@@ -109,7 +109,7 @@
   </object>
   <object id="72" template="../../obj/enemy.tx" x="243.5" y="155">
    <properties>
-    <property name="enemy" value="Monk"/>
+    <property name="enemy" value="Auramancer"/>
     <property name="threatRange" type="int" value="40"/>
    </properties>
   </object>
