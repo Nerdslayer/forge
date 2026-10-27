@@ -22,6 +22,7 @@ import forge.adventure.scene.*;
 import forge.adventure.stage.MapStage;
 import forge.adventure.stage.WorldStage;
 import forge.adventure.util.Config;
+import forge.adventure.util.AdventureExit;
 import forge.adventure.util.JSONStringLoader;
 import forge.adventure.world.WorldSave;
 import forge.animation.ForgeAnimation;
@@ -767,6 +768,11 @@ public class Forge implements ApplicationListener {
             return;
         } //don't allow exiting multiple times
 
+        if (AdventureExit.requestIfNeeded(() -> {
+            exited = true;
+            exitAnimation(true);
+        })) return;
+
         Consumer<Boolean> callback = result -> {
             if (result) {
                 exited = true;
@@ -788,6 +794,11 @@ public class Forge implements ApplicationListener {
         if (exited) {
             return;
         } //don't allow exiting multiple times
+
+        if (AdventureExit.requestIfNeeded(() -> {
+            exited = true;
+            exitAnimation(false);
+        })) return;
 
         final List<String> options = new ArrayList<>();
         options.add(getLocalizer().getMessage("lblExit"));
@@ -1002,6 +1013,7 @@ public class Forge implements ApplicationListener {
             OverlayText.getInstance().render(delta);
             // render framerate if enabled
             FrameRate.getInstance().render(showFPS);
+            AdventureExitDialog.render(delta);
             return;
         }
         // update DiceOverlay
@@ -1010,6 +1022,7 @@ public class Forge implements ApplicationListener {
         Classic.getInstance().render(screen);
         DiceOverlay.getInstance().render();
         FrameRate.getInstance().render(showFPS);
+        AdventureExitDialog.render(delta);
     }
 
     private static FContainer getHierachyScreen() {
@@ -1634,6 +1647,7 @@ public class Forge implements ApplicationListener {
                     }
                     hasGamepad = true;
                     lastInputWasController = true;
+                    if (AdventureExitDialog.controllerButton(controller, buttonIndex, true)) return true;
                     translateButtons(controller, buttonIndex, true);
                     return super.buttonDown(controller, buttonIndex);
                 }
@@ -1644,6 +1658,7 @@ public class Forge implements ApplicationListener {
                         return false;
                     }
                     hasGamepad = true;
+                    if (AdventureExitDialog.controllerButton(controller, buttonIndex, false)) return true;
                     translateButtons(controller, buttonIndex, false);
                     return super.buttonUp(controller, buttonIndex);
                 }
@@ -1659,6 +1674,7 @@ public class Forge implements ApplicationListener {
                     if (Math.abs(value) > 0.25f) {
                         lastInputWasController = true;
                     }
+                    if (AdventureExitDialog.isOpen()) return true;
                     translateAxis(controller, axisIndex, value);//prevent multi press axis
                     return super.axisMoved(controller, axisIndex, value);
                 }

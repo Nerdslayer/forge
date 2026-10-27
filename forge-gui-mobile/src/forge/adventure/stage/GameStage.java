@@ -37,6 +37,7 @@ import forge.adventure.scene.Scene;
 import forge.adventure.scene.StartScene;
 import forge.adventure.scene.TileMapScene;
 import forge.adventure.util.Config;
+import forge.adventure.util.AdventureExit;
 import forge.adventure.util.Controls;
 import forge.adventure.util.Current;
 import forge.adventure.util.KeyBinding;
@@ -420,6 +421,8 @@ public abstract class GameStage extends Stage {
                 player.stop();
             } else {
                 player.getMovementDirection().set(inputPriorityDir);
+                // TODO: Track autonomous world timers precisely; location state is not yet resumable.
+                AdventureExit.PROGRESS.markChanged();
             }
 
             if (touchX >= 0) {
@@ -495,8 +498,10 @@ public abstract class GameStage extends Stage {
         if (keycode == Input.Keys.F8)//todo config
         {
             if (!TileMapScene.instance().currentMap().isInMap()) {
-                WorldSave.getCurrentSave().quickLoad();
-                enter();
+                Runnable load = () -> {
+                    if (WorldSave.getCurrentSave().quickLoad()) enter();
+                };
+                if (!AdventureExit.requestIfNeeded(load)) load.run();
             }
         }
         if (keycode == Input.Keys.F11) {

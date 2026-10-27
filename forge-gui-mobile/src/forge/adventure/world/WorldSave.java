@@ -22,6 +22,9 @@ import forge.player.GamePlayerUtil;
 
 import java.io.*;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.nio.file.Paths;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -113,6 +116,14 @@ public class WorldSave {
             e.printStackTrace();
             return false;
         }
+        try {
+            AdventureExit.PROGRESS.checkpoint(currentSave.header.saveDate.getTime(), currentSave.captureProgress());
+        } catch (RuntimeException e) {
+            // Comparison failures should warn conservatively, without preventing a usable save from loading.
+            e.printStackTrace();
+            AdventureExit.PROGRESS.checkpoint(currentSave.header.saveDate.getTime(), new HashMap<>());
+            AdventureExit.PROGRESS.markChanged();
+        }
         return true;
     }
 
@@ -164,6 +175,7 @@ public class WorldSave {
         currentSave.player.setWorldPosY((int) (currentSave.world.getData().playerStartPosY * currentSave.world.getData().height * currentSave.world.getTileSize()));
         currentSave.player.setWorldPosX((int) (currentSave.world.getData().playerStartPosX * currentSave.world.getData().width * currentSave.world.getTileSize()));
         currentSave.onLoadList.emit();
+        AdventureExit.PROGRESS.startNew();
         return currentSave;
     }
 
@@ -180,67 +192,68 @@ public class WorldSave {
     }
 
     public boolean save(String text, int currentSlot) {
+        String oldName = header.name;
+        Date oldDate = header.saveDate;
+        Map<String, byte[]> savedProgress;
         header.name = text;
-
-        String fileName = WorldSave.getSaveFile(currentSlot);
-        String oldFileName = fileName.replace(".sav", ".old");
-        new File(getSaveDir()).mkdirs();
-        File currentFile = new File(fileName);
-        File backupFile = new File(oldFileName);
-        if (currentFile.exists())
-            currentFile.renameTo(backupFile);
-
         try {
-            try (FileOutputStream fos = new FileOutputStream(fileName);
-                 DeflaterOutputStream def = new DeflaterOutputStream(fos);
-                 ObjectOutputStream oos = new ObjectOutputStream(def)) {
-                SaveFileData player = currentSave.player.save();
-                SaveFileData world = currentSave.world.save();
-                SaveFileData worldStage = WorldStage.getInstance().save();
-                SaveFileData poiChanges = currentSave.pointOfInterestChanges.save();
-                SaveFileData shopCatalog = currentSave.shopCatalog.save();
+            SaveFileData player = currentSave.player.save();
+            SaveFileData world = currentSave.world.save();
+            SaveFileData worldStage = WorldStage.getInstance().save();
+            SaveFileData poiChanges = currentSave.pointOfInterestChanges.save();
+            SaveFileData shopCatalog = currentSave.shopCatalog.save();
+            String message = getExceptionMessage(player, world, worldStage, poiChanges, shopCatalog);
+            if (!message.isEmpty()) throw new IOException(message);
 
-                String message = getExceptionMessage(player, world, worldStage, poiChanges, shopCatalog);
-                if (!message.isEmpty()) {
-                    oos.close();
-                    fos.close();
-                    restoreBackup(oldFileName, fileName);
-                    finish(message);
-                    return true;
+            SaveFileData mainData = new SaveFileData();
+            mainData.store("player", player);
+            mainData.store("world", world);
+            mainData.store("worldStage", worldStage);
+            mainData.store("pointOfInterestChanges", poiChanges);
+            mainData.store("shopCatalog", shopCatalog);
+            message = getExceptionMessage(mainData);
+            if (!message.isEmpty()) throw new IOException(message);
+            savedProgress = progressData(player, poiChanges, shopCatalog);
+
+            header.saveDate = new Date();
+            AdventureSaveFile.write(Paths.get(getSaveFile(currentSlot)), stream -> {
+                try (ObjectOutputStream oos = new ObjectOutputStream(new DeflaterOutputStream(stream))) {
+                    oos.writeObject(header);
+                    oos.writeObject(mainData);
                 }
-
-                SaveFileData mainData = new SaveFileData();
-                mainData.store("player", player);
-                mainData.store("world", world);
-                mainData.store("worldStage", worldStage);
-                mainData.store("pointOfInterestChanges", poiChanges);
-                mainData.store("shopCatalog", shopCatalog);
-
-                if (mainData.readString("IOException") != null) {
-                    oos.close();
-                    fos.close();
-                    restoreBackup(oldFileName, fileName);
-                    finish("Please check forge.log for errors.");
-                    return true;
-                }
-
-                header.saveDate = new Date();
-                oos.writeObject(header);
-                oos.writeObject(mainData);
-            }
-
-        } catch (IOException e) {
-            restoreBackup(oldFileName, fileName);
-            finish("Please check forge.log for errors.");
-            return true;
+            });
+        } catch (IOException | RuntimeException e) {
+            header.name = oldName;
+            header.saveDate = oldDate;
+            AdventureExit.PROGRESS.markChanged();
+            e.printStackTrace();
+            finish(Forge.getLocalizer().getMessage("lblAdventureSaveFailed"));
+            return false;
         }
 
+        AdventureExit.PROGRESS.checkpoint(header.saveDate.getTime(), savedProgress);
         Config.instance().getSettingData().lastActiveSave = WorldSave.filename(currentSlot);
         Config.instance().saveSettings();
-        if (backupFile.exists())
-            backupFile.delete();
         finish(null);
         return true;
+    }
+
+    /** Compare persistent player/location data only on save/load or an attempted departure, never per frame. */
+    public Map<String, byte[]> captureProgress() {
+        SaveFileData playerData = player.save();
+        SaveFileData changes = pointOfInterestChanges.save();
+        SaveFileData shops = shopCatalog.save();
+        if (!getExceptionMessage(playerData, changes, shops).isEmpty())
+            throw new IllegalStateException("Could not compare Adventure progress");
+        return progressData(playerData, changes, shops);
+    }
+
+    private static Map<String, byte[]> progressData(SaveFileData playerData, SaveFileData changes, SaveFileData shops) {
+        Map<String, byte[]> state = new HashMap<>();
+        playerData.forEach((key, bytes) -> state.put("player/" + key, bytes));
+        changes.forEach((key, bytes) -> state.put("locations/" + key, bytes));
+        shops.forEach((key, bytes) -> state.put("shops/" + key, bytes));
+        return state;
     }
 
     private void finish(String errors) {
@@ -249,15 +262,6 @@ public class WorldSave {
         Gdx.app.postRunnable(() -> {
             OverlayText.getInstance().update("");
         });
-    }
-
-    public void restoreBackup(String oldFilename, String currentFilename) {
-        File f = new File(currentFilename);
-        if (f.exists())
-            f.delete();
-        File b = new File(oldFilename);
-        if (b.exists())
-            b.renameTo(new File(currentFilename));
     }
 
     public String getExceptionMessage(SaveFileData... datas) {

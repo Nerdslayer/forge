@@ -42,6 +42,7 @@ public abstract class Scene implements Disposable {
             if (!SoundSystem.instance.hasWindowFocus()) {
                 return false;
             }
+            if (AdventureExitDialog.controllerButton(controller, i, true)) return true;
             Scene scene = Forge.getCurrentScene();
             return scene != null && scene.buttonDown(controller, i);
         }
@@ -51,6 +52,7 @@ public abstract class Scene implements Disposable {
             if (!SoundSystem.instance.hasWindowFocus()) {
                 return false;
             }
+            if (AdventureExitDialog.controllerButton(controller, i, false)) return true;
             Scene scene = Forge.getCurrentScene();
             return scene != null && scene.buttonUp(controller, i);
         }
@@ -60,6 +62,7 @@ public abstract class Scene implements Disposable {
             if (!SoundSystem.instance.hasWindowFocus()) {
                 return false;
             }
+            if (AdventureExitDialog.isOpen()) return true;
             Scene scene = Forge.getCurrentScene();
             return scene != null && scene.axisMoved(controller, i, v);
         }

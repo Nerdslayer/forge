@@ -15,6 +15,7 @@ import forge.adventure.stage.GameStage;
 import forge.adventure.stage.MapStage;
 import forge.adventure.util.AdventureBackgroundDownloader;
 import forge.adventure.util.Config;
+import forge.adventure.util.AdventureExit;
 import forge.adventure.util.Controls;
 import forge.adventure.world.WorldSave;
 import forge.assets.FSkinTexture;
@@ -73,6 +74,8 @@ public class StartScene extends UIScene {
     }
 
     public boolean NewGame() {
+        if (AdventureExit.requestIfNeeded(() -> Forge.switchScene(NewGameScene.instance())))
+            return true;
         Forge.switchScene(NewGameScene.instance());
         return true;
     }
@@ -300,19 +303,16 @@ public class StartScene extends UIScene {
     }
 
     public boolean Exit() {
-        if (exitDialog == null) {
-            exitDialog = createGenericDialog(Forge.getLocalizer().getMessage("lblExitForge"),
-                    Forge.getLocalizer().getMessage("lblAreYouSureYouWishExitForge"), Forge.getLocalizer().getMessage("lblOK"),
-                    Forge.getLocalizer().getMessage("lblAbort"), () -> {
-                        Forge.exit(true);
-                        removeDialog();
-                    }, this::removeDialog);
-        }
-        showDialog(exitDialog);
+        Forge.exit(true); // The shared Adventure guard supplies the progress warning.
         return true;
     }
 
     public void switchToClassic() {
+        if (AdventureExit.requestIfNeeded(this::switchToClassicAfterConfirmation)) return;
+        switchToClassicAfterConfirmation();
+    }
+
+    private void switchToClassicAfterConfirmation() {
         SoundSystem.instance.stopBackgroundMusic();
         Forge.switchToClassic();
     }

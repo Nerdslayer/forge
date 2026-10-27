@@ -3,6 +3,7 @@ package forge;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import forge.adventure.scene.HudScene;
+import forge.adventure.scene.AdventureExitDialog;
 import forge.gui.error.BugReporter;
 //import forge.util.ScreenUtil;
 
@@ -66,7 +67,8 @@ public class Adventure {
             }*/
             // Adventure UIScene
             Forge.currentScene.render();
-            Forge.currentScene.act(delta);
+            if (!AdventureExitDialog.isOpen())
+                Forge.currentScene.act(delta);
             if (Forge.currentScene instanceof HudScene hudScene)
                 FrameRate.getInstance().sampleAdventure(hudScene.getBatch(), Forge.showFPS);
         } catch (IllegalStateException | NullPointerException ie) {

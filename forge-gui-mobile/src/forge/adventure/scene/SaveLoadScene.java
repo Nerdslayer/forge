@@ -16,6 +16,7 @@ import forge.adventure.data.DifficultyData;
 import forge.adventure.player.AdventurePlayer;
 import forge.adventure.stage.WorldStage;
 import forge.adventure.util.Config;
+import forge.adventure.util.AdventureExit;
 import forge.adventure.util.Controls;
 import forge.adventure.util.Current;
 import forge.adventure.world.WorldSave;
@@ -52,6 +53,11 @@ public class SaveLoadScene extends UIScene {
     ScrollPane scrollPane;
     char ASCII_179 = '│';
     Dialog saveDialog;
+    private Runnable afterSave;
+    private Runnable cancelSave;
+    private Scene saveReturnScene;
+    private Modes saveReturnMode;
+    private int saveReturnSlot;
     TextraButton sortToggleButton;
     enum SortMode { SLOT, RECENT }
     SortMode sortMode = SortMode.SLOT;
@@ -257,6 +263,17 @@ public class SaveLoadScene extends UIScene {
     boolean loaded = false;
 
     public void loadSave() {
+        Modes requestedMode = mode;
+        int requestedSlot = currentSlot;
+        if (mode != Modes.Save && AdventureExit.requestIfNeeded(() -> {
+            setMode(requestedMode);
+            currentSlot = requestedSlot;
+            performLoadSave();
+        })) return;
+        performLoadSave();
+    }
+
+    private void performLoadSave() {
         if (loaded)
             return;
         loaded = true;
@@ -268,6 +285,7 @@ public class SaveLoadScene extends UIScene {
                     //Otherwise location based events for quests can be skipped by saving and then loading outside the map
                     Dialog noSave = createGenericDialog("", Forge.getLocalizer().getMessage("lblGameNotSaved"), Forge.getLocalizer().getMessage("lblOK"), null, null, null);
                     showDialog(noSave);
+                    loaded = false;
                     return;
                 }
                 if (currentSlot > 0) {
@@ -277,9 +295,12 @@ public class SaveLoadScene extends UIScene {
                         saveDialog = createGenericDialog(Forge.getLocalizer().getMessage("lblSave"), null,
                                 Forge.getLocalizer().getMessage("lblOK"),
                                 Forge.getLocalizer().getMessage("lblAbort"), () -> {
-                                    this.save();
                                     removeDialog();
-                                }, this::removeDialog);
+                                    this.save();
+                                }, () -> {
+                                    removeDialog();
+                                    if (cancelSave != null) back();
+                                });
                         saveDialog.getContentTable().add(Controls.newLabel(Forge.getLocalizer().getMessage("lblNameYourSaveFile"))).colspan(2).pad(2, 15, 2, 15);
                         saveDialog.getContentTable().row();
                         saveDialog.getContentTable().add(Controls.newLabel(Forge.getLocalizer().getMessage("lblName") + ": ")).align(Align.left).pad(2, 15, 2, 2);
@@ -345,8 +366,15 @@ public class SaveLoadScene extends UIScene {
 
     public void save() {
         if (!TileMapScene.instance().currentMap().isInMap()) {
+            WorldStage.getInstance().getPlayerSprite().storePos();
             if (WorldSave.getCurrentSave().save(textInput.getText() + getSaveFileSuffix(), currentSlot)) {
                 updateFiles();
+                if (afterSave != null) {
+                    Runnable continuation = afterSave;
+                    clearSaveContinuation();
+                    continuation.run();
+                    return;
+                }
                 //ensure the dialog is hidden before switching
 
                 Scene restoreScene = Forge.switchToLast();
@@ -359,8 +387,49 @@ public class SaveLoadScene extends UIScene {
                 }
 
                 Forge.switchScene(restoreScene);
+            } else {
+                showDialog(createGenericDialog(Forge.getLocalizer().getMessage("lblSaveErrorWarning"),
+                        Forge.getLocalizer().getMessage("lblAdventureSaveFailed"),
+                        Forge.getLocalizer().getMessage("lblOK"), null, this::removeDialog, null));
             }
         }
+    }
+
+    public void saveBeforeContinuing(Runnable saved, Runnable canceled) {
+        saveReturnMode = mode;
+        saveReturnSlot = currentSlot;
+        setMode(Modes.Save);
+        afterSave = saved;
+        cancelSave = canceled;
+        saveReturnScene = Forge.getCurrentScene();
+        // Loading another slot can request a save from this same selector.
+        // Refresh it in place so Back does not acquire a self-reference in scene history.
+        if (saveReturnScene == this) enter();
+        else Forge.switchScene(this);
+    }
+
+    private void clearSaveContinuation() {
+        afterSave = null;
+        cancelSave = null;
+        saveReturnScene = null;
+    }
+
+    @Override
+    public boolean back() {
+        if (cancelSave != null) {
+            Runnable canceled = cancelSave;
+            Scene returnScene = saveReturnScene;
+            if (returnScene == this) {
+                setMode(saveReturnMode);
+                currentSlot = saveReturnSlot;
+            }
+            clearSaveContinuation();
+            canceled.run();
+            if (returnScene == this) enter();
+            else Forge.switchScene(returnScene);
+            return true;
+        }
+        return super.back();
     }
 
     private void updateFiles() {
