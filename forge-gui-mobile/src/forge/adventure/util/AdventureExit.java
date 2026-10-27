@@ -2,6 +2,7 @@ package forge.adventure.util;
 
 import forge.Forge;
 import forge.adventure.scene.AdventureExitDialog;
+import forge.adventure.scene.DuelScene;
 import forge.adventure.scene.GameScene;
 import forge.adventure.scene.SaveLoadScene;
 import forge.adventure.scene.StartScene;
@@ -26,7 +27,8 @@ public final class AdventureExit {
         boolean canSave = !inMap && (Forge.getCurrentScene() instanceof GameScene
                 || Forge.getCurrentScene() instanceof StartScene || Forge.getCurrentScene() instanceof SaveLoadScene);
         if (canSave) WorldStage.getInstance().getPlayerSprite().storePos();
-        if (inMap) PROGRESS.markChanged();
+        // A pre-duel autosave cannot preserve the match being played; player data changes only at GameEnd().
+        if (inMap || Forge.getCurrentScene() instanceof DuelScene) PROGRESS.markChanged();
         try {
             if (!PROGRESS.hasChanges(WorldSave.getCurrentSave().captureProgress())) return false;
         } catch (RuntimeException e) {

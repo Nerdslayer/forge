@@ -1,8 +1,16 @@
 package forge.adventure;
 
+import forge.Forge;
+import forge.adventure.scene.AdventureExitDialog;
+import forge.adventure.scene.DuelScene;
+import forge.adventure.stage.MapStage;
+import forge.adventure.util.AdventureExit;
 import forge.adventure.util.AdventureExitRequest;
 import forge.adventure.util.AdventureProgress;
 import forge.adventure.util.AdventureSaveFile;
+import forge.adventure.world.WorldSave;
+import forge.util.Localizer;
+import org.mockito.MockedStatic;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -12,9 +20,54 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @Test(groups = { "UnitTest", "fast" })
 public class AdventureProgressProtectionTest {
+    @Test
+    public void overworldDuelWarnsAfterPreDuelAutosaveWithUnchangedPlayerData() {
+        boolean previousAdventureMode = Forge.isMobileAdventureMode;
+        Map<String, byte[]> savedState = Map.of("player/cards", new byte[]{1});
+        AtomicInteger exits = new AtomicInteger();
+        AtomicReference<Runnable> keepPlaying = new AtomicReference<>();
+        try (MockedStatic<Forge> forge = mockStatic(Forge.class);
+             MockedStatic<MapStage> maps = mockStatic(MapStage.class);
+             MockedStatic<AdventureExitDialog> dialogs = mockStatic(AdventureExitDialog.class)) {
+            Forge.isMobileAdventureMode = true;
+            forge.when(Forge::getCurrentScene).thenReturn(mock(DuelScene.class));
+            Localizer localizer = mock(Localizer.class, invocation -> "warning");
+            forge.when(Forge::getLocalizer).thenReturn(localizer);
+            maps.when(MapStage::getInstance).thenReturn(mock(MapStage.class)); // An overworld encounter, not a dungeon.
+            dialogs.when(() -> AdventureExitDialog.show(anyString(), eq(false), any(), any(), any()))
+                    .thenAnswer(invocation -> {
+                        keepPlaying.set(invocation.getArgument(2));
+                        return null;
+                    });
+
+            // The encounter autosave cleared earlier movement. Combat changes the match,
+            // but the persistent Adventure player is not updated until GameEnd().
+            AdventureExit.PROGRESS.checkpoint(System.currentTimeMillis(), savedState);
+            Assert.assertFalse(AdventureExit.PROGRESS.hasChanges(savedState));
+            try (MockedStatic<WorldSave> saves = mockStatic(WorldSave.class)) {
+                WorldSave save = mock(WorldSave.class);
+                saves.when(WorldSave::getCurrentSave).thenReturn(save);
+                when(save.captureProgress()).thenReturn(savedState);
+                Assert.assertTrue(AdventureExit.requestIfNeeded(exits::incrementAndGet));
+            }
+            dialogs.verify(() -> AdventureExitDialog.show(anyString(), eq(false), any(), any(), any()));
+            Assert.assertNotNull(keepPlaying.get());
+            keepPlaying.get().run();
+            Assert.assertEquals(exits.get(), 0);
+        } finally {
+            if (keepPlaying.get() != null) keepPlaying.get().run();
+            AdventureExit.PROGRESS.checkpoint(System.currentTimeMillis(), Map.of());
+            Forge.isMobileAdventureMode = previousAdventureMode;
+        }
+    }
+
     @Test
     public void oldSaveIsCleanUntilProgressChanges() {
         AdventureProgress progress = new AdventureProgress();
