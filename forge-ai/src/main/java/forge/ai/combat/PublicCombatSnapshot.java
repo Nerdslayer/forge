@@ -29,7 +29,8 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         Map<Integer, CombatPlayerResources> resources, List<CombatTriggerDescription> triggers,
         Set<Integer> observedAttackers, Set<Integer> observedBlockers, List<CombatDamagePreventionRule> preventionRules,
         PreparedCombatStaticWorlds staticWorlds, List<String> ignoredEffects,
-        Map<Integer, Planeswalker> planeswalkers, boolean singletonPermutationSafe, PreparedCombatProtection protection) {
+        Map<Integer, Planeswalker> planeswalkers, boolean singletonPermutationSafe, PreparedCombatProtection protection,
+        PreparedCombatDepartures departures) {
     public PublicCombatSnapshot {
         creatures = Map.copyOf(creatures);
         players = Map.copyOf(players);
@@ -48,6 +49,23 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         preventionRules = List.copyOf(preventionRules);
         if (staticWorlds == null) { throw new IllegalArgumentException("Explicit static coverage required"); }
         if (protection == null) { throw new IllegalArgumentException("Explicit protection coverage required"); }
+        if (departures == null) { throw new IllegalArgumentException("Explicit departure coverage required"); }
+    }
+
+    /** Existing synthetic fixtures have no established scheduled departures. */
+    public PublicCombatSnapshot(final int observingPlayerId, final int attackingPlayerId, final int defendingPlayerId,
+            final Map<Integer, Creature> creatures, final Map<Integer, LifeState> players,
+            final Map<Integer, Integer> attackersToDefenders, final Map<Integer, Set<Integer>> legalBlockers,
+            final List<String> unavailableReasons, final List<String> unsupportedReasons, final boolean legacyDamageOrder,
+            final Map<Integer, CombatPlayerResources> resources, final List<CombatTriggerDescription> triggers,
+            final Set<Integer> observedAttackers, final Set<Integer> observedBlockers,
+            final List<CombatDamagePreventionRule> preventionRules, final PreparedCombatStaticWorlds staticWorlds,
+            final List<String> ignoredEffects, final Map<Integer, Planeswalker> planeswalkers,
+            final boolean singletonPermutationSafe, final PreparedCombatProtection protection) {
+        this(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players, attackersToDefenders,
+                legalBlockers, unavailableReasons, unsupportedReasons, legacyDamageOrder, resources, triggers,
+                observedAttackers, observedBlockers, preventionRules, staticWorlds, ignoredEffects, planeswalkers,
+                singletonPermutationSafe, protection, PreparedCombatDepartures.empty());
     }
 
     /** Compatibility for explicitly understood snapshots with no Protection. */
@@ -417,10 +435,24 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
             }
         }
         if (!checkpoint.getAsBoolean()) { return null; }
+        final var preparedDepartures = PreparedCombatDepartures.prepare(observer, checkpoint);
+        if (preparedDepartures.isEmpty()) { return null; }
+        var departures = preparedDepartures.orElseThrow();
+        final List<String> departureLimits = new ArrayList<>(departures.futureUnsupportedReasons());
+        for (final Card card : observer.getGame().getCardsIn(ZoneType.Battlefield)) {
+            if (!departures.expiringIds().contains(card.getId())) { continue; }
+            if (!checkpoint.getAsBoolean()) { return null; }
+            if (!staticWorlds.providers().contains(card.getId()) && card.getStaticAbilities().stream().anyMatch(ability ->
+                    !ability.isSuppressed() && forge.ai.effect.CombatStaticProjectionPreparation.supportsFixedPowerToughness(ability))) {
+                departureLimits.add("Scheduled static-source departure lacks prepared recipient worlds: " + card.getId());
+            }
+        }
+        departures = new PreparedCombatDepartures(departures.entries(), departures.unsupportedReasons(), departureLimits);
+        reasons.addAll(departures.unsupportedReasons());
         return new PublicCombatSnapshot(observer.getId(), attacking.getId(), defending == null ? -1 : defending.getId(),
                 creatures, players, attacks, blocks, unavailable, reasons, observer.getGame().getRules().hasOrderCombatants(),
                 resources, triggers, observedAttacks, observedBlocks, preventionRules, staticWorlds, ignored, walkers,
-                permutationSafe && protection.creatures().isEmpty(), protection);
+                permutationSafe && protection.creatures().isEmpty(), protection, departures);
     }
 
     /** Structured admission, independent of diagnostic wording and lethal certification. */

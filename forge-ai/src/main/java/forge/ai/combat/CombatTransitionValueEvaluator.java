@@ -39,10 +39,11 @@ public final class CombatTransitionValueEvaluator {
             throw new IllegalArgumentException("A supported, available combat projection is required");
         }
         if (!projection.outcomes().supported()) { throw new IllegalArgumentException("Incomplete outcomes cannot be scored"); }
-        final PreparedCombatValuation.LossValue casualties = values.retireOpportunities(projection.outcomes().resolutions())
+        final PreparedCombatValuation preservation = values.continuationPreservation(snapshot);
+        final PreparedCombatValuation.LossValue casualties = preservation.retireOpportunities(projection.outcomes().resolutions())
                 .evaluateLosses(projection.lostPermanents());
         final PreparedCombatValuation.LossValue loss = new PreparedCombatValuation.LossValue(
-                CombatOutcomePredictor.add(casualties.body(), values.survivorBodyUtility(snapshot, projection)),
+                CombatOutcomePredictor.add(casualties.body(), preservation.survivorBodyUtility(snapshot, projection)),
                 casualties.unknownAbility(), casualties.futureAbility(), casualties.relationships(), casualties.completeness(), casualties.reasons());
         int lifeUtility = 0;
         for (final var entry : snapshot.players().entrySet()) {

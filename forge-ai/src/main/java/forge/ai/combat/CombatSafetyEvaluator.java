@@ -115,7 +115,7 @@ public final class CombatSafetyEvaluator {
         if (readiness.nextActivePlayerId() != before.defendingPlayerId()) {
             return new Forecast(rejected("Immediate reply timing differs from ordinary alternating turns"), Optional.empty());
         }
-        final var transition = CombatTurnProjectionBuilder.advance(before, current, readiness, values);
+        final var transition = CombatTurnProjectionBuilder.advance(before, current, readiness, values, budget::tryConsume);
         if (transition.turn().isEmpty()) {
             return new Forecast(new FollowUp(false, false, 0, false, List.of(), transition.reasons()), Optional.empty());
         }

@@ -73,6 +73,36 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
                 !lost.contains(edge.key().producerId()) && !lost.contains(edge.key().consumerId())).toList(), completeness, reasons, kept);
     }
 
+    /** Decision-local residual preservation only; concrete combat effects still resolve normally. */
+    PreparedCombatValuation continuationPreservation(final PublicCombatSnapshot snapshot) {
+        final Set<Integer> expiring = snapshot.departures().expiringIds();
+        if (expiring.isEmpty()) { return this; }
+        final Map<Integer, PermanentValue> adjusted = new LinkedHashMap<>(permanents);
+        // Compare preservation at the same end-step boundary in every branch. Temporary
+        // anthem boosts still affect combat mechanics, but are not durable casualty value.
+        final var baseline = snapshot.staticWorlds().afterLosses(expiring);
+        baseline.forEach((id, state) -> {
+            final var value = adjusted.get(id);
+            if (value == null || expiring.contains(id)) { return; }
+            final int sign = value.controllerId() == snapshot.observingPlayerId() ? -1 : 1;
+            adjusted.put(id, new PermanentValue(id, value.controllerId(),
+                    saturated((long) value.bodyLossValue() + bodyDelta(id, (long) sign * state.bodyDelta())),
+                    value.unknownAbilityLossValue(), value.futureAbilityLossValue(), value.reasons(),
+                    value.bodyRetentionPercent(), value.abilitiesComplete()));
+        });
+        for (final int id : expiring) {
+            final var value = adjusted.get(id);
+            if (value != null) {
+                adjusted.put(id, new PermanentValue(id, value.controllerId(), 0, 0, 0, value.reasons(), 0, value.abilitiesComplete()));
+            }
+        }
+        final Map<CombatAbilityKey, OpportunityValue> remaining = new LinkedHashMap<>(opportunities);
+        remaining.keySet().removeIf(key -> expiring.contains(key.sourceId()));
+        return new PreparedCombatValuation(adjusted, relationships.stream().filter(edge ->
+                !expiring.contains(edge.key().producerId()) && !expiring.contains(edge.key().consumerId())).toList(),
+                completeness, reasons, remaining);
+    }
+
     /** Signed body delta for surviving counters; casualties already lose their entire old body. */
     public int survivorCounterUtility(final PublicCombatSnapshot snapshot, final CombatProjection projection) {
         long result = 0;
@@ -87,11 +117,16 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
 
     public int survivorBodyUtility(final PublicCombatSnapshot snapshot, final CombatProjection projection) {
         long result = survivorCounterUtility(snapshot, projection);
-        final var world = snapshot.staticWorlds().afterLosses(projection.lostPermanents());
+        final Set<Integer> expiring = snapshot.departures().expiringIds();
+        final Set<Integer> gone = new java.util.HashSet<>(projection.lostPermanents());
+        gone.addAll(expiring);
+        final var baseline = snapshot.staticWorlds().afterLosses(expiring);
+        final var world = snapshot.staticWorlds().afterLosses(gone);
         for (final int id : projection.survivors().keySet()) {
             final var changed = world.get(id);
             if (changed != null) {
-                result += bodyDelta(id, (long) changed.bodyDelta()
+                final int baselineDelta = baseline.containsKey(id) ? baseline.get(id).bodyDelta() : 0;
+                result += bodyDelta(id, ((long) changed.bodyDelta() - baselineDelta)
                         * (snapshot.creatures().get(id).controllerId() == snapshot.observingPlayerId() ? 1 : -1));
             }
         }
@@ -126,6 +161,25 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
             adjusted.put(id, new PermanentValue(value.cardId(), value.controllerId(), value.bodyLossValue() - sign * removed,
                     value.unknownAbilityLossValue(), value.futureAbilityLossValue(), value.reasons(), value.bodyRetentionPercent(), value.abilitiesComplete()));
         });
+        return new PreparedCombatValuation(adjusted, remaining.relationships(), remaining.completeness(), remaining.reasons(), remaining.opportunities());
+    }
+
+    /** Rebase surviving recipient bodies after expiry, without charging the expiring source twice. */
+    PreparedCombatValuation afterDepartures(final PublicCombatSnapshot snapshot, final CombatProjection combat, final Set<Integer> gone) {
+        final var remaining = surviving(gone);
+        if (snapshot.departures().expiringIds().isEmpty()) { return remaining; }
+        final var oldWorld = snapshot.staticWorlds().afterLosses(combat.lostPermanents());
+        final var newWorld = snapshot.staticWorlds().afterLosses(gone);
+        final Map<Integer, PermanentValue> adjusted = new LinkedHashMap<>(remaining.permanents());
+        for (final var entry : newWorld.entrySet()) {
+            final int id = entry.getKey();
+            final var value = adjusted.get(id);
+            if (value == null || !oldWorld.containsKey(id)) { continue; }
+            final int delta = saturated((long) entry.getValue().bodyDelta() - oldWorld.get(id).bodyDelta());
+            final int sign = value.controllerId() == snapshot.observingPlayerId() ? -1 : 1;
+            adjusted.put(id, new PermanentValue(id, value.controllerId(), saturated((long) value.bodyLossValue() + sign * bodyDelta(id, delta)),
+                    value.unknownAbilityLossValue(), value.futureAbilityLossValue(), value.reasons(), value.bodyRetentionPercent(), value.abilitiesComplete()));
+        }
         return new PreparedCombatValuation(adjusted, remaining.relationships(), remaining.completeness(), remaining.reasons(), remaining.opportunities());
     }
 

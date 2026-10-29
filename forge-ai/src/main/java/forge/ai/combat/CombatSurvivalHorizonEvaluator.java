@@ -78,7 +78,7 @@ public final class CombatSurvivalHorizonEvaluator {
             // TODO: Intervening plays, offensive tail decisions, extra turns and arbitrary
             // survivor-dependent legality. Plain tail blocks are locally optimal, not multi-turn optimal.
             final var aiTurn = CombatTurnProjectionBuilder.advance(state.snapshot(), projection,
-                    readiness.forActivePlayer(state.snapshot().observingPlayerId()), state.values());
+                    readiness.forActivePlayer(state.snapshot().observingPlayerId()), state.values(), budget::tryConsume);
             if (aiTurn.turn().isEmpty()) { return incomplete(survived, steps, aiTurn.reasons().toString()); }
             final var turn = aiTurn.turn().orElseThrow();
             final var hold = CombatAttackCandidates.select(turn.alternatives(), List.of());

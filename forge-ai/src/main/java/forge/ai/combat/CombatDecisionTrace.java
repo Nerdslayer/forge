@@ -42,6 +42,8 @@ public final class CombatDecisionTrace {
                 .append("\nPublic planeswalkers (loyalty, ultimate threshold, urgency): ").append(snapshot.planeswalkers())
                 .append("\nLegal attack destinations: ").append(plan.legalDestinations())
                 .append("\nPublic creature IDs: ").append(publicLabels(ai, snapshot))
+                .append("\nKnown departures: ").append(snapshot.departures())
+                .append("; zero continuation preservation for ").append(snapshot.departures().expiringIds())
                 .append("\nProtection coverage: ").append(snapshot.protection())
                 .append("\nIgnored effects (approximate model): ").append(snapshot.ignoredEffects()));
         plan.search().ifPresent(search -> {
@@ -99,6 +101,8 @@ public final class CombatDecisionTrace {
             text.append("\nAttacking player: ").append(snapshot.attackingPlayerId())
                     .append(", defending player: ").append(snapshot.defendingPlayerId());
             text.append("\nPublic creature IDs: ").append(publicLabels(ai, snapshot));
+            text.append("\nKnown departures: ").append(snapshot.departures())
+                    .append("; zero continuation preservation for ").append(snapshot.departures().expiringIds());
             text.append("\nProtection coverage: ").append(snapshot.protection());
             text.append("\nPublic combat characteristics: ").append(snapshot.creatures());
             text.append("\nPublic player life: ").append(snapshot.players());

@@ -70,9 +70,11 @@ final class CombatAttackEquivalence {
     private static boolean canReuse(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
             final PublicCombatReadiness readiness, final List<Integer> candidates, final Map<Integer, Integer> committed) {
         // Avoid whole-board key construction (and destination-map preparation) when no
-        // equivalence is possible. TODO: Audit broader source-sensitive permutation support.
+        // equivalence is possible. TODO: Audit broader source-sensitive permutation support,
+        // including matching lifetime roles; a disposable body cannot stand in for a durable one.
         if (candidates.size() < 2 || !snapshot.singletonPermutationSafe() || !readiness.singletonPermutationSafe()
                 || !snapshot.triggers().isEmpty() || !snapshot.preventionRules().isEmpty() || !snapshot.protection().creatures().isEmpty()
+                || !snapshot.departures().entries().isEmpty()
                 || !snapshot.staticWorlds().equals(PreparedCombatStaticWorlds.empty())
                 || !snapshot.unsupportedReasons().isEmpty() || !snapshot.unavailableReasons().isEmpty()
                 || !readiness.unsupportedReasons().isEmpty() || !values.relationships().isEmpty() || !values.opportunities().isEmpty()) {

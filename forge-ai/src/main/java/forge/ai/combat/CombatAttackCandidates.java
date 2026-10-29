@@ -19,7 +19,7 @@ final class CombatAttackCandidates {
         }
         return new PublicCombatSnapshot(all.observingPlayerId(), all.attackingPlayerId(), all.defendingPlayerId(),
                 all.creatures(), all.players(), attacks, blocks, all.unavailableReasons(), all.unsupportedReasons(), all.legacyDamageOrder(),
-                all.resources(), all.triggers(), all.observedAttackers(), all.observedBlockers(), all.preventionRules(), all.staticWorlds(), all.ignoredEffects(), all.planeswalkers(), all.singletonPermutationSafe(), all.protection());
+                all.resources(), all.triggers(), all.observedAttackers(), all.observedBlockers(), all.preventionRules(), all.staticWorlds(), all.ignoredEffects(), all.planeswalkers(), all.singletonPermutationSafe(), all.protection(), all.departures());
     }
 
     static PublicCombatSnapshot assign(final PublicCombatSnapshot all, final Map<Integer, Integer> assignments) {
@@ -28,6 +28,6 @@ final class CombatAttackCandidates {
                 selected.creatures(), selected.players(), assignments, selected.legalBlockers(), selected.unavailableReasons(),
                 selected.unsupportedReasons(), selected.legacyDamageOrder(), selected.resources(), selected.triggers(),
                 selected.observedAttackers(), selected.observedBlockers(), selected.preventionRules(), selected.staticWorlds(),
-                selected.ignoredEffects(), selected.planeswalkers(), selected.singletonPermutationSafe(), selected.protection());
+                selected.ignoredEffects(), selected.planeswalkers(), selected.singletonPermutationSafe(), selected.protection(), selected.departures());
     }
 }

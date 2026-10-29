@@ -58,6 +58,7 @@ public record PublicCombatReadiness(int nextActivePlayerId, Set<Integer> canAtta
         if (observer == null || snapshot == null || checkpoint == null) { throw new IllegalArgumentException("Explicit readiness inputs required"); }
         if (!checkpoint.getAsBoolean()) { return null; }
         final List<String> reasons = new ArrayList<>(snapshot.unsupportedReasons());
+        reasons.addAll(snapshot.departures().futureUnsupportedReasons());
         final List<String> ignored = new ArrayList<>(snapshot.ignoredEffects());
         if (snapshot.preventionRules().stream().anyMatch(rule -> !rule.survivesCleanup())) {
             reasons.add("Command-zone prevention policy needs duration-aware cleanup before a future attack");

@@ -130,7 +130,8 @@ public final class CombatExecutionPlan {
             invalidate(); return false;
         }
         final Set<Integer> lost = regular ? afterFirstStrike.lostCreatures() : Set.of();
-        final Set<Integer> lostProviders = regular ? afterFirstStrike.lostPermanents() : Set.of();
+        final Set<Integer> lostProviders = new java.util.LinkedHashSet<>(regular ? afterFirstStrike.lostPermanents() : Set.of());
+        before.departures().entries().forEach((id, departure) -> { if (lost.contains(id)) { lostProviders.add(departure.effectId()); } });
         // Later callbacks belong to a new live boundary, not the earlier search's expired clock.
         final CombatSearchBudget budget = CombatPlanningPreparation.budget(observer);
         final var captured = PublicCombatSnapshot.captureForExecution(observer, combat, budget::tryConsume);
@@ -139,6 +140,8 @@ public final class CombatExecutionPlan {
         final Map<Integer, Identity> expectedIdentities = new HashMap<>(publicIdentities);
         lostProviders.forEach(expectedIdentities::remove);
         final PreparedCombatStaticWorlds expectedStatics = before.staticWorlds().surviving(lostProviders);
+        final var expectedDepartures = new HashMap<>(before.departures().entries());
+        lost.forEach(expectedDepartures::remove);
         if (!current.unsupportedReasons().isEmpty() || !current.unavailableReasons().isEmpty()
                 || current.legacyDamageOrder() != before.legacyDamageOrder()
                 || !before.triggers().isEmpty() && !current.resources().equals(regular
@@ -146,6 +149,7 @@ public final class CombatExecutionPlan {
                 || !current.triggers().equals(before.triggers().stream().filter(trigger -> !lostProviders.contains(trigger.ability().sourceId())).toList())
                 || !current.preventionRules().equals(before.preventionRules().stream().filter(rule -> !lostProviders.contains(rule.providerId())).toList())
                 || !current.protection().equals(before.protection().surviving(lostProviders))
+                || !current.departures().entries().equals(expectedDepartures)
                 || !current.staticWorlds().providers().equals(expectedStatics.providers())
                 || !expectedStatics.providers().isEmpty() && !current.staticWorlds().equals(expectedStatics)
                 || !expectedIdentities.equals(identities(lostProviders, budget::tryConsume))

@@ -61,6 +61,47 @@ public class TriggerHandler {
                 || !thisTurnDelayedTriggers.isEmpty() || !playerDefinedDelayedTriggers.isEmpty();
     }
 
+    /** Public fact about this battlefield object only; never exposes unrelated delayed triggers. */
+    public boolean hasPendingUnearthExile(final Card card) {
+        return hasPendingUnearthExile(card, () -> true).orElseThrow();
+    }
+
+    /** Cancellable read-only query for a pending standard unearth exile allowed by current rules.
+     * Empty means no conclusion, not "no pending trigger"; no delayed ability is consumed or mutated. */
+    public Optional<Boolean> hasPendingUnearthExile(final Card card, final java.util.function.BooleanSupplier checkpoint) {
+        if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
+        if (!card.isInPlay() || !card.isUnearthed() || isTriggerSuppressed(TriggerType.Phase)) { return Optional.of(false); }
+        for (final Trigger trigger : delayedTriggers) {
+            if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
+            final SpellAbility spawning = trigger.getSpawningAbility();
+            final SpellAbility effect = trigger.getOverridingAbility();
+            if (spawning == null || !spawning.isKeyword(forge.game.keyword.Keyword.UNEARTH)
+                    || trigger.isSuppressed() || trigger.getMode() != TriggerType.Phase
+                    || !"End Of Turn".equals(trigger.getParamOrDefault("Phase", "").trim())
+                    || !Set.of("Mode", "Phase", "TriggerDescription").containsAll(trigger.getMapParams().keySet())
+                    || trigger.hasParam("ValidPlayer") || effect == null
+                    || effect.getApi() != forge.game.ability.ApiType.ChangeZone
+                    || !Set.of("DB", "Defined", "Origin", "Destination").containsAll(effect.getMapParams().keySet())
+                    || !"DelayTriggerRememberedLKI".equals(effect.getParam("Defined"))
+                    || !"Battlefield".equals(effect.getParam("Origin"))
+                    || !"Exile".equals(effect.getParam("Destination")) || effect.hasParam("ConditionCheckSVar")) { continue; }
+            for (final Object remembered : trigger.getTriggerRemembered()) {
+                if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
+                if (remembered instanceof Card object && object.equalsWithGameTimestamp(card)) {
+                    final Map<AbilityKey, Object> params = AbilityKey.newMap();
+                    params.put(AbilityKey.Player, game.getPhaseHandler().getPlayerTurn());
+                    if (StaticAbilityDisableTriggers.disabled(game, trigger, params)) { continue; }
+                    // Match the cause as it will resolve, without modifying the stored delayed ability.
+                    final SpellAbility cause = effect.copy(trigger.getHostCard(), spawning.getActivatingPlayer(), false, true);
+                    cause.setTrigger(trigger);
+                    if (forge.game.staticability.StaticAbilityCantExile.cantExile(card, cause, true)) { continue; }
+                    return Optional.of(true);
+                }
+            }
+        }
+        return Optional.of(false);
+    }
+
     public final void registerDelayedTrigger(final Trigger trig) {
         delayedTriggers.add(trig);
     }

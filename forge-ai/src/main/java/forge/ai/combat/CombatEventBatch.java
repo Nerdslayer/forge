@@ -17,11 +17,11 @@ public record CombatEventBatch(Stage stage, Map<Integer, CardState> battlefieldB
         FIRST_STRIKE_DAMAGE, FIRST_STRIKE_DEATHS, REGULAR_DAMAGE, REGULAR_DEATHS
     }
 
-    /** Death batches retain every simultaneous casualty until the entire batch leaves play. */
+    /** Battlefield-exit batches retain every simultaneous casualty until the entire batch leaves play. */
     public record CardState(PublicCombatSnapshot.Creature characteristics, int markedDamage,
             boolean markedDeathtouch, boolean tapped) { }
 
-    public sealed interface Event permits Attacks, Taps, Blocks, BecomesBlocked, Damage, LifeGain, LifeLoss, Dies, CountersRemoved { }
+    public sealed interface Event permits Attacks, Taps, Blocks, BecomesBlocked, Damage, LifeGain, LifeLoss, Dies, Exiled, CountersRemoved { }
     public record Attacks(int cardId, int defenderId) implements Event { }
     public record Taps(int cardId) implements Event { }
     public record Blocks(int blockerId, int attackerId) implements Event { }
@@ -34,6 +34,8 @@ public record CombatEventBatch(Stage stage, Map<Integer, CardState> battlefieldB
     public record LifeGain(int sourceId, int playerId, int amount) implements Event { }
     public record LifeLoss(int playerId, int amount) implements Event { }
     public record Dies(int cardId) implements Event { }
+    /** A battlefield casualty replaced with exile is a removal, but not a death. */
+    public record Exiled(int cardId) implements Event { }
     public record CountersRemoved(int cardId, String type, int amount) implements Event { }
 
     // Fixed self-attack/block, self combat-player-damage and self-death draws use replacement and

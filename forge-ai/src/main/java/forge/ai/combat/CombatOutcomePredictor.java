@@ -207,16 +207,19 @@ public final class CombatOutcomePredictor {
                 final Map<Integer, CombatEventBatch.CardState> beforeDeaths = eventState(
                         snapshot, assignment, damage, deathtouched, lost, true, shields);
                 final List<CombatEventBatch.Event> deaths = new ArrayList<>();
+                final Set<Integer> removed = new java.util.LinkedHashSet<>();
                 for (final int id : snapshot.creatures().keySet().stream().sorted().toList()) {
                     if (lost.contains(id)) { continue; }
                     final var creature = snapshot.creatureAfterLosses(id, lost);
                     if (creature.toughness() <= 0 || !creature.indestructible()
                             && (damage.get(id) >= creature.toughness() || deathtouched.contains(id))) {
-                        deaths.add(new CombatEventBatch.Dies(id));
+                        removed.add(id);
+                        deaths.add(snapshot.departures().exilesInsteadOfDying(id)
+                                ? new CombatEventBatch.Exiled(id) : new CombatEventBatch.Dies(id));
                     }
                 }
                 // Determine the simultaneous casualty set before removing any of its providers.
-                for (final var event : deaths) { lost.add(((CombatEventBatch.Dies) event).cardId()); }
+                lost.addAll(removed);
                 if (!deaths.isEmpty()) {
                     final var deathEvents = new CombatEventBatch(first ? CombatEventBatch.Stage.FIRST_STRIKE_DEATHS
                             : CombatEventBatch.Stage.REGULAR_DEATHS, beforeDeaths, life, deaths);
