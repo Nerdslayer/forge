@@ -1020,9 +1020,10 @@ public class Cost implements Serializable {
                 getCostMana().setMaxWaterbend(mPart.getMaxWaterbend());
             } else if (part instanceof CostPutCounter || (mergeAdditional && // below usually not desired because they're from different causes
                     (part instanceof CostDiscard || part instanceof CostDraw ||
-                    part instanceof CostAddMana || part instanceof CostPayLife ||
+                    part instanceof CostAddMana || part instanceof CostPayLife || part instanceof CostPayEnergy ||
                     part instanceof CostSacrifice || part instanceof CostTapType ||
                     part instanceof CostExile))) {
+                // TODO: Merge symbolic energy amounts too; this path only combines numeric amounts.
                 boolean alreadyAdded = false;
                 for (final CostPart other : costParts) {
                     Integer otherAmount = other.convertAmount();
@@ -1062,6 +1063,8 @@ public class Cost implements Serializable {
                             costParts.add(new CostAddMana(amount, part.getType(), part.getTypeDescription()));
                         } else if (part instanceof CostPayLife) {
                             costParts.add(new CostPayLife(amount, part.getTypeDescription()));
+                        } else if (part instanceof CostPayEnergy) {
+                            costParts.add(new CostPayEnergy(amount));
                         } else if (part instanceof CostExile) {
                             costParts.add(new CostExile(amount, part.getType(), part.getTypeDescription(), ((CostExile) part).getFrom()));
                         }
