@@ -25,7 +25,7 @@ public final class CombatStaticProjectionPreparation {
     private static final int MAX_PROVIDERS = 4;
     private CombatStaticProjectionPreparation() { }
 
-    private record Tracked(StaticAbility ability, StaticEffect effect, Set<Integer> recipients) { }
+    private record Tracked(StaticAbility ability, long timestamp, Set<Integer> recipients) { }
 
     /** Only tracked permanent boosts are safe to retain across cleanup; temporary pumps are not. */
     public static boolean hasOnlyPersistentBoosts(final Card card) {
@@ -74,10 +74,16 @@ public final class CombatStaticProjectionPreparation {
 
     public static Optional<PreparedCombatStaticWorlds> prepare(final Player observer, final BooleanSupplier checkpoint) {
         if (observer == null || checkpoint == null) { throw new IllegalArgumentException("Observer and checkpoint required"); }
+        return prepare(observer, checkpoint, observer.getGame().getCardsIn(ZoneType.Battlefield).stream().toList());
+    }
+
+    public static Optional<PreparedCombatStaticWorlds> prepare(final Player observer, final BooleanSupplier checkpoint,
+            final List<Card> battlefield) {
+        if (observer == null || checkpoint == null) { throw new IllegalArgumentException("Observer and checkpoint required"); }
         if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
         final List<Card> creatures = new ArrayList<>();
         final Map<Integer, List<Tracked>> byProvider = new LinkedHashMap<>();
-        for (final Card source : observer.getGame().getCardsIn(ZoneType.Battlefield)) {
+        for (final Card source : battlefield) {
             if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
             if (source.isPhasedOut()) { continue; }
             if (source.isFaceDown()) { return Optional.of(PreparedCombatStaticWorlds.unsupported("Hidden static source or recipient")); }
@@ -94,7 +100,7 @@ public final class CombatStaticProjectionPreparation {
                 final var effect = source.getGame().getStaticEffects().findStaticEffect(ability);
                 if (effect == null) {
                     boolean hasRecipient = false;
-                    for (final Card candidate : observer.getGame().getCardsIn(ZoneType.Battlefield)) {
+                    for (final Card candidate : battlefield) {
                         if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
                         if (!candidate.isFaceDown() && !candidate.isPhasedOut() && candidate.isCreature()
                                 && candidate.isValid(ability.getMapParams().get("Affected"), source.getController(), source, ability)) {
@@ -110,14 +116,19 @@ public final class CombatStaticProjectionPreparation {
                         continue;
                     }
                 }
-                if (effect == null || effect.getTimestamp() < 0) {
+                final boolean projectedRecipient = effect == null && battlefield.stream().anyMatch(candidate -> candidate.isCreature()
+                        && !observer.getGame().getCardState(candidate).isCreature()
+                        && candidate.isValid(ability.getParam("Affected"), source.getController(), source, ability));
+                if (effect == null && !projectedRecipient || effect != null && effect.getTimestamp() < 0) {
                     return Optional.of(PreparedCombatStaticWorlds.unsupported("Static tracked changes are not current: " + source.getId()));
                 }
                 final Set<Integer> recipients = new LinkedHashSet<>();
-                for (final Card card : effect.getAffectedCards()) {
-                    if (card.isInPlay() && card.isCreature()) { recipients.add(card.getId()); }
+                for (final Card card : battlefield) {
+                    if (card.isInPlay() && card.isCreature()
+                            && card.isValid(ability.getParam("Affected"), source.getController(), source, ability)) { recipients.add(card.getId()); }
                 }
-                byProvider.computeIfAbsent(source.getId(), key -> new ArrayList<>()).add(new Tracked(ability, effect, recipients));
+                byProvider.computeIfAbsent(source.getId(), key -> new ArrayList<>()).add(new Tracked(ability,
+                        effect == null ? observer.getGame().getTimestamp() + 1 : effect.getTimestamp(), recipients));
             }
             if (source.getHiddenStaticAbilities().stream().anyMatch(ability -> !ability.isSuppressed())) {
                 return Optional.of(PreparedCombatStaticWorlds.unsupported("Hidden static layers need projection: " + source.getId()));
@@ -147,7 +158,7 @@ public final class CombatStaticProjectionPreparation {
                 for (final int provider : losses) {
                     for (final Tracked change : byProvider.get(provider)) {
                         if (change.recipients().contains(creature.getId())) {
-                            StaticAbilityAnalyzer.removeTrackedChanges(projected, change.effect(), change.ability());
+                            projected.removePTBoost(change.timestamp(), change.ability().getId());
                         }
                     }
                 }

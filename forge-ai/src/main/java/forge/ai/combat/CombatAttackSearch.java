@@ -11,8 +11,13 @@ public final class CombatAttackSearch {
 
     public record Candidate(List<Integer> attackers, CombatBlockSearch.Candidate combat,
             Optional<CombatSafetyEvaluator.FollowUp> reply, int replyAdjustment, boolean certifiedWin,
-            Optional<CombatTwoTurnPressureEvaluator.Forecast> twoTurnPressure) {
-        public Candidate { attackers = List.copyOf(attackers); }
+            Optional<CombatTwoTurnPressureEvaluator.Forecast> twoTurnPressure, java.util.Map<Integer, Set<Integer>> hypotheticalCrews) {
+        public Candidate { attackers = List.copyOf(attackers); hypotheticalCrews = java.util.Map.copyOf(hypotheticalCrews); }
+        public Candidate(final List<Integer> attackers, final CombatBlockSearch.Candidate combat,
+                final Optional<CombatSafetyEvaluator.FollowUp> reply, final int adjustment, final boolean win,
+                final Optional<CombatTwoTurnPressureEvaluator.Forecast> pressure) {
+            this(attackers, combat, reply, adjustment, win, pressure, java.util.Map.of());
+        }
         public java.util.Map<Integer, CombatAttackDestination> destinations() {
             final java.util.Map<Integer, CombatAttackDestination> result = new java.util.LinkedHashMap<>();
             combat.assignment().attackersToDefenders().forEach((id, target) -> result.put(id, CombatAttackDestination.fromKey(target)));
@@ -39,6 +44,12 @@ public final class CombatAttackSearch {
     /** Fixed attackers are present in every alternative, including the no-additional-attacks baseline. */
     public static Result search(final PublicCombatSnapshot alternatives, final PreparedCombatValuation values,
             final PublicCombatReadiness readiness, final CombatSearchBudget budget, final Set<Integer> fixedAttackers) {
+        return search(alternatives, values, readiness, budget, fixedAttackers, PreparedCombatCrewResponses.empty());
+    }
+
+    static Result search(final PublicCombatSnapshot alternatives, final PreparedCombatValuation values,
+            final PublicCombatReadiness readiness, final CombatSearchBudget budget, final Set<Integer> fixedAttackers,
+            final PreparedCombatCrewResponses crews) {
         if (alternatives.observingPlayerId() != alternatives.attackingPlayerId()) {
             throw new IllegalArgumentException("The observing AI must be the attacking player");
         }
@@ -51,7 +62,7 @@ public final class CombatAttackSearch {
         final List<Integer> fixed = fixedAttackers.stream().sorted().toList();
         final List<Integer> optional = alternatives.attackersToDefenders().keySet().stream()
                 .filter(id -> !fixedAttackers.contains(id)).sorted().toList();
-        final Evaluation evaluation = new Evaluation(alternatives, values, readiness, budget, reasons);
+        final Evaluation evaluation = new Evaluation(alternatives, values, readiness, budget, reasons, crews);
         final var representatives = CombatAttackEquivalence.representatives(alternatives, values, readiness, optional);
         final var selection = GreedyAttackCandidates.select(fixed, optional, evaluation::evaluate,
                 CombatAttackSearch::compare, CombatAttackSearch::compareSelection, id -> representatives.get(id));
@@ -87,6 +98,8 @@ public final class CombatAttackSearch {
         private final Set<String> reasons;
         private final int startingNodes;
         private final CombatAttackForecasts forecasts;
+        private final PreparedCombatCrewResponses crews;
+        private final java.util.Map<PreparedCombatCrewResponses.Response, Evaluation> responses = new java.util.LinkedHashMap<>();
         private Candidate baseline;
         private boolean supported = true;
         private int cacheHits;
@@ -94,11 +107,18 @@ public final class CombatAttackSearch {
 
         Evaluation(final PublicCombatSnapshot alternatives0, final PreparedCombatValuation values0,
                 final PublicCombatReadiness readiness0, final CombatSearchBudget budget0, final Set<String> reasons0) {
+            this(alternatives0, values0, readiness0, budget0, reasons0, PreparedCombatCrewResponses.empty());
+        }
+
+        Evaluation(final PublicCombatSnapshot alternatives0, final PreparedCombatValuation values0,
+                final PublicCombatReadiness readiness0, final CombatSearchBudget budget0, final Set<String> reasons0,
+                final PreparedCombatCrewResponses crews0) {
             alternatives = alternatives0;
             values = values0;
             readiness = readiness0;
             budget = budget0;
             reasons = reasons0;
+            crews = crews0;
             startingNodes = budget.used();
             // Follow-ups depend on the projected state and frozen public board, not on which
             // declaration produced it. Reuse equal projections across singleton/joint candidates.
@@ -113,6 +133,8 @@ public final class CombatAttackSearch {
             reasons = new LinkedHashSet<>();
             startingNodes = budget.used();
             forecasts = source.forecasts.withBudget(allowance);
+            crews = source.crews;
+            source.responses.forEach((key, value) -> responses.put(key, value.withBudget(allowance)));
             baseline = source.baseline;
             completed.putAll(source.completed);
         }
@@ -125,6 +147,27 @@ public final class CombatAttackSearch {
         }
 
         Candidate evaluate(final PublicCombatSnapshot current) {
+            if (!crews.reasons().isEmpty()) { supported = false; reasons.addAll(crews.reasons()); return null; }
+            final boolean first = baseline == null;
+            final Candidate ordinary = evaluateBase(current);
+            if (ordinary == null || current.attackersToDefenders().isEmpty() || crews.responses().isEmpty()) { return ordinary; }
+            Candidate worst = ordinary;
+            for (final var response : crews.responses()) {
+                final Evaluation trial = responses.computeIfAbsent(response, key ->
+                        new Evaluation(key.world(), values, readiness, budget, reasons));
+                trial.baseline = first ? null : baseline;
+                final Candidate candidate = trial.evaluateBase(CombatAttackCandidates.assign(response.world(), current.attackersToDefenders()));
+                if (candidate == null || !trial.supported) { supported = false; return null; }
+                if (compare(candidate, worst) < 0) {
+                    worst = new Candidate(candidate.attackers(), candidate.combat(), candidate.reply(), candidate.replyAdjustment(),
+                            candidate.certifiedWin(), candidate.twoTurnPressure(), response.crews());
+                }
+            }
+            if (first) { baseline = worst; }
+            return worst;
+        }
+
+        private Candidate evaluateBase(final PublicCombatSnapshot current) {
             if (!budget.tryConsume()) { supported = false; reasons.add("Shared attack search budget exhausted"); return null; }
             final var cached = completed.get(current.attackersToDefenders());
             if (cached != null) { cacheHits++; return cached; }
@@ -174,6 +217,22 @@ public final class CombatAttackSearch {
 
         /** Independent current-combat safeguard; future uncertainty cannot poison terminal scoring. */
         Candidate immediateWin(final PublicCombatSnapshot current, final CombatSearchBudget allowance) {
+            if (!crews.reasons().isEmpty()) { reasons.addAll(crews.reasons()); return null; }
+            Candidate worst = immediateWinBase(current, allowance);
+            if (worst == null) { return null; }
+            for (final var response : crews.responses()) {
+                final var trial = new Evaluation(response.world(), values, readiness, allowance, reasons);
+                final var candidate = trial.immediateWinBase(CombatAttackCandidates.assign(response.world(), current.attackersToDefenders()), allowance);
+                if (candidate == null) { return null; }
+                if (compare(candidate, worst) < 0) {
+                    worst = new Candidate(candidate.attackers(), candidate.combat(), candidate.reply(), candidate.replyAdjustment(),
+                            candidate.certifiedWin(), candidate.twoTurnPressure(), response.crews());
+                }
+            }
+            return worst;
+        }
+
+        private Candidate immediateWinBase(final PublicCombatSnapshot current, final CombatSearchBudget allowance) {
             final var blocks = CombatBlockSearch.search(current, values, allowance);
             if (!blocks.outcomeDomainComplete() || !blocks.searchExhaustive() || blocks.best().isEmpty()) { return null; }
             final var combat = blocks.best().orElseThrow();

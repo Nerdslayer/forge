@@ -30,7 +30,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         Set<Integer> observedAttackers, Set<Integer> observedBlockers, List<CombatDamagePreventionRule> preventionRules,
         PreparedCombatStaticWorlds staticWorlds, List<String> ignoredEffects,
         Map<Integer, Planeswalker> planeswalkers, boolean singletonPermutationSafe, PreparedCombatProtection protection,
-        PreparedCombatDepartures departures) {
+        PreparedCombatDepartures departures, Set<Integer> temporaryCrew) {
     public PublicCombatSnapshot {
         creatures = Map.copyOf(creatures);
         players = Map.copyOf(players);
@@ -47,9 +47,24 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         observedAttackers = Set.copyOf(observedAttackers);
         observedBlockers = Set.copyOf(observedBlockers);
         preventionRules = List.copyOf(preventionRules);
+        temporaryCrew = Set.copyOf(temporaryCrew);
         if (staticWorlds == null) { throw new IllegalArgumentException("Explicit static coverage required"); }
         if (protection == null) { throw new IllegalArgumentException("Explicit protection coverage required"); }
         if (departures == null) { throw new IllegalArgumentException("Explicit departure coverage required"); }
+    }
+
+    public PublicCombatSnapshot(final int observer, final int attacker, final int defender,
+            final Map<Integer, Creature> creatures, final Map<Integer, LifeState> players,
+            final Map<Integer, Integer> attacks, final Map<Integer, Set<Integer>> blocks,
+            final List<String> unavailable, final List<String> unsupported, final boolean legacy,
+            final Map<Integer, CombatPlayerResources> resources, final List<CombatTriggerDescription> triggers,
+            final Set<Integer> observedAttacks, final Set<Integer> observedBlocks,
+            final List<CombatDamagePreventionRule> prevention, final PreparedCombatStaticWorlds worlds,
+            final List<String> ignored, final Map<Integer, Planeswalker> walkers, final boolean permutationSafe,
+            final PreparedCombatProtection protection, final PreparedCombatDepartures departures) {
+        this(observer, attacker, defender, creatures, players, attacks, blocks, unavailable, unsupported, legacy,
+                resources, triggers, observedAttacks, observedBlocks, prevention, worlds, ignored, walkers,
+                permutationSafe, protection, departures, Set.of());
     }
 
     /** Existing synthetic fixtures have no established scheduled departures. */
@@ -230,6 +245,28 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         return changed == null ? original : original.withPowerToughness(changed.combatDamage(), changed.toughness());
     }
 
+    PublicCombatSnapshot withCrew(final Set<Integer> vehicles) {
+        return new PublicCombatSnapshot(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players,
+                attackersToDefenders, legalBlockers, unavailableReasons, unsupportedReasons, legacyDamageOrder,
+                resources, triggers, observedAttackers, observedBlockers, preventionRules, staticWorlds, ignoredEffects,
+                planeswalkers, false, protection, departures, vehicles);
+    }
+
+    PublicCombatSnapshot withModeledCrew(final Player observer, final Set<Integer> vehicles) {
+        final List<String> ignored = new ArrayList<>(ignoredEffects);
+        for (final Card card : observer.getGame().getCardsIn(ZoneType.Battlefield)) {
+            if (!vehicles.contains(card.getId())) { continue; }
+            ignored.remove("Unprojected public keyword: Crew on " + card.getId());
+            if (card.getSpellAbilities().stream().noneMatch(sa -> sa.isActivatedAbility() && !sa.isManaAbility() && !sa.isCrew())) {
+                ignored.remove("Unprojected public activation: " + card.getId());
+            }
+        }
+        return new PublicCombatSnapshot(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players,
+                attackersToDefenders, legalBlockers, unavailableReasons, unsupportedReasons, legacyDamageOrder,
+                resources, triggers, observedAttackers, observedBlockers, preventionRules, staticWorlds, ignored,
+                planeswalkers, false, protection, departures, temporaryCrew);
+    }
+
     public record LifeState(int life, boolean canLoseLife, boolean canGainLife,
             boolean cannotLoseAtZero, boolean cannotWin) { }
 
@@ -265,6 +302,12 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
 
     private static PublicCombatSnapshot capture(final Player observer, final Combat declaration, final boolean execution,
             final BooleanSupplier checkpoint) {
+        return captureViews(observer, declaration, execution, checkpoint, Map.of());
+    }
+
+    /** Analysis-only public overlays; no copies are installed in the game. */
+    static PublicCombatSnapshot captureViews(final Player observer, final Combat declaration, final boolean execution,
+            final BooleanSupplier checkpoint, final Map<Integer, Card> overrides) {
         if (checkpoint == null) { throw new IllegalArgumentException("An explicit capture checkpoint is required"); }
         if (observer == null || declaration == null || observer.getGame() != declaration.getAttackingPlayer().getGame()) {
             throw new IllegalArgumentException("An observer and declaration in the same game are required");
@@ -273,7 +316,11 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         final List<String> reasons = new ArrayList<>();
         final List<String> ignored = new ArrayList<>();
         final List<String> unavailable = new ArrayList<>();
-        final var preparedProtection = CombatProtectionPreparation.prepare(observer, checkpoint);
+        final List<Card> battlefield = observer.getGame().getCardsIn(ZoneType.Battlefield).stream()
+                .map(card -> overrides.getOrDefault(card.getId(), card)).toList();
+        final List<Card> sources = observer.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES).stream()
+                .map(card -> overrides.getOrDefault(card.getId(), card)).toList();
+        final var preparedProtection = CombatProtectionPreparation.prepare(observer, checkpoint, battlefield, overrides.keySet());
         if (preparedProtection.isEmpty()) { return null; }
         final var protection = preparedProtection.orElseThrow();
         reasons.addAll(protection.unsupportedReasons());
@@ -303,7 +350,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
                 reasons.add("Unprojected player prevention or win restriction: " + player.getId());
             }
         }
-        for (final Card card : observer.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES)) {
+        for (final Card card : sources) {
             if (!checkpoint.getAsBoolean()) { return null; }
             if (card.isPhasedOut()) { continue; }
             final int ignoredBefore = ignored.size();
@@ -377,7 +424,8 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
                 reasons.add("Unprojected attack payment: " + attacker.getId());
             }
             final Set<Integer> eligible = new LinkedHashSet<>();
-            for (final Card blocker : defending.getCreaturesInPlay()) {
+            for (final Card blocker : battlefield) {
+                if (!blocker.isCreature() || blocker.getController() != defending) { continue; }
                 if (!checkpoint.getAsBoolean()) { return null; }
                 // Pair eligibility and group-size legality are different. In particular, a
                 // creature may be a legal member of a menace gang but not a legal solo block.
@@ -399,12 +447,12 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         }
         final List<CombatTriggerDescription> triggers = new ArrayList<>();
         final List<CombatDamagePreventionRule> preventionRules = new ArrayList<>();
-        for (final Card card : observer.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES)) {
+        for (final Card card : sources) {
             if (!checkpoint.getAsBoolean()) { return null; }
             if (card.isPhasedOut() || card.isFaceDown()) { continue; }
             card.getStaticAbilities().forEach(ability -> CombatDamagePreventionRule.parse(ability).ifPresent(preventionRules::add));
         }
-        for (final Card card : observer.getGame().getCardsIn(ZoneType.Battlefield)) {
+        for (final Card card : battlefield) {
             if (!checkpoint.getAsBoolean()) { return null; }
             if (card.isPhasedOut() || card.isFaceDown()) { continue; }
             card.getTriggers().forEach(trigger -> CombatTriggerDescription.parse(trigger).ifPresent(triggers::add));
@@ -419,12 +467,12 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
             live.getAllBlockers().forEach(card -> observedBlocks.add(card.getId()));
         }
         PreparedCombatStaticWorlds staticWorlds = PreparedCombatStaticWorlds.empty();
-        final boolean needsStaticWorld = observer.getGame().getCardsIn(ZoneType.Battlefield).stream()
+        final boolean needsStaticWorld = battlefield.stream()
                 .filter(card -> !card.isFaceDown() && !card.isPhasedOut())
                 .anyMatch(card -> card.getStaticAbilities().stream().anyMatch(ability -> !ability.isSuppressed()
                         && forge.ai.effect.CombatStaticProjectionPreparation.supportsFixedPowerToughness(ability)));
         if (needsStaticWorld) {
-            final var prepared = forge.ai.effect.CombatStaticProjectionPreparation.prepare(observer, checkpoint);
+            final var prepared = forge.ai.effect.CombatStaticProjectionPreparation.prepare(observer, checkpoint, battlefield);
             if (prepared.isEmpty()) { return null; }
             staticWorlds = prepared.orElseThrow();
             if (!staticWorlds.supported()) {
@@ -559,7 +607,8 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
                         .containsAll(params.keySet());
         // TODO: Other prevention/replacement effects and shield-dependent statics need their
         // own audited transitions. Shield counters do not rescue an already pending SBA death.
-        return card.isCreature() && card.getCounters(CounterEnumType.SHIELD) > 0 && !effect.isSuppressed()
+        return (card.isCreature() || card.getType().hasSubtype("Vehicle") && !card.isPlaneswalker())
+                && card.getCounters(CounterEnumType.SHIELD) > 0 && !effect.isSuppressed()
                 && "Battlefield".equals(params.get("ActiveZones")) && "True".equals(params.get("Secondary"))
                 && (damage || destroy) && outcome != null && outcome.getApi() == forge.game.ability.ApiType.RemoveCounter
                 && outcome.getSubAbility() == null && !outcome.usesTargeting()
@@ -576,7 +625,8 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         // Only the engine's counter-generated self untap replacement is mechanically admitted.
         // TODO: General untap replacements, optional untaps and counter-changing triggers need
         // chronological event projection rather than ignoring all replacement text on this card.
-        return card.isCreature() && card.getCounters(CounterEnumType.STUN) > 0
+        return (card.isCreature() || card.getType().hasSubtype("Vehicle") && !card.isPlaneswalker())
+                && card.getCounters(CounterEnumType.STUN) > 0
                 && !effect.isSuppressed() && "Untap".equals(params.get("Event"))
                 && "Battlefield".equals(params.get("ActiveZones")) && "Card.Self".equals(params.get("ValidCard"))
                 && "True".equals(params.get("Secondary"))

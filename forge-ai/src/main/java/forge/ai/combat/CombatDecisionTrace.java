@@ -37,7 +37,9 @@ public final class CombatDecisionTrace {
         final StringBuilder text = new StringBuilder("[AI Combat Analysis]\nDecision: attack, observer=")
                 .append(ai.getName()).append('#').append(ai.getId()).append(", applied=").append(applied)
                 .append("\nNodes: ").append(budget.used()).append(", elapsedMs=").append(budget.elapsedMillis())
-                .append("\nPlan reasons: ").append(plan.reasons()).append("\nExecution: ").append(executionReason);
+                .append("\nPlan reasons: ").append(plan.reasons()).append("\nExecution: ").append(executionReason)
+                .append("\nPrepared crew response worlds: ").append(plan.crewResponses().responses().size())
+                .append(", public resource identities: ").append(plan.crewResponses().identities());
         plan.snapshot().ifPresent(snapshot -> text.append("\nPublic attack alternatives: ").append(snapshot.attackersToDefenders())
                 .append("\nPublic planeswalkers (loyalty, ultimate threshold, urgency): ").append(snapshot.planeswalkers())
                 .append("\nLegal attack destinations: ").append(plan.legalDestinations())
@@ -55,6 +57,7 @@ public final class CombatDecisionTrace {
             search.noAttack().ifPresent(candidate -> text.append("\nNo additional attacks: ").append(candidate.total())
                     .append(", public reply=").append(candidate.reply()));
             search.best().ifPresent(candidate -> text.append("\nChosen attackers: ").append(candidate.attackers())
+                    .append(", hypothetical crews (Vehicle=pilots): ").append(candidate.hypotheticalCrews())
                     .append(", destinations=").append(candidate.destinations())
                     .append(", planeswalker loyalty after=").append(candidate.combat().projection().planeswalkerLoyaltyAfter())
                     .append(", planeswalker utility=").append(CombatTransitionValueEvaluator.planeswalkerUtility(plan.snapshot().orElseThrow(), candidate.combat().projection()))

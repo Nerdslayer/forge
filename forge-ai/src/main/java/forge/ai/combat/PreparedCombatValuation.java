@@ -83,7 +83,7 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
         final var baseline = snapshot.staticWorlds().afterLosses(expiring);
         baseline.forEach((id, state) -> {
             final var value = adjusted.get(id);
-            if (value == null || expiring.contains(id)) { return; }
+            if (value == null || expiring.contains(id) || snapshot.temporaryCrew().contains(id)) { return; }
             final int sign = value.controllerId() == snapshot.observingPlayerId() ? -1 : 1;
             adjusted.put(id, new PermanentValue(id, value.controllerId(),
                     saturated((long) value.bodyLossValue() + bodyDelta(id, (long) sign * state.bodyDelta())),
@@ -107,6 +107,7 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
     public int survivorCounterUtility(final PublicCombatSnapshot snapshot, final CombatProjection projection) {
         long result = 0;
         for (final var entry : projection.survivors().entrySet()) {
+            if (snapshot.temporaryCrew().contains(entry.getKey())) { continue; }
             final var before = snapshot.creatures().get(entry.getKey());
             final int spent = forge.ai.CreatureEvaluator.shieldCounterValue(before.shieldCounters(), before.indestructible())
                     - forge.ai.CreatureEvaluator.shieldCounterValue(entry.getValue().shieldCounters(), before.indestructible());
@@ -123,6 +124,7 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
         final var baseline = snapshot.staticWorlds().afterLosses(expiring);
         final var world = snapshot.staticWorlds().afterLosses(gone);
         for (final int id : projection.survivors().keySet()) {
+            if (snapshot.temporaryCrew().contains(id)) { continue; }
             final var changed = world.get(id);
             if (changed != null) {
                 final int baselineDelta = baseline.containsKey(id) ? baseline.get(id).bodyDelta() : 0;
@@ -139,6 +141,7 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
         final Map<Integer, PermanentValue> adjusted = new LinkedHashMap<>(remaining.permanents());
         final var world = snapshot.staticWorlds().afterLosses(projection.lostPermanents());
         for (final var entry : projection.survivors().entrySet()) {
+            if (snapshot.temporaryCrew().contains(entry.getKey())) { continue; }
             final var before = snapshot.creatures().get(entry.getKey());
             final var value = adjusted.get(entry.getKey());
             if (value == null) { continue; }
@@ -174,7 +177,8 @@ public record PreparedCombatValuation(Map<Integer, PermanentValue> permanents,
         for (final var entry : newWorld.entrySet()) {
             final int id = entry.getKey();
             final var value = adjusted.get(id);
-            if (value == null || !oldWorld.containsKey(id)) { continue; }
+            // Temporary crew bodies revert at cleanup; their ledger already values the enduring noncreature permanent.
+            if (value == null || snapshot.temporaryCrew().contains(id) || !oldWorld.containsKey(id)) { continue; }
             final int delta = saturated((long) entry.getValue().bodyDelta() - oldWorld.get(id).bodyDelta());
             final int sign = value.controllerId() == snapshot.observingPlayerId() ? -1 : 1;
             adjusted.put(id, new PermanentValue(id, value.controllerId(), saturated((long) value.bodyLossValue() + sign * bodyDelta(id, delta)),

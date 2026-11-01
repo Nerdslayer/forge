@@ -21,12 +21,18 @@ public final class CombatAttackPlanner {
 
     public record Plan(Optional<PublicCombatSnapshot> snapshot, Optional<PublicCombatReadiness> readiness,
             Optional<CombatAttackSearch.Result> search, boolean applicable, List<String> reasons,
-            Map<Integer, Integer> fixedAttackers, Map<Integer, Set<Integer>> legalDestinations) {
+            Map<Integer, Integer> fixedAttackers, Map<Integer, Set<Integer>> legalDestinations,
+            PreparedCombatCrewResponses crewResponses) {
         public Plan { reasons = List.copyOf(reasons); fixedAttackers = Map.copyOf(fixedAttackers); legalDestinations = Map.copyOf(legalDestinations); }
+        public Plan(final Optional<PublicCombatSnapshot> snapshot, final Optional<PublicCombatReadiness> readiness,
+                final Optional<CombatAttackSearch.Result> search, final boolean applicable, final List<String> reasons,
+                final Map<Integer, Integer> fixed, final Map<Integer, Set<Integer>> legal) {
+            this(snapshot, readiness, search, applicable, reasons, fixed, legal, PreparedCombatCrewResponses.empty());
+        }
     }
 
     private record Capture(PublicCombatSnapshot snapshot, PublicCombatReadiness readiness, Map<Integer, Integer> fixedAttackers,
-            Map<Integer, Set<Integer>> legalDestinations) { }
+            Map<Integer, Set<Integer>> legalDestinations, PreparedCombatCrewResponses crewResponses) { }
 
     /** Read-only: hypothetical attacks never publish live combat/card views or consume card IDs. */
     public static Plan plan(final Player ai, final Combat combat, final CombatSearchBudget budget) {
@@ -49,8 +55,9 @@ public final class CombatAttackPlanner {
                 && capture.snapshot().planeswalkers().values().stream().anyMatch(walker -> walker.controllerId() == capture.snapshot().defendingPlayerId());
         final CombatAttackSearch.Result search = destinations
                 ? CombatAttackDestinationSearch.search(capture.snapshot(), values, capture.readiness(), budget,
-                        capture.fixedAttackers(), capture.legalDestinations())
-                : CombatAttackSearch.search(capture.snapshot(), values, capture.readiness(), budget, capture.fixedAttackers().keySet());
+                        capture.fixedAttackers(), capture.legalDestinations(), capture.crewResponses())
+                : CombatAttackSearch.search(capture.snapshot(), values, capture.readiness(), budget,
+                        capture.fixedAttackers().keySet(), capture.crewResponses());
         reasons.addAll(search.reasons());
         // Greedy declaration coverage need not enumerate every subset. Opposing responses must
         // still be complete; an incomplete counterattack must never become "zero threat".
@@ -58,7 +65,8 @@ public final class CombatAttackPlanner {
         final boolean applicable = search.best().isPresent() && (search.best().orElseThrow().certifiedWin()
                 || search.outcomeDomainComplete() && search.candidateSearchComplete());
         if (!applicable) { reasons.add("No sufficiently supported, verified attack/reply result"); }
-        return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.of(search), applicable, reasons, capture.fixedAttackers(), capture.legalDestinations());
+        return new Plan(Optional.of(capture.snapshot()), Optional.of(capture.readiness()), Optional.of(search), applicable, reasons,
+                capture.fixedAttackers(), capture.legalDestinations(), capture.crewResponses());
     }
 
     /** A real own declaration only; rejected plans leave all live assignments untouched. */
@@ -78,6 +86,7 @@ public final class CombatAttackPlanner {
         }
         if (!stale.isEmpty() || !plan.snapshot().orElseThrow().equals(fresh.snapshot())
                 || !plan.readiness().orElseThrow().equals(fresh.readiness()) || !plan.fixedAttackers().equals(fresh.fixedAttackers())
+                || !plan.crewResponses().equals(fresh.crewResponses())
                 || !plan.legalDestinations().equals(fresh.legalDestinations())) {
             CombatDecisionTrace.attacks(ai, plan, false, "Public alternatives/readiness or declarations changed", budget);
             return false;
@@ -187,7 +196,16 @@ public final class CombatAttackPlanner {
         }
         final var captured = PublicCombatSnapshot.capture(ai, all, budget::tryConsume);
         if (captured.isEmpty()) { return null; }
-        final PublicCombatSnapshot snapshot = captured.orElseThrow();
+        PublicCombatSnapshot snapshot = captured.orElseThrow();
+        final var crews = CombatCrewPreparation.prepare(ai, all, budget::tryConsume);
+        if (crews.isEmpty()) { return null; }
+        final var crewResponses = crews.orElseThrow();
+        reasons.addAll(crewResponses.reasons());
+        if (!crewResponses.responses().isEmpty()) {
+            final Set<Integer> vehicles = crewResponses.responses().stream().flatMap(response -> response.crews().keySet().stream())
+                    .collect(java.util.stream.Collectors.toSet());
+            snapshot = snapshot.withModeledCrew(ai, vehicles);
+        }
         final var preparedReadiness = PublicCombatReadiness.capture(ai, snapshot, budget::tryConsume);
         if (preparedReadiness.isEmpty()) { return null; }
         final PublicCombatReadiness readiness = preparedReadiness.orElseThrow();
@@ -196,7 +214,7 @@ public final class CombatAttackPlanner {
         // Future-only uncertainty must not prevent certifying an immediate actual win.
         // The search reports it when a continuing combat needs a reply forecast.
         // TODO: Battles/multiplayer destinations, attack maxima, forced splits and taxes.
-        return new Capture(snapshot, readiness, Map.copyOf(fixedIds), Map.copyOf(legal));
+        return new Capture(snapshot, readiness, Map.copyOf(fixedIds), Map.copyOf(legal), crewResponses);
     }
 
     private static CombatAttackDestination destination(final forge.game.GameEntity target) {

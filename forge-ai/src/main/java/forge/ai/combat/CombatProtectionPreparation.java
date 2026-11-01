@@ -48,6 +48,11 @@ public final class CombatProtectionPreparation {
     }
 
     static Optional<PreparedCombatProtection> prepare(final Player observer, final BooleanSupplier checkpoint) {
+        return prepare(observer, checkpoint, observer.getGame().getCardsIn(ZoneType.Battlefield).stream().toList(), Set.of());
+    }
+
+    static Optional<PreparedCombatProtection> prepare(final Player observer, final BooleanSupplier checkpoint,
+            final List<Card> battlefield, final Set<Integer> projectedTypes) {
         final List<Card> cards = new ArrayList<>();
         final List<Card> protectedCards = new ArrayList<>();
         final List<String> reasons = new ArrayList<>();
@@ -55,20 +60,27 @@ public final class CombatProtectionPreparation {
             if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
             if (player.hasKeyword(Keyword.PROTECTION)) { reasons.add("Protected player needs explicit combat projection: " + player.getId()); }
         }
-        for (final Card card : observer.getGame().getCardsIn(ZoneType.Battlefield)) {
+        for (final Card card : battlefield) {
             if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
             if (card.isFaceDown() || card.isPhasedOut()) { continue; }
             if (card.isCreature()) { cards.add(card); }
             final boolean printed = card.getCurrentState().getIntrinsicKeywords().stream().anyMatch(k -> k.getKeyword() == Keyword.PROTECTION);
             if (!card.hasKeyword(Keyword.PROTECTION) && !printed) { continue; }
-            if (!card.isCreature()) { reasons.add("Protected noncreature needs explicit combat projection: " + card.getId()); }
-            else { protectedCards.add(card); }
+            // An uncrewed Vehicle is not a current combat recipient. Its hypothetical
+            // creature face is prepared separately, including matching Protection sources.
+            if (!card.isCreature()) {
+                if (!card.getType().hasSubtype("Vehicle") || card.isPlaneswalker()) {
+                    reasons.add("Protected noncreature needs explicit combat projection: " + card.getId());
+                }
+                continue;
+            }
+            protectedCards.add(card);
         }
         if (protectedCards.isEmpty()) { return Optional.of(new PreparedCombatProtection(Map.of(), Map.of(), reasons)); }
         final Map<Integer, PreparedCombatProtection.Source> sources = new LinkedHashMap<>();
         for (final Card card : cards) {
             if (!checkpoint.getAsBoolean()) { return Optional.empty(); }
-            if (card.hasChangedCardColors() || card.getChangedCardTypes().iterator().hasNext()) {
+            if (card.hasChangedCardColors() || card.getChangedCardTypes().iterator().hasNext() && !projectedTypes.contains(card.getId())) {
                 reasons.add("Protection source color/type transition needs projection: " + card.getId());
             }
             sources.put(card.getId(), new PreparedCombatProtection.Source(card.getController().getId(), card.getColor().getColor(),

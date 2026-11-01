@@ -18,7 +18,13 @@ final class CombatAttackDestinationSearch {
     static CombatAttackSearch.Result search(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
             final PublicCombatReadiness readiness, final CombatSearchBudget budget,
             final Map<Integer, Integer> fixed, final Map<Integer, Set<Integer>> legal) {
-        return new Search(snapshot, values, readiness, budget, fixed, legal).run();
+        return search(snapshot, values, readiness, budget, fixed, legal, PreparedCombatCrewResponses.empty());
+    }
+
+    static CombatAttackSearch.Result search(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
+            final PublicCombatReadiness readiness, final CombatSearchBudget budget,
+            final Map<Integer, Integer> fixed, final Map<Integer, Set<Integer>> legal, final PreparedCombatCrewResponses crews) {
+        return new Search(snapshot, values, readiness, budget, fixed, legal, crews).run();
     }
 
     static boolean allWalkerAbilitiesComplete(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values) {
@@ -54,13 +60,13 @@ final class CombatAttackDestinationSearch {
 
         Search(final PublicCombatSnapshot snapshot0, final PreparedCombatValuation values0,
                 final PublicCombatReadiness readiness, final CombatSearchBudget budget0,
-                final Map<Integer, Integer> fixed0, final Map<Integer, Set<Integer>> legal0) {
+                final Map<Integer, Integer> fixed0, final Map<Integer, Set<Integer>> legal0, final PreparedCombatCrewResponses crews) {
             snapshot = snapshot0; values = values0; budget = budget0; fixed = fixed0; legal = legal0;
             this.readiness = readiness;
             start = budget.used();
             reasons = new LinkedHashSet<>(snapshot.unsupportedReasons());
             reasons.addAll(snapshot.unavailableReasons());
-            evaluation = new CombatAttackSearch.Evaluation(snapshot, values, readiness, budget, reasons);
+            evaluation = new CombatAttackSearch.Evaluation(snapshot, values, readiness, budget, reasons, crews);
         }
 
         CombatAttackSearch.Result run() {

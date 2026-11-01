@@ -51,6 +51,9 @@ final class CombatTurnProjectionBuilder {
             if (!scheduled.isEmpty() && (card.toughness() <= 0 || !card.indestructible() && survivor.markedDamage() >= card.toughness())) {
                 return new Result(Optional.empty(), List.of("Scheduled static-source departure needs subsequent state-based deaths"));
             }
+            // End-step source loss is checked before cleanup reversion. Crew lasts until
+            // cleanup, not until the permanent leaves; retain its enduring loss ledger.
+            if (before.temporaryCrew().contains(id)) { continue; }
             // The next active player untaps; the other side does not. Combat damage clears.
             final boolean attemptsUntap = card.controllerId() == active && survivor.tapped();
             final boolean tapped = survivor.tapped() && (!attemptsUntap || card.stunCounters() > 0);
@@ -98,11 +101,16 @@ final class CombatTurnProjectionBuilder {
                 creatures, players, attacks, blockers, List.of(), List.of(), before.legacyDamageOrder(), resources,
                 before.triggers().stream().filter(trigger -> !gone.contains(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
                 before.preventionRules().stream().filter(rule -> !gone.contains(rule.providerId())).toList(),
-                before.staticWorlds().surviving(gone), readiness.ignoredEffects(), walkers,
-                before.singletonPermutationSafe() && readiness.singletonPermutationSafe(), before.protection().surviving(gone),
+                before.staticWorlds().surviving(gone).withoutCreatures(before.temporaryCrew()), readiness.ignoredEffects(), walkers,
+                before.singletonPermutationSafe() && readiness.singletonPermutationSafe(), before.protection().surviving(gone).surviving(before.temporaryCrew()),
                 PreparedCombatDepartures.empty());
         final List<String> reasons = new java.util.ArrayList<>(readiness.ignoredEffects());
         if (!scheduled.isEmpty()) { reasons.add("Known end-step departures removed before future combat: " + scheduled); }
+        if (!before.temporaryCrew().isEmpty()) {
+            // TODO: Recompute fresh crew for future attackers/defenders after casualties,
+            // untaps and cleanup; never retain an already-paid crew as automatic readiness.
+            reasons.add("Hypothetical crew animation reverted at cleanup; fresh future crew remains unprojected: " + before.temporaryCrew());
+        }
         return new Result(Optional.of(new Turn(alternatives, survivingValues)), reasons);
     }
 }

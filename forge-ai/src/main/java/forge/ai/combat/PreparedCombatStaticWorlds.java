@@ -34,6 +34,18 @@ public record PreparedCombatStaticWorlds(boolean supported, Set<Integer> provide
         return new PreparedCombatStaticWorlds(true, Set.of(), Map.of(Set.of(), Map.of()), List.of());
     }
 
+    /** Animation ending removes a creature representation, not its permanent/static provider. */
+    PreparedCombatStaticWorlds withoutCreatures(final Set<Integer> ids) {
+        if (ids.isEmpty()) { return this; }
+        final Map<Set<Integer>, Map<Integer, CreatureState>> kept = new LinkedHashMap<>();
+        worlds.forEach((key, world) -> {
+            final Map<Integer, CreatureState> remaining = new LinkedHashMap<>(world);
+            ids.forEach(remaining::remove);
+            kept.put(key, remaining);
+        });
+        return new PreparedCombatStaticWorlds(supported, providers, kept, reasons);
+    }
+
     /** Rebases both mechanics and body deltas after one combat, without any live recalculation. */
     public PreparedCombatStaticWorlds surviving(final Set<Integer> losses) {
         final var baseline = afterLosses(losses);
