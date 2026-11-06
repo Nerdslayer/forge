@@ -1,0 +1,392 @@
+[
+  {
+    "name": "HP Dumbledore",
+    "nameOverride": "Dumbledore",
+    "sprite": "sprites/enemy/harry_potter/dumbledore.atlas",
+    "deck": [
+      "decks/harry_potter/dumbledore.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 0.09375,
+    "life": 22,
+    "colors": "WUR",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 300,
+        "addMaxCount": 200
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Gryffindor",
+    "nameOverride": "Harry Potter",
+    "sprite": "sprites/enemy/humanoid/human/wizard/enchanter.atlas",
+    "deck": [
+      "decks/harry_potter/gryffindor.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 1.0,
+    "life": 20,
+    "colors": "WR",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 200,
+        "addMaxCount": 100
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Weasley Family",
+    "nameOverride": "Ron Weasley",
+    "sprite": "sprites/enemy/harry_potter/ron.atlas",
+    "deck": [
+      "decks/harry_potter/weasley_family.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 0.0859375,
+    "life": 20,
+    "colors": "WURG",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 200,
+        "addMaxCount": 100
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Hagrid",
+    "nameOverride": "Hagrid",
+    "sprite": "sprites/enemy/harry_potter/hagrid.atlas",
+    "deck": [
+      "decks/harry_potter/hagrid.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 0.1171875,
+    "life": 24,
+    "colors": "WUBRG",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 200,
+        "addMaxCount": 100
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Voldemort",
+    "nameOverride": "Voldemort",
+    "sprite": "sprites/enemy/harry_potter/voldemort.atlas",
+    "deck": [
+      "decks/harry_potter/voldemort.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 0.09375,
+    "life": 28,
+    "colors": "UBR",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 400,
+        "addMaxCount": 200
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Roaming Dumbledore",
+    "nameOverride": "Albus Dumbledore",
+    "sprite": "sprites/enemy/harry_potter/dumbledore.atlas",
+    "deck": [
+      "decks/harry_potter/dumbledore.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0.25,
+    "difficulty": 3,
+    "speed": 20,
+    "scale": 0.09375,
+    "life": 22,
+    "colors": "WUR",
+    "questTags": [
+      "HarryPotter",
+      "Roaming"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 300,
+        "addMaxCount": 200
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Roaming Harry Potter",
+    "nameOverride": "Harry Potter, the Boy Who Lived",
+    "sprite": "sprites/enemy/humanoid/human/wizard/enchanter.atlas",
+    "deck": [
+      "decks/harry_potter/gryffindor.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0.25,
+    "difficulty": 2,
+    "speed": 22,
+    "scale": 1.0,
+    "life": 20,
+    "colors": "WR",
+    "questTags": [
+      "HarryPotter",
+      "Roaming"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 200,
+        "addMaxCount": 100
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Roaming Ron Weasley",
+    "nameOverride": "Ron Weasley, Loyal Friend",
+    "sprite": "sprites/enemy/harry_potter/ron.atlas",
+    "deck": [
+      "decks/harry_potter/weasley_family.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0.25,
+    "difficulty": 2,
+    "speed": 22,
+    "scale": 0.0859375,
+    "life": 20,
+    "colors": "WURG",
+    "questTags": [
+      "HarryPotter",
+      "Roaming"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 200,
+        "addMaxCount": 100
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Roaming Hagrid",
+    "nameOverride": "Rubeus Hagrid",
+    "sprite": "sprites/enemy/harry_potter/hagrid.atlas",
+    "deck": [
+      "decks/harry_potter/hagrid.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0.25,
+    "difficulty": 2,
+    "speed": 17,
+    "scale": 0.1171875,
+    "life": 24,
+    "colors": "WUBRG",
+    "questTags": [
+      "HarryPotter",
+      "Roaming"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 200,
+        "addMaxCount": 100
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Roaming Voldemort",
+    "nameOverride": "Lord Voldemort",
+    "sprite": "sprites/enemy/harry_potter/voldemort.atlas",
+    "deck": [
+      "decks/harry_potter/voldemort.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0.25,
+    "difficulty": 3,
+    "speed": 20,
+    "scale": 0.09375,
+    "life": 28,
+    "colors": "UBR",
+    "questTags": [
+      "HarryPotter",
+      "Roaming"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 1,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 400,
+        "addMaxCount": 200
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  }
+]

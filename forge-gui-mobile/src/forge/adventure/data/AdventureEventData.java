@@ -1,5 +1,6 @@
 package forge.adventure.data;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.utils.Array;
 import forge.Forge;
@@ -526,7 +527,7 @@ public class AdventureEventData implements Serializable {
     public void generateParticipants(int numberOfOpponents) {
         participants = new AdventureEventParticipant[numberOfOpponents + 1];
 
-        Iterable<EnemyData> validParticipants = IterableUtil.filter(WorldData.getAllEnemies(), q -> q.nextEnemy == null);
+        Iterable<EnemyData> validParticipants = IterableUtil.filter(WorldData.getAllEnemies(), q -> q.nextEnemy == null && AdventureContentPacks.get().selectable(q));
         List<EnemyData> data = Aggregates.random(validParticipants, numberOfOpponents);
         for (int i = 0; i < numberOfOpponents; i++) {
             participants[i] = new AdventureEventParticipant().generate(data.get(i));
@@ -960,7 +961,7 @@ public class AdventureEventData implements Serializable {
                 EnemyData data = WorldData.getEnemy(enemyDataName);
                 if (data == null) {
                     //enemyDataName was not found, replace with something valid.
-                    enemyDataName = Aggregates.random(WorldData.getAllEnemies()).getName();
+                    enemyDataName = Aggregates.random(com.google.common.collect.Iterables.filter(WorldData.getAllEnemies(), candidate -> AdventureContentPacks.get().selectable(candidate))).getName();
                 }
                 sprite = new EnemySprite(WorldData.getEnemy(enemyDataName));
             }

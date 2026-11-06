@@ -1,0 +1,655 @@
+{
+  "schemaVersion": 1,
+  "id": "harry_potter",
+  "planes": [
+    "Shandalar"
+  ],
+  "groups": [
+    {
+      "id": "hogwarts",
+      "requiredDecks": [
+        {
+          "path": "decks/harry_potter/dumbledore.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/harry_potter/gryffindor.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/harry_potter/weasley_family.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/harry_potter/hagrid.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/harry_potter/voldemort.dck",
+          "mainCount": 60
+        }
+      ],
+      "requiredCards": [
+        {
+          "name": "Accio",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Acromantula Brood",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Albus Dumbledore, Headmaster",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Amycus Carrow, Dark Arts Instructor",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Apparate",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Aragog, King of the Acromantulas",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Arthur Weasley, Artifact Inspector",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Avada Kedavra",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Azkaban",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Barty Crouch Jr., Unmasked",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Basilisk Venom",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Basilisk of the Chamber",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Battle of Hogwarts",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Bellatrix Lestrange",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Buckbeak, Proud Hippogriff",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Corban Yaxley, Ministry Infiltrator",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Crucio",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Death Eater Infiltrator",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Dementor",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Dobby, the Free Elf",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Draco Malfoy",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Dumbledore's Army",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Expecto Patronum",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Expelliarmus",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Fang, Hagrid's Loyal Hound",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Fawkes, the Phoenix",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Fiendfyre",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Firebolt Broom",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Firenze, Reader of the Stars",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Fluffy, Three-Headed Guardian",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Forbidden Forest Unicorn",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Fred Weasley, Setup Artist",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "George Weasley, Master Prankster",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Ginny Weasley, Fearless Duelist",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Grawp, Hagrid's Little Brother",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Gringotts Wizarding Bank",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Harry Potter, Seeker",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Harry Potter, the Boy Who Lived",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Harry Potter, the Chosen One",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Hedwig, Faithful Messenger",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Hermione Granger, Brilliant Witch",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Hermione's Time-Turner",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Hogwarts, School of Witchcraft and Wizardry",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Hungarian Horntail",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Imperio",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Incendio",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Legilimens",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Lord Voldemort, Soul-Split Tyrant",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Lost Diadem of Ravenclaw",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Lucius Malfoy",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Luna Lovegood, Seer of the Unseen",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Mad-Eye Moody, Impostor",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Marvolo Gaunt's Ring",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Minerva McGonagall, Master Transfigurer",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Ministry Auror",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Molly Weasley, Great Mother",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Monster Book of Monsters",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Morsmordre",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Nagini, the Last Horcrux",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Neville Longbottom, Dunderhead",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Neville Longbottom, Stud",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Niffler, Shiny-Stuff Snatcher",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Nimbus 2000",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Norbert, Hagrid's Hatchling",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Padfoot, the Black Dog",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Peter Pettigrew, Unmasked",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Petrificus Totalus",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Polyjuice Potion",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Protego",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Reducto",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Riddikulus",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Ron Weasley, Unexpected Hero",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Ron Weasley, the Knight's Gambit",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Rubeus Hagrid, Keeper of the Keys",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Scabbers, Ron's Rat",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Seaside Cave",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Sectumsempra",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Sirius Black, Escaped Prisoner",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Slytherin's Locket",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Stupefy",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Sword of Gryffindor",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Burrow",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Chamber of Secrets",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Dark Mark",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Elder Wand",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Forbidden Forest",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Golden Snitch",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Invisibility Cloak",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Marauder's Map",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Mirror of Erised",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Pensieve",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Philosopher's Stone",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Resurrection Stone",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Room of Requirement",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Sorting Hat",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Thestral, Unseen Steed",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Tom Riddle's Diary",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Triwizard Tournament",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Ukrainian Ironbelly",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Weasleys' Wizard Wheezes",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Wildfire Whiz-Bangs",
+          "edition": "HP",
+          "custom": true
+        }
+      ],
+      "requiredTokens": [
+        "hp_b_1_1_death_eater",
+        "hp_b_2_2_inferius",
+        "hp_c_a_horcrux_indestructible",
+        "hp_c_a_sock",
+        "hp_c_horcrux_indestructible",
+        "hp_c_legendary_triwizard_cup",
+        "hp_g_1_1_trevor",
+        "hp_g_1_2_spider_reach_deathtouch",
+        "hp_w_1_1_human_wizard",
+        "hp_w_2_2_a_golem_vigilance",
+        "hp_w_3_3_elk_spirit_vigilance"
+      ],
+      "requiredResources": [
+        "maps/map/hogwarts/hogwarts_great_hall.tmx",
+        "maps/map/hogwarts/hogwarts_shadow_chamber.tmx",
+        "sprites/enemy/harry_potter/dumbledore.atlas",
+        "sprites/enemy/harry_potter/dumbledore.png",
+        "sprites/enemy/harry_potter/hagrid.atlas",
+        "sprites/enemy/harry_potter/hagrid.png",
+        "sprites/enemy/harry_potter/ron.atlas",
+        "sprites/enemy/harry_potter/ron.png",
+        "sprites/enemy/harry_potter/voldemort.atlas",
+        "sprites/enemy/harry_potter/voldemort.png",
+        "sprites/locations/harry_potter/hogwarts_castle.atlas",
+        "sprites/locations/harry_potter/hogwarts_castle.png"
+      ],
+      "deckOverrides": [],
+      "enemyDefinitions": "enemies.json",
+      "poiDefinitions": "points_of_interest.json",
+      "biomeAdditions": "biome_additions.json"
+    },
+    {
+      "id": "human_elite",
+      "requiredDecks": [
+        {
+          "path": "decks/harry_potter/variants/humanelite.dck",
+          "mainCount": 60
+        }
+      ],
+      "requiredCards": [
+        {
+          "name": "Arthur Weasley, Muggle Enthusiast",
+          "edition": "HP",
+          "custom": true
+        }
+      ],
+      "requiredTokens": [],
+      "requiredResources": [],
+      "deckOverrides": [
+        {
+          "path": "decks/standard/humanelite.dck",
+          "replacement": "decks/harry_potter/variants/humanelite.dck"
+        }
+      ],
+      "biomeAdditions": "human_biome_additions.json"
+    },
+    {
+      "id": "esper_artificer",
+      "requiredDecks": [
+        {
+          "path": "decks/harry_potter/variants/esper_artificer.dck",
+          "mainCount": 77
+        }
+      ],
+      "requiredCards": [
+        {
+          "name": "Kreacher, Loyal House-Elf",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Regulus Black, Defier of the Dark Lord",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Severus Snape, the Half-Blood Prince",
+          "edition": "HP",
+          "custom": true
+        }
+      ],
+      "requiredTokens": [],
+      "requiredResources": [],
+      "deckOverrides": [
+        {
+          "path": "decks/standard/esper_artificer.dck",
+          "replacement": "decks/harry_potter/variants/esper_artificer.dck"
+        }
+      ]
+    },
+    {
+      "id": "cook",
+      "requiredDecks": [
+        {
+          "path": "decks/harry_potter/variants/thecheff.dck",
+          "mainCount": 182
+        }
+      ],
+      "requiredCards": [
+        {
+          "name": "Hufflepuff's Cup",
+          "edition": "HP",
+          "custom": true
+        }
+      ],
+      "requiredTokens": [],
+      "requiredResources": [],
+      "deckOverrides": [
+        {
+          "path": "decks/miniboss/thecheff.dck",
+          "replacement": "decks/harry_potter/variants/thecheff.dck"
+        }
+      ]
+    }
+  ]
+}

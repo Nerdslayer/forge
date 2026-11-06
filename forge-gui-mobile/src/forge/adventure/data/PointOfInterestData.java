@@ -1,5 +1,6 @@
 package forge.adventure.data;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Json;
@@ -35,8 +36,13 @@ public class PointOfInterestData implements Serializable {
 
 
     private static Array<PointOfInterestData> pointOfInterestList;
+    private static String pointSource;
+    private static AdventureContentPacks pointContent;
     public static Array<PointOfInterestData> getAllPointOfInterest() {
-        if (pointOfInterestList == null) {
+        String source = Config.instance().getFile(Paths.POINTS_OF_INTEREST).path();
+        if (pointOfInterestList == null || !source.equals(pointSource) || pointContent != AdventureContentPacks.get()) {
+            pointContent = AdventureContentPacks.get();
+            pointSource = source;
             Json json = new Json();
             FileHandle handle = Config.instance().getFile(Paths.POINTS_OF_INTEREST);
             if (handle.exists()) {
@@ -44,9 +50,11 @@ public class PointOfInterestData implements Serializable {
             }
 
         }
-        return pointOfInterestList;
+        return AdventureContentPacks.get().mergePoints(pointOfInterestList);
     }
     public static PointOfInterestData getPointOfInterest(String name) {
+        PointOfInterestData owned = AdventureContentPacks.get().findPoint(name);
+        if (owned != null) return owned;
         for(PointOfInterestData data: new Array.ArrayIterator<>(getAllPointOfInterest())){
             if(data.name.equals(name)) return data;
         }

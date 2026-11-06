@@ -1,0 +1,52 @@
+[
+  {
+    "path": "world/biomes/colorless.json",
+    "enemies": [
+      "Albus Dumbledore",
+      "Harry Potter, the Boy Who Lived",
+      "Ron Weasley, Loyal Friend",
+      "Rubeus Hagrid",
+      "Lord Voldemort"
+    ],
+    "pointsOfInterest": [
+      "Hogwarts"
+    ]
+  },
+  {
+    "path": "world/biomes/white.json",
+    "enemies": [
+      "Albus Dumbledore",
+      "Harry Potter, the Boy Who Lived"
+    ],
+    "pointsOfInterest": []
+  },
+  {
+    "path": "world/biomes/blue.json",
+    "enemies": [
+      "Albus Dumbledore"
+    ],
+    "pointsOfInterest": []
+  },
+  {
+    "path": "world/biomes/black.json",
+    "enemies": [
+      "Lord Voldemort"
+    ],
+    "pointsOfInterest": []
+  },
+  {
+    "path": "world/biomes/red.json",
+    "enemies": [
+      "Harry Potter, the Boy Who Lived",
+      "Ron Weasley, Loyal Friend"
+    ],
+    "pointsOfInterest": []
+  },
+  {
+    "path": "world/biomes/green.json",
+    "enemies": [
+      "Rubeus Hagrid"
+    ],
+    "pointsOfInterest": []
+  }
+]

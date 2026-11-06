@@ -1,5 +1,6 @@
 package forge.adventure.stage;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.maps.MapLayer;
 import com.badlogic.gdx.maps.MapObject;
@@ -506,6 +507,7 @@ public class MapStage extends GameStage {
                         Object enemy = prop.get("enemy");
                         if (enemy != null && !enemy.toString().isEmpty()) {
                             EnemyData EN = WorldData.getEnemy(enemy.toString());
+                            if (EN != null && !AdventureContentPacks.get().available(EN)) break;
                             if (EN == null) {
                                 System.err.printf("Enemy \"%s\" not found, choosing a random one for current biome\n", enemy);
                                 forge.adventure.world.World world = Current.world();

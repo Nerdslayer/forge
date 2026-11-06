@@ -1,5 +1,6 @@
 package forge.adventure.data;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.utils.Array;
 
@@ -38,6 +39,7 @@ public class BiomeData implements Serializable {
     public BiomeStructureData[] structures;
 
     private ArrayList<EnemyData> enemyList;
+    private transient AdventureContentPacks content;
     private ArrayList<PointOfInterestData> pointOfInterestList;
 
     private final Random rand = MyRandom.getRandom();
@@ -47,11 +49,17 @@ public class BiomeData implements Serializable {
     }
 
     public ArrayList<EnemyData> getEnemyList() {
+        if (content != AdventureContentPacks.get()) {
+            content = AdventureContentPacks.get();
+            enemyList = null;
+            pointOfInterestList = null;
+        }
         if (enemyList == null) {
             enemyList = new ArrayList<>();
             if (enemies == null)
                 return enemyList;
             for (EnemyData data : new Array.ArrayIterator<>(WorldData.getAllEnemies())) {
+                if (!AdventureContentPacks.get().inRegion(data, enemies)) continue;
                 for (String enemyName : enemies) {
                     if (data.getName().equals(enemyName)) {
                         enemyList.add(data);
@@ -68,6 +76,11 @@ public class BiomeData implements Serializable {
     }
 
     public ArrayList<PointOfInterestData> getPointsOfInterest() {
+        if (content != AdventureContentPacks.get()) {
+            content = AdventureContentPacks.get();
+            enemyList = null;
+            pointOfInterestList = null;
+        }
         if (pointOfInterestList == null) {
             pointOfInterestList = new ArrayList<PointOfInterestData>();
             if (pointsOfInterest == null)
@@ -95,7 +108,8 @@ public class BiomeData implements Serializable {
 
     public EnemyData getExtraSpawnEnemy(float difficultyFactor) {
         //todo: implement difficultyFactor
-        List<EnemyData> extraSpawnEnemies = AdventureQuestController.instance().getExtraQuestSpawns(difficultyFactor);
+        List<EnemyData> extraSpawnEnemies = new ArrayList<>(AdventureQuestController.instance().getExtraQuestSpawns(difficultyFactor));
+        extraSpawnEnemies.removeIf(enemy -> !AdventureContentPacks.get().eligible(enemy, enemies, Current.player().getStatistic().rank()));
         if (extraSpawnEnemies.isEmpty())
             return null;
         return Aggregates.random(extraSpawnEnemies); //fallback, shouldn't reach this point but guarantee that we return something
@@ -106,14 +120,17 @@ public class BiomeData implements Serializable {
         difficultyFactor = Current.player().getStatistic().rank(); // compare difficulty data to how many wins you have on your save
         List<EnemyData> filteredEnemies = new ArrayList<>();
         for (EnemyData data : enemyList ){
-            if (data.difficulty <= difficultyFactor) { 
+            if (data.difficulty <= difficultyFactor && AdventureContentPacks.get().eligible(data, enemies, difficultyFactor)) {
                 filteredEnemies.add(data);
                 totalDistribution += data.spawnRate;
             }
         }
         // If no enemies match the criteria, fallback to a random enemy from the original list
         if (filteredEnemies.isEmpty()) {
-            return Aggregates.random(enemyList);
+            List<EnemyData> fallback = new ArrayList<>(enemyList);
+            final float rank = difficultyFactor;
+            fallback.removeIf(enemy -> !AdventureContentPacks.get().eligible(enemy, enemies, rank));
+            return fallback.isEmpty() ? null : Aggregates.random(fallback);
         }
 
         // Perform weighted random selection

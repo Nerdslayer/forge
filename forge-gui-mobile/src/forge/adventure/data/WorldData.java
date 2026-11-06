@@ -1,5 +1,6 @@
 package forge.adventure.data;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Json;
@@ -36,6 +37,9 @@ public class WorldData implements Serializable {
     private List<BiomeData> biomes;
 
     private static Array<EnemyData> allEnemies;
+    private static String enemySource;
+    private static AdventureContentPacks enemyContent;
+    private transient AdventureContentPacks biomeContent;
     private static Array<ShopData> shopList;
 
 
@@ -54,7 +58,10 @@ public class WorldData implements Serializable {
         return shopList;
     }
     static public Array<EnemyData> getAllEnemies() {
-        if (allEnemies == null) {
+        String source = Config.instance().getFile(Paths.ENEMIES).path();
+        if (allEnemies == null || !source.equals(enemySource) || enemyContent != AdventureContentPacks.get()) {
+            enemyContent = AdventureContentPacks.get();
+            enemySource = source;
             Json json = new Json();
             FileHandle handle = Config.instance().getFile(Paths.ENEMIES);
             if (handle.exists()) {
@@ -62,10 +69,12 @@ public class WorldData implements Serializable {
                 allEnemies = readList;
             }
         }
-        return allEnemies;
+        return AdventureContentPacks.get().mergeEnemies(allEnemies);
     }
 
     public static EnemyData getEnemy(String enemy) {
+        EnemyData owned = AdventureContentPacks.get().findEnemy(enemy);
+        if (owned != null) return owned;
         for(EnemyData data: new Array.ArrayIterator<>(getAllEnemies())) {
             if(data.name.equals(enemy))
                 return data;
@@ -90,13 +99,17 @@ public class WorldData implements Serializable {
     }
 
     public List<BiomeData> GetBiomes() {
-        if (biomes == null) {
+        if (biomes == null || biomeContent != AdventureContentPacks.get()) {
+            biomeContent = AdventureContentPacks.get();
             try
             {
                 biomes = new ArrayList<BiomeData>();
                 Json json = new Json();
                 for (String name : biomesNames) {
-                    biomes.add(json.fromJson(BiomeData.class, Config.instance().getFile(name)));
+                    BiomeData biome = json.fromJson(BiomeData.class, Config.instance().getFile(name));
+                    biome.enemies = AdventureContentPacks.get().additions(name, "enemies", biome.enemies);
+                    biome.pointsOfInterest = AdventureContentPacks.get().additions(name, "pointsOfInterest", biome.pointsOfInterest);
+                    biomes.add(biome);
                 }
             }
             catch (SerializationException ex) {

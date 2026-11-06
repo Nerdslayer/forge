@@ -174,6 +174,7 @@ public class MapViewScene extends UIScene {
         setOverlayButtonStates(1);
         List<PointOfInterest> allPois = Current.world().getAllPointOfInterest();
         for (PointOfInterest poi : allPois) {
+            if (!forge.adventure.util.AdventureContentPacks.get().available(poi.getData())) continue;
             for (AdventureEventData data : AdventurePlayer.current().getEvents()) {
                 if (data.sourceID.equals(poi.getID())) {
                     StringBuilder sb = new StringBuilder();
@@ -203,6 +204,7 @@ public class MapViewScene extends UIScene {
         List<PointOfInterest> allPois = Current.world().getAllPointOfInterest();
         details.clear();
         for (PointOfInterest poi : allPois) {
+            if (!forge.adventure.util.AdventureContentPacks.get().available(poi.getData())) continue;
             int rep = WorldSave.getCurrentSave().getPointOfInterestChanges(poi.getID()).getMapReputation();
             if (rep != 0) {
                 TypingLabel label = Controls.newTypingLabel("[%?BLACKEN] " + rep);
@@ -223,6 +225,7 @@ public class MapViewScene extends UIScene {
         details.clear();
         List<PointOfInterest> allPois = Current.world().getAllPointOfInterest();
         for (PointOfInterest poi : allPois) {
+            if (!forge.adventure.util.AdventureContentPacks.get().available(poi.getData())) continue;
             if (WorldSave.getCurrentSave().getPointOfInterestChanges(poi.getID()).isVisited()) {
                 if (poi.getData().isDungeon() || "castle".equalsIgnoreCase(poi.getData().type)) {
                     TypingLabel label = Controls.newTypingLabel("[%?BLACKEN] " + poi.getDisplayName());
@@ -299,6 +302,7 @@ public class MapViewScene extends UIScene {
             }
         }
         for (PointOfInterest poi : bookmark) {
+            if (!forge.adventure.util.AdventureContentPacks.get().available(poi.getData())) continue;
             TypingLabel label = Controls.newTypingLabel("[%75][+Star] ");
             table.addActor(label);
             label.setPosition(getMapX(poi.getPosition().x) - label.getWidth() / 2, getMapY(poi.getPosition().y) - label.getHeight() / 2);

@@ -84,7 +84,6 @@ public class WorldSave {
         CardUtil.clearPriceCache();
         Forge.getLocalizer().loadAdventureBundle(Config.instance().getPlanePath(Config.instance().getSettingData().plane) + "languages/");
 
-        Forge.invokeWorldSave = true; // This is for dispose method check
         String fileName = WorldSave.getSaveFile(currentSlot);
         if (!new File(fileName).exists())
             return false;
@@ -93,8 +92,20 @@ public class WorldSave {
             try (FileInputStream fos = new FileInputStream(fileName);
                  InflaterInputStream inf = new InflaterInputStream(fos);
                  ObjectInputStream oos = new ObjectInputStream(inf)) {
-                currentSave.header = (WorldSaveHeader) oos.readObject();
+                WorldSaveHeader candidateHeader = (WorldSaveHeader) oos.readObject();
                 SaveFileData mainData = (SaveFileData) oos.readObject();
+                String missing = AdventureContentPacks.get().missingSavedCards(mainData.readSubData("player"));
+                if (missing != null) {
+                    forge.gui.GuiBase.getInterface().showOptionDialog("Required custom card is missing: " + missing + ". Restore the custom cards before loading this save.", "Save not loaded", null, java.util.List.of("OK"), 0);
+                    return false;
+                }
+                String location = AdventureContentPacks.get().missingSavedLocation(mainData.readSubData("world"));
+                if (location != null) {
+                    forge.gui.GuiBase.getInterface().showOptionDialog("Required location is missing: " + location + ". Restore its content before loading this save.", "Save not loaded", null, java.util.List.of("OK"), 0);
+                    return false;
+                }
+                Forge.invokeWorldSave = true; // Validated load; this is for the dispose-method check.
+                currentSave.header = candidateHeader;
                 currentSave.player.load(mainData.readSubData("player"));
                 GamePlayerUtil.getGuiPlayer().setName(currentSave.player.getName());
                 try {

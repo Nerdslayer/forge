@@ -40,7 +40,7 @@ public class PointOfInterest implements Serializable, SaveFileContent {
         }
 
         oldMapId="";
-        Array<Sprite> textureAtlas = Config.instance().getPOISprites(this.data);
+        Array<Sprite> textureAtlas = Config.instance().getPOISprites(AdventureContentPacks.get().presentation(this.data));
         sprite = textureAtlas.get(spriteIndex%textureAtlas.size);
     }
 
@@ -125,6 +125,7 @@ public class PointOfInterest implements Serializable, SaveFileContent {
     }
 
     public boolean getActive() {
+        if (!AdventureContentPacks.get().available(data)) return false;
         for (DialogData.ActionData.QuestFlag flag : questFlagsToActivate) {
             if (Current.player().getQuestFlag(flag.key) < flag.val){
                 return false;

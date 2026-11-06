@@ -1,0 +1,292 @@
+dumbledore.png
+size: 1024,1536
+format: RGBA8888
+filter: Nearest,Nearest
+repeat: none
+Avatar
+  rotate: false
+  xy: 0,0
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: -1
+Idle
+  rotate: false
+  xy: 0,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+Idle
+  rotate: false
+  xy: 256,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+Idle
+  rotate: false
+  xy: 512,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+Idle
+  rotate: false
+  xy: 768,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+Walk
+  rotate: false
+  xy: 0,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+Walk
+  rotate: false
+  xy: 256,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+Walk
+  rotate: false
+  xy: 512,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+Walk
+  rotate: false
+  xy: 768,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+Attack
+  rotate: false
+  xy: 0,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+Attack
+  rotate: false
+  xy: 256,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+Attack
+  rotate: false
+  xy: 512,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+Attack
+  rotate: false
+  xy: 768,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+Hit
+  rotate: false
+  xy: 0,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+Hit
+  rotate: false
+  xy: 256,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+Hit
+  rotate: false
+  xy: 512,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+Hit
+  rotate: false
+  xy: 768,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+Death
+  rotate: false
+  xy: 0,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+Death
+  rotate: false
+  xy: 256,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+Death
+  rotate: false
+  xy: 512,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+Death
+  rotate: false
+  xy: 768,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+IdleLeft
+  rotate: false
+  xy: 0,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+IdleLeft
+  rotate: false
+  xy: 256,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+IdleLeft
+  rotate: false
+  xy: 512,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+IdleLeft
+  rotate: false
+  xy: 768,256
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+WalkLeft
+  rotate: false
+  xy: 0,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+WalkLeft
+  rotate: false
+  xy: 256,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+WalkLeft
+  rotate: false
+  xy: 512,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+WalkLeft
+  rotate: false
+  xy: 768,512
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+AttackLeft
+  rotate: false
+  xy: 0,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+AttackLeft
+  rotate: false
+  xy: 256,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+AttackLeft
+  rotate: false
+  xy: 512,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+AttackLeft
+  rotate: false
+  xy: 768,768
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+HitLeft
+  rotate: false
+  xy: 0,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+HitLeft
+  rotate: false
+  xy: 256,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+HitLeft
+  rotate: false
+  xy: 512,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+HitLeft
+  rotate: false
+  xy: 768,1024
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3
+DeathLeft
+  rotate: false
+  xy: 0,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 0
+DeathLeft
+  rotate: false
+  xy: 256,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 1
+DeathLeft
+  rotate: false
+  xy: 512,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 2
+DeathLeft
+  rotate: false
+  xy: 768,1280
+  size: 256,256
+  orig: 256,256
+  offset: 0,0
+  index: 3

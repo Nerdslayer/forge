@@ -680,6 +680,8 @@ public class Config {
     }
 
     public void loadResources() {
+        AdventureContentPacks.reset();
+        Cache.clear();
         AdventureOverrides.instance().load(prefix, FModel.getMagicDb().getEditions(), configData);
         applyTokenEditionFilter();
         RewardData.getAllCards();//initialize before loading custom cards
@@ -687,7 +689,7 @@ public class Config {
         ImageKeys.ADVENTURE_CARD_PICS_DIR = Config.currentConfig.getCommonFilePath(forge.adventure.util.Paths.CUSTOM_CARDS_PICS);// not the cleanest solution
         File[] customCards = new File(getCommonFilePath(forge.adventure.util.Paths.CUSTOM_CARDS)).listFiles();
         if (customCards == null)
-            return;
+            customCards = new File[0];
         for (File cardFile : customCards) {
             FileInputStream fileInputStream;
             try {
@@ -708,5 +710,7 @@ public class Config {
                 throw new RuntimeException(e);
             }
         }
+        AdventureContentPacks.reset();
+        AdventureContentPacks.get();
     }
 }

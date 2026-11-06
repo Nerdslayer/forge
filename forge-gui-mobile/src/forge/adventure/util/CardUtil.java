@@ -758,6 +758,7 @@ public class CardUtil {
 
     public static Deck getDeck(String path, boolean forAI, boolean isFantasyMode, String colors, boolean isTheme,
             boolean useGeneticAI, CardEdition starterEdition, boolean discourageDuplicates) {
+        path = AdventureContentPacks.get().resolveDeck(path);
         if (path.endsWith(".dck")) {
             FileHandle fileHandle = Config.instance().getFile(path);
             Deck deck = null;

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Hogwarts",
+    "displayName": "Hogwarts Castle",
+    "type": "town",
+    "count": 1,
+    "spriteAtlas": "../common/sprites/locations/harry_potter/hogwarts_castle.atlas",
+    "sprite": "HogwartsCastle",
+    "map": "../common/maps/map/hogwarts/hogwarts_great_hall.tmx",
+    "radiusFactor": 0.2,
+    "active": true,
+    "questTags": [
+      "Hogwarts",
+      "HarryPotter",
+      "Academy",
+      "Friendly"
+    ]
+  }
+]

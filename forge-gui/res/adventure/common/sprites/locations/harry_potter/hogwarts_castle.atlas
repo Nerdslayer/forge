@@ -1,0 +1,12 @@
+hogwarts_castle.png
+size: 64,64
+format: RGBA8888
+filter: Nearest,Nearest
+repeat: none
+HogwartsCastle
+  rotate: false
+  xy: 0,0
+  size: 64,64
+  orig: 64,64
+  offset: 0,0
+  index: -1

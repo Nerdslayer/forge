@@ -1,5 +1,6 @@
 package forge.adventure.stage;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.math.GridPoint2;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
@@ -248,6 +249,7 @@ public class WorldStage extends GameStage implements SaveFileContent {
     }
 
     public void loadPOI(PointOfInterest poi) {
+        if (!AdventureContentPacks.get().available(poi.getData())) return;
         try {
             stop();
             TileMapScene.instance().load(poi);
@@ -325,6 +327,7 @@ public class WorldStage extends GameStage implements SaveFileContent {
     }
 
     private boolean spawn(EnemySprite sprite){
+        if (sprite != null && !AdventureContentPacks.get().worldEligible(sprite.getData())) return false;
         if (sprite == null)
             return false;
         float unit = Scene.getIntendedHeight() / 6f;
@@ -348,6 +351,7 @@ public class WorldStage extends GameStage implements SaveFileContent {
     }
 
     private boolean spawn(EnemyData enemyData) {
+        if (!AdventureContentPacks.get().worldEligible(enemyData)) return false;
         if (enemyData == null)
             return false;
         EnemySprite sprite = new EnemySprite(enemyData);
@@ -356,6 +360,7 @@ public class WorldStage extends GameStage implements SaveFileContent {
     }
 
     private boolean spawnQuestSprite(EnemySprite sprite, float distanceMultiplier){
+        if (sprite != null && !AdventureContentPacks.get().worldEligible(sprite.getData())) return false;
         if (sprite == null)
             return false;
         float unit = Scene.getIntendedHeight() / 6f;
@@ -449,7 +454,9 @@ public class WorldStage extends GameStage implements SaveFileContent {
             List<Float> y = (List<Float>) data.readObject("y");
             List<String> questStageIDs = (List<String>) data.readObject("questStageIDs");
             for (int i = 0; i < timeouts.size(); i++) {
-                EnemySprite sprite = new EnemySprite(WorldData.getEnemy(names.get(i)));
+                EnemyData restored = WorldData.getEnemy(names.get(i));
+                if (!AdventureContentPacks.get().restorable(restored)) continue;
+                EnemySprite sprite = new EnemySprite(restored);
                 sprite.setX(x.get(i));
                 sprite.setY(y.get(i));
                 sprite.questStageID = questStageIDs.get(i);

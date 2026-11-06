@@ -1,5 +1,6 @@
 package forge.adventure.scene;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.maps.tiled.TiledMap;
@@ -151,6 +152,7 @@ public class TileMapScene extends HudScene {
     }
 
     public void load(PointOfInterest point) {
+        if (!AdventureContentPacks.get().available(point.getData())) throw new IllegalStateException("Optional location unavailable");
         AdventureQuestController.instance().mostRecentPOI = point;
         if (rootPoint != point) {
             // If we go from one town to another, don't resume the previous track.
@@ -185,6 +187,8 @@ public class TileMapScene extends HudScene {
     }
 
     private void load(String targetMap, int nextSpawnPoint) {
+        if (!AdventureContentPacks.get().availableMap(targetMap)) throw new IllegalStateException("Optional map unavailable");
+        if (rootPoint != null && !AdventureContentPacks.get().available(rootPoint.getData())) throw new IllegalStateException("Optional location unavailable");
         map = new TemplateTmxMapLoader().load(Config.instance().getFilePath(targetMap));
         pointOfInterestChangesKey = getPointOfInterestChangesKey(targetMap);
         ((MapStage) stage).setPointOfInterest(getPointOfInterestChanges(targetMap));

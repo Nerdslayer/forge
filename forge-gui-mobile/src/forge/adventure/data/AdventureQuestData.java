@@ -1,5 +1,6 @@
 package forge.adventure.data;
 
+import forge.adventure.util.AdventureContentPacks;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import forge.Forge;
@@ -364,6 +365,7 @@ public class AdventureQuestData implements Serializable {
     {
         ArrayList<EnemyData> matchesTags = new ArrayList<>();
         for(EnemyData data: new Array.ArrayIterator<>(WorldData.getAllEnemies())) {
+            if (!AdventureContentPacks.get().selectable(data)) continue;
             ArrayList<String> candidateTags = new ArrayList<>(Arrays.asList(data.questTags));
             int tagCount = candidateTags.size();
 
@@ -378,7 +380,7 @@ public class AdventureQuestData implements Serializable {
             }
         }
         if (matchesTags.isEmpty()){
-            return new EnemyData(Aggregates.random(WorldData.getAllEnemies()));
+            return new EnemyData(Aggregates.random(com.google.common.collect.Iterables.filter(WorldData.getAllEnemies(), data -> AdventureContentPacks.get().selectable(data))));
         }
         else{
             return new EnemyData(Aggregates.random(matchesTags));
