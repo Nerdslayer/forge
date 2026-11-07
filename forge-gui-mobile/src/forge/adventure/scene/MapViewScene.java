@@ -276,7 +276,7 @@ public class MapViewScene extends UIScene {
 
     @Override
     public void enter() {
-        Pixmap biomeImage = WorldSave.getCurrentSave().getWorld().getBiomeImage();
+        Pixmap biomeImage = WorldSave.getCurrentSave().getWorld().getMinimapImage();
         Texture miniMapTexture = Forge.getAssets().getNewMiniMapTexture(biomeImage);
         img.setSize(biomeImage.getWidth(), biomeImage.getHeight());
         img.getParent().setSize(biomeImage.getWidth(), biomeImage.getHeight());

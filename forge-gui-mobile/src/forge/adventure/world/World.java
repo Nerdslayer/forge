@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class World implements Disposable, SaveFileContent {
     private WorldData data;
     private Pixmap biomeImage;
+    private Pixmap minimapImage;
     private long[][] biomeMap;
     public int[][] terrainMap;
     private static final int collisionBit = 0b10000000000000000000000000000000;
@@ -101,6 +102,7 @@ public class World implements Disposable, SaveFileContent {
 
     @Override
     public void load(SaveFileData saveFileData) {
+        clearMinimapImage();
 
         if (biomeImage != null) {
             biomeImage.dispose();
@@ -300,6 +302,7 @@ public class World implements Disposable, SaveFileContent {
     }
 
     public boolean generateNew(long seed) {
+        clearMinimapImage();
         try {
             if (GuiBase.isMobile())
                 GuiBase.getInterface().preventSystemSleep(true);
@@ -927,6 +930,129 @@ public class World implements Disposable, SaveFileContent {
         return biomeImage;
     }
 
+    /** Display-only marker overrides; the original saved map pixels remain untouched. */
+    public Pixmap getMinimapImage() {
+        if (minimapImage != null || biomeImage == null) return minimapImage == null ? biomeImage : minimapImage;
+        List<PointOfInterest> points = getAllPointOfInterest();
+        List<PointOfInterest> custom = new ArrayList<>();
+        for (PointOfInterest point : points) {
+            if (point.getActive() && point.getData().minimapIconSize > 0) custom.add(point);
+        }
+        if (custom.isEmpty()) return biomeImage;
+        minimapImage = new Pixmap(biomeImage.getWidth(), biomeImage.getHeight(), Pixmap.Format.RGBA8888);
+        minimapImage.setBlending(Pixmap.Blending.None);
+        minimapImage.drawPixmap(biomeImage, 0, 0);
+        TextureAtlas markers = Config.instance().getAtlas(Paths.MAP_MARKER);
+        List<Rectangle> patches = new ArrayList<>();
+        try {
+            for (PointOfInterest point : custom) {
+                int size = point.getData().minimapIconSize;
+                TextureAtlas.AtlasRegion old = markers.findRegion(point.getData().type);
+                int width = Math.max(size, old == null ? 0 : old.getRegionWidth());
+                int height = Math.max(size, old == null ? 0 : old.getRegionHeight());
+                int x = minimapX(point) - width / 2, y = minimapY(point) - height / 2;
+                Rectangle patch = new Rectangle(x, y, width, height);
+                patches.add(patch);
+                // Restore the terrain beneath the baked-in generic marker, including
+                // transparent areas around the replacement icon in older saves.
+                Pixmap terrain = new Pixmap(width, height, Pixmap.Format.RGBA8888);
+                try {
+                    for (int tx = Math.max(0, x / data.miniMapTileSize); tx <= Math.min(this.width - 1, (x + width - 1) / data.miniMapTileSize); tx++) {
+                        for (int ty = Math.max(0, y / data.miniMapTileSize); ty <= Math.min(this.height - 1, (y + height - 1) / data.miniMapTileSize); ty++) {
+                            drawMinimapTerrain(terrain, tx, ty, x, y);
+                        }
+                    }
+                    minimapImage.drawPixmap(terrain, x, y);
+                } finally {
+                    terrain.dispose();
+                }
+            }
+            minimapImage.setBlending(Pixmap.Blending.SourceOver);
+            // Preserve any neighboring generic markers that overlap a restored patch.
+            for (PointOfInterest point : points) {
+                if (custom.contains(point)) continue;
+                TextureAtlas.AtlasRegion region = markers.findRegion(point.getData().type);
+                if (region == null) continue;
+                int x = minimapX(point) - region.getRegionWidth() / 2;
+                int y = minimapY(point) - region.getRegionHeight() / 2;
+                for (Rectangle patch : patches) {
+                    int left = Math.max(x, (int) patch.x), top = Math.max(y, (int) patch.y);
+                    int right = Math.min(x + region.getRegionWidth(), (int) (patch.x + patch.width));
+                    int bottom = Math.min(y + region.getRegionHeight(), (int) (patch.y + patch.height));
+                    if (right > left && bottom > top) {
+                        Pixmap source = readRegionPixmap(region);
+                        try {
+                            minimapImage.drawPixmap(source, region.getRegionX() + left - x, region.getRegionY() + top - y,
+                                    right - left, bottom - top, left, top, right - left, bottom - top);
+                        } finally { source.dispose(); }
+                    }
+                }
+            }
+            for (PointOfInterest point : custom) {
+                var sprite = point.getSprite();
+                String icon = point.getData().minimapIcon;
+                boolean dedicated = icon != null && !icon.isEmpty();
+                Pixmap source = dedicated ? new Pixmap(Config.instance().getFile(icon)) : readRegionPixmap(sprite);
+                int size = point.getData().minimapIconSize;
+                try {
+                    // TODO: Account for rotated/trimmed atlas regions when such a marker is needed.
+                    minimapImage.setFilter(Pixmap.Filter.NearestNeighbour);
+                    minimapImage.drawPixmap(source, dedicated ? 0 : sprite.getRegionX(), dedicated ? 0 : sprite.getRegionY(),
+                            dedicated ? source.getWidth() : sprite.getRegionWidth(), dedicated ? source.getHeight() : sprite.getRegionHeight(),
+                            minimapX(point) - size / 2, minimapY(point) - size / 2, size, size);
+                } finally { source.dispose(); }
+            }
+        } catch (RuntimeException | Error failure) {
+            clearMinimapImage();
+            throw failure;
+        } finally {
+            for (var entry : pixmapHash.values()) {
+                entry.getLeft().dispose();
+                for (Pixmap tile : entry.getRight().values()) tile.dispose();
+            }
+            pixmapHash.clear();
+        }
+        return minimapImage;
+    }
+
+    private int minimapX(PointOfInterest point) {
+        return (int) (point.getPosition().x / data.tileSize * data.miniMapTileSize);
+    }
+
+    private int minimapY(PointOfInterest point) {
+        return (int) ((height - point.getPosition().y / data.tileSize) * data.miniMapTileSize);
+    }
+
+    private static Pixmap readRegionPixmap(com.badlogic.gdx.graphics.g2d.TextureRegion region) {
+        TextureData texture = region.getTexture().getTextureData();
+        if (!texture.isPrepared()) texture.prepare();
+        return texture.consumePixmap();
+    }
+
+    private void drawMinimapTerrain(Pixmap target, int x, int y, int originX, int originY) {
+        int targetX = x * data.miniMapTileSize - originX;
+        int targetY = y * data.miniMapTileSize - originY;
+        int index = highestBiome(biomeMap[x][y]);
+        if (index >= data.GetBiomes().size()) {
+            target.drawPixmap(createSmallPixmap(data.roadTileset.tilesetAtlas, data.roadTileset.tilesetName, 0), targetX, targetY);
+            return;
+        }
+        BiomeData biome = data.GetBiomes().get(index);
+        int terrain = terrainMap[x][y] & ~terrainMask;
+        target.drawPixmap(createSmallPixmap(biome.tilesetAtlas, biome.tilesetName, terrain > biome.terrain.length ? 0 : terrain), targetX, targetY);
+        if (terrain <= biome.terrain.length) return;
+        terrain -= biome.terrain.length + 1;
+        for (BiomeStructureData structure : biome.structures) {
+            if (terrain >= structure.mappingInfo.length) { terrain -= structure.mappingInfo.length; continue; }
+            target.drawPixmap(createSmallPixmap(structure.structureAtlasPath, structure.mappingInfo[terrain].name, 0), targetX, targetY);
+            break;
+        }
+    }
+
+    private void clearMinimapImage() {
+        if (minimapImage != null) { minimapImage.dispose(); minimapImage = null; }
+    }
+
     public List<Pair<Vector2, Integer>> GetMapObjects(int chunkX, int chunkY) {
         return mapObjectIds.positions(chunkX, chunkY);
     }
@@ -952,6 +1078,7 @@ public class World implements Disposable, SaveFileContent {
     }
 
     public void dispose() {
+        clearMinimapImage();
         drawingInfoCache.clear();
         Forge.safeDispose(biomeImage, globalTileDrawing, globalTexture, emptyTile);
     }

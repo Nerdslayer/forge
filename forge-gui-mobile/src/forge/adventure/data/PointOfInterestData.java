@@ -22,6 +22,8 @@ public class PointOfInterestData implements Serializable {
     public int count;
     public String spriteAtlas;
     public String sprite;
+    public int minimapIconSize; // Positive: override the ordinary marker at this pixel size.
+    public String minimapIcon; // Optional dedicated PNG; otherwise use the overworld sprite.
     public String map;
     public String battleBackground;
     public float radiusFactor;
@@ -71,6 +73,8 @@ public class PointOfInterestData implements Serializable {
         count=other.count;
         spriteAtlas=other.spriteAtlas;
         sprite=other.sprite;
+        minimapIconSize=other.minimapIconSize;
+        minimapIcon=other.minimapIcon;
         map=other.map;
         battleBackground=other.battleBackground;
         radiusFactor=other.radiusFactor;

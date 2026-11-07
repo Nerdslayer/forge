@@ -8,6 +8,15 @@ import static org.mockito.Mockito.*;
 
 @Test(groups = {"UnitTest", "fast"})
 public class AdventureVictoryHistoryTest {
+    @org.testng.annotations.BeforeClass
+    public void initializeLocalization() {
+        var languages = java.nio.file.Path.of(System.getProperty("user.dir"), "forge-gui", "res", "languages");
+        if (!java.nio.file.Files.isDirectory(languages)) {
+            languages = java.nio.file.Path.of(System.getProperty("user.dir"), "..", "forge-gui", "res", "languages");
+        }
+        forge.util.Localizer.getInstance().initialize("en-US", languages.normalize().toString());
+    }
+
     @Test public void namedDefeatStagesMatchOnlyTheirTargetAndOptInToPreviousVictories() {
         var player = mock(forge.adventure.player.AdventurePlayer.class);
         var history = new PlayerStatistic();

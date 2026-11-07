@@ -377,7 +377,7 @@ public class GameHUD extends Stage {
 
     public void enter() {
         updateKeys();
-        Pixmap biomeImage = WorldSave.getCurrentSave().getWorld().getBiomeImage();
+        Pixmap biomeImage = WorldSave.getCurrentSave().getWorld().getMinimapImage();
         miniMapTexture = Forge.getAssets().getNewMiniMapTexture(biomeImage);
         miniMapRegion = new TextureRegion(miniMapTexture, 0, 0, viewWidth, viewHeight);
         miniMap.setDrawable(new TextureRegionDrawable(miniMapRegion));

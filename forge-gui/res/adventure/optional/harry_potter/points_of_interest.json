@@ -6,6 +6,8 @@
     "count": 1,
     "spriteAtlas": "../common/sprites/locations/harry_potter/hogwarts_castle.atlas",
     "sprite": "HogwartsCastle",
+    "minimapIconSize": 32,
+    "minimapIcon": "../common/sprites/locations/harry_potter/hogwarts_minimap.png",
     "map": "../common/maps/map/hogwarts/hogwarts_great_hall.tmx",
     "radiusFactor": 0.2,
     "active": true,
