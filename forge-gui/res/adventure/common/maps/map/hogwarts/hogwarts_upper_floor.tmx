@@ -258,5 +258,21 @@
   <object id="2167" name="Solid architecture" type="collision" x="560" y="176" width="16" height="16" />
   <object id="2168" name="Solid architecture" type="collision" x="560" y="336" width="16" height="16" />
   <object id="2169" name="Solid architecture" type="collision" x="560" y="496" width="16" height="16" />
+  <object id="242" name="Moaning Myrtle's bathroom" type="entry" x="432" y="320" width="48" height="16">
+   <properties>
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+    <property name="teleport" value="../common/maps/map/hogwarts/hogwarts_myrtles_bathroom.tmx" />
+    <property name="teleportObjectId" value="1" type="int" />
+    <property name="direction" value="down" />
+    <property name="requiredQuestFlag" value="hpChamberHeardPipes" />
+    <property name="lockedText" value="An out-of-order bathroom. The pipes rattle somewhere behind the door." />
+   </properties>
+  </object>
+  <object id="243" name="Bathroom notice" type="dialog" x="480" y="336" width="16" height="16" gid="13777">
+   <properties>
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Out of order\nSomeone has added a small handwritten note: Myrtle is still in there.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+   </properties>
+  </object>
  </objectgroup>
 </map>

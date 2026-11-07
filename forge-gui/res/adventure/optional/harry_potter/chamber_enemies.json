@@ -1,0 +1,147 @@
+[
+  {
+    "name": "HP Duelling Club Draco",
+    "nameOverride": "Draco Malfoy (Duelling Club)",
+    "sprite": "sprites/enemy/harry_potter/draco.atlas",
+    "deck": [
+      "decks/harry_potter/draco_duelling_club.dck"
+    ],
+    "colors": "B",
+    "life": 20,
+    "difficulty": 0.1,
+    "spawnRate": 0,
+    "speed": 0,
+    "scale": 1,
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 110,
+        "addMaxCount": 75
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 3
+      }
+    ]
+  },
+  {
+    "name": "HP Chamber Basilisk",
+    "nameOverride": "Basilisk of the Chamber",
+    "sprite": "sprites/enemy/beast/reptile/big_snake.atlas",
+    "deck": [
+      "decks/harry_potter/basilisk_chamber.dck"
+    ],
+    "colors": "BG",
+    "life": 24,
+    "difficulty": 0.1,
+    "spawnRate": 0,
+    "speed": 0,
+    "scale": 2.25,
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts"
+    ],
+    "boss": true,
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 250,
+        "addMaxCount": 75
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 8
+      }
+    ]
+  },
+  {
+    "name": "HP Draco Malfoy Roaming",
+    "nameOverride": "Draco Malfoy",
+    "sprite": "sprites/enemy/harry_potter/draco.atlas",
+    "deck": [
+      "decks/harry_potter/draco_duelling_club.dck"
+    ],
+    "colors": "B",
+    "life": 22,
+    "difficulty": 1,
+    "spawnRate": 0.16,
+    "speed": 0.75,
+    "scale": 1,
+    "questTags": [
+      "HarryPotter",
+      "Roaming"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 180,
+        "addMaxCount": 75
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Basilisk Roaming",
+    "nameOverride": "Basilisk of the Chamber (Wandering)",
+    "sprite": "sprites/enemy/beast/reptile/big_snake.atlas",
+    "deck": [
+      "decks/harry_potter/basilisk_chamber.dck"
+    ],
+    "colors": "BG",
+    "life": 24,
+    "difficulty": 2,
+    "spawnRate": 0.12,
+    "speed": 0.75,
+    "scale": 2.25,
+    "questTags": [
+      "HarryPotter",
+      "Roaming"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 275,
+        "addMaxCount": 75
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 8
+      }
+    ]
+  }
+]

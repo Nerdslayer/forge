@@ -1,0 +1,13 @@
+[
+  {
+    "name": "Sword of Gryffindor",
+    "equipmentSlot": "Right",
+    "iconName": "SteelSword",
+    "description": "Start each battle with Sword of Gryffindor on the battlefield. It's an equipment that grants +2/+1 and first strike with 4 to equip or 2 to equip a Wizard.",
+    "effect": {
+      "startBattleWithCard": [
+        "Sword of Gryffindor|HP"
+      ]
+    }
+  }
+]

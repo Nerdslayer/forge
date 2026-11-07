@@ -81,6 +81,22 @@ public class AdventureContentPackTest {
         Assert.assertEquals(packs.findPoint("Optional Place").map, "maps/optional.tmx");
     }
 
+    @Test public void namedItemsRequireTheirPackDependenciesAndGetUniqueInventoryIds() throws IOException {
+        var fixture = new Fixture();
+        fixture.write("optional/sample/items.json",
+                "[{\"name\":\"Optional Staff\",\"equipmentSlot\":\"Right\",\"effect\":{\"startBattleWithCard\":[\"Optional Wizard|HP\"]}}]");
+        fixture.manifest("Shandalar", ",{id: 'equipment', itemDefinitions: 'items.json', requiredCards: [{name: 'Optional Wizard', edition: 'HP', custom: true}]}");
+
+        var packs = fixture.load();
+        var item = packs.findItem("Optional Staff");
+        Assert.assertEquals(item.equipmentSlot, "Right");
+        Assert.assertEquals(item.effect.startBattleWithCard, new String[]{"Optional Wizard|HP"});
+        Assert.assertNotEquals(item.longID, packs.findItem("optional staff").longID);
+
+        fixture.cards.clear();
+        Assert.assertNull(fixture.load().findItem("Optional Staff"));
+    }
+
     @Test public void missingTokenOrShortenedDeckCannotPartiallyActivate() throws IOException {
         var fixture = new Fixture(); fixture.tokens = false;
         Assert.assertEquals(fixture.load().mergeEnemies(new Array<EnemyData>()).size, 0);
@@ -149,8 +165,11 @@ public class AdventureContentPackTest {
             Assert.assertSame(merged.first(), nativeQuest);
             Assert.assertEquals(packs.mergeQuests(merged).size, 2);
             Assert.assertEquals(merged.peek().requiredPOI, "Optional Place");
+            Assert.assertTrue(packs.hasQuestTemplate(9001));
             fixture.cards.clear();
-            Assert.assertEquals(fixture.load().mergeQuests(nativeQuests).size, 1);
+            var disabled = fixture.load();
+            Assert.assertEquals(disabled.mergeQuests(nativeQuests).size, 1);
+            Assert.assertFalse(disabled.hasQuestTemplate(9001));
             fixture.cards.add("Optional Wizard");
             fixture.write("common/world/quests.json", "[{id:9001}]");
             Assert.assertEquals(fixture.load().mergeQuests(nativeQuests).size, 1);

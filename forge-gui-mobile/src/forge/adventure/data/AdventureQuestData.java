@@ -439,7 +439,7 @@ public class AdventureQuestData implements Serializable {
 
     public void activateNextStages() {
         boolean showNotification = false;
-        boolean creditedVictory = false;
+        boolean creditedProgress = false;
         for (AdventureQuestStage s : stages) {
             if (s.getStatus() == INACTIVE){
                 s.checkPrerequisites(getCompletedStageIDs());
@@ -447,16 +447,16 @@ public class AdventureQuestData implements Serializable {
                     if (s.hasRequiredFetchItems()) {
                         s.handleEvent(new AdventureQuestEvent());
                     }
-                    if (s.hasPreviousVictory()) {
+                    if (s.hasPreviousProgress()) {
                         s.handleEvent(new AdventureQuestEvent());
-                        creditedVictory = true;
+                        creditedProgress = true;
                     }
                     AdventureQuestController.instance().addQuestSprites(s);
                     showNotification = true;
                 }
             }
         }
-        if (creditedVictory) completed = Arrays.stream(stages).allMatch(s -> s.getStatus() == COMPLETE);
+        if (creditedProgress) completed = Arrays.stream(stages).allMatch(s -> s.getStatus() == COMPLETE);
         if (showNotification) {
             StringBuilder description = new StringBuilder();
             description.append("[!]").append(name).append("[]");

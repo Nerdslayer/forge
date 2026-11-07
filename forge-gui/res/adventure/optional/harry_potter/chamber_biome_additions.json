@@ -1,0 +1,21 @@
+[
+  {
+    "path": "world/biomes/black.json",
+    "enemies": [
+      "Draco Malfoy",
+      "Basilisk of the Chamber (Wandering)"
+    ]
+  },
+  {
+    "path": "world/biomes/colorless.json",
+    "enemies": [
+      "Draco Malfoy"
+    ]
+  },
+  {
+    "path": "world/biomes/green.json",
+    "enemies": [
+      "Basilisk of the Chamber (Wandering)"
+    ]
+  }
+]

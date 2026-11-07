@@ -3,6 +3,7 @@ package forge.adventure.data;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Json;
+import forge.adventure.util.AdventureContentPacks;
 import forge.adventure.util.Config;
 import forge.adventure.util.Paths;
 
@@ -16,13 +17,13 @@ public class ItemListData {
         }
     }
     public static ItemData getItem(String name) {
-        if (itemList == null)
-            return null;
-        for (ItemData orig : new Array.ArrayIterator<>(itemList)) {
-            if (orig.name.equalsIgnoreCase(name))
-                return orig.clone();
+        if (itemList != null) {
+            for (ItemData orig : new Array.ArrayIterator<>(itemList)) {
+                if (orig.name.equalsIgnoreCase(name))
+                    return orig.clone();
+            }
         }
-        return null;
+        return AdventureContentPacks.get().findItem(name);
     }
     public static Array<ItemData> getSketchBooks() {
         Array<ItemData> sketchbooks = new Array<>();

@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import forge.adventure.data.EnemyData;
 import forge.adventure.data.AdventureQuestData;
+import forge.adventure.data.ItemData;
 import forge.adventure.data.PointOfInterestData;
 import forge.StaticData;
 
@@ -20,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /** Dependency-checked, plane-scoped Adventure additions. Never writes base resources. */
 public final class AdventureContentPacks {
@@ -42,6 +44,7 @@ public final class AdventureContentPacks {
     private final Map<String, String> decks = new HashMap<>();
     private final List<JsonObject> biomes = new ArrayList<>();
     private final Map<Integer, AdventureQuestData> quests = new java.util.LinkedHashMap<>();
+    private final Map<String, ItemData> items = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
     private final Map<String, String> customEditions = new HashMap<>();
     private final Set<String> requiredEditions = new HashSet<>();
     private final Set<String> ownedDecks = new HashSet<>();
@@ -174,6 +177,14 @@ public final class AdventureContentPacks {
         var json = new Json();
         EnemyData[] ownedEnemies = group.has("enemyDefinitions") ? json.fromJson(EnemyData[].class, definition(folder, group.get("enemyDefinitions"))) : new EnemyData[0];
         PointOfInterestData[] ownedPoints = group.has("poiDefinitions") ? json.fromJson(PointOfInterestData[].class, definition(folder, group.get("poiDefinitions"))) : new PointOfInterestData[0];
+        Map<String, ItemData> groupItems = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        if (group.has("itemDefinitions")) {
+            for (var item : json.fromJson(ItemData[].class, definition(folder, group.get("itemDefinitions")))) {
+                if (item.name == null || item.name.isBlank() || items.containsKey(item.name) || groupItems.putIfAbsent(item.name, item) != null) {
+                    throw new IOException("Duplicate or unnamed optional item");
+                }
+            }
+        }
         String questDefinition = group.has("questDefinitions") ? definition(folder, group.get("questDefinitions")) : "[]";
         var questRecords = JsonParser.parseString(questDefinition).getAsJsonArray();
         Set<Integer> questIds = new HashSet<>(quests.keySet());
@@ -278,6 +289,7 @@ public final class AdventureContentPacks {
         enabledMaps.addAll(groupMaps);
         biomes.addAll(additions);
         for (var quest : ownedQuests) quests.put(quest.getID(), quest);
+        items.putAll(groupItems);
     }
 
     private Set<String> baseNames(String logicalPath) throws IOException {
@@ -310,6 +322,15 @@ public final class AdventureContentPacks {
         for (var quest : base) if (!quests.containsKey(quest.getID())) result.add(quest);
         for (var quest : quests.values()) result.add(quest);
         return result;
+    }
+
+    public boolean hasQuestTemplate(int id) {
+        return quests.containsKey(id);
+    }
+
+    public ItemData findItem(String name) {
+        ItemData item = name == null ? null : items.get(name);
+        return item == null ? null : item.clone();
     }
 
     public Array<PointOfInterestData> mergePoints(Array<PointOfInterestData> base) {

@@ -406,6 +406,10 @@ public class MapStage extends GameStage {
                 if (changes.isObjectDeleted(id))
                     continue;
 
+                Integer requiredQuest = prop.get("requiredOptionalQuest", Integer.class);
+                if (requiredQuest != null && !AdventureContentPacks.get().hasQuestTemplate(requiredQuest))
+                    continue;
+
                 boolean hidden = !obj.isVisible(); //Check if the object is invisible.
 
                 String rotatingShop = "";

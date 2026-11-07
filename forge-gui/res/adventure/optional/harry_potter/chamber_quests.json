@@ -1,0 +1,132 @@
+[
+  {
+    "id": 90702,
+    "isTemplate": true,
+    "oneTime": true,
+    "requiredPOI": "Hogwarts",
+    "name": "The Chamber of Secrets",
+    "description": "Investigate the petrification at Hogwarts and find out who opened the Chamber of Secrets.",
+    "questSourceTags": [
+      "hp_chamber_hermione"
+    ],
+    "rewardDescription": "The Chamber of Secrets, Basilisk of the Chamber, Tom Riddle's Diary, and Sword of Gryffindor as both a card and a right-hand item",
+    "epilogue": {
+      "text": "With the Basilisk defeated, Harry drives one of its fangs into the diary. The ink bleeds out and Ginny wakes. Fawkes perches beside her while you pick up the Sword of Gryffindor.",
+      "options": [
+        {
+          "name": "Claim your rewards.",
+          "action": [
+            {
+              "grantRewards": [
+                {
+                  "type": "card",
+                  "cardName": "The Chamber of Secrets|HP",
+                  "count": 1,
+                  "probability": 1
+                },
+                {
+                  "type": "card",
+                  "cardName": "Basilisk of the Chamber|HP",
+                  "count": 1,
+                  "probability": 1
+                },
+                {
+                  "type": "card",
+                  "cardName": "Tom Riddle's Diary|HP",
+                  "count": 1,
+                  "probability": 1
+                },
+                {
+                  "type": "card",
+                  "cardName": "Sword of Gryffindor|HP",
+                  "count": 1,
+                  "probability": 1
+                },
+                {
+                  "type": "item",
+                  "itemName": "Sword of Gryffindor",
+                  "count": 1,
+                  "probability": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "stages": [
+      {
+        "id": 1,
+        "name": "Read the bestiary",
+        "description": "Check the reading stand inside the library east of the Great Hall.",
+        "POITags": [
+          "Hogwarts"
+        ],
+        "objective": "QuestFlag",
+        "creditPreviousQuestFlag": true,
+        "mapFlag": "hpChamberLibraryClue",
+        "mapFlagValue": 1
+      },
+      {
+        "id": 2,
+        "name": "Join the Duelling Club",
+        "description": "Defeat Draco Malfoy in the classroom at the back of the Great Hall.",
+        "POITags": [
+          "Hogwarts"
+        ],
+        "prerequisiteIDs": [
+          1
+        ],
+        "objective": "Defeat",
+        "targetEnemy": "HP Duelling Club Draco",
+        "creditPreviousVictory": true,
+        "count3": 1
+      },
+      {
+        "id": 3,
+        "name": "Speak to Harry",
+        "description": "Ask Harry about the snake after the duel.",
+        "POITags": [
+          "Hogwarts"
+        ],
+        "prerequisiteIDs": [
+          2
+        ],
+        "objective": "QuestFlag",
+        "creditPreviousQuestFlag": true,
+        "mapFlag": "hpChamberHeardPipes",
+        "mapFlagValue": 1
+      },
+      {
+        "id": 4,
+        "name": "Ask Moaning Myrtle",
+        "description": "Find Myrtle in the bathroom off the upper gallery. Ask what she saw by the sinks.",
+        "POITags": [
+          "Hogwarts"
+        ],
+        "prerequisiteIDs": [
+          3
+        ],
+        "objective": "QuestFlag",
+        "creditPreviousQuestFlag": true,
+        "mapFlag": "hpChamberOpened",
+        "mapFlagValue": 1
+      },
+      {
+        "id": 5,
+        "name": "Defeat the Basilisk",
+        "description": "Go down the stairs beneath the sink and defeat the Basilisk of the Chamber.",
+        "POITags": [
+          "Hogwarts"
+        ],
+        "prerequisiteIDs": [
+          4
+        ],
+        "objective": "Defeat",
+        "targetEnemy": "HP Chamber Basilisk",
+        "creditPreviousVictory": true,
+        "count3": 1
+      }
+    ]
+  }
+]

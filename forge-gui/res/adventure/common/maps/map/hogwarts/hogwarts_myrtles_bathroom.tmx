@@ -1,0 +1,147 @@
+<?xml version='1.0' encoding='utf-8'?>
+<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="right-down" width="26" height="23" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="2089">
+ <properties>
+  <property name="name" value="Hogwarts - Moaning Myrtle's Bathroom" />
+  <property name="respawnEnemies" value="true" type="bool" />
+  <property name="canFailDungeon" value="false" type="bool" />
+  <property name="preventEscape" value="false" type="bool" />
+ </properties>
+ <tileset firstgid="1" source="../../tileset/main.tsx" />
+ <tileset firstgid="10113" source="../../tileset/buildings.tsx" />
+ <tileset firstgid="11905" source="../../tileset/main-nocollide.tsx" />
+ <tileset firstgid="22017" source="../../tileset/dungeon-nocollide.tsx" />
+ <tileset firstgid="26497" source="hogwarts_exteriors.tsx" />
+ <tileset firstgid="26501" source="hogwarts_chamber_npcs.tsx" />
+ <layer id="1" name="Ground" width="26" height="23">
+  <data encoding="base64" compression="zlib">eJxjYBieYFocbfCoPaP2jNozas+oPaP2jNpDfXuGCwAAR8SOeA==</data>
+ </layer>
+ <layer id="2" name="Architecture" width="26" height="23">
+  <data encoding="base64" compression="zlib">eJxjYBieYLYVA4OVNXXxXCvs9lAbjNozdO1BTi+kAnS9g8E/w82e0fgZ3PaMxs/gtYdQ/YgMyK1PhwsAAO+EOOg=</data>
+ </layer>
+ <layer id="3" name="Furnishings" width="26" height="23">
+  <data encoding="base64" compression="zlib">eJxjYBgF1AJs+rSVpyeQjWBgkIvAzp/hxsAwE4hnuRGnnlxg5s7AYA7EFu6UmUMIXAGafxWIr9HYnlEwCkbBKBgFwx8AAKJrC7c=</data>
+ </layer>
+ <layer id="4" name="Canopy" width="26" height="23" opacity="0.88">
+  <properties>
+   <property name="spriteLayer" value="true" type="bool" />
+  </properties>
+  <data encoding="base64" compression="zlib">eJztwTEBAAAAwqD1T20JT6AAAHgYCVgAAQ==</data>
+ </layer>
+ <objectgroup id="5" name="Objects">
+  <object id="1" name="Upper gallery" type="entry" x="176" y="320" width="48" height="16">
+   <properties>
+    <property name="teleport" value="../common/maps/map/hogwarts/hogwarts_upper_floor.tmx" />
+    <property name="teleportObjectId" value="242" type="int" />
+    <property name="direction" value="up" />
+   </properties>
+  </object>
+  <object id="20" name="Stairs beneath the sink" type="entry" x="176" y="80" width="48" height="16">
+   <properties>
+    <property name="teleport" value="../common/maps/map/hogwarts/hogwarts_chamber_of_secrets.tmx" />
+    <property name="teleportObjectId" value="1" type="int" />
+    <property name="direction" value="down" />
+    <property name="requiredQuestFlag" value="hpChamberOpened" />
+    <property name="lockedText" value="The old sink is sealed. A tiny snake is engraved on the tap." />
+   </properties>
+  </object>
+  <object id="301" name="Moaning Myrtle" type="dialog" x="240" y="176" width="24.0" height="32" gid="26502">
+   <properties>
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Myrtle: I died here. I heard a boy speaking, and then I saw a pair of enormous yellow eyes by those sinks. Look at the tap. There's a little snake on it.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Ask Harry to speak to the snake.&quot;, &quot;text&quot;: &quot;Harry whispers in Parseltongue. The basin sinks into the floor, revealing a passage into the rock.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Descend into the Chamber.&quot;, &quot;action&quot;: [{&quot;setQuestFlag&quot;: {&quot;key&quot;: &quot;hpChamberOpened&quot;, &quot;val&quot;: 1}}]}]}], &quot;condition&quot;: [{&quot;checkQuestFlag&quot;: &quot;hpChamberOpened&quot;, &quot;not&quot;: true}]}, {&quot;text&quot;: &quot;Myrtle: The stairs are where the sink used to be. Try to avoid looking it in the eyes.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}], &quot;condition&quot;: [{&quot;checkQuestFlag&quot;: &quot;hpChamberOpened&quot;}]}]" />
+   </properties>
+  </object>
+  <object id="302" name="Waterlogged diary" type="dialog" x="128" y="256" width="16" height="16" gid="18084">
+   <properties>
+    <property name="dialog" value="[{&quot;text&quot;: &quot;The blank pages darken for an instant. You glimpse a prefect called Tom Riddle pointing the blame at Hagrid. Then the ink sinks back into the paper.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+   </properties>
+  </object>
+  <object id="2000" name="Solid architecture" type="collision" x="32" y="32" width="16" height="16" />
+  <object id="2001" name="Solid architecture" type="collision" x="48" y="32" width="16" height="16" />
+  <object id="2002" name="Solid architecture" type="collision" x="64" y="32" width="16" height="16" />
+  <object id="2003" name="Solid architecture" type="collision" x="80" y="32" width="16" height="16" />
+  <object id="2004" name="Solid architecture" type="collision" x="96" y="32" width="16" height="16" />
+  <object id="2005" name="Solid architecture" type="collision" x="112" y="32" width="16" height="16" />
+  <object id="2006" name="Solid architecture" type="collision" x="128" y="32" width="16" height="16" />
+  <object id="2007" name="Solid architecture" type="collision" x="144" y="32" width="16" height="16" />
+  <object id="2008" name="Solid architecture" type="collision" x="160" y="32" width="16" height="16" />
+  <object id="2009" name="Solid architecture" type="collision" x="176" y="32" width="16" height="16" />
+  <object id="2010" name="Solid architecture" type="collision" x="192" y="32" width="16" height="16" />
+  <object id="2011" name="Solid architecture" type="collision" x="208" y="32" width="16" height="16" />
+  <object id="2012" name="Solid architecture" type="collision" x="224" y="32" width="16" height="16" />
+  <object id="2013" name="Solid architecture" type="collision" x="240" y="32" width="16" height="16" />
+  <object id="2014" name="Solid architecture" type="collision" x="256" y="32" width="16" height="16" />
+  <object id="2015" name="Solid architecture" type="collision" x="272" y="32" width="16" height="16" />
+  <object id="2016" name="Solid architecture" type="collision" x="288" y="32" width="16" height="16" />
+  <object id="2017" name="Solid architecture" type="collision" x="304" y="32" width="16" height="16" />
+  <object id="2018" name="Solid architecture" type="collision" x="320" y="32" width="16" height="16" />
+  <object id="2019" name="Solid architecture" type="collision" x="336" y="32" width="16" height="16" />
+  <object id="2020" name="Solid architecture" type="collision" x="352" y="32" width="16" height="16" />
+  <object id="2021" name="Solid architecture" type="collision" x="368" y="32" width="16" height="16" />
+  <object id="2022" name="Solid architecture" type="collision" x="32" y="320" width="16" height="16" />
+  <object id="2023" name="Solid architecture" type="collision" x="48" y="320" width="16" height="16" />
+  <object id="2024" name="Solid architecture" type="collision" x="64" y="320" width="16" height="16" />
+  <object id="2025" name="Solid architecture" type="collision" x="80" y="320" width="16" height="16" />
+  <object id="2026" name="Solid architecture" type="collision" x="96" y="320" width="16" height="16" />
+  <object id="2027" name="Solid architecture" type="collision" x="112" y="320" width="16" height="16" />
+  <object id="2028" name="Solid architecture" type="collision" x="128" y="320" width="16" height="16" />
+  <object id="2029" name="Solid architecture" type="collision" x="144" y="320" width="16" height="16" />
+  <object id="2030" name="Solid architecture" type="collision" x="160" y="320" width="16" height="16" />
+  <object id="2031" name="Solid architecture" type="collision" x="224" y="320" width="16" height="16" />
+  <object id="2032" name="Solid architecture" type="collision" x="240" y="320" width="16" height="16" />
+  <object id="2033" name="Solid architecture" type="collision" x="256" y="320" width="16" height="16" />
+  <object id="2034" name="Solid architecture" type="collision" x="272" y="320" width="16" height="16" />
+  <object id="2035" name="Solid architecture" type="collision" x="288" y="320" width="16" height="16" />
+  <object id="2036" name="Solid architecture" type="collision" x="304" y="320" width="16" height="16" />
+  <object id="2037" name="Solid architecture" type="collision" x="320" y="320" width="16" height="16" />
+  <object id="2038" name="Solid architecture" type="collision" x="336" y="320" width="16" height="16" />
+  <object id="2039" name="Solid architecture" type="collision" x="352" y="320" width="16" height="16" />
+  <object id="2040" name="Solid architecture" type="collision" x="368" y="320" width="16" height="16" />
+  <object id="2041" name="Solid architecture" type="collision" x="32" y="32" width="16" height="16" />
+  <object id="2042" name="Solid architecture" type="collision" x="32" y="48" width="16" height="16" />
+  <object id="2043" name="Solid architecture" type="collision" x="32" y="64" width="16" height="16" />
+  <object id="2044" name="Solid architecture" type="collision" x="32" y="80" width="16" height="16" />
+  <object id="2045" name="Solid architecture" type="collision" x="32" y="96" width="16" height="16" />
+  <object id="2046" name="Solid architecture" type="collision" x="32" y="112" width="16" height="16" />
+  <object id="2047" name="Solid architecture" type="collision" x="32" y="128" width="16" height="16" />
+  <object id="2048" name="Solid architecture" type="collision" x="32" y="144" width="16" height="16" />
+  <object id="2049" name="Solid architecture" type="collision" x="32" y="160" width="16" height="16" />
+  <object id="2050" name="Solid architecture" type="collision" x="32" y="176" width="16" height="16" />
+  <object id="2051" name="Solid architecture" type="collision" x="32" y="192" width="16" height="16" />
+  <object id="2052" name="Solid architecture" type="collision" x="32" y="208" width="16" height="16" />
+  <object id="2053" name="Solid architecture" type="collision" x="32" y="224" width="16" height="16" />
+  <object id="2054" name="Solid architecture" type="collision" x="32" y="240" width="16" height="16" />
+  <object id="2055" name="Solid architecture" type="collision" x="32" y="256" width="16" height="16" />
+  <object id="2056" name="Solid architecture" type="collision" x="32" y="272" width="16" height="16" />
+  <object id="2057" name="Solid architecture" type="collision" x="32" y="288" width="16" height="16" />
+  <object id="2058" name="Solid architecture" type="collision" x="32" y="304" width="16" height="16" />
+  <object id="2059" name="Solid architecture" type="collision" x="32" y="320" width="16" height="16" />
+  <object id="2060" name="Solid architecture" type="collision" x="368" y="32" width="16" height="16" />
+  <object id="2061" name="Solid architecture" type="collision" x="368" y="48" width="16" height="16" />
+  <object id="2062" name="Solid architecture" type="collision" x="368" y="64" width="16" height="16" />
+  <object id="2063" name="Solid architecture" type="collision" x="368" y="80" width="16" height="16" />
+  <object id="2064" name="Solid architecture" type="collision" x="368" y="96" width="16" height="16" />
+  <object id="2065" name="Solid architecture" type="collision" x="368" y="112" width="16" height="16" />
+  <object id="2066" name="Solid architecture" type="collision" x="368" y="128" width="16" height="16" />
+  <object id="2067" name="Solid architecture" type="collision" x="368" y="144" width="16" height="16" />
+  <object id="2068" name="Solid architecture" type="collision" x="368" y="160" width="16" height="16" />
+  <object id="2069" name="Solid architecture" type="collision" x="368" y="176" width="16" height="16" />
+  <object id="2070" name="Solid architecture" type="collision" x="368" y="192" width="16" height="16" />
+  <object id="2071" name="Solid architecture" type="collision" x="368" y="208" width="16" height="16" />
+  <object id="2072" name="Solid architecture" type="collision" x="368" y="224" width="16" height="16" />
+  <object id="2073" name="Solid architecture" type="collision" x="368" y="240" width="16" height="16" />
+  <object id="2074" name="Solid architecture" type="collision" x="368" y="256" width="16" height="16" />
+  <object id="2075" name="Solid architecture" type="collision" x="368" y="272" width="16" height="16" />
+  <object id="2076" name="Solid architecture" type="collision" x="368" y="288" width="16" height="16" />
+  <object id="2077" name="Solid architecture" type="collision" x="368" y="304" width="16" height="16" />
+  <object id="2078" name="Solid architecture" type="collision" x="368" y="320" width="16" height="16" />
+  <object id="2079" name="Solid architecture" type="collision" x="64" y="80" width="32" height="16" />
+  <object id="2080" name="Solid architecture" type="collision" x="128" y="80" width="32" height="16" />
+  <object id="2081" name="Solid architecture" type="collision" x="256" y="80" width="32" height="16" />
+  <object id="2082" name="Solid architecture" type="collision" x="320" y="80" width="32" height="16" />
+  <object id="2083" name="Solid architecture" type="collision" x="64" y="128" width="48" height="16" />
+  <object id="2084" name="Solid architecture" type="collision" x="304" y="128" width="48" height="16" />
+  <object id="2085" name="Solid architecture" type="collision" x="64" y="192" width="48" height="16" />
+  <object id="2086" name="Solid architecture" type="collision" x="304" y="192" width="48" height="16" />
+  <object id="2087" name="Solid architecture" type="collision" x="64" y="256" width="48" height="16" />
+  <object id="2088" name="Solid architecture" type="collision" x="304" y="256" width="48" height="16" />
+ </objectgroup>
+</map>

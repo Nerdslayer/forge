@@ -29,6 +29,7 @@ public class AdventureQuestStage implements Serializable {
     public boolean anyPOI = false; //false: Pick one PoI. True: Any PoI matching tags is usable
     public String mapFlag; //Map (or quest) flag to check
     public int mapFlagValue; //Minimum value for the flag
+    public boolean creditPreviousQuestFlag; // Opt in to completing a QuestFlag stage from saved player progress.
     public int count1; //use defined by objective type, this can be enemies to defeat, minimum PoI distance, etc
     public int count2; //use defined by objective type, this can be enemies to defeat, minimum PoI distance, etc
     public int count3; //use defined by objective type, this can be enemies to defeat, minimum PoI distance, etc
@@ -241,6 +242,7 @@ public class AdventureQuestStage implements Serializable {
         this.objective = other.objective;
         this.mapFlagValue = other.mapFlagValue;
         this.mapFlag = other.mapFlag;
+        this.creditPreviousQuestFlag = other.creditPreviousQuestFlag;
         this.equipNames = other.equipNames;
         this.mixedEnemies = other.mixedEnemies;
         this.itemNames = other.itemNames;
@@ -287,6 +289,14 @@ public class AdventureQuestStage implements Serializable {
         return objective == Defeat && targetEnemy != null && !targetEnemy.isEmpty();
     }
 
+    public boolean hasPreviousProgress() {
+        if (objective == QuestFlag && creditPreviousQuestFlag && mapFlag != null && !mapFlag.isEmpty()) {
+            var player = Current.player();
+            return player.checkQuestFlag(mapFlag) && player.getQuestFlag(mapFlag) >= mapFlagValue;
+        }
+        return hasPreviousVictory();
+    }
+
     public boolean hasPreviousVictory() {
         return hasNamedTargetEnemy() && creditPreviousVictory
                 && AdventureQuestController.hasRecordedEnemyVictory(targetEnemy, targetPOI);
@@ -315,7 +325,7 @@ public class AdventureQuestStage implements Serializable {
     }
 
     public AdventureQuestController.QuestStatus handleEvent(AdventureQuestEvent event) {
-        if (hasPreviousVictory()) {
+        if (hasPreviousProgress()) {
             status = COMPLETE;
             return status;
         }

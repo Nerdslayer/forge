@@ -11,6 +11,7 @@
  <tileset firstgid="11905" source="../../tileset/main-nocollide.tsx" />
  <tileset firstgid="22017" source="../../tileset/dungeon-nocollide.tsx" />
  <tileset firstgid="26497" source="hogwarts_exteriors.tsx" />
+ <tileset firstgid="26501" source="hogwarts_chamber_npcs.tsx" />
  <layer id="1" name="Ground" width="56" height="44">
   <data encoding="base64" compression="zlib">eJztzwENACAMwLArxRle0bHTJRWwGW3onl38tflr89fmr81fm782f23+2vy1+Wvz1+avzV+bvzZ/bf7a/LX5a/PX9tufmj0PEPfK</data>
  </layer>
@@ -305,5 +306,33 @@
   <object id="2184" name="Solid architecture" type="collision" x="688" y="304" width="64" height="16" />
   <object id="2185" name="Solid architecture" type="collision" x="688" y="416" width="64" height="16" />
   <object id="2186" name="Solid architecture" type="collision" x="688" y="528" width="64" height="16" />
+  <object id="241" name="Hermione Granger" type="dialog" x="480" y="576" width="24.0" height="32" gid="26501">
+   <properties>
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+    <property name="dialog" value="[{&quot;text&quot;:&quot;Hermione: Ginny is safe now. I only wish we'd worked out what the writing meant sooner.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;checkQuestFlag&quot;:&quot;questCompleted:90702&quot;}]},{&quot;text&quot;:&quot;Hermione: The library bestiary is on the reading stand just inside the east doorway. See if it explains how Mrs Norris survived.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702},{&quot;checkQuestFlag&quot;:&quot;hpChamberLibraryClue&quot;,&quot;not&quot;:true}]},{&quot;text&quot;:&quot;Hermione: The Duelling Club is meeting through the door at the back of the hall. Look for Harry there.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702},{&quot;checkQuestFlag&quot;:&quot;hpChamberLibraryClue&quot;},{&quot;defeatedEnemy&quot;:&quot;HP Duelling Club Draco&quot;,&quot;not&quot;:true}]},{&quot;text&quot;:&quot;Hermione: Harry heard something in the pipes. Myrtle haunts the bathroom off the upper gallery.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702},{&quot;defeatedEnemy&quot;:&quot;HP Duelling Club Draco&quot;}]},{&quot;text&quot;:&quot;Hermione: We can pick up where we left off. Have you got time to help?&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Let's continue.&quot;,&quot;action&quot;:[{&quot;issueQuest&quot;:&quot;90702&quot;}]},{&quot;name&quot;:&quot;Perhaps later.&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;questCompleted:90702&quot;,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;hpChamberAccepted&quot;}]},{&quot;text&quot;:&quot;Hermione: Someone petrified Mrs Norris. You can still see the writing on the east wall. Could you check the library bestiary? The doorway is on the east side of the hall.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;I'll look in the library.&quot;,&quot;action&quot;:[{&quot;issueQuest&quot;:&quot;90702&quot;},{&quot;setQuestFlag&quot;:{&quot;key&quot;:&quot;hpChamberAccepted&quot;,&quot;val&quot;:1}}]},{&quot;name&quot;:&quot;Perhaps later.&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;questCompleted:90702&quot;,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;hpChamberAccepted&quot;,&quot;not&quot;:true}]}]" />
+   </properties>
+  </object>
+  <object id="242" name="Duelling Club classroom" type="entry" x="416" y="80" width="48" height="16">
+   <properties>
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+    <property name="teleport" value="../common/maps/map/hogwarts/hogwarts_duelling_club.tmx" />
+    <property name="teleportObjectId" value="1" type="int" />
+    <property name="direction" value="down" />
+    <property name="requiredQuestFlag" value="hpChamberLibraryClue" />
+    <property name="lockedText" value="The classroom is reserved for the Duelling Club." />
+   </properties>
+  </object>
+  <object id="243" name="Duelling Club notice" type="dialog" x="480" y="96" width="16" height="16" gid="13777">
+   <properties>
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Duelling Club\nPractice bouts in the classroom through the door to the left.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+   </properties>
+  </object>
+  <object id="244" name="Writing on the wall" type="dialog" x="800" y="568" width="48" height="24" gid="26503">
+   <properties>
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+    <property name="dialog" value="[{&quot;text&quot;:&quot;THE CHAMBER OF SECRETS HAS BEEN OPENED.\nENEMIES OF THE HEIR, BEWARE.\n\nA shallow puddle glints beneath the red letters.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Step back.&quot;}]}]" />
+   </properties>
+  </object>
  </objectgroup>
 </map>

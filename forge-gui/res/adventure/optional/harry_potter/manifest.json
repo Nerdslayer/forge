@@ -720,6 +720,92 @@
           "replacement": "decks/harry_potter/variants/thecheff.dck"
         }
       ]
+    },
+    {
+      "id": "chamber_of_secrets",
+      "requiredDecks": [
+        {
+          "path": "decks/harry_potter/draco_duelling_club.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/harry_potter/basilisk_chamber.dck",
+          "mainCount": 60
+        }
+      ],
+      "requiredCards": [
+        {
+          "name": "Vincent Crabbe, Reckless Enforcer",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Gregory Goyle, Malfoy's Muscle",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Draco Malfoy",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Lucius Malfoy",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Tom Riddle's Diary",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Basilisk of the Chamber",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Basilisk Venom",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "The Chamber of Secrets",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Harry Potter, the Boy Who Lived",
+          "edition": "HP",
+          "custom": true
+        },
+        {
+          "name": "Sword of Gryffindor",
+          "edition": "HP",
+          "custom": true
+        }
+      ],
+      "requiredTokens": [
+        "g_1_1_snake",
+        "c_a_treasure_sac"
+      ],
+      "requiredResources": [
+        "../common/maps/map/hogwarts/hogwarts_duelling_club.tmx",
+        "../common/maps/map/hogwarts/hogwarts_myrtles_bathroom.tmx",
+        "../common/maps/map/hogwarts/hogwarts_chamber_of_secrets.tmx",
+        "../common/maps/map/hogwarts/hogwarts_chamber_npcs.tsx",
+        "../common/maps/map/hogwarts/art/hermione.png",
+        "../common/maps/map/hogwarts/art/moaning_myrtle.png",
+        "../common/maps/map/hogwarts/art/chamber_wall_writing.png",
+        "sprites/enemy/harry_potter/draco.atlas",
+        "sprites/enemy/harry_potter/draco.png",
+        "sprites/enemy/harry_potter/harry.atlas",
+        "sprites/enemy/beast/reptile/big_snake.atlas"
+      ],
+      "enemyDefinitions": "chamber_enemies.json",
+      "questDefinitions": "chamber_quests.json",
+      "itemDefinitions": "items.json",
+      "biomeAdditions": "chamber_biome_additions.json"
     }
   ]
 }

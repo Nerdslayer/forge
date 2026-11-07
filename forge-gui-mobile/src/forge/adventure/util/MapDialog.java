@@ -488,6 +488,11 @@ public class MapDialog {
         if (data == null) return true;
         AdventurePlayer player = Current.player();
         for (DialogData.ConditionData condition : data) {
+            if (condition.activeQuest > 0) {
+                boolean active = player.getQuests().stream()
+                        .anyMatch(quest -> quest.getID() == condition.activeQuest && !quest.failed && !quest.completed);
+                if (active == condition.not) return false;
+            }
             if (condition.defeatedEnemy != null && !condition.defeatedEnemy.isEmpty()) {
                 var root = TileMapScene.instance().rootPoint;
                 boolean won = AdventureQuestController.hasRecordedEnemyVictory(condition.defeatedEnemy, root);

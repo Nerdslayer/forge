@@ -235,5 +235,11 @@
   <object id="2160" name="Solid architecture" type="collision" x="432" y="384" width="32" height="16" />
   <object id="2161" name="Solid architecture" type="collision" x="144" y="480" width="64" height="16" />
   <object id="2162" name="Solid architecture" type="collision" x="336" y="480" width="64" height="16" />
+  <object id="241" name="Open bestiary" type="dialog" x="96" y="320" width="16" height="16" gid="18084">
+   <properties>
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;A bestiary entry on basilisks describes a fatal gaze. A victim who sees it indirectly may only be petrified. Footsteps in the hall turn to a rush: Harry Potter and Draco Malfoy are about to duel in the classroom at the back of the Great Hall.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Go to the Duelling Club.&quot;, &quot;action&quot;: [{&quot;setQuestFlag&quot;: {&quot;key&quot;: &quot;hpChamberLibraryClue&quot;, &quot;val&quot;: 1}}]}], &quot;condition&quot;: [{&quot;checkQuestFlag&quot;: &quot;hpChamberAccepted&quot;}, {&quot;checkQuestFlag&quot;: &quot;hpChamberLibraryClue&quot;, &quot;not&quot;: true}]}, {&quot;text&quot;: &quot;The entry describes the Basilisk's gaze. The Duelling Club meets in the classroom at the back of the Great Hall.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}], &quot;condition&quot;: [{&quot;checkQuestFlag&quot;: &quot;hpChamberLibraryClue&quot;}]}]" />
+   </properties>
+  </object>
  </objectgroup>
 </map>

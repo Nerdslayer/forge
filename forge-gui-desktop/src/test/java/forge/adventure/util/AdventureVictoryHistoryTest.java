@@ -140,6 +140,45 @@ public class AdventureVictoryHistoryTest {
         }
     }
 
+    @Test public void savedQuestFlagsCountOnlyForStagesThatOptIn() {
+        var player = mock(forge.adventure.player.AdventurePlayer.class);
+        try (var current = mockStatic(Current.class)) {
+            current.when(Current::player).thenReturn(player);
+            var stage = new forge.adventure.data.AdventureQuestStage();
+            stage.objective = AdventureQuestController.ObjectiveTypes.QuestFlag;
+            stage.mapFlag = "clue";
+            stage.mapFlagValue = 2;
+            when(player.checkQuestFlag("clue")).thenReturn(true);
+            when(player.getQuestFlag("clue")).thenReturn(2);
+            Assert.assertFalse(stage.hasPreviousProgress());
+            stage.creditPreviousQuestFlag = true;
+            var copied = new forge.adventure.data.AdventureQuestStage(stage);
+            Assert.assertEquals(copied.handleEvent(new AdventureQuestEvent()), AdventureQuestController.QuestStatus.COMPLETE);
+            when(player.getQuestFlag("clue")).thenReturn(1);
+            Assert.assertFalse(stage.hasPreviousProgress());
+        }
+    }
+
+    @Test public void dialogueTreatsAbandonedAndCompletedQuestsAsInactive() {
+        var player = mock(forge.adventure.player.AdventurePlayer.class);
+        try (var current = mockStatic(Current.class)) {
+            current.when(Current::player).thenReturn(player);
+            var quest = new com.badlogic.gdx.utils.Json().fromJson(forge.adventure.data.AdventureQuestData.class, "{id:9001}");
+            when(player.getQuests()).thenReturn(java.util.List.of(quest));
+            var dialog = new MapDialog("[]", null, -1);
+            var condition = new forge.adventure.data.DialogData.ConditionData();
+            condition.activeQuest = 9001;
+            condition.not = true;
+            var conditions = new forge.adventure.data.DialogData.ConditionData[]{condition};
+            Assert.assertFalse(dialog.isConditionOk(conditions));
+            quest.completed = true;
+            Assert.assertTrue(dialog.isConditionOk(conditions));
+            quest.completed = false;
+            quest.fail();
+            Assert.assertTrue(dialog.isConditionOk(conditions));
+        }
+    }
+
     @Test public void previousWinsSurviveSaveAndLossesDoNotCountAsVictories() {
         var history = new PlayerStatistic();
         history.setResult("Old display name", false);
