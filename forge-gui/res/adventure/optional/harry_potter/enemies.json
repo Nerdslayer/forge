@@ -21,7 +21,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -41,7 +41,7 @@
   {
     "name": "HP Gryffindor",
     "nameOverride": "Harry Potter",
-    "sprite": "sprites/enemy/humanoid/human/wizard/enchanter.atlas",
+    "sprite": "sprites/enemy/harry_potter/harry.atlas",
     "deck": [
       "decks/harry_potter/gryffindor.dck"
     ],
@@ -49,7 +49,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 1.0,
+    "scale": 0.0859375,
     "life": 20,
     "colors": "WR",
     "questTags": [
@@ -60,7 +60,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -99,7 +99,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -138,7 +138,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -177,7 +177,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -216,7 +216,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -236,7 +236,7 @@
   {
     "name": "HP Roaming Harry Potter",
     "nameOverride": "Harry Potter, the Boy Who Lived",
-    "sprite": "sprites/enemy/humanoid/human/wizard/enchanter.atlas",
+    "sprite": "sprites/enemy/harry_potter/harry.atlas",
     "deck": [
       "decks/harry_potter/gryffindor.dck"
     ],
@@ -244,7 +244,7 @@
     "spawnRate": 0.25,
     "difficulty": 2,
     "speed": 22,
-    "scale": 1.0,
+    "scale": 0.0859375,
     "life": 20,
     "colors": "WR",
     "questTags": [
@@ -255,7 +255,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -294,7 +294,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -333,7 +333,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -372,7 +372,7 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 1,
+        "count": 2,
         "addMaxCount": 1
       },
       {
@@ -388,5 +388,244 @@
         "addMaxCount": 5
       }
     ]
+  },
+  {
+    "name": "HP Aragog",
+    "nameOverride": "Aragog",
+    "sprite": "sprites/enemy/beast/arachnid/spider_black.atlas",
+    "deck": [
+      "decks/harry_potter/aragog.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 2.0,
+    "life": 26,
+    "colors": "BG",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts",
+      "Aragog"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 300,
+        "addMaxCount": 200
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Snape",
+    "nameOverride": "Severus Snape",
+    "sprite": "sprites/enemy/harry_potter/snape.atlas",
+    "deck": [
+      "decks/harry_potter/snape.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 0.125,
+    "life": 22,
+    "colors": "WUBR",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts",
+      "Severus Snape"
+    ],
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 300,
+        "addMaxCount": 200
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 10,
+        "addMaxCount": 5
+      }
+    ]
+  },
+  {
+    "name": "HP Forest Boar",
+    "sprite": "sprites/enemy/beast/smallmammals/boar.atlas",
+    "deck": [
+      "decks/standard/boar_monogreenlifegain.dck"
+    ],
+    "ai": "",
+    "randomizeDeck": true,
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 0.55,
+    "life": 13,
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 80,
+        "addMaxCount": 40
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 3,
+        "addMaxCount": 3
+      }
+    ],
+    "colors": "G",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts",
+      "ForestCreature"
+    ],
+    "nameOverride": "Forest Boar"
+  },
+  {
+    "name": "HP Forest Wolf",
+    "sprite": "sprites/enemy/beast/largemammals/wolf.atlas",
+    "deck": [
+      "decks/standard/wolfboss.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "scale": 0.7,
+    "life": 20,
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 80,
+        "addMaxCount": 40
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 3,
+        "addMaxCount": 3
+      }
+    ],
+    "colors": "G",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts",
+      "ForestCreature"
+    ],
+    "nameOverride": "Forest Wolf"
+  },
+  {
+    "name": "HP Forest Giant Spider",
+    "sprite": "sprites/enemy/beast/arachnid/spider_purple.atlas",
+    "deck": [
+      "decks/standard/spider_token.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "life": 15,
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 80,
+        "addMaxCount": 40
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 3,
+        "addMaxCount": 3
+      }
+    ],
+    "colors": "G",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts",
+      "ForestCreature"
+    ],
+    "nameOverride": "Forest Giant Spider"
+  },
+  {
+    "name": "HP Forest Centaur",
+    "sprite": "sprites/enemy/fey/centaur_2.atlas",
+    "deck": [
+      "decks/standard/centaur_warrior.dck"
+    ],
+    "ai": "",
+    "spawnRate": 0,
+    "difficulty": 0.1,
+    "speed": 0,
+    "life": 16,
+    "rewards": [
+      {
+        "type": "deckCard",
+        "probability": 1,
+        "count": 2,
+        "addMaxCount": 1
+      },
+      {
+        "type": "gold",
+        "probability": 1,
+        "count": 80,
+        "addMaxCount": 40
+      },
+      {
+        "type": "shards",
+        "probability": 1,
+        "count": 3,
+        "addMaxCount": 3
+      }
+    ],
+    "colors": "GW",
+    "questTags": [
+      "HarryPotter",
+      "Hogwarts",
+      "ForestCreature"
+    ],
+    "nameOverride": "Forest Centaur"
   }
 ]

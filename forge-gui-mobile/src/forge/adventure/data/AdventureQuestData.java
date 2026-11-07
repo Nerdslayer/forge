@@ -34,6 +34,7 @@ public class AdventureQuestData implements Serializable {
     }
     public boolean isTemplate = false;
     public boolean oneTime = false;
+    public String requiredPOI = ""; // Offer only while this named location exists and is available.
     public String name = "";
     public String description = "";
     public String synopsis =""; //Intended for Dev Mode only at most
@@ -79,6 +80,7 @@ public class AdventureQuestData implements Serializable {
         id = data.id;
         isTemplate = false; //Anything being copied is by definition not a template
         oneTime = data.oneTime;
+        requiredPOI = data.requiredPOI;
         name = data.name;
         description = data.description;
         synopsis = data.synopsis;
@@ -197,7 +199,7 @@ public class AdventureQuestData implements Serializable {
                 stage.setTargetPOI(poiTokens, this.name);
             case Defeat:
                 stage.setTargetPOI(poiTokens, this.name);
-                if (!stage.mixedEnemies)
+                if (!stage.mixedEnemies && !stage.hasNamedTargetEnemy())
                     stage.setTargetEnemyData(generateTargetEnemyData(stage));
                 break;
             case Delivery:
@@ -437,6 +439,7 @@ public class AdventureQuestData implements Serializable {
 
     public void activateNextStages() {
         boolean showNotification = false;
+        boolean creditedVictory = false;
         for (AdventureQuestStage s : stages) {
             if (s.getStatus() == INACTIVE){
                 s.checkPrerequisites(getCompletedStageIDs());
@@ -444,11 +447,16 @@ public class AdventureQuestData implements Serializable {
                     if (s.hasRequiredFetchItems()) {
                         s.handleEvent(new AdventureQuestEvent());
                     }
+                    if (s.hasPreviousVictory()) {
+                        s.handleEvent(new AdventureQuestEvent());
+                        creditedVictory = true;
+                    }
                     AdventureQuestController.instance().addQuestSprites(s);
                     showNotification = true;
                 }
             }
         }
+        if (creditedVictory) completed = Arrays.stream(stages).allMatch(s -> s.getStatus() == COMPLETE);
         if (showNotification) {
             StringBuilder description = new StringBuilder();
             description.append("[!]").append(name).append("[]");

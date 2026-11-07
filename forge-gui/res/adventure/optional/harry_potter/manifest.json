@@ -27,6 +27,30 @@
         {
           "path": "decks/harry_potter/voldemort.dck",
           "mainCount": 60
+        },
+        {
+          "path": "decks/harry_potter/aragog.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/harry_potter/snape.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/standard/boar_monogreenlifegain.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/standard/wolfboss.dck",
+          "mainCount": 87
+        },
+        {
+          "path": "decks/standard/spider_token.dck",
+          "mainCount": 60
+        },
+        {
+          "path": "decks/standard/centaur_warrior.dck",
+          "mainCount": 60
         }
       ],
       "requiredCards": [
@@ -416,6 +440,11 @@
           "custom": true
         },
         {
+          "name": "Severus Snape, the Half-Blood Prince",
+          "edition": "HP",
+          "custom": true
+        },
+        {
           "name": "Sirius Black, Escaped Prisoner",
           "edition": "HP",
           "custom": true
@@ -550,8 +579,34 @@
         "hp_w_3_3_elk_spirit_vigilance"
       ],
       "requiredResources": [
+        "maps/map/hogwarts/art/hagrid_hut_exterior.png",
+        "maps/map/hogwarts/art/hogwarts_castle_facade.png",
+        "maps/map/hogwarts/hogwarts_dungeons.tmx",
+        "maps/map/hogwarts/hogwarts_exteriors.tsx",
         "maps/map/hogwarts/hogwarts_great_hall.tmx",
-        "maps/map/hogwarts/hogwarts_shadow_chamber.tmx",
+        "maps/map/hogwarts/hogwarts_hagrid_hut.tmx",
+        "maps/map/hogwarts/hogwarts_hall.tmx",
+        "maps/map/hogwarts/hogwarts_headmasters_office.tmx",
+        "maps/map/hogwarts/hogwarts_library.tmx",
+        "maps/map/hogwarts/hogwarts_potions.tmx",
+        "maps/map/hogwarts/hogwarts_upper_floor.tmx",
+        "maps/tileset/buildings.png",
+        "maps/tileset/buildings.tsx",
+        "maps/tileset/dungeon-nocollide.tsx",
+        "maps/tileset/dungeon.png",
+        "maps/tileset/main-nocollide.tsx",
+        "maps/tileset/main.png",
+        "maps/tileset/main.tsx",
+        "sprites/enemy/beast/arachnid/spider_black.atlas",
+        "sprites/enemy/beast/arachnid/spider_black.png",
+        "sprites/enemy/beast/arachnid/spider_purple.atlas",
+        "sprites/enemy/beast/arachnid/spider_purple.png",
+        "sprites/enemy/beast/largemammals/wolf.atlas",
+        "sprites/enemy/beast/largemammals/wolf.png",
+        "sprites/enemy/beast/smallmammals/boar.atlas",
+        "sprites/enemy/beast/smallmammals/boar.png",
+        "sprites/enemy/fey/centaur_2.atlas",
+        "sprites/enemy/fey/centaur_2.png",
         "sprites/enemy/harry_potter/dumbledore.atlas",
         "sprites/enemy/harry_potter/dumbledore.png",
         "sprites/enemy/harry_potter/hagrid.atlas",
@@ -560,13 +615,27 @@
         "sprites/enemy/harry_potter/ron.png",
         "sprites/enemy/harry_potter/voldemort.atlas",
         "sprites/enemy/harry_potter/voldemort.png",
+        "sprites/enemy/humanoid/human/wizard/black_wizard.atlas",
+        "sprites/enemy/humanoid/human/wizard/black_wizard.png",
         "sprites/locations/harry_potter/hogwarts_castle.atlas",
-        "sprites/locations/harry_potter/hogwarts_castle.png"
+        "sprites/locations/harry_potter/hogwarts_castle.png",
+        "sprites/treasure.atlas",
+        "sprites/treasure.png",
+        "sprites/enemy/harry_potter/snape.atlas",
+        "sprites/enemy/harry_potter/snape_head.png",
+        "maps/map/hogwarts/hogwarts_kitchens.tmx",
+        "maps/map/hogwarts/hogwarts_requirement.tmx",
+        "maps/map/hogwarts/hogwarts_shrieking_shack.tmx",
+        "sprites/enemy/harry_potter/snape.png",
+        "sprites/enemy/harry_potter/snape_rest_left.png",
+        "sprites/enemy/harry_potter/harry.png",
+        "sprites/enemy/harry_potter/harry.atlas"
       ],
       "deckOverrides": [],
       "enemyDefinitions": "enemies.json",
       "poiDefinitions": "points_of_interest.json",
-      "biomeAdditions": "biome_additions.json"
+      "biomeAdditions": "biome_additions.json",
+      "questDefinitions": "quests.json"
     },
     {
       "id": "human_elite",

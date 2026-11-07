@@ -132,6 +132,35 @@ public class AdventureContentPackTest {
         Assert.assertEquals(fixture.load().mergeEnemies(new Array<EnemyData>()).size, 0);
     }
 
+    @Test public void optionalQuestsActivateAtomicallyAndPreserveNativeQuests() throws IOException {
+        try (var forgeMock = org.mockito.Mockito.mockStatic(forge.Forge.class)) {
+            forgeMock.when(forge.Forge::getLocalizer).thenReturn(org.mockito.Mockito.mock(forge.util.Localizer.class));
+            var fixture = new Fixture();
+            fixture.write("optional/sample/quests.json", "[{id:9001,isTemplate:true,oneTime:true,requiredPOI:\"Optional Place\",stages:[{id:1,objective:QuestFlag,mapFlag:done,mapFlagValue:1}]}]");
+            var manifest = fixture.root.resolve("optional/sample/manifest.json");
+            Files.writeString(manifest, Files.readString(manifest).replace("enemyDefinitions:", "questDefinitions:\"quests.json\",enemyDefinitions:"));
+            var nativeQuests = new Array<forge.adventure.data.AdventureQuestData>();
+            var nativeQuest = new forge.adventure.data.AdventureQuestData();
+            nativeQuests.add(nativeQuest);
+            var packs = fixture.load();
+            var merged = packs.mergeQuests(nativeQuests);
+            Assert.assertEquals(merged.size, 2);
+            Assert.assertEquals(nativeQuests.size, 1);
+            Assert.assertSame(merged.first(), nativeQuest);
+            Assert.assertEquals(packs.mergeQuests(merged).size, 2);
+            Assert.assertEquals(merged.peek().requiredPOI, "Optional Place");
+            fixture.cards.clear();
+            Assert.assertEquals(fixture.load().mergeQuests(nativeQuests).size, 1);
+            fixture.cards.add("Optional Wizard");
+            fixture.write("common/world/quests.json", "[{id:9001}]");
+            Assert.assertEquals(fixture.load().mergeQuests(nativeQuests).size, 1);
+            Assert.assertEquals(fixture.load().mergeEnemies(new Array<EnemyData>()).size, 0);
+            fixture.write("common/world/quests.json", "[]");
+            fixture.write("optional/sample/quests.json", "[{id:0,isTemplate:true,stages:[{id:1,objective:QuestFlag}]}]");
+            Assert.assertEquals(fixture.load().mergeEnemies(new Array<EnemyData>()).size, 0);
+        }
+    }
+
     @Test public void missingOwnedCardsAreDetectedBeforePoolLoading() throws IOException {
         var fixture = new Fixture(); fixture.cards.clear();
         var packs = fixture.load();

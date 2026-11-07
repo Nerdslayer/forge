@@ -21,6 +21,14 @@ public class PlayerStatistic implements SaveFileContent {
     {
         return winLossRecord;
     }
+
+    public boolean hasWonAgainst(String... names) {
+        for (String name : names) {
+            Pair<Integer, Integer> record = winLossRecord.get(name);
+            if (record != null && record.getLeft() > 0) return true;
+        }
+        return false;
+    }
     public int totalWins()
     {
         int wins=0;

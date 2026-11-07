@@ -49,6 +49,9 @@ public class AdventureQuestStage implements Serializable {
     public List<String> enemyTags = new ArrayList<>(); //Tags defining potential targets
     public List<String> enemyExcludeTags = new ArrayList<>(); //Tags denoting invalid targets
     public String requiredEnemy = ""; //Must not have been defeated at the target location.
+    public String targetEnemy = ""; // Exact ID of an existing Defeat encounter; never creates extra quest spawns.
+    public boolean creditPreviousVictory = false; // Opt in to recognizing a saved win against targetEnemy.
+    // TODO: Support named targets for Hunt/Escort spawning objectives; currently Defeat only.
     public List<String> itemNames = new ArrayList<>(); //Tags defining items to use
     public List<String> equipNames = new ArrayList<>(); //Tags defining equipment to use
     public boolean prologueDisplayed = false;
@@ -187,6 +190,7 @@ public class AdventureQuestStage implements Serializable {
     }
 
     public boolean checkIfTargetEnemy(EnemySprite enemy) {
+        if (hasNamedTargetEnemy()) return targetEnemy.equals(enemy.getData().name);
         if (targetEnemyData != null) {
             return (enemy.getData().match(targetEnemyData));
         }
@@ -229,6 +233,8 @@ public class AdventureQuestStage implements Serializable {
         this.enemyTags = other.enemyTags;
         this.enemyExcludeTags = other.enemyExcludeTags;
         this.requiredEnemy = other.requiredEnemy;
+        this.targetEnemy = other.targetEnemy;
+        this.creditPreviousVictory = other.creditPreviousVictory;
         this.anyPOI = other.anyPOI;
         this.here = other.here;
         this.targetPOI = other.targetPOI;
@@ -277,6 +283,15 @@ public class AdventureQuestStage implements Serializable {
         return requiredEnemy != null && !requiredEnemy.isEmpty();
     }
 
+    public boolean hasNamedTargetEnemy() {
+        return objective == Defeat && targetEnemy != null && !targetEnemy.isEmpty();
+    }
+
+    public boolean hasPreviousVictory() {
+        return hasNamedTargetEnemy() && creditPreviousVictory
+                && AdventureQuestController.hasRecordedEnemyVictory(targetEnemy, targetPOI);
+    }
+
     private boolean isRequiredEnemyAvailable(PointOfInterest location) {
         return location != null && (!hasRequiredEnemy()
                 || !WorldSave.getCurrentSave().getPointOfInterestChanges(location.getID()).isEnemyDefeated(requiredEnemy));
@@ -300,6 +315,10 @@ public class AdventureQuestStage implements Serializable {
     }
 
     public AdventureQuestController.QuestStatus handleEvent(AdventureQuestEvent event) {
+        if (hasPreviousVictory()) {
+            status = COMPLETE;
+            return status;
+        }
         if (objective == Fetch && hasRequiredFetchItems()) {
             status = COMPLETE;
             return status;

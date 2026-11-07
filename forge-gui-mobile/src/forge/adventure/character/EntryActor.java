@@ -17,6 +17,18 @@ public class EntryActor extends MapActor {
     protected final String direction;
     protected final int entryTargetObject;
     protected String currentMap;
+    private String requiredQuestFlag;
+    private String lockedText;
+
+    public void requireQuestFlag(String flag, String message) {
+        requiredQuestFlag = flag;
+        lockedText = message;
+    }
+
+    public boolean isUnlocked() {
+        return requiredQuestFlag == null || requiredQuestFlag.isEmpty()
+                || forge.adventure.util.Current.player().checkQuestFlag(requiredQuestFlag);
+    }
 
     public EntryActor(MapStage stage, int id, String targetMap, float x, float y, float w, float h, String direction, String currentMap, int entryTargetObject) {
         super(id);
@@ -37,6 +49,17 @@ public class EntryActor extends MapActor {
 
     @Override
     public void onPlayerCollide() {
+        if (!isUnlocked()) {
+            var message = new forge.adventure.data.DialogData();
+            message.text = lockedText == null ? "The passage remains closed." : lockedText;
+            var dismiss = new forge.adventure.data.DialogData();
+            dismiss.name = "Leave";
+            message.options = new forge.adventure.data.DialogData[]{dismiss};
+            stage.resetPosition();
+            new forge.adventure.util.MapDialog(message, stage, getId(), null).activate();
+            stage.showDialog();
+            return;
+        }
         if (targetMap == null || targetMap.isEmpty()) {
             stage.exitDungeon(false, false);
         } else {

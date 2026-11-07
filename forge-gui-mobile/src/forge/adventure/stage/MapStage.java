@@ -435,6 +435,9 @@ public class MapStage extends GameStage {
                         int entryTargetId = (!prop.containsKey("teleportObjectId") || prop.get("teleportObjectId") ==null || prop.get("teleportObjectId").toString().isEmpty())? 0: Integer.parseInt(prop.get("teleportObjectId").toString());
 
                         EntryActor entry = new EntryActor(this, id, targetMap, x, y, w, h, direction, currentMap, entryTargetId);
+                        if (prop.containsKey("requiredQuestFlag")) {
+                            entry.requireQuestFlag(prop.get("requiredQuestFlag", String.class), prop.get("lockedText", String.class));
+                        }
                         if (prop.containsKey("spawn") && prop.get("spawn").toString().equals("true")) {
                             spawnClassified.add(entry);
                         } else if (canStillSpawnPlayerThere) {

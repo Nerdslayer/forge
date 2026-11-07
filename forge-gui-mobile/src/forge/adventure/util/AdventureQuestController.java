@@ -39,6 +39,7 @@ public class AdventureQuestController implements Serializable {
         for (AdventureQuestData q : Current.player().getQuests()) {
             for (AdventureQuestStage c : q.stages) {
                 if (c.getStatus().equals(ACTIVE) && c.objective.equals(ObjectiveTypes.Defeat)) {
+                    if (c.hasNamedTargetEnemy()) continue;
                     if (c.getTargetEnemyData() != null) {
                         extraSpawns.add(c.getTargetEnemyData());
                         continue;
@@ -74,6 +75,7 @@ public class AdventureQuestController implements Serializable {
             for (AdventureQuestStage c : q.stages){
                 if (c.getStatus().equals(ACTIVE) && c.objective.equals(ObjectiveTypes.Defeat))
                 {
+                    if (c.hasNamedTargetEnemy()) continue;
                     List<String> toBoost = new ArrayList<>();
                     if (c.mixedEnemies){
                         for (EnemyData enemy : localSpawns){
@@ -157,6 +159,14 @@ public class AdventureQuestController implements Serializable {
     public PointOfInterest mostRecentPOI;
     private final List<EnemySprite> enemySpriteList= new ArrayList<>();
     private int nextQuestID = 0;
+
+    public static boolean hasRecordedEnemyVictory(String name, PointOfInterest location) {
+        EnemyData enemy = WorldData.getEnemy(name);
+        String id = enemy == null ? name : enemy.name;
+        String label = enemy == null ? name : enemy.getName();
+        return Current.player().getStatistic().hasWonAgainst(id, label)
+                || location != null && WorldSave.getCurrentSave().getPointOfInterestChanges(location.getID()).isEnemyDefeated(id);
+    }
     public void showQuestDialogs(GameStage stage) {
         List<AdventureQuestData> finishedQuests = new ArrayList<>();
         for (AdventureQuestData quest : Current.player().getQuests()) {
@@ -332,6 +342,7 @@ public class AdventureQuestController implements Serializable {
             allQuests = json.fromJson(Array.class, AdventureQuestData.class, handle);
         }
 
+        allQuests = AdventureContentPacks.get().mergeQuests(allQuests);
         for (AdventureQuestData q : allQuests){
             if (q.storyQuest) continue;
             allSideQuests.add(q);
@@ -532,6 +543,10 @@ public class AdventureQuestController implements Serializable {
 
     public boolean isQuestAvailable(AdventureQuestData quest) {
         if (!Current.player().canAcceptQuest(quest)) return false;
+        if (quest.requiredPOI != null && !quest.requiredPOI.isEmpty()) {
+            var location = Current.world().findPointsOfInterest(quest.requiredPOI);
+            if (location == null || !location.getActive() || !AdventureContentPacks.get().available(location.getData())) return false;
+        }
         for (AdventureQuestStage stage : quest.stages) {
             if (stage.hasRequiredEnemy() && stage.getAvailablePOIs().isEmpty()) return false;
         }

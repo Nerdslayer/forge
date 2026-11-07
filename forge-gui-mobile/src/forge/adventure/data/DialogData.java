@@ -136,6 +136,7 @@ public class DialogData implements Serializable {
             public int val;
         }
         public String item;
+        public String defeatedEnemy; // Enemy ID or recorded display name; a past victory also counts.
         public int actorID = 0;                    //Check for an actor ID.
         public String hasBlessing = null;          //Check for specific blessing, if named.
         public int hasGold = 0;                    //Check for player gold. True if gold is equal or higher than X.

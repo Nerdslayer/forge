@@ -7,6 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import forge.adventure.data.EnemyData;
+import forge.adventure.data.AdventureQuestData;
 import forge.adventure.data.PointOfInterestData;
 import forge.StaticData;
 
@@ -40,6 +41,7 @@ public final class AdventureContentPacks {
     private final Set<String> enabledPoints = new java.util.LinkedHashSet<>();
     private final Map<String, String> decks = new HashMap<>();
     private final List<JsonObject> biomes = new ArrayList<>();
+    private final Map<Integer, AdventureQuestData> quests = new java.util.LinkedHashMap<>();
     private final Map<String, String> customEditions = new HashMap<>();
     private final Set<String> requiredEditions = new HashSet<>();
     private final Set<String> ownedDecks = new HashSet<>();
@@ -172,6 +174,30 @@ public final class AdventureContentPacks {
         var json = new Json();
         EnemyData[] ownedEnemies = group.has("enemyDefinitions") ? json.fromJson(EnemyData[].class, definition(folder, group.get("enemyDefinitions"))) : new EnemyData[0];
         PointOfInterestData[] ownedPoints = group.has("poiDefinitions") ? json.fromJson(PointOfInterestData[].class, definition(folder, group.get("poiDefinitions"))) : new PointOfInterestData[0];
+        String questDefinition = group.has("questDefinitions") ? definition(folder, group.get("questDefinitions")) : "[]";
+        var questRecords = JsonParser.parseString(questDefinition).getAsJsonArray();
+        Set<Integer> questIds = new HashSet<>(quests.keySet());
+        if (!questRecords.isEmpty()) {
+            Path baseQuests = dependencies.resource("world/quests.json");
+            if (Files.isRegularFile(baseQuests)) {
+                for (var quest : JsonParser.parseString(Files.readString(baseQuests)).getAsJsonArray()) {
+                    questIds.add(quest.getAsJsonObject().get("id").getAsInt());
+                }
+            }
+        }
+        // Validate explicit IDs before getID() can allocate an ID through the quest controller.
+        for (var record : questRecords) {
+            var quest = record.getAsJsonObject();
+            if (!quest.has("id") || quest.get("id").getAsInt() <= 0 || !questIds.add(quest.get("id").getAsInt())) {
+                throw new IOException("Duplicate or missing optional quest ID");
+            }
+        }
+        AdventureQuestData[] ownedQuests = json.fromJson(AdventureQuestData[].class, questDefinition);
+        for (var quest : ownedQuests) {
+            if (!quest.isTemplate || quest.stages.length == 0) {
+                throw new IOException("Duplicate or incomplete optional quest: " + quest.getID());
+            }
+        }
         Set<String> names = new HashSet<>();
         for (var enemy : ownedEnemies) if (enemy.name == null || enemies.containsKey(enemy.name) || !names.add(enemy.name)) throw new IOException("Duplicate or unnamed enemy");
         Set<String> baseEnemies = baseNames("world/enemies.json");
@@ -251,6 +277,7 @@ public final class AdventureContentPacks {
         enabledDecks.addAll(groupDecks);
         enabledMaps.addAll(groupMaps);
         biomes.addAll(additions);
+        for (var quest : ownedQuests) quests.put(quest.getID(), quest);
     }
 
     private Set<String> baseNames(String logicalPath) throws IOException {
@@ -275,6 +302,13 @@ public final class AdventureContentPacks {
         var result = new Array<EnemyData>();
         for (var enemy : base) if (!enemies.containsKey(enemy.name)) result.add(enemy);
         for (String id : enabledEnemies) result.add(enemies.get(id));
+        return result;
+    }
+
+    public Array<AdventureQuestData> mergeQuests(Array<AdventureQuestData> base) {
+        var result = new Array<AdventureQuestData>();
+        for (var quest : base) if (!quests.containsKey(quest.getID())) result.add(quest);
+        for (var quest : quests.values()) result.add(quest);
         return result;
     }
 

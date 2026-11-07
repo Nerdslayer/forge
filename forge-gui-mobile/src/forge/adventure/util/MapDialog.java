@@ -488,6 +488,11 @@ public class MapDialog {
         if (data == null) return true;
         AdventurePlayer player = Current.player();
         for (DialogData.ConditionData condition : data) {
+            if (condition.defeatedEnemy != null && !condition.defeatedEnemy.isEmpty()) {
+                var root = TileMapScene.instance().rootPoint;
+                boolean won = AdventureQuestController.hasRecordedEnemyVictory(condition.defeatedEnemy, root);
+                if (won == condition.not) return false;
+            }
             //TODO:Check for card in inventory.
             if (condition.item != null && !condition.item.isEmpty()) { //Check for an item in player's inventory.
                 if (!player.hasItem(condition.item)) {

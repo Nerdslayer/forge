@@ -1,0 +1,135 @@
+[
+  {
+    "id": 90701,
+    "isTemplate": true,
+    "oneTime": true,
+    "requiredPOI": "Hogwarts",
+    "name": "A Castle Out of Place",
+    "description": "A magical castle has been transported to Shandalar from another plane. Seek Dumbledore upstairs at Hogwarts, then defeat Voldemort in the northern forest. A previous castle victory counts; no return trip is required.",
+    "offerDialog": {
+      "text": "A castle appeared in the colorless heartlands overnight. Its visitors call it Hogwarts: a school of magic torn from another plane. Their headmaster, Dumbledore, is asking for help. Will you investigate?",
+      "options": [
+        {
+          "name": "I will find Dumbledore.",
+          "action": [
+            {
+              "setQuestFlag": {
+                "key": "hpCastleQuestAccepted",
+                "val": 1
+              }
+            },
+            {
+              "issueQuest": "90701"
+            }
+          ]
+        },
+        {
+          "name": "Perhaps later."
+        }
+      ]
+    },
+    "prologue": {},
+    "epilogue": {
+      "text": "With Voldemort defeated, the displaced castle is safe from his immediate threat. Dumbledore's promised supplies are yours: 500 gold, 10 shards, and three random Harry Potter cards.",
+      "options": [
+        {
+          "name": "Claim quest reward",
+          "action": [
+            {
+              "grantRewards": [
+                {
+                  "type": "gold",
+                  "count": 500,
+                  "probability": 1
+                },
+                {
+                  "type": "shards",
+                  "count": 10,
+                  "probability": 1
+                },
+                {
+                  "type": "card",
+                  "count": 3,
+                  "editions": [
+                    "HP"
+                  ],
+                  "probability": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "rewardDescription": "500 gold, 10 shards, and 3 random HP cards",
+    "stages": [
+      {
+        "id": 1,
+        "name": "Find the displaced castle",
+        "description": "Travel to Hogwarts Castle in the colorless heartlands.",
+        "objective": "Travel",
+        "count3": 1,
+        "POITags": [
+          "Hogwarts"
+        ],
+        "epilogue": {
+          "text": "You have reached Hogwarts. A message for visitors directs you to Dumbledore: enter the Great Hall, take the rear-right stairs, and follow the upper gallery to his office.",
+          "options": [
+            {
+              "name": "Find Dumbledore"
+            }
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "name": "Meet the headmaster",
+        "description": "Speak to Dumbledore in his upstairs office at Hogwarts.",
+        "objective": "QuestFlag",
+        "mapFlag": "hpCastleBriefed",
+        "mapFlagValue": 1,
+        "POITags": [
+          "Hogwarts"
+        ],
+        "prerequisiteIDs": [
+          1
+        ]
+      },
+      {
+        "id": 3,
+        "name": "End the threat",
+        "description": "Defeat Voldemort at the northern end of the Forbidden Forest. A previous castle victory counts. No return to Dumbledore or the town is needed.",
+        "objective": "Defeat",
+        "POITags": [
+          "Hogwarts"
+        ],
+        "prerequisiteIDs": [
+          2
+        ],
+        "targetEnemy": "HP Voldemort",
+        "creditPreviousVictory": true,
+        "count3": 1
+      }
+    ],
+    "questSourceTags": [
+      "forest_town_generic",
+      "forest_town_identity",
+      "forest_town_tribal",
+      "island_town_generic",
+      "island_town_identity",
+      "island_town_tribal",
+      "mountain_town_generic",
+      "mountain_town_identity",
+      "mountain_town_tribal",
+      "plains_town_generic",
+      "plains_town_identity",
+      "plains_town_tribal",
+      "swamp_town_generic",
+      "swamp_town_identity",
+      "swamp_town_tribal",
+      "waste_town_generic",
+      "waste_town_identity",
+      "waste_town_tribal"
+    ]
+  }
+]
