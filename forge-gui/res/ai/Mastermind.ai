@@ -326,6 +326,9 @@ SIDEBOARDING_SHARED_TYPE_ONLY=false
 # Allow replacing a creature with a planeswalker and vice versa when sideboarding if the previous option is disabled
 SIDEBOARDING_PLANESWALKER_EQ_CREATURE=false
 
+# Keep Mastermind's decisions from being overridden by Flat Monte Carlo.
+FLAT_MC_ENABLED=false
+
 # Experimental first-order effect relationship analysis for removal-target selection
 ENABLE_EFFECT_ANALYSIS=true
 # Percentage applied to the raw effect synergy score
