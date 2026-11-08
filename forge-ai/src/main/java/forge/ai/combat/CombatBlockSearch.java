@@ -37,7 +37,7 @@ public final class CombatBlockSearch {
             snapshot = snapshot0;
             values = values0;
             fixed = fixed0;
-            comparison = new Search(snapshot, values, budget, 16, null, null, fixed);
+            comparison = new Search(snapshot, values, budget, defaultBeamWidth(budget), null, null, fixed);
         }
 
         Candidate evaluate(final CombatAssignment assignment, final CombatSearchBudget budget) {
@@ -45,7 +45,7 @@ public final class CombatBlockSearch {
             final var cached = completed.get(assignment);
             if (cached != null) { cacheHits++; return cached; }
             evaluations++;
-            final Search trial = new Search(snapshot, values, budget, 16, null, null, fixed);
+            final Search trial = new Search(snapshot, values, budget, defaultBeamWidth(budget), null, null, fixed);
             final var candidate = trial.evaluate(assignment.blockersByAttacker());
             if (candidate == null || !trial.domainComplete || trial.interrupted
                     || !trial.verifiedAllocations.contains(candidate)) {
@@ -102,7 +102,7 @@ public final class CombatBlockSearch {
 
     static Result searchWithLeafAdjustment(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
             final CombatSearchBudget budget, final java.util.function.Function<CombatProjection, LeafAdjustment> adjustment) {
-        final Search search = new Search(snapshot, values, budget, 16, null, null);
+        final Search search = new Search(snapshot, values, budget, defaultBeamWidth(budget), null, null);
         search.leafAdjustment = adjustment;
         return search.run();
     }
@@ -134,9 +134,13 @@ public final class CombatBlockSearch {
         }
     }
 
+    static int defaultBeamWidth(final CombatSearchBudget budget) {
+        return budget.scale(16);
+    }
+
     public static Result search(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
             final CombatSearchBudget budget) {
-        return search(snapshot, values, budget, 16);
+        return search(snapshot, values, budget, defaultBeamWidth(budget));
     }
 
     public static Result search(final PublicCombatSnapshot snapshot, final PreparedCombatValuation values,
@@ -172,7 +176,7 @@ public final class CombatBlockSearch {
         if (snapshot.observingPlayerId() != snapshot.defendingPlayerId() || readiness == null) {
             throw new IllegalArgumentException("Pressure requires an observing defender and frozen readiness");
         }
-        final Search search = new Search(snapshot, values, budget, 16, readiness, null, fixedBlocks);
+        final Search search = new Search(snapshot, values, budget, defaultBeamWidth(budget), readiness, null, fixedBlocks);
         search.reuse = reuse;
         return search.run();
     }
@@ -181,7 +185,7 @@ public final class CombatBlockSearch {
             final CombatSearchBudget budget, final PublicCombatReadiness readiness,
             final Map<Integer, List<Integer>> fixed, final List<CombatAssignment> seeds,
             final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> forecast) {
-        final Search search = new Search(snapshot, values, budget, 16, readiness, null, fixed);
+        final Search search = new Search(snapshot, values, budget, defaultBeamWidth(budget), readiness, null, fixed);
         search.seeds = seeds;
         search.defensiveEstimator = forecast;
         return search.run();
@@ -195,7 +199,7 @@ public final class CombatBlockSearch {
         if (snapshot.observingPlayerId() != snapshot.defendingPlayerId() || readiness == null || forecast == null) {
             throw new IllegalArgumentException("Defensive forecast requires an observing defender and readiness");
         }
-        final Search search = new Search(snapshot, values, budget, 16, readiness, null, fixedBlocks);
+        final Search search = new Search(snapshot, values, budget, defaultBeamWidth(budget), readiness, null, fixedBlocks);
         search.defensiveEstimator = forecast;
         return search.run();
     }
@@ -214,7 +218,7 @@ public final class CombatBlockSearch {
         if (snapshot.observingPlayerId() != snapshot.attackingPlayerId() || forecast == null) {
             throw new IllegalArgumentException("Combined continuation requires an observing attacker");
         }
-        final Search search = new Search(snapshot, values, budget, 16, null, forecast);
+        final Search search = new Search(snapshot, values, budget, defaultBeamWidth(budget), null, forecast);
         search.undiscountedReply = true;
         search.replyOpportunityReference = reference;
         return search.run();
@@ -233,7 +237,7 @@ public final class CombatBlockSearch {
         if (snapshot.observingPlayerId() != snapshot.attackingPlayerId() || replyEstimator == null) {
             throw new IllegalArgumentException("Reply-aware responses require an observing attacker");
         }
-        return new Search(snapshot, values, budget, 16, null, replyEstimator, Map.of(), continuationEstimator).run();
+        return new Search(snapshot, values, budget, defaultBeamWidth(budget), null, replyEstimator, Map.of(), continuationEstimator).run();
     }
 
     private static final class Search {

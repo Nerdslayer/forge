@@ -204,6 +204,16 @@ public class SettingsPage extends TabPage<SettingsScreen> {
             Forge.getLocalizer().getMessage("cbpAiProfiles"),
             Forge.getLocalizer().getMessage("nlpAiProfiles"),
             AiProfileUtil.getProfilesArray()), 1);
+        lstSettings.addItem(new LocalizedSelectSetting(FPref.MASTERMIND_AI_EFFORT,
+                Forge.getLocalizer().getMessage("cbMastermindEffort"),
+                Forge.getLocalizer().getMessage("nlMastermindEffort"),
+                forge.ai.MastermindEffort.localizedOptions()) {
+            @Override
+            public void valueChanged(String value) {
+                super.valueChanged(value);
+                forge.ai.MastermindEffort.configure(FModel.getPreferences().getPref(FPref.MASTERMIND_AI_EFFORT));
+            }
+        }, 1);
         lstSettings.addItem(new BooleanSetting(FPref.UI_ANTE,
             Forge.getLocalizer().getMessage("cbAnte"),
             Forge.getLocalizer().getMessage("nlAnte")), 1);
@@ -1002,6 +1012,10 @@ public class SettingsPage extends TabPage<SettingsScreen> {
             Forge.openScreen(new CustomSelectScreen());
         }
 
+        protected boolean isSelected(String option, String storedValue) {
+            return option.equals(storedValue);
+        }
+
         private class CustomSelectScreen extends FScreen {
             private final FList<String> lstOptions;
             private final String currentValue;
@@ -1020,7 +1034,7 @@ public class SettingsPage extends TabPage<SettingsScreen> {
                     @Override
                     public boolean tap(Integer index, String value, float x, float y, int count) {
                         Forge.back();
-                        if (!value.equals(currentValue)) {
+                        if (!isSelected(value, currentValue)) {
                             valueChanged(value);
                         }
                         return true;
@@ -1040,7 +1054,7 @@ public class SettingsPage extends TabPage<SettingsScreen> {
                         x += w - radius;
                         y += h / 2;
                         g.drawCircle(Utils.scale(1), SettingsScreen.DESC_COLOR, x, y, radius);
-                        if (value.equals(currentValue)) {
+                        if (isSelected(value, currentValue)) {
                             g.fillCircle(foreColor, x, y, radius / 2);
                         }
                     }
@@ -1090,6 +1104,11 @@ public class SettingsPage extends TabPage<SettingsScreen> {
             for (Map.Entry<String, String> entry : localizationMap.entrySet()) {
                 backingToLocalizedMap.put(entry.getValue(), entry.getKey());
             }
+        }
+
+        @Override
+        protected boolean isSelected(String option, String storedValue) {
+            return java.util.Objects.equals(localizedToBackingMap.get(option), storedValue);
         }
 
         @Override

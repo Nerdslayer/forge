@@ -52,7 +52,7 @@ public final class CombatBlockPlanner {
         }
         final PreparedCombatValuation values = prepared.orElseThrow();
         final int seedStarted = budget.used();
-        final var seedAllowance = budget.childAllowance(Math.min(4000, budget.remaining() / 4));
+        final var seedAllowance = budget.childAllowance(Math.min(budget.scale(4000), budget.remaining() / 4));
         final var seeds = CombatDefenseFloorSearch.prepare(snapshot, values, fixed, seedAllowance);
         reasons.addAll(seeds.floor().reasons());
         reasons.add("Whole-board defense prepared before optional forecasts; nodes=" + (budget.used() - seedStarted));
@@ -68,7 +68,7 @@ public final class CombatBlockPlanner {
         final CombatBlockSearch.Result explored;
         if (AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_BLOCK_DEFENSIVE_FORECAST)) {
             final var defensive = CombatDefensiveForecastEvaluator.search(snapshot, values, readiness.orElseThrow(), fixed,
-                    budget, CombatDefensiveForecastEvaluator.MAX_ADDITIONAL_NODES,
+                    budget, budget.scale(CombatDefensiveForecastEvaluator.MAX_ADDITIONAL_NODES),
                     AiProfileUtil.getBoolProperty(ai, AiProps.ENABLE_COMBAT_SURVIVAL_HORIZON)
                             ? Math.max(0, AiProfileUtil.getIntProperty(ai, AiProps.COMBAT_SURVIVAL_EXTRA_TURN_VALUE)) : 0, seeds.assignments());
             explored = defensive.search();

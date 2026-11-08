@@ -155,6 +155,7 @@ public enum VSubmenuPreferences implements IVSubmenu<CSubmenuPreferences> {
     private final FComboBoxPanel<String> cbpAiProfiles = new FComboBoxPanel<>(localizer.getMessage("cbpAiProfiles")+":");
     private final FComboBoxPanel<String> cbpAiSideboardingMode = new FComboBoxPanel<>(localizer.getMessage("cbpAiSideboardingMode")+":");
     private final FComboBoxPanel<String> cbpAiTimeout = new FComboBoxPanel<>(localizer.getMessage("cbAITimeout")+":");
+    private final FComboBoxPanel<String> cbpMastermindEffort = new FComboBoxPanel<>(localizer.getMessage("cbMastermindEffort") + ":");
     private final FComboBoxPanel<String> cbpStackAdditions = new FComboBoxPanel<>(localizer.getMessage("cbpStackAdditions")+":");
     private final FComboBoxPanel<String> cbpLandPlayed = new FComboBoxPanel<>(localizer.getMessage("cbpLandPlayed")+":");
     private final FComboBoxPanel<String> cbpDisplayCurrentCardColors = new FComboBoxPanel<>(localizer.getMessage("cbpDisplayCurrentCardColors")+":");
@@ -231,6 +232,7 @@ public enum VSubmenuPreferences implements IVSubmenu<CSubmenuPreferences> {
         pnlPrefs.add(new NoteLabel(localizer.getMessage("nlpMulliganRule")), descriptionConstraints);
 
         pnlPrefs.add(cbpAiProfiles, comboBoxConstraints);
+        pnlPrefs.add(cbpMastermindEffort, comboBoxConstraints);
         pnlPrefs.add(new NoteLabel(localizer.getMessage("nlpAiProfiles")), descriptionConstraints);
 
         pnlPrefs.add(cbAnte, titleConstraints);
@@ -925,6 +927,10 @@ public enum VSubmenuPreferences implements IVSubmenu<CSubmenuPreferences> {
 
     public FComboBoxPanel<String> getMusicSetsComboBoxPanel() {
         return cbpMusicSets;
+    }
+
+    public FComboBoxPanel<String> getMastermindEffortComboBoxPanel() {
+        return cbpMastermindEffort;
     }
 
     public FComboBoxPanel<String> getAiProfilesComboBoxPanel() {

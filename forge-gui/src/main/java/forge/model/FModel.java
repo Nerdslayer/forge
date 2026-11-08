@@ -294,6 +294,13 @@ public final class FModel {
         // Preload AI profiles
         AiProfileUtil.loadAllProfiles(ForgeConstants.AI_PROFILE_DIR);
         AiProfileUtil.setAiSideboardingMode(AiProfileUtil.AISideboardingMode.normalizedValueOf(getPreferences().getPref(FPref.MATCH_AI_SIDEBOARDING_MODE)));
+        if (Boolean.getBoolean("java.awt.headless")) {
+            forge.ai.MastermindEffort.configure("LOW");
+        } else {
+            final var effort = forge.ai.MastermindEffort.parse(getPreferences().getPref(FPref.MASTERMIND_AI_EFFORT));
+            getPreferences().setPref(FPref.MASTERMIND_AI_EFFORT, effort.name());
+            forge.ai.MastermindEffort.configure(effort.name());
+        }
 
         // Generate Deck Gen matrix
         if(getPreferences().getPrefBoolean(FPref.DECKGEN_CARDBASED) && !loadCardsLazily) {

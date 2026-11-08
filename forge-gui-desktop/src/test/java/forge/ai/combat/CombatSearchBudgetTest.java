@@ -1,5 +1,6 @@
 package forge.ai.combat;
 
+import forge.ai.MastermindEffort;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.testng.Assert;
@@ -7,6 +8,29 @@ import org.testng.annotations.Test;
 
 /** Shared node/time caps and validation headroom, independent of machine speed. */
 public class CombatSearchBudgetTest {
+    @Test
+    public void effortScalesWorkOnceAndKeepsValidationReserve() {
+        final int[] multipliers = {1, 2, 4, 8};
+        for (final var effort : MastermindEffort.values()) {
+            final int multiplier = multipliers[effort.ordinal()];
+            final AtomicLong clock = new AtomicLong();
+            final var total = new CombatSearchBudget(effort.scale(50), effort.scale(500), clock::get, effort);
+            final var planning = total.planningAllowance();
+            Assert.assertEquals(CombatBlockSearch.defaultBeamWidth(planning), 16 * multiplier);
+            Assert.assertEquals(planning.remaining(), 40 * multiplier);
+            final var child = planning.nodeAllowance(planning.scale(10));
+            for (int index = 0; index < 10 * multiplier; index++) { Assert.assertTrue(child.tryConsume()); }
+            Assert.assertFalse(child.tryConsume());
+            Assert.assertEquals(total.used(), 10 * multiplier);
+            Assert.assertEquals(planning.remaining(), 30 * multiplier);
+            clock.set(400_000_000L * multiplier);
+            Assert.assertFalse(planning.tryConsume());
+            Assert.assertTrue(total.tryConsume());
+        }
+        Assert.assertEquals(MastermindEffort.parse("invalid"), MastermindEffort.LOW);
+        Assert.assertEquals(MastermindEffort.parse(null), MastermindEffort.LOW);
+        Assert.assertEquals(MastermindEffort.MAX.scale(Integer.MAX_VALUE), Integer.MAX_VALUE);
+    }
     @Test
     public void optionalChildSharesWorkAndLeavesRecoveryAndValidationCapacity() {
         final AtomicLong clock = new AtomicLong();

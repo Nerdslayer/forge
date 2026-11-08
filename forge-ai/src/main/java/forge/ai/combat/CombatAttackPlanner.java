@@ -197,7 +197,8 @@ public final class CombatAttackPlanner {
         final var captured = PublicCombatSnapshot.capture(ai, all, budget::tryConsume);
         if (captured.isEmpty()) { return null; }
         PublicCombatSnapshot snapshot = captured.orElseThrow();
-        final var crews = CombatCrewPreparation.prepare(ai, all, budget::tryConsume);
+        final var crews = CombatCrewPreparation.prepare(ai, all, budget::tryConsume,
+                budget.scale(CombatCrewPreparation.MAX_RESPONSES));
         if (crews.isEmpty()) { return null; }
         final var crewResponses = crews.orElseThrow();
         reasons.addAll(crewResponses.reasons());

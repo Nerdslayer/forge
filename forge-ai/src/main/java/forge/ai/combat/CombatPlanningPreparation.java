@@ -2,6 +2,7 @@ package forge.ai.combat;
 
 import forge.ai.AiProfileUtil;
 import forge.ai.AiProps;
+import forge.ai.MastermindEffort;
 import forge.ai.effect.CombatValuationEvaluator;
 import forge.ai.effect.ValuationContext;
 import forge.ai.effect.ValuationDecision;
@@ -14,8 +15,10 @@ public final class CombatPlanningPreparation {
 
     /** Live entry boundary only; nested searches receive this same caller-owned allowance. */
     public static CombatSearchBudget budget(final Player observer) {
-        return new CombatSearchBudget(Math.max(0, AiProfileUtil.getIntProperty(observer, AiProps.COMBAT_PLANNING_MAX_NODES)),
-                Math.max(1, AiProfileUtil.getIntProperty(observer, AiProps.COMBAT_PLANNING_TIMEOUT_MS)));
+        final var effort = MastermindEffort.forPlayer(observer);
+        return new CombatSearchBudget(effort.scale(Math.max(0, AiProfileUtil.getIntProperty(observer, AiProps.COMBAT_PLANNING_MAX_NODES))),
+                effort.scale(Math.max(1, AiProfileUtil.getIntProperty(observer, AiProps.COMBAT_PLANNING_TIMEOUT_MS))),
+                System::nanoTime, effort);
     }
 
     static Optional<PreparedCombatValuation> values(final Player observer, final ValuationDecision decision, final CombatSearchBudget budget) {

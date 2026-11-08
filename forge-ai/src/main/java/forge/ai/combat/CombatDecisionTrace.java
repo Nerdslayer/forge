@@ -16,6 +16,7 @@ public final class CombatDecisionTrace {
                 .append(ai.getName()).append('#').append(ai.getId())
                 .append(", prepared=").append(preparation.execution().isPresent())
                 .append("\nNodes: ").append(budget.used()).append(", elapsedMs=").append(budget.elapsedMillis())
+                .append(", ").append(budget.limits())
                 .append("\nReasons: ").append(preparation.reasons())
                 .append("\nTwo-turn pressure: ").append(preparation.twoTurnPressure());
         preparation.search().ifPresent(search -> {
@@ -37,6 +38,7 @@ public final class CombatDecisionTrace {
         final StringBuilder text = new StringBuilder("[AI Combat Analysis]\nDecision: attack, observer=")
                 .append(ai.getName()).append('#').append(ai.getId()).append(", applied=").append(applied)
                 .append("\nNodes: ").append(budget.used()).append(", elapsedMs=").append(budget.elapsedMillis())
+                .append(", ").append(budget.limits())
                 .append("\nPlan reasons: ").append(plan.reasons()).append("\nExecution: ").append(executionReason)
                 .append("\nPrepared crew response worlds: ").append(plan.crewResponses().responses().size())
                 .append(", public resource identities: ").append(plan.crewResponses().identities());
@@ -99,6 +101,7 @@ public final class CombatDecisionTrace {
         final StringBuilder text = new StringBuilder("[AI Combat Analysis]\nDecision: block, observer=")
                 .append(ai.getName()).append('#').append(ai.getId()).append(", applied=").append(applied)
                 .append("\nNodes: ").append(budget.used()).append(", elapsedMs=").append(budget.elapsedMillis())
+                .append(", ").append(budget.limits())
                 .append("\nPlan reasons: ").append(plan.reasons()).append("\nExecution: ").append(executionReason);
         plan.snapshot().ifPresent(snapshot -> {
             text.append("\nAttacking player: ").append(snapshot.attackingPlayerId())

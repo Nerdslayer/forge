@@ -90,7 +90,7 @@ final class CombatDefenseFloorSearch {
                 + ", cacheHits=" + evaluator.cacheHits() + ", singlePairs=" + pairs
                 + ", duplicateProposalsSkipped=" + duplicateProposals
                 + ", singletonScanComplete=" + singletonComplete + ", groups=" + groups
-                + ", refinementBounded=" + (!capacity() || groups == MAX_GROUPS)
+                + ", refinementBounded=" + (!capacity() || groups == budget.scale(MAX_GROUPS))
                 + ", bestSource=" + bestSource + ", baseline=" + describe(baseline) + ", best=" + describe(best));
         reasons.addAll(evaluator.failures());
         final var assignments = retained().stream().map(CombatBlockSearch.Candidate::assignment).toList();
@@ -119,7 +119,7 @@ final class CombatDefenseFloorSearch {
         return result;
     }
 
-    private boolean capacity() { return trials < MAX_TRIALS && budget.remaining() > 0; }
+    private boolean capacity() { return trials < budget.scale(MAX_TRIALS) && budget.remaining() > 0; }
 
     private CombatBlockSearch.Candidate trial(final Map<Integer, List<Integer>> blocks, final CombatSearchBudget allowance) {
         if (!capacity() || allowance.remaining() == 0) { return null; }
@@ -159,7 +159,7 @@ final class CombatDefenseFloorSearch {
             if (!budget.tryConsume()) { return false; }
             options.put(attacker, snapshot.legalBlockers().getOrDefault(attacker, Set.of()).stream().sorted().toList());
             final var required = fixed.getOrDefault(attacker, List.of());
-            if (!blocks.getOrDefault(attacker, List.of()).equals(required)) { replace(blocks, attacker, required, budget.nodeAllowance(64)); }
+            if (!blocks.getOrDefault(attacker, List.of()).equals(required)) { replace(blocks, attacker, required, budget.nodeAllowance(budget.scale(64))); }
         }
         for (int index = 0; ; index++) {
             boolean any = false;
@@ -173,12 +173,12 @@ final class CombatDefenseFloorSearch {
                 final var group = new ArrayList<>(fixed.getOrDefault(attacker, List.of()));
                 if (!group.contains(blocker)) { group.add(blocker); }
                 pairs++;
-                replace(blocks, attacker, group, budget.nodeAllowance(64));
+                replace(blocks, attacker, group, budget.nodeAllowance(budget.scale(64)));
                 // Also reinforce existing gangs/tramplers, rather than replacing away their useful members.
                 final var reinforced = new ArrayList<>(blocks.getOrDefault(attacker, List.of()));
                 if (!reinforced.isEmpty() && reinforced.size() < 4 && !reinforced.contains(blocker)) {
                     reinforced.add(blocker);
-                    replace(blocks, attacker, reinforced, budget.nodeAllowance(128));
+                    replace(blocks, attacker, reinforced, budget.nodeAllowance(budget.scale(128)));
                 }
             }
             if (!any) { return true; }
@@ -216,7 +216,7 @@ final class CombatDefenseFloorSearch {
                     final var proposal = new LinkedHashMap<>(blocks);
                     proposal.put(donor, List.of(replacement));
                     proposal.put(target, List.of(moving));
-                    trial(proposal, budget.nodeAllowance(64));
+                    trial(proposal, budget.nodeAllowance(budget.scale(64)));
                 }
             }
         }
@@ -224,7 +224,7 @@ final class CombatDefenseFloorSearch {
 
     private void gangs(final Map<Integer, List<Integer>> blocks) {
         for (final int attacker : attackers) {
-            if (!capacity() || groups >= MAX_GROUPS || !budget.tryConsume()) { return; }
+            if (!capacity() || groups >= budget.scale(MAX_GROUPS) || !budget.tryConsume()) { return; }
             final var body = snapshot.creatures().get(attacker);
             if (body.maximumBlockers() < 2 || body.minimumBlockers() > 4) { continue; }
             final var used = usedElsewhere(blocks, attacker);
@@ -244,14 +244,14 @@ final class CombatDefenseFloorSearch {
                 }
             }
             for (final var group : proposals) {
-                if (!capacity() || groups >= MAX_GROUPS) { return; }
+                if (!capacity() || groups >= budget.scale(MAX_GROUPS)) { return; }
                 final var proposed = new LinkedHashMap<>(blocks);
                 proposed.put(attacker, group);
                 if (attempted.contains(new CombatAssignment(snapshot.attackersToDefenders(), proposed))) { continue; }
                 groups++;
                 // TODO: Legacy four-member order coverage remains explicitly incomplete in the optimizer.
                 // Larger gangs, multi-displacement matching and unmodeled global requirements are deferred.
-                replace(blocks, attacker, group, budget.nodeAllowance(512));
+                replace(blocks, attacker, group, budget.nodeAllowance(budget.scale(512)));
             }
         }
     }

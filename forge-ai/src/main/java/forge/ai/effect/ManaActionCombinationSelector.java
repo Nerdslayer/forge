@@ -13,6 +13,7 @@ import java.util.function.Predicate;
 import org.tinylog.Logger;
 
 import forge.ai.AiProfileUtil;
+import forge.ai.MastermindEffort;
 import forge.ai.AiProps;
 import forge.ai.CardResourceValueEvaluator;
 import forge.ai.ComputerUtilCost;
@@ -184,7 +185,7 @@ public final class ManaActionCombinationSelector {
         }
         PreparedCandidates prepared = null;
         final EffectEvaluationBudget budget = EffectEvaluationBudget.fromTimeoutMillis(
-                actionSelectionTimeoutMillis(ai));
+                actionSelectionTimeoutMillis(ai), MastermindEffort.forPlayer(ai));
         final IdentityHashMap<SpellAbility, Boolean> admissionResults = new IdentityHashMap<>();
         final Predicate<SpellAbility> cachedCandidateFilter = ability -> {
             if (admissionResults.containsKey(ability)) {
@@ -242,9 +243,9 @@ public final class ManaActionCombinationSelector {
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
             final int timeoutMana = prepared == null ? availableMana : prepared.availableMana();
             final int evaluated = prepared == null ? 0 : prepared.candidates().size();
-            final Selection timeout = timedOut(timeoutMana, evaluated);
+            final Selection timeout = timedOut(timeoutMana, evaluated, budget);
             return comparison(timeout, timeout, "evaluation_timeout",
-                    List.of("analysis budget exceeded after " + evaluated + " candidate(s)"));
+                    List.of("analysis budget exceeded after " + evaluated + " candidate(s); " + budget.limits()));
         } catch (final RuntimeException exception) {
             final Selection empty = emptySelection(availableMana, 0);
             return comparison(empty, empty, "evaluation_error",
@@ -309,14 +310,14 @@ public final class ManaActionCombinationSelector {
         }
 
         final EffectEvaluationBudget budget = EffectEvaluationBudget.fromTimeoutMillis(
-                actionSelectionTimeoutMillis(ai));
+                actionSelectionTimeoutMillis(ai), MastermindEffort.forPlayer(ai));
         try {
             final PreparedCandidates prepared = prepareCandidates(ai, abilities, skipCounter,
                     snapshot, candidateFilter, ignored -> "legacy candidate filter rejected action",
                     budget);
             return selectPrepared(prepared, requiredFirstAction, snapshot, budget);
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
-            return timedOut(snapshot == null ? 0 : snapshot.availableMana(), 0);
+            return timedOut(snapshot == null ? 0 : snapshot.availableMana(), 0, budget);
         } catch (final RuntimeException ignored) {
             // The existing chooser remains the safe fallback if mana estimation is unavailable.
             return emptySelection(0, 0);
@@ -782,7 +783,7 @@ public final class ManaActionCombinationSelector {
             });
             for (final State state : finalStates) {
                 budget.check();
-                if (isManaFeasible(state, snapshot, manaSourceModel)) {
+                if (isManaFeasible(state, snapshot, manaSourceModel, budget)) {
                     return state;
                 }
             }
@@ -1042,9 +1043,9 @@ public final class ManaActionCombinationSelector {
         }
     }
 
-    private static Selection timedOut(final int availableMana, final int evaluated) {
+    private static Selection timedOut(final int availableMana, final int evaluated, final EffectEvaluationBudget budget) {
         Logger.warn("[AI Effect Analysis] Mana action combination timed out after evaluating {} candidates; "
-                + "preserving legacy action ordering.", evaluated);
+                + "preserving legacy action ordering ({}).", evaluated, budget.limits());
         return emptySelection(availableMana, evaluated);
     }
 
@@ -1245,7 +1246,7 @@ public final class ManaActionCombinationSelector {
     }
 
     private static boolean isManaFeasible(final State state,
-            final ActionDecisionSnapshot snapshot, final ManaSourceModel manaSourceModel) {
+            final ActionDecisionSnapshot snapshot, final ManaSourceModel manaSourceModel, final EffectEvaluationBudget budget) {
         if (!snapshot.manaResourcesComplete()) {
             return false;
         }
@@ -1299,7 +1300,7 @@ public final class ManaActionCombinationSelector {
                 isGenericRequirement(first), isGenericRequirement(second)));
         if (manaSourceModel.independentSingleOutputSources()) {
             return assignWithBipartiteMatching(requirements, manaSourceModel.sources(),
-                    unavailableManaSources);
+                    unavailableManaSources, budget);
         }
         final boolean[][] usedOutputs = new boolean[manaSourceModel.sources().size()][];
         for (int i = 0; i < manaSourceModel.sources().size(); i++) {
@@ -1310,7 +1311,7 @@ public final class ManaActionCombinationSelector {
         return assignManaRequirements(0, requirements, manaSourceModel.sources(), usedOutputs,
                 new IdentityHashMap<>(), unavailableManaSources,
                 manaSourceModel.symmetryGroups().bySource(),
-                lastTriedAtFrame, new SearchBudget());
+                lastTriedAtFrame, new SearchBudget(budget));
     }
 
     private static ManaSourceModel manaSourceModel(final ActionDecisionSnapshot snapshot) {
@@ -1350,10 +1351,10 @@ public final class ManaActionCombinationSelector {
 
     private static boolean assignWithBipartiteMatching(
             final List<Integer> requirements, final List<ActionManaSource> sources,
-            final IdentityHashMap<Card, Boolean> unavailableManaSources) {
+            final IdentityHashMap<Card, Boolean> unavailableManaSources, final EffectEvaluationBudget budget) {
         final int[] matchedRequirementBySource = new int[sources.size()];
         java.util.Arrays.fill(matchedRequirementBySource, -1);
-        final SearchBudget searchBudget = new SearchBudget();
+        final SearchBudget searchBudget = new SearchBudget(budget);
         for (int requirementIndex = 0; requirementIndex < requirements.size(); requirementIndex++) {
             final boolean[] visitedSources = new boolean[sources.size()];
             if (!assignRequirement(requirementIndex, requirements, sources,
@@ -1628,11 +1629,15 @@ public final class ManaActionCombinationSelector {
     private static final int MAX_MANA_SEARCH_NODES = 10_000;
 
     private static final class SearchBudget {
+        private final EffectEvaluationBudget budget;
+
+        SearchBudget(final EffectEvaluationBudget budget) { this.budget = budget; }
         private int nodes;
         private int frames;
 
         private boolean visit() {
-            return ++nodes <= MAX_MANA_SEARCH_NODES;
+            budget.check();
+            return ++nodes <= budget.scale(MAX_MANA_SEARCH_NODES);
         }
 
         private int nextFrame() {

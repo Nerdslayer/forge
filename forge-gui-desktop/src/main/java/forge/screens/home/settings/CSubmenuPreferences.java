@@ -212,6 +212,7 @@ public enum CSubmenuPreferences implements ICDoc {
         initializeServerUPnPComboBox();
         initializeMulliganRuleComboBox();
         initializeAiProfilesComboBox();
+        initializeMastermindEffortComboBox();
         initializeAiSideboardingModeComboBox();
         initializeAiTimeoutComboBox();
         initializeSoundSetsComboBox();
@@ -521,6 +522,17 @@ public enum CSubmenuPreferences implements ICDoc {
         final FComboBox<String> comboBox = createComboBox(AiProfileUtil.getProfilesArray(), userSetting);
         final String selectedItem = this.prefs.getPref(userSetting);
         panel.setComboBox(comboBox, selectedItem);
+    }
+
+    private void initializeMastermindEffortComboBox() {
+        final FPref setting = FPref.MASTERMIND_AI_EFFORT;
+        final var labels = forge.ai.MastermindEffort.localizedOptions();
+        final var selected = forge.ai.MastermindEffort.parse(prefs.getPref(setting));
+        final var panel = view.getMastermindEffortComboBoxPanel();
+        panel.setToolTipText(forge.util.Localizer.getInstance().getMessage("nlMastermindEffort"));
+        final var combo = createLocalizedComboBox(labels.keySet().toArray(new String[0]), setting, labels);
+        panel.setComboBox(combo, selected.localizedLabel());
+        combo.addActionListener(event -> forge.ai.MastermindEffort.configure(labels.get(combo.getSelectedItem())));
     }
 
     private void initializeAiSideboardingModeComboBox() {

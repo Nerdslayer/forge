@@ -73,7 +73,7 @@ public final class CombatAttackSearch {
         Optional<Candidate> best = selection.best();
         if (complete && best.isPresent() && budget.remaining() > 0
                 && best.orElseThrow().combat().projection().terminal() == CombatProjection.Terminal.NONE) {
-            final var allowance = budget.childAllowance(Math.min(4000, budget.remaining() / 4));
+            final var allowance = budget.childAllowance(Math.min(budget.scale(4000), budget.remaining() / 4));
             final var refinement = evaluation.withBudget(allowance);
             best = Optional.of(CombatAttackRefiner.refine(best.orElseThrow(),
                     alternatives.attackersToDefenders().entrySet().stream().filter(e -> fixedAttackers.contains(e.getKey()))

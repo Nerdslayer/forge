@@ -397,6 +397,34 @@ public class CombatCrewResponseTest extends AITest {
         Assert.assertEquals(next.alternatives().creatures().get(pilot.getId()).toughness(), 2);
     }
 
+    @Test
+    public void scaledCrewWorkCapCanCompleteAnOtherwiseBoundedSearch() {
+        final var f = fixture();
+        f.combat().addAttacker(creature(f.ai(), 2, 2), f.opponent());
+        vehicle(f.opponent(), 4, 4, 1);
+        for (int i = 0; i < 3; i++) { creature(f.opponent(), 1, 1); }
+        final var low = CombatCrewPreparation.prepare(f.ai(), f.combat(), () -> true, 2).orElseThrow();
+        final var medium = CombatCrewPreparation.prepare(f.ai(), f.combat(), () -> true,
+                forge.ai.MastermindEffort.MEDIUM.scale(2)).orElseThrow();
+        Assert.assertFalse(low.reasons().isEmpty());
+        Assert.assertTrue(medium.reasons().isEmpty(), medium.reasons().toString());
+        Assert.assertEquals(medium.responses().size(), 3);
+    }
+
+    @Test
+    public void higherEffortAppliesOnlyToTheResolvedMastermindProfile() {
+        final var f = fixture();
+        final var original = forge.ai.MastermindEffort.forPlayer(f.ai());
+        try {
+            forge.ai.MastermindEffort.configure("MAX");
+            Assert.assertEquals(CombatPlanningPreparation.budget(f.ai()).scale(100), 800);
+            ((LobbyPlayerAi) f.ai().getLobbyPlayer()).setAiProfile("Default");
+            Assert.assertEquals(CombatPlanningPreparation.budget(f.ai()).scale(100), 100);
+        } finally {
+            forge.ai.MastermindEffort.configure(original.name());
+        }
+    }
+
     private Fixture fixture() {
         final Game game = initAndCreateGame();
         final Player ai = game.getPlayers().get(0);

@@ -25,12 +25,17 @@ import forge.game.zone.ZoneType;
 /** Read-only standard crew preparation; payment and opponent choices are never executed. */
 final class CombatCrewPreparation {
     private CombatCrewPreparation() { }
-    private static final int MAX_RESPONSES = 128;
+    static final int MAX_RESPONSES = 128;
 
     private record Vehicle(Card animated, List<Set<Integer>> payments) { }
 
     static Optional<PreparedCombatCrewResponses> prepare(final Player observer, final Combat alternatives,
             final BooleanSupplier checkpoint) {
+        return prepare(observer, alternatives, checkpoint, MAX_RESPONSES);
+    }
+
+    static Optional<PreparedCombatCrewResponses> prepare(final Player observer, final Combat alternatives,
+            final BooleanSupplier checkpoint, final int cap) {
         final List<Vehicle> vehicles = new ArrayList<>();
         final Map<Integer, Long> identities = new LinkedHashMap<>();
         final List<String> reasons = new ArrayList<>();
@@ -74,10 +79,10 @@ final class CombatCrewPreparation {
                 }
                 final List<Set<Integer>> groups = new ArrayList<>();
                 if (!groups(new ArrayList<>(contributions.keySet()), contributions, required, 0, 0,
-                        new LinkedHashSet<>(), groups, checkpoint)) {
-                    if (groups.size() >= MAX_RESPONSES) {
+                        new LinkedHashSet<>(), groups, checkpoint, cap)) {
+                    if (groups.size() >= cap) {
                         return Optional.of(new PreparedCombatCrewResponses(List.of(), identities,
-                                List.of("Crew payment enumeration exceeds " + MAX_RESPONSES + " alternatives: " + card.getId())));
+                                List.of("Crew payment enumeration exceeds " + cap + " alternatives: " + card.getId())));
                     }
                     return Optional.empty();
                 }
@@ -120,10 +125,10 @@ final class CombatCrewPreparation {
         // Unrelated ETB/attack triggers retain the ordinary ignored-effect policy.
         final List<PreparedCombatCrewResponses.Response> responses = new ArrayList<>();
         if (!worlds(observer, alternatives, vehicles, 0, new LinkedHashMap<>(), new LinkedHashSet<>(),
-                responses, checkpoint)) {
-            if (responses.size() >= MAX_RESPONSES) {
+                responses, checkpoint, cap)) {
+            if (responses.size() >= cap) {
                 return Optional.of(new PreparedCombatCrewResponses(responses, identities,
-                        List.of("Crew response enumeration exceeds " + MAX_RESPONSES + " alternatives")));
+                        List.of("Crew response enumeration exceeds " + cap + " alternatives")));
             }
             return Optional.empty();
         }
@@ -132,8 +137,8 @@ final class CombatCrewPreparation {
 
     private static boolean groups(final List<Integer> pilots, final Map<Integer, Integer> contributions,
             final int required, final int index, final int total, final Set<Integer> chosen,
-            final List<Set<Integer>> result, final BooleanSupplier checkpoint) {
-        if (!checkpoint.getAsBoolean() || result.size() >= MAX_RESPONSES) { return false; }
+            final List<Set<Integer>> result, final BooleanSupplier checkpoint, final int cap) {
+        if (!checkpoint.getAsBoolean() || result.size() >= cap) { return false; }
         if (total >= required) {
             // Threshold-only payment: extra taps cannot improve the modeled defense.
             if (chosen.stream().allMatch(id -> total - contributions.get(id) < required)) { result.add(Set.copyOf(chosen)); }
@@ -146,7 +151,7 @@ final class CombatCrewPreparation {
             final int id = pilots.get(i);
             if (contributions.get(id) <= 0) { continue; }
             chosen.add(id);
-            if (!groups(pilots, contributions, required, i + 1, total + contributions.get(id), chosen, result, checkpoint)) { return false; }
+            if (!groups(pilots, contributions, required, i + 1, total + contributions.get(id), chosen, result, checkpoint, cap)) { return false; }
             chosen.remove(id);
         }
         return true;
@@ -154,9 +159,9 @@ final class CombatCrewPreparation {
 
     private static boolean worlds(final Player observer, final Combat alternatives, final List<Vehicle> vehicles,
             final int index, final Map<Integer, Set<Integer>> crews, final Set<Integer> spent,
-            final List<PreparedCombatCrewResponses.Response> result, final BooleanSupplier checkpoint) {
+            final List<PreparedCombatCrewResponses.Response> result, final BooleanSupplier checkpoint, final int cap) {
         if (vehicles.isEmpty()) { return true; }
-        if (!checkpoint.getAsBoolean() || result.size() >= MAX_RESPONSES) { return false; }
+        if (!checkpoint.getAsBoolean() || result.size() >= cap) { return false; }
         if (index == vehicles.size()) {
             if (crews.isEmpty()) { return true; }
             final Map<Integer, Card> views = new HashMap<>();
@@ -180,12 +185,12 @@ final class CombatCrewPreparation {
             return true;
         }
         final Vehicle vehicle = vehicles.get(index);
-        if (!worlds(observer, alternatives, vehicles, index + 1, crews, spent, result, checkpoint)) { return false; }
+        if (!worlds(observer, alternatives, vehicles, index + 1, crews, spent, result, checkpoint, cap)) { return false; }
         for (final var group : vehicle.payments()) {
             if (group.stream().anyMatch(spent::contains)) { continue; }
             crews.put(vehicle.animated().getId(), group);
             spent.addAll(group);
-            if (!worlds(observer, alternatives, vehicles, index + 1, crews, spent, result, checkpoint)) { return false; }
+            if (!worlds(observer, alternatives, vehicles, index + 1, crews, spent, result, checkpoint, cap)) { return false; }
             spent.removeAll(group);
             crews.remove(vehicle.animated().getId());
         }

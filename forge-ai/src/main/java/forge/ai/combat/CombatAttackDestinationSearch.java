@@ -75,7 +75,7 @@ final class CombatAttackDestinationSearch {
             legal.keySet().stream().sorted().filter(id -> !fixed.containsKey(id) && legal.get(id).contains(snapshot.defendingPlayerId()))
                     .forEach(id -> playerAll.put(id, snapshot.defendingPlayerId()));
             // Current resolution first, within the existing planning budget and validation reserve.
-            final var immediateAllowance = budget.childAllowance(Math.min(6000, Math.max(1, budget.remaining() / 4)));
+            final var immediateAllowance = budget.childAllowance(Math.min(budget.scale(6000), Math.max(1, budget.remaining() / 4)));
             safeguardEvaluations++;
             final var win = evaluation.immediateWin(CombatAttackCandidates.assign(snapshot, playerAll), immediateAllowance);
             if (win != null) {
@@ -175,7 +175,7 @@ final class CombatAttackDestinationSearch {
 
         private CombatAttackSearch.Candidate trim(CombatAttackSearch.Candidate best) {
             if (best.combat().projection().terminal() != CombatProjection.Terminal.NONE) { return best; }
-            final var allowance = budget.childAllowance(Math.min(4000, budget.remaining() / 4));
+            final var allowance = budget.childAllowance(Math.min(budget.scale(4000), budget.remaining() / 4));
             if (allowance.remaining() == 0) { return best; }
             final var optional = evaluation.withBudget(allowance);
             final Function<Map<Integer, Integer>, CombatAttackSearch.Candidate> trial = assignments -> {

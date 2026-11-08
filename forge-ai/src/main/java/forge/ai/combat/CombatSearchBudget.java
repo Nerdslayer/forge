@@ -1,5 +1,6 @@
 package forge.ai.combat;
 
+import forge.ai.MastermindEffort;
 import java.util.function.LongSupplier;
 
 /** One caller-owned allowance shared by search, projection, and future nested reply work. */
@@ -12,8 +13,10 @@ public final class CombatSearchBudget {
         private final LongSupplier clock;
         private final long started;
         private int used;
+        private final MastermindEffort effort;
 
-        private Usage(final LongSupplier clock0) {
+        private Usage(final LongSupplier clock0, final MastermindEffort effort0) {
+            effort = effort0;
             clock = clock0;
             started = clock.getAsLong();
         }
@@ -29,13 +32,17 @@ public final class CombatSearchBudget {
 
     /** Injectable monotonic clock for deterministic allowance tests. */
     CombatSearchBudget(final int nodes, final long emergencyMillis, final LongSupplier clock) {
+        this(nodes, emergencyMillis, clock, MastermindEffort.LOW);
+    }
+
+    CombatSearchBudget(final int nodes, final long emergencyMillis, final LongSupplier clock, final MastermindEffort effort) {
         if (nodes < 0 || emergencyMillis <= 0 || emergencyMillis > Long.MAX_VALUE / 1_000_000) {
             throw new IllegalArgumentException("Nonnegative nodes and a positive, bounded time allowance are required");
         }
         limit = nodes;
         emergencyNanos = emergencyMillis * 1_000_000;
         if (clock == null) { throw new IllegalArgumentException("A monotonic clock is required"); }
-        usage = new Usage(clock);
+        usage = new Usage(clock, effort);
     }
 
     private CombatSearchBudget(final int nodes, final long nanos, final Usage usage0) {
@@ -59,6 +66,12 @@ public final class CombatSearchBudget {
     }
 
     public int used() { return usage.used; }
+
+    int scale(final int base) { return usage.effort.scale(base); }
+
+    String limits() {
+        return "effort=" + usage.effort + ", nodeLimit=" + limit + ", timeoutMs=" + emergencyNanos / 1_000_000;
+    }
 
     /** Node-only slice: share usage and the existing deadline without repeatedly halving time. */
     CombatSearchBudget nodeAllowance(final int additionalNodes) {
