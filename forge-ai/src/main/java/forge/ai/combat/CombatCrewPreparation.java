@@ -167,6 +167,8 @@ final class CombatCrewPreparation {
                 if (!checkpoint.getAsBoolean()) { return false; }
                 if (spent.contains(card.getId())) {
                     final Card copy = CardCopyService.getLKICopy(card);
+                    // LKI copies omit the current zone, which snapshot effect checks require.
+                    copy.setZone(card.getZone());
                     copy.setTapped(true);
                     views.put(card.getId(), copy);
                 }

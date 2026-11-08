@@ -320,12 +320,14 @@ public class CombatCrewResponseTest extends AITest {
             final var f = fixture();
             final Card attacker = creature(f.ai(), 3, 3, "K:Flying");
             final Card pilot = creature(f.opponent(), 1, 4,
-                    "S:Mode$ TapPowerValue | ValidSA$ Activated.Crew+Vehicle | ValidCard$ Card.Self | Value$ " + value);
+                    "S:Mode$ TapPowerValue | EffectZone$ Battlefield | ValidSA$ Activated.Crew+Vehicle | ValidCard$ Card.Self | Value$ " + value);
             final Card vehicle = vehicle(f.opponent(), 5, 5, 3, "K:Flying");
             f.combat().addAttacker(attacker, f.opponent());
             final var response = CombatCrewPreparation.prepare(f.ai(), f.combat(), () -> true).orElseThrow();
             Assert.assertEquals(response.responses().size(), 1, value);
             Assert.assertEquals(response.responses().get(0).crews(), Map.of(vehicle.getId(), Set.of(pilot.getId())));
+            Assert.assertTrue(response.responses().get(0).world().creatures().get(pilot.getId()).tapped());
+            Assert.assertFalse(pilot.isTapped());
         }
     }
 
