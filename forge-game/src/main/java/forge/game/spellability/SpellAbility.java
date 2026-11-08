@@ -169,6 +169,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     private CardDamageTable preventMap;
     private GameEntityCounterTable counterTable;
     private CardZoneTable changeZoneTable;
+    private List<Card> airbendExiled = List.of();
     private Map<Player, Integer> loseLifeMap;
 
     private String name = "";
@@ -1285,6 +1286,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
 
             clone.payingMana = Lists.newArrayList(payingMana);
+            clone.airbendExiled = List.of();
             clone.paidAbilities = Lists.newArrayList();
             clone.setPaidHash(getPaidHash());
 
@@ -2502,6 +2504,14 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
     public void setChangeZoneTable(final CardZoneTable table) {
         changeZoneTable = table;
+    }
+
+    public List<Card> getAirbendExiled() {
+        return airbendExiled;
+    }
+
+    public void setAirbendExiled(final List<Card> cards) {
+        airbendExiled = List.copyOf(cards);
     }
     public void setLoseLifeMap(final Map<Player, Integer> map) {
         loseLifeMap = map;

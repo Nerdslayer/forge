@@ -301,6 +301,11 @@ public class AbilityUtils {
             }
             cards.addAll(CardLists.getValidCards(candidates, validDefined, player, hostCard, sa));
             return cards;
+        } else if (defined.equals("AirbendExiled") && sa instanceof SpellAbility ability) {
+            final SpellAbility parent = ability.getParent();
+            if (parent != null) {
+                cards.addAll(parent.getAirbendExiled());
+            }
         } else if (defined.startsWith("ExiledWith")) {
             cards.addAll(hostCard.getExiledCards());
         } else if (defined.equals("Convoked")) {
@@ -1391,16 +1396,22 @@ public class AbilityUtils {
             game.getTriggerHandler().runTrigger(TriggerType.GiveGift, AbilityKey.mapFromPlayer(sa.getActivatingPlayer()), false);
         }
 
-        // check conditions
-        if (sa.metConditions()) {
-            if (sa.isWrapper() || StringUtils.isBlank(sa.getParam("UnlessCost"))) {
-                sa.resolve();
-            } else {
-                handleUnlessCost(sa, game);
-                return;
+        try {
+            // check conditions
+            if (sa.metConditions()) {
+                if (sa.isWrapper() || StringUtils.isBlank(sa.getParam("UnlessCost"))) {
+                    sa.resolve();
+                } else {
+                    handleUnlessCost(sa, game);
+                    return;
+                }
+            }
+            resolveSubAbilities(sa, game);
+        } finally {
+            if (sa.getApi() == ApiType.Airbend) {
+                sa.setAirbendExiled(List.of());
             }
         }
-        resolveSubAbilities(sa, game);
     }
 
     private static void handleUnlessCost(final SpellAbility sa, final Game game) {

@@ -10,6 +10,7 @@ import forge.game.ability.AbilityKey;
 import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
+import forge.game.card.CardCollectionView;
 import forge.game.card.CardZoneTable;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
@@ -51,6 +52,7 @@ public class AirbendEffect extends SpellAbilityEffect {
         Map<AbilityKey, Object> moveParams = AbilityKey.newMap();
         CardZoneTable zoneMovements = AbilityKey.addCardZoneTableParams(moveParams, sa);
         CardCollection moved = new CardCollection();
+        CardCollection tracked = sa.hasParam("TrackExiled") ? new CardCollection() : null;
 
         for (Card c : getCardsfromTargets(sa)) {
             final Card gameCard = game.getCardState(c, null);
@@ -68,6 +70,9 @@ public class AirbendEffect extends SpellAbilityEffect {
                 si = game.getStack().getInstanceMatchingSpellAbilityID(stackSA);
             }
 
+            Card meldedWith = gameCard.getMeldedWith();
+            CardCollectionView merged = tracked != null && gameCard.hasMergedCard()
+                    ? new CardCollection(gameCard.getMergedCards()) : CardCollection.EMPTY;
             Card movedCard = game.getAction().exile(gameCard, sa, moveParams);
             if (movedCard == null || !movedCard.isInZone(ZoneType.Exile)) {
                 continue;
@@ -85,6 +90,15 @@ public class AirbendEffect extends SpellAbilityEffect {
                 continue;
             }
             moved.addAll(exiled);
+            if (tracked != null) {
+                // A replacement ability can share the zone table with other moves.
+                for (Card exiledCard : exiled) {
+                    if (exiledCard.equalsWithGameTimestamp(movedCard) || exiledCard.equals(meldedWith)
+                            || merged.contains(exiledCard)) {
+                        tracked.add(exiledCard);
+                    }
+                }
+            }
 
             // Effect to cast for 2 from exile
             Card eff = createEffect(sa, movedCard.getOwner(), "Airbend " + movedCard, hostCard.getImageKey());
@@ -103,6 +117,10 @@ public class AirbendEffect extends SpellAbilityEffect {
 
         zoneMovements.triggerChangesZoneAll(game, sa);
         handleExiledWith(zoneMovements.allCards(), sa);
+
+        if (tracked != null) {
+            sa.setAirbendExiled(tracked);
+        }
 
         // CR 701.65b
         if (!zoneMovements.isEmpty()) {
