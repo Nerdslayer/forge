@@ -15,10 +15,10 @@
   <data encoding="base64" compression="zlib">eJxjYBgZYGocbfGofaP2jdo3at+ofaP2jdo3ah+17RuuAAB91cew</data>
  </layer>
  <layer id="2" name="Architecture" width="28" height="24">
-  <data encoding="base64" compression="zlib">eJxjYBgZYLYVA4OVNW3wXCvs9tEKjNo3at+ofaP2jdo3at+ofQNnHzFtA3RAbntiuAIAh/EzuQ==</data>
+  <data encoding="base64" compression="zlib">eNrtzzsOACAIBNG9FnBU41H99NrQEAtnki3JC9IfDZNm0ZbdXvO6X7rj4eHh4eHhvfAsJE/sLHMToW/a0YJEZQ==</data>
  </layer>
  <layer id="3" name="Furnishings" width="28" height="24">
-  <data encoding="base64" compression="zlib">eJxjYBgFtAZs+rSVRwbfjBkYvhsTrx4GGj0YGJo8MOlRgB08dmdgeOKOSY8C2oOlbgwMy9wG2hWkAUY7BgYmHJjZjvr2zQeauQAHXjhq36h9A2yfrT0Dgx0ObG9PfftGweAEALfRQAo=</data>
+  <data encoding="base64" compression="zlib">eNpjYBgFtAZs+qTLP3ZnYHjijkkTMuubMQPDd2PS3djowcDQ5IFJjwLsoM4DOx4FtAdL3RgYlrkNLTcz2jEwMOHAzHbUt28+0MwFOPDCUftG7Rtg+2ztGRjscGB7+9EybqQAALBgRK4=</data>
  </layer>
  <layer id="4" name="Canopy" width="28" height="24" opacity="0.88">
   <properties>
@@ -41,7 +41,9 @@
     <property name="pursueRange" value="0" type="int" />
     <property name="threatRange" value="0" type="int" />
     <property name="fleeRange" value="0" type="int" />
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Hagrid: They are lovely creatures, really. Fancy trying your deck against the beasts I have been looking after?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Hagrid: They are lovely creatures, really. Fancy trying your deck against the beasts I have been looking after?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}], &quot;condition&quot;: [{&quot;duelReady&quot;: true}]}, {&quot;name&quot;: &quot;Ask about a rematch&quot;, &quot;condition&quot;: [{&quot;duelReady&quot;: true, &quot;not&quot;: true}], &quot;text&quot;: &quot;Hagrid: Blimey, you handled my lot better than I did! I'd best see to their supper. Come back tomorrow if you fancy another round.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="defeatDialog" value="[{&quot;text&quot;: &quot;Hagrid: Blimey, you handled my lot better than I did! I'd best see to their supper. Come back tomorrow if you fancy another round.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+    <property name="rematchNextDay" value="true" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
     <property name="spawn.Hard" value="true" type="bool" />
@@ -51,7 +53,7 @@
   <object id="501" name="Exploration cache" type="reward" x="96" y="256" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;shards&quot;, &quot;count&quot;: 3, &quot;addMaxCount&quot;: 3, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/manashards.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />

@@ -17,6 +17,7 @@ import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.actions.Actions;
 import com.badlogic.gdx.scenes.scene2d.ui.Button;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.*;
 import com.badlogic.gdx.utils.Timer;
@@ -61,6 +62,7 @@ public class MapStage extends GameStage {
     MapLayer spriteLayer;
     private PointOfInterestChanges changes;
     private EnemySprite currentMob;
+    private MapDialog pendingDuelVictory;
     Queue<Vector2> positions = new LinkedList<>();
     private boolean isLoadingMatch = false;
     private boolean isPlayerLeavingDungeon = false;
@@ -227,6 +229,7 @@ public class MapStage extends GameStage {
         disposeWorld();
         createNewWorld();
         isLoadingMatch = false;
+        pendingDuelVictory = null;
         isInMap = true;
         currentMap = targetMap;
         GameHUD.getInstance().showHideMap(false);
@@ -531,6 +534,16 @@ public class MapStage extends GameStage {
                             if (dialogObject != null && !dialogObject.toString().isEmpty()) {
                                 mob.defeatDialog = new MapDialog(dialogObject.toString(), this, mob.getId(), currentMap);
                             }
+                            mob.rematchNextDay = mob.defeatDialog != null
+                                    && Boolean.TRUE.equals(prop.get("rematchNextDay", Boolean.class));
+                            if (mob.rematchNextDay) {
+                                mob.defeatDialog.addDialogCompleteListener(new ChangeListener() {
+                                    @Override
+                                    public void changed(ChangeEvent event, Actor actor) {
+                                        AdventureQuestController.instance().showQuestDialogs(MapStage.this);
+                                    }
+                                });
+                            }
                             dialogObject = prop.get("displayNameOverride"); //Check for name override.
                             if (dialogObject != null && !dialogObject.toString().isEmpty()) {
                                 mob.nameOverride = dialogObject.toString();
@@ -651,9 +664,10 @@ public class MapStage extends GameStage {
                         if (obj instanceof TiledMapTileMapObject) {
                             TiledMapTileMapObject tiledObj = (TiledMapTileMapObject) obj;
                             DialogActor dialog;
-                            if (prop.containsKey("sprite"))
+                            if (prop.containsKey("sprite")) {
                                 dialog = new DialogActor(this, id, prop.get("dialog").toString(), prop.get("sprite").toString(), currentMap);
-                            else {
+                                dialog.setSpriteScale(prop.get("spriteScale", 1f, Float.class));
+                            } else {
                                 dialog = new DialogActor(this, id, prop.get("dialog").toString(), tiledObj.getTextureRegion(), currentMap);
                             }
                             if (prop.containsKey("hidden") && Boolean.parseBoolean(prop.get("hidden").toString()))
@@ -868,6 +882,11 @@ public class MapStage extends GameStage {
         if (playerWins) {
             currentMob.clearCollisionHeight();
             Current.player().win();
+            if (currentMob.rematchNextDay) {
+                currentMob.resetCollisionHeight();
+                finishVictory();
+                return;
+            }
             player.setAnimation(CharacterSprite.AnimationTypes.Attack);
             float attackDuration = Math.max(1f,
                     player.getActionAnimationDuration(CharacterSprite.AnimationTypes.Attack, 1f));
@@ -878,12 +897,7 @@ public class MapStage extends GameStage {
                     currentMob.setAnimation(CharacterSprite.AnimationTypes.Death);
                     currentMob.resetCollisionHeight();
                     float deathDuration = currentMob.getActionAnimationDuration(CharacterSprite.AnimationTypes.Death, 0.3f);
-                    startPause(deathDuration, () -> {
-                        MapStage.this.getReward();
-                        AdventureQuestController.instance().updateQuestsWin(currentMob,enemies);
-                        AdventureQuestController.instance().showQuestDialogs(MapStage.this);
-                        currentMob = null;
-                    });
+                    startPause(deathDuration, MapStage.this::finishVictory);
                     player.setAnimation(CharacterSprite.AnimationTypes.Idle);
                 }
             }, attackDuration);
@@ -914,6 +928,24 @@ public class MapStage extends GameStage {
                 currentMob = null;
             });
         }
+    }
+
+    private void finishVictory() {
+        var defeated = currentMob;
+        getReward();
+        AdventureQuestController.instance().updateQuestsWin(defeated, enemies);
+        currentMob = null;
+        if (defeated.rematchNextDay) {
+            pendingDuelVictory = defeated.defeatDialog;
+        } else {
+            AdventureQuestController.instance().showQuestDialogs(this);
+        }
+    }
+
+    public boolean showPendingDuelVictory() {
+        var victory = pendingDuelVictory;
+        pendingDuelVictory = null;
+        return victory != null && victory.activate();
     }
 
     private void dungeonFailedDialog(boolean exit, boolean defeatedByBoss) {
@@ -1021,7 +1053,12 @@ public class MapStage extends GameStage {
 
     protected void getReward() {
         isLoadingMatch = false;
-        TileMapScene.instance().getPointOfInterestChanges().recordEnemyDefeat(currentMob.getData().name);
+        var location = getChanges();
+        String enemyName = currentMob.getData().name;
+        location.recordEnemyDefeat(enemyName);
+        if (currentMob.rematchNextDay) {
+            location.recordDuelWin(enemyName, LocalDate.now());
+        }
         RewardScene.instance().loadRewards(currentMob.getRewards(), RewardScene.Type.Loot, null);
         Forge.switchScene(RewardScene.instance());
         if (currentMob.defeatDialog == null) {
@@ -1031,7 +1068,9 @@ public class MapStage extends GameStage {
                 changes.deleteObject(currentMob.getId());
                 enemies.remove(currentMob);
         } else {
-            currentMob.defeatDialog.activate();
+            if (!currentMob.rematchNextDay) {
+                currentMob.defeatDialog.activate();
+            }
             player.setAnimation(CharacterSprite.AnimationTypes.Idle);
             currentMob.setAnimation(CharacterSprite.AnimationTypes.Idle);
         }
@@ -1202,8 +1241,12 @@ public class MapStage extends GameStage {
 
     boolean started = false;
     
+    public boolean canDuel(EnemySprite mob) {
+        return mob != null && (!mob.rematchNextDay || getChanges().isDuelReady(mob.getData().name, LocalDate.now()));
+    }
+
     public void beginDuel(EnemySprite mob) {
-        if (mob == null) return;
+        if (!canDuel(mob)) return;
         mob.clearCollisionHeight();
         currentMob = mob;
         player.setAnimation(CharacterSprite.AnimationTypes.Attack);

@@ -12,13 +12,13 @@
  <tileset firstgid="22017" source="../../tileset/dungeon-nocollide.tsx" />
  <tileset firstgid="26497" source="hogwarts_exteriors.tsx" />
  <layer id="1" name="Ground" width="112" height="120">
-  <data encoding="base64" compression="zlib">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</data>
+  <data encoding="base64" compression="zlib">eNrtXUtu3TAMzLYHKtwL9Sg5Sq6m5Zyh6KJAEbxn8zOkSJsLoUCQvvh5NBQ5JMV1fHysbwsvfsZeePG3kPD3Mj8bzr8N43eB4Pfh+HzLO87YU9J3A+PzgbzP4PiZ9PtJMYFwb0j4DNK7+L4+f9ZZEPCM+X532Tkrn179/0r4Wbik5ZH1TIDDJkTa2W74RZ9pUecglHth3YR/Zz6h12Zio52F0AaAwL/f5HWGHzb6cgj0YyOeHwXxW8lxySL63nDYXKtN1eL3ZVwa/EA+65DEBUsce+VHg3D+ZePHjDmtMRhIPgicmsPVM3fFDwFc1cZfSPBr7mI/V0H7GRUvQKFNdMUPwfFBlI7Hfs5K+CHovXs1GAT4jSydreP5lxlfV9IHuvov+LY8GqVEE9+ly1j2TEX7KTlvvn7ee0k1gMGv5orSXzL1s7PvMPwb/Drg14l/mpzrE/F75cMN//rxrwt+Zzm5J+CHhv6LVN8Y/8VWP8HCyqu/DP8Gv6f4n4NfLfv5vy8w+PXgH0j1g9H44ZDVXI/9rIefpi9h8KvLPwmGT9Ov3+WWqp9/GP/l1I/p4L9g7OfED43xgzN/O/jt019GP+vtv1zV8HTyP9eD/c+I/s3hXz/9OiKvZKm/nvxRXfwkdc9Pjd8r43d1jwkmf+SOHzL5tx7Mv7N6cDSxn3P+XdvQyvZz6s+u7VE1/IZ/sfqnNf7z2M+n5m8l/aLd8Hs6/5Dsf1rxw/BPlMvuwL/RX/bFf1788CaXO/7Lvvp5D/8w9YNl8cPkj9rzT3qP4vCvp/0c/vXg39PrP6X3yw//+sQPMOovGb2bZ/dnYc4/V/9RFn5S7J6mv5zt62r4jf1873+iwP0F1v6j8T9fc7Eqfhj9RXSfXUX7ien/E+fSKvsvGP3lcj+P/3L/+qUq+GH8z9L9DxBqDnhg/h3TvzL9m4XwY81fhfOuStac3R3zN3fcX2CdU3M2W+gKwx+/3q9ds5LR0H6y7oXX3vN+hl/UnIG7929aZmVbZwNo+IfDP3+cPT+gw/kXMZNPgx8cn+85N7rZT+8c+BXMP82MVMZe68Y/6XxD5rxgDf+YM7a6+Z9Q8M7jg0p5/W9p+QfDM1gxrMw/D4+Y8x0l/mf2TMFO/IucnyfhyxX/QLKXUfPHdvIvY+YfO37ImgWIBvzDcX0vRfSeZ/Lvzv6Ld0645F82fnDGb9H6S2S+j2U/o8+aCP2TpUtUxo+9V63vioEfDps+4dVfquFnibHgjKkz+Ge181Xxw0Z7GaV/RtiGLvyz+JpItp8g5B80miga28/MOIJlP0HI266m+Hlnh+PQ53ok+qemPiAiTxmJ3+cG+xmh02jspyafzLAjGfeaZeZvPb4eCPghaU9Vxg/BMZ327JHaT02+BIH+ZwQ2TP6BqFNJzqno+iWpjwMi/7LwQxAfNe/Smn/w5Grh0K8r8g+B3AQp/8CK46E4vzvazwg95uy9W+pfGDqtZF9Uwg/BfmRE/naHXV9N+QfFec/yZyz6Cxw2URtjVOMfhNqKVYux+AgV8n934J+m76NC/e5KiGE7xA9aH/LsfbOXdGZ21DlZFT/PuZWNHzMe0Na2dvU/0Qg/a+2VtX6ik35WxX5e3fPIrEFGE/ysfkkmfrvXHfUXkHM6g5/ff/H2Jmn68tbgR8MPR3xe/konGPxs9fNRvcjM+H3wex8/wFjT4+l3QRP9DI3jh+w6Xm//+9U+9OR8u/svHi0DBfTPiP6xSvEfhLYSgVqjpv4FyTajm37t7bWLtp/Z+dxu+Vsk52c894dknOEd838MHDW1hNH8g9HnRuD3tvjzMHCD1SOJDf4LyHYiou8VBmzg/DzWM1r6V7JxAyn3qPEX2T2onv2HYP9+KXxo9lmPRB1hp4ah6T+z6uje+BVCe7GMelXGXau776qC4YyP7D8C2YaBYK/+rj8NkRZF</data>
  </layer>
  <layer id="2" name="Architecture" width="112" height="120">
-  <data encoding="base64" compression="zlib">eJzt3DFqw1AURUGvImsJylJD9pr2FbHycQTxfJ8Dr3LjyzQWBh0ft9vR0Vdm+dnlZ5efXX52+dnlZ5efXX52+dnlZ5efXX52+dnlZ7fi93nc/9/p6+SzZ7vfdoit+r29/3ya39kOsSv8lHbZMcvP2zHLz9sxy8/bMcvP2zG74vlBaZcdsxW/3Z/x5X352fvys/flZ+/Lz96Xn70vP3tffva+/Ox9+dn78rP35Wfvy8/el5+9Lz97X372vvzsffnZ+/Kz9+Vn78vP3pefvS8/e19+9r787H352fvys/flZ+/Lz96Xn70vP3tffva+/Ox9+dn78rP35Wfvy8/et/Ldd3lvwy47Zqt+O7w3ZZcds/y8HbP8vB2z/Lwds/y8HbMr/O79pnvkVr7ro/fKfme/uyW/V3x+qOctP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7v87PKzy88uP7u/vpO4+//7Boz406I=</data>
+  <data encoding="base64" compression="zlib">eNrt3E0KgCAQgFGvlR41Omp/ByghyGj0fTCrFiEPFxHMOqW0mZCznzPnpKAtmR8/8RM/fuInfuLHT/zET/z4iZ++91sH+Y/Wq1/t+RLo7vZyDn78+PHjx48fvxH8crmeUuKcdSr35xj1/vX0HcyPHz9+/Pjx48ePHz9+/Pjx48ePHz9+/Pjx48ePHz9+/Pjx48ePHz9+/Pjx48ePHz9+/Pjx48ePHz9+/Pjx48ePHz9+/Pjxa+vXw9632h4++1/+n/09/Pjx48ePHz9+Mfxqe99aTK1W74y0h++pn/iJn/jxEz/xEz9+4id+/MRP/MSPn/iJn/jxEz/xEz9+4id+4sdP/MSPn/iJn/jxEz/xEz9+4id+4sdP/MRP/PiJn/jxU0S/r/cjm3f3Ph/lwl8o</data>
  </layer>
  <layer id="3" name="Furnishings" width="112" height="120">
-  <data encoding="base64" compression="zlib">eJzt3DtuFEEUBdAC403wdUqKZAiQZ2TJ8ipsNsFu+NkI7JxlmJyEf8waCPwIEMkgT0P3VL+qc6QrdeCRnnzVdld3TZcCAAAAADk9ffjn+NqilOsrsrX4+2eYj5Po6XRFXi+u/iz16S83/eWmv9z2lqUsVmS5rD0ZAAAAQF/ePao9AUBOF09qTwBQ18/HtSe42ofd2hOsL9OsAAAA5OW5EADMQ6Z7wplmJT/P4WGzMjzzBZjKs6NSnkdeRF5GXkVOIqdHtSeb3rrvKJqzj9HTp8jnyJfI18i3yPcO+mvhHRs3j0u5FbkduRO5G7kX2TmuPdn0WuivZ/rbrLHvSU3Zn/tn03P+5aa/3PSXWwvrv6FaWu/3eP61tN7vsb+W1vs99tcS/eXWW3+t7en1jmEAaId9ZQD0xHcYhrtxWMr2Ye0p5mPnwbCf9/sDgHkb+r+dvrX2vA+AXN7sl/J2v/YUudW89juL7s71B//NGg4gN3uUAP6d+9PzYE3CL/afMSc/XGMzMvsdycTfwL7oG8bhXAI2oZV7aPd3xw8w3MXBOMet8MydTXp/MM4xsB7XnwAAwG+XpkLRRw==</data>
+  <data encoding="base64" compression="zlib">eNrt3LlOAlEUBuDr9hKutLYmaGGEkBCeAnwJ38YNjEvvY2Bv4177DBaextBgIog4d+b7kj+ZhmRyToC5y9yUAAAAACBPR7uj64VGSotjstT4/jMURz/6NBiTi4ba6B/6h/6V10EzpcaYNJtqAwAAADBPt3tqADCN4aEaANX2sV/8e7yv51PPnO4VAACAfFkXAoBiMH8N41mHh/nKYc0X4K8cd1M6iZxGziLnkX5k0FWbHDxEnx4jT5HnyEvkNfKmf1lY7aW0FlmPbEQ2I1uRWk9tgBHzZwCA8f7Pzxk23i+mqp2TWbbxvnNO86Z/+peLMu7pdc4wAJSDfWUAVIl3GCa33ElppaMOX2o76gcAVf5vp9qc4QPAf7pspXTVUodcn/2uo3c3+gfGcAAVZ48SwPTMTxuTUBz2n1Ek756xmTH7HfEbiH6D7xLAb5VlDm27PvsAkxu2Z3NdFtbcmae79myuAc+fAADAZD4Bp0Ge9w==</data>
  </layer>
  <layer id="4" name="Canopy" width="112" height="120" opacity="0.88">
   <properties>
@@ -32,25 +32,19 @@
     <property name="blocking" value="false" type="bool" />
    </properties>
   </object>
-  <object id="10" name="Castle entrance" type="entry" x="576" y="992" width="80" height="16">
+  <object id="10" name="Castle entrance" type="entry" x="592" y="992" width="80" height="16">
    <properties>
     <property name="teleport" value="../common/maps/map/hogwarts/hogwarts_hall.tmx" />
     <property name="teleportObjectId" value="1" type="int" />
     <property name="direction" value="down" />
    </properties>
   </object>
-  <object id="210" name="Notice: Hogwarts Castle" type="dialog" x="496" y="944" width="16" height="16" gid="13777">
-   <properties>
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Hogwarts Castle\nGreat Hall, library, upper galleries, headmaster's office and dungeon stairs.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
-    <property name="hidden" value="false" type="bool" />
-   </properties>
-  </object>
-  <object id="301" name="Hagrid's hut exterior" type="dummy" x="144" y="1584" width="256" height="256" gid="26498">
+  <object id="301" name="Hagrid's hut exterior" type="dummy" x="208" y="1584" width="128" height="128" gid="26498">
    <properties>
     <property name="blocking" value="false" type="bool" />
    </properties>
   </object>
-  <object id="20" name="Hagrid's hut" type="entry" x="256" y="1584" width="48" height="16">
+  <object id="20" name="Hagrid's hut" type="entry" x="260" y="1584" width="24" height="16">
    <properties>
     <property name="teleport" value="../common/maps/map/hogwarts/hogwarts_hagrid_hut.tmx" />
     <property name="teleportObjectId" value="1" type="int" />
@@ -66,7 +60,7 @@
   <object id="501" name="Exploration cache" type="reward" x="448" y="1760" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;gold&quot;, &quot;count&quot;: 80, &quot;addMaxCount&quot;: 40, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/gold.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
@@ -87,7 +81,9 @@
     <property name="pursueRange" value="0" type="int" />
     <property name="threatRange" value="0" type="int" />
     <property name="fleeRange" value="0" type="int" />
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Aragog: My children do not often welcome visitors. Will you face the colony?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Aragog: My children do not often welcome visitors. Will you face the colony?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}], &quot;condition&quot;: [{&quot;duelReady&quot;: true}]}, {&quot;name&quot;: &quot;Ask about a rematch&quot;, &quot;condition&quot;: [{&quot;duelReady&quot;: true, &quot;not&quot;: true}], &quot;text&quot;: &quot;Aragog: You stood your ground when my children came for you. Few do. Return tomorrow, if you still wish to test yourself against the colony.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="defeatDialog" value="[{&quot;text&quot;: &quot;Aragog: You stood your ground when my children came for you. Few do. Return tomorrow, if you still wish to test yourself against the colony.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+    <property name="rematchNextDay" value="true" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
     <property name="spawn.Hard" value="true" type="bool" />
@@ -140,7 +136,9 @@
     <property name="pursueRange" value="0" type="int" />
     <property name="threatRange" value="0" type="int" />
     <property name="fleeRange" value="0" type="int" />
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Centaur: The forest is not yours to command. If you seek a test of its guardians, we may oblige.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Centaur: The forest is not yours to command. If you seek a test of its guardians, we may oblige.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}], &quot;condition&quot;: [{&quot;duelReady&quot;: true}]}, {&quot;name&quot;: &quot;Ask about a rematch&quot;, &quot;condition&quot;: [{&quot;duelReady&quot;: true, &quot;not&quot;: true}], &quot;text&quot;: &quot;Centaur: You kept your footing when others would have fled. Let the forest rest tonight. If you seek another trial, return tomorrow.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="defeatDialog" value="[{&quot;text&quot;: &quot;Centaur: You kept your footing when others would have fled. Let the forest rest tonight. If you seek another trial, return tomorrow.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+    <property name="rematchNextDay" value="true" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
     <property name="spawn.Hard" value="true" type="bool" />
@@ -150,7 +148,7 @@
   <object id="502" name="Exploration cache" type="reward" x="1664" y="656" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;shards&quot;, &quot;count&quot;: 5, &quot;addMaxCount&quot;: 3, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/manashards.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
@@ -161,7 +159,7 @@
   <object id="503" name="Exploration cache" type="reward" x="1600" y="992" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;gold&quot;, &quot;count&quot;: 100, &quot;addMaxCount&quot;: 40, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/gold.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
@@ -186,7 +184,7 @@
   <object id="504" name="Exploration cache" type="reward" x="1584" y="272" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;shards&quot;, &quot;count&quot;: 7, &quot;addMaxCount&quot;: 3, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/manashards.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
@@ -194,17 +192,11 @@
     <property name="spawn.Insane" value="true" type="bool" />
    </properties>
   </object>
-  <object id="1" name="South gate to Shandalar" type="entry" x="560" y="1872" width="112" height="16">
+  <object id="1" name="South gate to Shandalar" type="entry" x="576" y="1872" width="112" height="16">
    <properties>
     <property name="teleport" value="" />
     <property name="teleportObjectId" value="0" type="int" />
     <property name="direction" value="up" />
-   </properties>
-  </object>
-  <object id="201" name="Notice: Hogwarts Grounds" type="dialog" x="688" y="1824" width="16" height="16" gid="13777">
-   <properties>
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Hogwarts Grounds\nCastle ahead. Hagrid's hut to the front-left; Forbidden Forest to the front-right. The south gate returns to Shandalar. All duels are optional.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
-    <property name="hidden" value="false" type="bool" />
    </properties>
   </object>
   <object id="213" name="Notice: A message from the headmaster" type="dialog" x="544" y="1168" width="16" height="16" gid="13777">
@@ -240,8 +232,8 @@
   <object id="2000" name="Solid architecture" type="collision" x="128" y="256" width="928" height="32" />
   <object id="2001" name="Solid architecture" type="collision" x="128" y="288" width="32" height="816" />
   <object id="2002" name="Solid architecture" type="collision" x="1024" y="288" width="32" height="816" />
-  <object id="2003" name="Solid architecture" type="collision" x="128" y="1072" width="432" height="32" />
-  <object id="2004" name="Solid architecture" type="collision" x="672" y="1072" width="384" height="32" />
+  <object id="2003" name="Solid architecture" type="collision" x="128" y="1072" width="448" height="32" />
+  <object id="2004" name="Solid architecture" type="collision" x="688" y="1072" width="368" height="32" />
   <object id="2005" name="Solid architecture" type="collision" x="128" y="256" width="128" height="16" />
   <object id="2006" name="Solid architecture" type="collision" x="128" y="368" width="128" height="16" />
   <object id="2007" name="Solid architecture" type="collision" x="128" y="256" width="16" height="128" />
@@ -269,7 +261,7 @@
   <object id="2029" name="Solid architecture" type="collision" x="928" y="512" width="16" height="16" />
   <object id="2030" name="Solid architecture" type="collision" x="928" y="720" width="16" height="16" />
   <object id="2031" name="Solid architecture" type="collision" x="928" y="896" width="16" height="16" />
-  <object id="2032" name="Solid architecture" type="collision" x="160" y="1344" width="224" height="224" />
+  <object id="2032" name="Solid architecture" type="collision" x="216" y="1464" width="112" height="112" />
   <object id="2033" name="Solid architecture" type="collision" x="128" y="1712" width="16" height="16" />
   <object id="2034" name="Solid architecture" type="collision" x="128" y="1808" width="16" height="16" />
   <object id="2035" name="Solid architecture" type="collision" x="144" y="1712" width="16" height="16" />

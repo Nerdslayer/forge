@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="right-down" width="56" height="44" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="2187">
+<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="right-down" width="56" height="44" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="2196">
  <properties>
   <property name="name" value="Hogwarts - Great Hall" />
   <property name="respawnEnemies" value="true" type="bool" />
@@ -16,10 +16,10 @@
   <data encoding="base64" compression="zlib">eJztzwENACAMwLArxRle0bHTJRWwGW3onl38tflr89fmr81fm782f23+2vy1+Wvz1+avzV+bvzZ/bf7a/LX5a/PX9tufmj0PEPfK</data>
  </layer>
  <layer id="2" name="Architecture" width="56" height="44">
-  <data encoding="base64" compression="zlib">eJzt2rENgDAMBVHPZUZF7IroAkpBA+g+9yRXKZwr0qVKCdau6uU8o+vZV3PnTlvP+1LYx2Yfm31s9rHZx2Yfm31s9uWxjy2pL/392cdmH5t9bPax2cdmH5t9bPax/bXvrX8dhyd3zfrEtAPec2l+</data>
+  <data encoding="base64" compression="zlib">eNrt00EKgCAURdG/ra9LjZaaNQ1rEIQQdi68sR7ECM3QlhGt27mW39iTO+159S1lnrdaCx8fHx8fHx8fHx8fH98ffHfx8fl/fHx8fHx8fHx8fHx8fHx8b3xZI8rA9Y08q9bQJB3/horW</data>
  </layer>
  <layer id="3" name="Furnishings" width="56" height="44">
-  <data encoding="base64" compression="zlib">eJztmE0OgjAQhUdNvI47NTHCDr2FPyfxGOoGjSvvo57HNrDSStG28grvSyaQTDqd1wFeggghcTEcFdd9JnJQcczMedv6EPlPPf3CeCEyUTFduNfyhc+ebqrGXcXDQ61eItIvY5Bg9OSTXGk6lXF20IcK9cUNkr7cw7f3rWZAfSH6/boHoPm9clXns5qJ7JbFvSm/rshr6ujTazeWfbaWfZoCeX6ai+W8bPm6+lz3aQr0+blCfX/spWP+R3+wg/R8mqA/VIM+P1eoL26Q9bXNH7rm7xr6QzXI758PqC9ukPW1zR9CgDQ/k58g+wP/74aH+uKm7frmqUhSRpo23Q0hGDwBu7nSlA==</data>
+  <data encoding="base64" compression="zlib">eNrtmE0KwjAQhZ8KXseFuhKbXfEQDf5cQd17ExVXrq0nU/dOaZbRRKuQJu/B0MKQzHydkkcLULHqVgB3iUcRV0/9QX0damAkMdb2vGu9b51P1r/q6RutZY+NxFaHM79f9nSRPUqJa0B8IfZUqZMBXRO9LL6zai9MBxNH8pGvSS95u/j+0W9M7+dZns98Auxm9b0tv3iT9+Wr1i4ddVaOOpyfXae8Wd6Xr2kdzo989L92+R/9gf5Af+D5ST7ypeAPKX7f0h94vpCPfPQHzs/mJyH7A//vko98afNNFZCZUAoURYme8O7W2A==</data>
  </layer>
  <layer id="4" name="Canopy" width="56" height="44" opacity="0.88">
   <properties>
@@ -63,7 +63,9 @@
     <property name="pursueRange" value="0" type="int" />
     <property name="threatRange" value="0" type="int" />
     <property name="fleeRange" value="0" type="int" />
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Harry: A quick spell and a little courage can make all the difference. Ready to practise?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Harry: A quick spell and a little courage can make all the difference. Ready to practise?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}], &quot;condition&quot;: [{&quot;duelReady&quot;: true}]}, {&quot;name&quot;: &quot;Ask about a rematch&quot;, &quot;condition&quot;: [{&quot;duelReady&quot;: true, &quot;not&quot;: true}], &quot;text&quot;: &quot;Harry: Nice one. I thought I had you until that last turn. Come back tomorrow and we'll see if I can spot it coming.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="defeatDialog" value="[{&quot;text&quot;: &quot;Harry: Nice one. I thought I had you until that last turn. Come back tomorrow and we'll see if I can spot it coming.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+    <property name="rematchNextDay" value="true" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
     <property name="spawn.Hard" value="true" type="bool" />
@@ -77,7 +79,9 @@
     <property name="pursueRange" value="0" type="int" />
     <property name="threatRange" value="0" type="int" />
     <property name="fleeRange" value="0" type="int" />
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Ron: Fred and George sent a few things along. Fancy a practice duel?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Ron: Fred and George sent a few things along. Fancy a practice duel?&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}], &quot;condition&quot;: [{&quot;duelReady&quot;: true}]}, {&quot;name&quot;: &quot;Ask about a rematch&quot;, &quot;condition&quot;: [{&quot;duelReady&quot;: true, &quot;not&quot;: true}], &quot;text&quot;: &quot;Ron: Blimey, even Fred and George's tricks weren't enough. Give me till tomorrow to think of a few of my own, and we'll go again.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="defeatDialog" value="[{&quot;text&quot;: &quot;Ron: Blimey, even Fred and George's tricks weren't enough. Give me till tomorrow to think of a few of my own, and we'll go again.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+    <property name="rematchNextDay" value="true" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
     <property name="spawn.Hard" value="true" type="bool" />
@@ -105,7 +109,7 @@
   <object id="501" name="Exploration cache" type="reward" x="752" y="576" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;gold&quot;, &quot;count&quot;: 70, &quot;addMaxCount&quot;: 40, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/gold.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
@@ -306,13 +310,13 @@
   <object id="2184" name="Solid architecture" type="collision" x="688" y="304" width="64" height="16" />
   <object id="2185" name="Solid architecture" type="collision" x="688" y="416" width="64" height="16" />
   <object id="2186" name="Solid architecture" type="collision" x="688" y="528" width="64" height="16" />
-  <object id="241" name="Hermione Granger" type="dialog" x="480" y="576" width="24.0" height="32" gid="26501">
+  <object id="241" name="Hermione Granger" type="dialog" x="485" y="576" width="14" height="21" gid="26501">
    <properties>
     <property name="requiredOptionalQuest" value="90702" type="int" />
     <property name="dialog" value="[{&quot;text&quot;:&quot;Hermione: Ginny is safe now. I only wish we'd worked out what the writing meant sooner.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;checkQuestFlag&quot;:&quot;questCompleted:90702&quot;}]},{&quot;text&quot;:&quot;Hermione: The library bestiary is on the reading stand just inside the east doorway. See if it explains how Mrs Norris survived.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702},{&quot;checkQuestFlag&quot;:&quot;hpChamberLibraryClue&quot;,&quot;not&quot;:true}]},{&quot;text&quot;:&quot;Hermione: The Duelling Club is meeting through the door at the back of the hall. Look for Harry there.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702},{&quot;checkQuestFlag&quot;:&quot;hpChamberLibraryClue&quot;},{&quot;defeatedEnemy&quot;:&quot;HP Duelling Club Draco&quot;,&quot;not&quot;:true}]},{&quot;text&quot;:&quot;Hermione: Harry heard something in the pipes. Myrtle haunts the bathroom off the upper gallery.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Continue&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702},{&quot;defeatedEnemy&quot;:&quot;HP Duelling Club Draco&quot;}]},{&quot;text&quot;:&quot;Hermione: We can pick up where we left off. Have you got time to help?&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Let's continue.&quot;,&quot;action&quot;:[{&quot;issueQuest&quot;:&quot;90702&quot;}]},{&quot;name&quot;:&quot;Perhaps later.&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;questCompleted:90702&quot;,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;hpChamberAccepted&quot;}]},{&quot;text&quot;:&quot;Hermione: Someone petrified Mrs Norris. You can still see the writing on the east wall. Could you check the library bestiary? The doorway is on the east side of the hall.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;I'll look in the library.&quot;,&quot;action&quot;:[{&quot;issueQuest&quot;:&quot;90702&quot;},{&quot;setQuestFlag&quot;:{&quot;key&quot;:&quot;hpChamberAccepted&quot;,&quot;val&quot;:1}}]},{&quot;name&quot;:&quot;Perhaps later.&quot;}],&quot;condition&quot;:[{&quot;activeQuest&quot;:90702,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;questCompleted:90702&quot;,&quot;not&quot;:true},{&quot;checkQuestFlag&quot;:&quot;hpChamberAccepted&quot;,&quot;not&quot;:true}]}]" />
    </properties>
   </object>
-  <object id="242" name="Duelling Club classroom" type="entry" x="416" y="80" width="48" height="16">
+  <object id="242" name="Duelling Club classroom" type="entry" x="424" y="80" width="48" height="16">
    <properties>
     <property name="requiredOptionalQuest" value="90702" type="int" />
     <property name="teleport" value="../common/maps/map/hogwarts/hogwarts_duelling_club.tmx" />
@@ -332,6 +336,60 @@
    <properties>
     <property name="requiredOptionalQuest" value="90702" type="int" />
     <property name="dialog" value="[{&quot;text&quot;:&quot;THE CHAMBER OF SECRETS HAS BEEN OPENED.\nENEMIES OF THE HEIR, BEWARE.\n\nA shallow puddle glints beneath the red letters.&quot;,&quot;options&quot;:[{&quot;name&quot;:&quot;Step back.&quot;}]}]" />
+   </properties>
+  </object>
+  <object id="2187" name="Duelling Club stone arch" type="dummy" x="424" y="64" width="16" height="16" gid="22584">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2188" name="Duelling Club stone arch" type="dummy" x="440" y="64" width="16" height="16" gid="22585">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2189" name="Duelling Club stone arch" type="dummy" x="456" y="64" width="16" height="16" gid="22586">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2190" name="Duelling Club stone arch" type="dummy" x="424" y="80" width="16" height="16" gid="22648">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2191" name="Duelling Club stone arch" type="dummy" x="440" y="80" width="16" height="16" gid="22649">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2192" name="Duelling Club stone arch" type="dummy" x="456" y="80" width="16" height="16" gid="22650">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2193" name="Duelling Club stone arch" type="dummy" x="424" y="96" width="16" height="16" gid="22712">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2194" name="Duelling Club stone arch" type="dummy" x="440" y="96" width="16" height="16" gid="22713">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
+   </properties>
+  </object>
+  <object id="2195" name="Duelling Club stone arch" type="dummy" x="456" y="96" width="16" height="16" gid="22714">
+   <properties>
+    <property name="blocking" value="false" type="bool" />
+    <property name="requiredOptionalQuest" value="90702" type="int" />
    </properties>
   </object>
  </objectgroup>

@@ -15,10 +15,10 @@
   <data encoding="base64" compression="zlib">eJztzjENAAAIwDCUIgu9GODgITxdsr8R2lT5Ow8PDw8PDw8PDw8PDw8PDw/PrUdzDX++0C4=</data>
  </layer>
  <layer id="2" name="Architecture" width="36" height="36">
-  <data encoding="base64" compression="zlib">eJzt2LEJACAMBdHMFUcVd7W00cMuCvcg/RW/SoRu9IzIVnMj9z1V7GH2MHuYPcweZg/7oaeSPeyH/diz2MPsYfYwe5g97NTz0r9FexPdEE5u</data>
+  <data encoding="base64" compression="zlib">eNrt0rsJADAMA1GtZXvUkFHzGSCNm6DmDtQ/jCXqtELapp14PSN9t5iJBw8ePHjw4PnhcYaHf8aDBw8ePHgcnigpTasSNbvCKmUq</data>
  </layer>
  <layer id="3" name="Furnishings" width="36" height="36">
-  <data encoding="base64" compression="zlib">eJxjYBgFQx2w6Q+s/CggDzR6MDA0eWDS1JIfBdQFDcCwXek20K4YBcSC0fw1CkYB7cBo/hpZYLT+oy8YzV+jYBTQHjx2R5RtT9ypr34UjILhCgAmmkUH</data>
+  <data encoding="base64" compression="zlib">eNrt1bENwCAMRNGrWCdbgKdCIdswFxkk6SioIlmKjP5rXByVpcMSokvHv3kUo0h3WadX/lUz6bJ1euXwdb677Zk90C+AftEv7h/9ol9AZNXm31bN/z2wqwdfS5dp</data>
  </layer>
  <layer id="4" name="Canopy" width="36" height="36" opacity="0.88">
   <properties>

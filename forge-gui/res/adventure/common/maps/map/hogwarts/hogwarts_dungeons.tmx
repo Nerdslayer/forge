@@ -15,10 +15,10 @@
   <data encoding="base64" compression="zlib">eJztzwENACAMwLArRSzK0LHTJRWwGW3onl38tflr89fmr81fm782f23+2vy1+Wvz1+avzV+bvzZ/bf7a/LX99qdmD1hjOnk=</data>
  </layer>
  <layer id="2" name="Architecture" width="56" height="40">
-  <data encoding="base64" compression="zlib">eJztmTEKwDAMA/2u9Kmlf+1enE1RkbkDr4puiQOpggncq2pd5+bLybOe1ftNAb9s8MsGv2zwy0btt3uj/JWHn7ePOg8/bx913vT7swO/bPDLYfr9wn7w9lHn4efto87Dz9tHnYeft486j/2eDX7Z4JfNzu/kn7FzOj/I5AVOLHx5</data>
+  <data encoding="base64" compression="zlib">eNrt19EKwCAIhWFfK33U0aPWRndjrCsNQf4DXc74KNKJkAoZTWQeXN+c3Ov+2e/SOmfVFR8+fPjw4cPn9Y3NzJBVL9q3vu2B5++thw/fO81EzOJ83nrV38/dncCHDx/zGfMZ/R0fPnz4+H+gv+PDhw9fpm+9yVpkRfYqkpsHs3OzCQ==</data>
  </layer>
  <layer id="3" name="Furnishings" width="56" height="40">
-  <data encoding="base64" compression="zlib">eJzt1jEOwjAMBdAPSFyHDVhItvaKwFIYYOA8wHnwkLmqZCd20H+Spw7xl6O4AFFftru+v3s4D8BF6jp4d1LHfgQOUsfRu5M63pLrI/X903yrBKxLbZJ3N/YmyXQrdWe+5h7y7j0Vb582n/b82qLPT4v52pvkvr+M7rxVPsueLEWcnyXm61v0fNzv86LPT4v5+hYxH/9flos4P0vM54v7fV70+WkxX3vcf8tFnJ+lUwZSqZy9uyEi0vsBqxt71g==</data>
+  <data encoding="base64" compression="zlib">eNrtlrEOwiAURa+a+DsO6ljY+IryFdXvqQ51cFW/TN1leHM7lARLzknuRAKccJOHBDDNu5U+lm9b9i7bXf71fZQOlmMc32fu+SXoktPJco719fORnJ6WV4V+KyetLRtXn1+fnC6WK374ZWYI0i2U85t7Pv3Eb2l+fer7PfyXX8470U/88GO+M9/xw4//C/8X+okf8533w4/5x/yricZLzuK9AAAWzw/MRIbv</data>
  </layer>
  <layer id="4" name="Canopy" width="56" height="40" opacity="0.88">
   <properties>
@@ -50,7 +50,7 @@
   <object id="501" name="Exploration cache" type="reward" x="144" y="400" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;gold&quot;, &quot;count&quot;: 90, &quot;addMaxCount&quot;: 40, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/gold.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />

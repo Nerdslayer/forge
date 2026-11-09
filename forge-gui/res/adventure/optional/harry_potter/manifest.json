@@ -636,7 +636,8 @@
       "enemyDefinitions": "enemies.json",
       "poiDefinitions": "points_of_interest.json",
       "biomeAdditions": "biome_additions.json",
-      "questDefinitions": "quests.json"
+      "questDefinitions": "quests.json",
+      "itemDefinitions": "hogwarts_items.json"
     },
     {
       "id": "human_elite",

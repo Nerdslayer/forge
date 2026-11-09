@@ -15,10 +15,10 @@
   <data encoding="base64" compression="zlib">eJztzsENADAIxDAmZSzm7RjlkCPl7yptaDprfn5+fn5+fn7+rPn5+fn5+fn5+bPm5+fn5+e/4NefHhOr5gw=</data>
  </layer>
  <layer id="2" name="Architecture" width="48" height="40">
-  <data encoding="base64" compression="zlib">eJzt2bEJACAMBdHMFUcVd7UXy8AZuQe/DdcnQi+YGZGjbqfK2yvv/V3Yz7KfZT/Lfpb9LPtZ9rPsZ9nPsp9lP8t+lv0s+1n2s+xn/drf+X8kxgbJRF7t</data>
+  <data encoding="base64" compression="zlib">eNrt0DsKwDAMRMG9lu2jhhw1n96kVKHAPFC7DErUoWskd+HtVW4/H/vH/M+vz8nPz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz9/fP1YyC2+vcnutqEkvAdl7uQ==</data>
  </layer>
  <layer id="3" name="Furnishings" width="48" height="40">
-  <data encoding="base64" compression="zlib">eJztl0EKwjAQRUcFr+OuurHdNT2OR1BPoW6s4Mb7qBfQgziLghUqzWSmNpX/YMgiNP8RQjohAsCW6Szu+RDOuW6+6/XAJ6OUaFzVJP19/qYg2hbfxzaO7FxWdfLw1+ZZI/WPDfjrWSXh34b4a/KsiWH/NcBfz8MRPd17lBDir8nzYc3/kYtnXxLiL1m/a/o8P/XepV6SPkbqb5HZlF0G7qPU3yIT/vCHP9EyI0obKsu687fItCSG/kFDDP7/1v9IiGH/NcBfD96/OD99seN31J7rkA/TP+H7e861cMP0v7L3jevu+uthAGjjBRMn2VE=</data>
+  <data encoding="base64" compression="zlib">eNrtlz8KwjAYxZ8VvI6DfzZTp7aHqHcQ1FXUi1jBxVk9kd5A3c2QQaWlTZNIU94PHhkCeT/KN3wFCLFLr9/s+zocI7N71++1jVsM3OPis4yOAAKVrnDf98s2AXZJ8VnGXjpnKgfhvs82uv5Ng/7mzMf/9Tfp4/zQ3zbr5Duu/U36qrCRb54id/4677d5fj53l0Bzj6nrb6Mzrzur+R11/W100p/+9AcmISByEobu/G10cv/h/uNy/+H80J//v5wfHzjPML2oXGV8819I56XKykP/gXQeqow89H+kmD5VXql//qQab9QR7xY=</data>
  </layer>
  <layer id="4" name="Canopy" width="48" height="40" opacity="0.88">
   <properties>
@@ -50,7 +50,7 @@
   <object id="501" name="Exploration cache" type="reward" x="624" y="368" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;shards&quot;, &quot;count&quot;: 4, &quot;addMaxCount&quot;: 3, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/manashards.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />

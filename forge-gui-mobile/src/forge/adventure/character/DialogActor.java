@@ -17,6 +17,7 @@ public class DialogActor extends CharacterSprite {
 
     private String lazyDialogText = null;
     private String lazySourceMapFile = null;
+    private float spriteScale = 1f;
     public DialogActor(MapStage stage, int id, String S, TextureRegion textureRegion) {
         this(stage, id, S, textureRegion, null);
     }
@@ -50,6 +51,15 @@ public class DialogActor extends CharacterSprite {
 
     public void removeFromMap() {
         dialog = null;
+    }
+
+    public void setSpriteScale(float spriteScale) {
+        this.spriteScale = spriteScale;
+    }
+
+    @Override
+    protected float getFrameScale() {
+        return spriteScale;
     }
 
     @Override

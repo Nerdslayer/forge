@@ -191,6 +191,12 @@
         "probability": 1,
         "count": 10,
         "addMaxCount": 5
+      },
+      {
+        "type": "item",
+        "itemName": "Hogwarts Portkey",
+        "probability": 1,
+        "count": 1
       }
     ]
   },

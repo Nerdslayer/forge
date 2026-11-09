@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Hogwarts Portkey",
+    "iconName": "StrangeKey",
+    "equipmentSlot": "Ability2",
+    "description": "An old key enchanted to carry you to the Hogwarts grounds from the world map.",
+    "commandOnUse": "teleport to poi Hogwarts",
+    "usableOnWorldMap": true,
+    "shardsNeeded": 1,
+    "cost": 100
+  }
+]

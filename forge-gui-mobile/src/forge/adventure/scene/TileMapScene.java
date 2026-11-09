@@ -138,7 +138,9 @@ public class TileMapScene extends HudScene {
 
     private void initializeDialogs() {
         AdventureQuestController.instance().updateEnteredPOI(rootPoint);
-        AdventureQuestController.instance().showQuestDialogs(stage);
+        if (!currentMap().showPendingDuelVictory()) {
+            AdventureQuestController.instance().showQuestDialogs(stage);
+        }
     }
     @Override
     public boolean leave() {

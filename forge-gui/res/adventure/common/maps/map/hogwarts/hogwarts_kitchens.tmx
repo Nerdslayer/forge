@@ -15,10 +15,10 @@
   <data encoding="base64" compression="zlib">eJztzqENAAAIwDAu5Sv+5QEEDkGXzDdCmypv5+Hh4eHh4eHh4eHh+eLRXAPYbtkf</data>
  </layer>
  <layer id="2" name="Architecture" width="36" height="28">
-  <data encoding="base64" compression="zlib">eJzt10EKgEAMBMF5V3zq4l+9S2jWIIjQBXMNfU2iHauSOp7vbnLjrL7nK/Ywe5g9zB5mD7OH2cPsYfYwe9hfeia/yhvretS7AEMOQbk=</data>
+  <data encoding="base64" compression="zlib">eNrt1z0KACAMg9Fcq+1RxaP6s4tD6SLIF8gaHt0qkUyGSbPQM5WNddlp/u4W3fHgwYMHDx48ePDgwfOTx0LyR43g38xmA+eGVW0=</data>
  </layer>
  <layer id="3" name="Furnishings" width="36" height="28">
-  <data encoding="base64" compression="zlib">eJxjYBgFQx2w6Q+s/GAH34wZGL4bEy9OqnnkmjMKRgEl4LE7A8NKNwaGBg8GhlVuEP4TdwhNC32jYBSMgoEDo/l9FIwC6oNGYL5o8qA9PQpGAbUBAOKlO9g=</data>
+  <data encoding="base64" compression="zlib">eNpjYBgFQx2w6Q+s/GAH34wZGL4bEy9OqnnkmjMKRgEloM6DgWGlGwNDA5Be5QbhwzAt9I2CUTAKRvP7KBgFlIDH7gwMT9xpTxMLGoH5oMmD9vQoGAXUBgCHclPl</data>
  </layer>
  <layer id="4" name="Canopy" width="36" height="28" opacity="0.88">
   <properties>
@@ -43,7 +43,7 @@
   <object id="501" name="Exploration cache" type="reward" x="464" y="320" width="16" height="16">
    <properties>
     <property name="reward" value="[{&quot;type&quot;: &quot;gold&quot;, &quot;count&quot;: 80, &quot;addMaxCount&quot;: 40, &quot;probability&quot;: 1}]" />
-    <property name="sprite" value="sprites/treasure.atlas" />
+    <property name="sprite" value="sprites/gold.atlas" />
     <property name="hidden" value="false" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />

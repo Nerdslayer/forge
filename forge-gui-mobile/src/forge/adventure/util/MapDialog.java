@@ -498,6 +498,9 @@ public class MapDialog {
                 boolean won = AdventureQuestController.hasRecordedEnemyVictory(condition.defeatedEnemy, root);
                 if (won == condition.not) return false;
             }
+            if (condition.duelReady && stage.canDuel(stage.getEnemyByID(parentID)) == condition.not) {
+                return false;
+            }
             //TODO:Check for card in inventory.
             if (condition.item != null && !condition.item.isEmpty()) { //Check for an item in player's inventory.
                 if (!player.hasItem(condition.item)) {

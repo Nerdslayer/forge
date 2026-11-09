@@ -15,10 +15,10 @@
   <data encoding="base64" compression="zlib">eJztzrEJAAAIwDAv9Vgv8wdxUEiheyK0UeWt+fj4+Pj4+Pj4+C7Nx8fHx8fHx/fdp1kN5nEQTA==</data>
  </layer>
  <layer id="2" name="Architecture" width="40" height="36">
-  <data encoding="base64" compression="zlib">eJzt2EEKwCAMRNGcKx61eNfi3op0FEf4D7L/BLJJBFZ4MiKLx9Ts97lw6Wu76qFvDn0a+vagT0Of5sY+J/Rpbuxzvw/65tGnoU9Dn4Y+DX2ar77Tf7XRfw3/vCNnU/8=</data>
+  <data encoding="base64" compression="zlib">eNrt10EKwCAMRNG5VpKjSo+q9gBtd1JG/B+y9iEoRKIV9ZCGycx4+lr63NWVHr4e3r6vM/Hh+6Mob5/7/4IP3y4+p/Cd5+P94sOHDx8+fPjedtE0mSrRom40xXAD</data>
  </layer>
  <layer id="3" name="Furnishings" width="40" height="36">
-  <data encoding="base64" compression="zlib">eJzt1EEKgCAQheG36jotuoN6hLxNdZu6Vh7E9haFgWL9H8iDGRmYhUr4m66v278zO2lx5fNLViNNJztd1XPnvZn51G6lYNMEgJaNg+SPs5my9wCgNv4/oF28XwC5IrMTOIw=</data>
+  <data encoding="base64" compression="zlib">eNrt1MEJgDAMheF3ch0P7tBmBF1G1G10rTpIO4CHoBAR/w9CIAm5JRL+pmTpzPHZazVps/js1fXv9j32JC3mr9/d92Sn12zXAQBfNg7S1OJIsXMAwP8DwP0CiFYBn4dZLA==</data>
  </layer>
  <layer id="4" name="Canopy" width="40" height="36" opacity="0.88">
   <properties>
@@ -41,7 +41,9 @@
     <property name="pursueRange" value="0" type="int" />
     <property name="threatRange" value="0" type="int" />
     <property name="fleeRange" value="0" type="int" />
-    <property name="dialog" value="[{&quot;text&quot;: &quot;Snape: Precision. Patience. Discipline. Let us discover whether you possess any of them.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="dialog" value="[{&quot;text&quot;: &quot;Snape: Precision. Patience. Discipline. Let us discover whether you possess any of them.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Begin duel&quot;, &quot;action&quot;: [{&quot;battleWithActorID&quot;: -1}], &quot;condition&quot;: [{&quot;duelReady&quot;: true}]}, {&quot;name&quot;: &quot;Ask about a rematch&quot;, &quot;condition&quot;: [{&quot;duelReady&quot;: true, &quot;not&quot;: true}], &quot;text&quot;: &quot;Snape: Adequate. You recognized the opening I left you. Return tomorrow if you wish to see how you fare when I leave you none.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}, {&quot;name&quot;: &quot;Perhaps later&quot;}]}]" />
+    <property name="defeatDialog" value="[{&quot;text&quot;: &quot;Snape: Adequate. You recognized the opening I left you. Return tomorrow if you wish to see how you fare when I leave you none.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}]}]" />
+    <property name="rematchNextDay" value="true" type="bool" />
     <property name="spawn.Easy" value="true" type="bool" />
     <property name="spawn.Normal" value="true" type="bool" />
     <property name="spawn.Hard" value="true" type="bool" />

@@ -286,10 +286,7 @@ public class CharacterSprite extends MapActor {
             currentFrame = currentAnimation.getKeyFrame(timer, !isOneShotAnimation(currentAnimationType));
         }
 
-        float scale = 1f;
-        if (this instanceof EnemySprite) {
-            scale = ((EnemySprite) this).getData().scale;
-        }
+        float scale = getFrameScale();
 
         setHeight(currentFrame.getRegionHeight() * scale);
         setWidth(currentFrame.getRegionWidth() * scale);
@@ -305,6 +302,10 @@ public class CharacterSprite extends MapActor {
     }
 
 
+
+    protected float getFrameScale() {
+        return this instanceof EnemySprite enemy ? enemy.getData().scale : 1f;
+    }
 
     public Sprite getAvatar() {
         if (avatar == null || avatar.isEmpty())

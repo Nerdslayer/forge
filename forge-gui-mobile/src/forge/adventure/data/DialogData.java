@@ -137,6 +137,7 @@ public class DialogData implements Serializable {
         }
         public String item;
         public String defeatedEnemy; // Enemy ID or recorded display name; a past victory also counts.
+        public boolean duelReady; // The enemy owning this dialog is available for a duel.
         public int activeQuest; // Template ID currently in the player's quest log.
         public int actorID = 0;                    //Check for an actor ID.
         public String hasBlessing = null;          //Check for specific blessing, if named.

@@ -4,6 +4,9 @@ import forge.adventure.player.PlayerStatistic;
 import forge.adventure.pointofintrest.PointOfInterestChanges;
 import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import java.time.LocalDate;
+
 import static org.mockito.Mockito.*;
 
 @Test(groups = {"UnitTest", "fast"})
@@ -195,5 +198,50 @@ public class AdventureVictoryHistoryTest {
         restoredLocation.load(location.save());
         Assert.assertTrue(restoredLocation.isEnemyDefeated("Enemy ID"));
         Assert.assertFalse(restoredLocation.isEnemyDefeated("Different enemy"));
+    }
+
+    @Test public void dailyRematchesAreIndependentAndSurviveSaveAndReload() {
+        var today = LocalDate.of(2026, 12, 31);
+        var oldLocation = new PointOfInterestChanges();
+        oldLocation.recordEnemyDefeat("Duelist");
+        var location = new PointOfInterestChanges();
+        location.load(oldLocation.save());
+        Assert.assertTrue(location.isDuelReady("Duelist", today));
+
+        location.recordDuelWin("Duelist", today);
+        var restored = new PointOfInterestChanges();
+        restored.load(location.save());
+        Assert.assertFalse(restored.isDuelReady("Duelist", today));
+        Assert.assertTrue(restored.isDuelReady("Other duelist", today));
+        Assert.assertTrue(restored.isDuelReady("Duelist", today.plusDays(1)));
+
+        restored.load(oldLocation.save());
+        Assert.assertTrue(restored.isDuelReady("Duelist", today));
+    }
+
+    @Test public void rematchCooldownGatesBothDialogChoiceAndBattleEntry() {
+        var location = new PointOfInterestChanges();
+        var stage = mock(forge.adventure.stage.MapStage.class, CALLS_REAL_METHODS);
+        var duelist = mock(forge.adventure.character.EnemySprite.class);
+        var data = new forge.adventure.data.EnemyData();
+        data.name = "Duelist";
+        duelist.rematchNextDay = true;
+        when(duelist.getData()).thenReturn(data);
+        doReturn(duelist).when(stage).getEnemyByID(101);
+        doReturn(location).when(stage).getChanges();
+        var dialog = new MapDialog("[]", stage, 101);
+        var condition = new forge.adventure.data.DialogData.ConditionData();
+        condition.duelReady = true;
+        var conditions = new forge.adventure.data.DialogData.ConditionData[]{condition};
+
+        try (var current = mockStatic(Current.class)) {
+            Assert.assertTrue(dialog.isConditionOk(conditions));
+            location.recordDuelWin(data.name, LocalDate.now());
+            Assert.assertFalse(dialog.isConditionOk(conditions));
+            condition.not = true;
+            Assert.assertTrue(dialog.isConditionOk(conditions));
+            stage.beginDuel(duelist);
+            verify(duelist, never()).clearCollisionHeight();
+        }
     }
 }

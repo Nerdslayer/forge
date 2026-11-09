@@ -4,6 +4,7 @@ import forge.adventure.util.Current;
 import forge.adventure.util.SaveFileContent;
 import forge.adventure.util.SaveFileData;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +18,7 @@ public class PointOfInterestChanges implements SaveFileContent  {
     private final HashMap<Integer, HashSet<Integer>> cardsBought = new HashMap<>();
     private final java.util.Map<String, Byte> mapFlags = new HashMap<>();
     private final java.util.Map<Integer, Long> shopSeeds = new HashMap<>();
+    private final java.util.Map<String, Long> lastDuelDays = new HashMap<>();
     //private final java.util.Map<Integer, Float> shopModifiers = new HashMap<>();
     private final java.util.Map<Integer, Integer> reputation = new HashMap<>();
     private Boolean isBookmarked;
@@ -61,6 +63,10 @@ public class PointOfInterestChanges implements SaveFileContent  {
         cardsBought.putAll((HashMap<Integer, HashSet<Integer>>) data.readObject("cardsBought"));
         shopSeeds.clear();
         shopSeeds.putAll((java.util.Map<Integer, Long>) data.readObject("shopSeeds"));
+        lastDuelDays.clear();
+        if (data.containsKey("lastDuelDays")) {
+            lastDuelDays.putAll((java.util.Map<String, Long>) data.readObject("lastDuelDays"));
+        }
         mapFlags.clear();
         mapFlags.putAll((java.util.Map<String, Byte>) data.readObject("mapFlags"));
         reputation.clear();
@@ -78,6 +84,9 @@ public class PointOfInterestChanges implements SaveFileContent  {
         data.storeObject("cardsBought",cardsBought);
         data.storeObject("mapFlags", mapFlags);
         data.storeObject("shopSeeds", shopSeeds);
+        if (!lastDuelDays.isEmpty()) {
+            data.storeObject("lastDuelDays", lastDuelDays);
+        }
         data.storeObject("reputation", reputation);
         data.storeObject("isBookmarked", isBookmarked);
         data.storeObject("isVisited", isVisited);
@@ -98,6 +107,14 @@ public class PointOfInterestChanges implements SaveFileContent  {
 
     public boolean isEnemyDefeated(String enemyName) {
         return mapFlags.containsKey("enemyDefeated:" + enemyName);
+    }
+
+    public void recordDuelWin(String enemyName, LocalDate day) {
+        lastDuelDays.put(enemyName, day.toEpochDay());
+    }
+
+    public boolean isDuelReady(String enemyName, LocalDate day) {
+        return day.toEpochDay() > lastDuelDays.getOrDefault(enemyName, Long.MIN_VALUE);
     }
 
     public void buyCard(int objectID, int cardIndex) {

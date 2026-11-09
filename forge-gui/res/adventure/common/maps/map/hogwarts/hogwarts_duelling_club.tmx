@@ -15,10 +15,10 @@
   <data encoding="base64" compression="zlib">eJxjYBgFIDA3jr541P5R+0ftH7V/1P5R+0ftH7V/1P6Rbf9IBQDB+UCj</data>
  </layer>
  <layer id="2" name="Architecture" width="32" height="25">
-  <data encoding="base64" compression="zlib">eJxjYBgFIDDbioHBypo+eK4VdvvpBUbtH7V/1P5R+0ftH7V/1P5R+0ftJ739hwyo0f4bqQAAtcs5gg==</data>
+  <data encoding="base64" compression="zlib">eNrt1jsKADAIBNG9lnrUkKPmQ4pAIJWN1QxYysNOiU7DpFk0y36/ed2t3fHx8fHx8fHx8S0kT8ybJ3cj+LdvGyfhTTY=</data>
  </layer>
  <layer id="3" name="Furnishings" width="32" height="25">
-  <data encoding="base64" compression="zlib">eJxjYBgFgw2w6dNWfhSQDxjtGBiYsGBmO+rZ8didgeGJO4RGB/OB9izAghfaEW8GJYBY+2kFRu2nvf2j6W/U/oG0H1/asbVnYLDDgu3tiTdjFIyCUTA4AAD6MFd5</data>
+  <data encoding="base64" compression="zlib">eNpjYBgFgw2w6dNWfhSQDxjtGBiYsGBmO+rZUeeBwOhgPtCeBVjwQjvizaAEEGs/rcCo/bS3fzT9jdo/WNOfrT0Dgx0WbG9Pn/Q3CiDAIoKBwRKIrSIGxv4KoL2VQFw1QPbvANq7E4h3RYymBUoAAOxeV8Q=</data>
  </layer>
  <layer id="4" name="Canopy" width="32" height="25" opacity="0.88">
   <properties>
@@ -34,7 +34,7 @@
     <property name="direction" value="up" />
    </properties>
   </object>
-  <object id="301" name="HP Duelling Club Draco" type="enemy" x="232.0" y="160" width="32" height="32">
+  <object id="301" name="HP Duelling Club Draco" type="enemy" x="237" y="160" width="32" height="32">
    <properties>
     <property name="enemy" value="HP Duelling Club Draco" />
     <property name="speedModifier" value="0" />
@@ -49,10 +49,11 @@
     <property name="effect" value="{&quot;startBattleWithCard&quot;: [&quot;g_1_1_snake&quot;], &quot;opponent&quot;: {&quot;startBattleWithCard&quot;: [&quot;Harry Potter, the Boy Who Lived|HP&quot;]}}" />
    </properties>
   </object>
-  <object id="302" name="Harry Potter" type="dialog" x="288" y="256" width="24.0" height="32" gid="13777">
+  <object id="302" name="Harry Potter" type="dialog" x="289" y="256" width="22" height="22" gid="13777">
    <properties>
     <property name="dialog" value="[{&quot;text&quot;: &quot;Harry: Malfoy conjured a snake. I told it to stop, but everyone says I was speaking Parseltongue. It's the same language as the voice I've heard moving through the pipes. Myrtle's bathroom is off the upper gallery. Let's look there.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Find Moaning Myrtle.&quot;, &quot;action&quot;: [{&quot;setQuestFlag&quot;: {&quot;key&quot;: &quot;hpChamberHeardPipes&quot;, &quot;val&quot;: 1}}]}], &quot;condition&quot;: [{&quot;defeatedEnemy&quot;: &quot;HP Duelling Club Draco&quot;}, {&quot;checkQuestFlag&quot;: &quot;hpChamberHeardPipes&quot;, &quot;not&quot;: true}]}, {&quot;text&quot;: &quot;Harry: Look for Myrtle in the bathroom off the upper gallery. I can try speaking to whatever we find there.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}], &quot;condition&quot;: [{&quot;checkQuestFlag&quot;: &quot;hpChamberHeardPipes&quot;}]}, {&quot;text&quot;: &quot;Harry: There's room for both of us up there. Malfoy's waiting on the carpet.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}], &quot;condition&quot;: [{&quot;defeatedEnemy&quot;: &quot;HP Duelling Club Draco&quot;, &quot;not&quot;: true}]}]" />
     <property name="sprite" value="sprites/enemy/harry_potter/harry.atlas" />
+    <property name="spriteScale" type="float" value="0.0859375" />
    </properties>
   </object>
   <object id="2000" name="Solid architecture" type="collision" x="32" y="32" width="16" height="16" />

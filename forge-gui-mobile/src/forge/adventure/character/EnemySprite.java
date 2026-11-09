@@ -62,6 +62,7 @@ public class EnemySprite extends CharacterSprite implements Steerable<Vector2> {
     EnemyData data;
     public MapDialog dialog; //Dialog to show on contact. Overrides standard battle (can be started as an action)
     public MapDialog defeatDialog; //Dialog to show on defeat. Overrides standard death (can be removed as an action)
+    public boolean rematchNextDay; //A persistent duelist with a daily cooldown after a win.
     public EffectData effect; //Battle effect for this enemy. Similar to a player's blessing.
     public String nameOverride = ""; //Override name of this enemy in battles.
     public String battleBackground = ""; //Override the battle background folder for this encounter.
