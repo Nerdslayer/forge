@@ -40,6 +40,8 @@ public class RewardData implements Serializable {
     public String itemName;
     public String[] itemNames;
     public String[] editions;
+    public String[] excludedEditions;
+    public boolean excludeLands;
     public String[] colors;
     public int startDate;
     public int endDate;
@@ -76,6 +78,8 @@ public class RewardData implements Serializable {
         endDate          = rewardData.endDate;
         itemNames        = rewardData.itemNames == null ? null : rewardData.itemNames.clone();
         editions         = rewardData.editions == null ? null : rewardData.editions.clone();
+        excludedEditions = rewardData.excludedEditions == null ? null : rewardData.excludedEditions.clone();
+        excludeLands     = rewardData.excludeLands;
         colors           = rewardData.colors == null ? null : rewardData.colors.clone();
         rarity           = rewardData.rarity == null ? null : rewardData.rarity.clone();
         subTypes         = rewardData.subTypes == null ? null : rewardData.subTypes.clone();

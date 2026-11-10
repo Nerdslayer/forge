@@ -57,6 +57,8 @@ public class CardUtil {
 
         private final List<CardRarity> rarities = new ArrayList<>();
         private final List<String> editions = new ArrayList<>();
+        private final List<String> excludedEditions = new ArrayList<>();
+        private final boolean excludeLands;
         private final List<String> subType = new ArrayList<>();
         private final List<String> keyWords = new ArrayList<>();
         private final List<CardType.CoreType> type = new ArrayList<>();
@@ -82,22 +84,22 @@ public class CardUtil {
             }
         }
 
+        private static boolean printedIn(PaperCard card, List<String> editionCodes) {
+            return editionCodes.contains(card.getEdition())
+                    || FModel.getMagicDb().getCommonCards().getAllCards(card).stream()
+                            .anyMatch(printing -> editionCodes.contains(printing.getEdition()));
+        }
+
         @Override
         public boolean test(final PaperCard card) {
             if (!this.rarities.isEmpty() && !this.rarities.contains(card.getRarity()))
                 return !this.shouldBeEqual;
-            if (!this.editions.isEmpty() && !this.editions.contains(card.getEdition())) {
-                boolean found = false;
-                List<PaperCard> allPrintings = FModel.getMagicDb().getCommonCards().getAllCards(card);
-                for (PaperCard c : allPrintings) {
-                    if (this.editions.contains(c.getEdition())) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
-                    return !this.shouldBeEqual;
-            }
+            if (excludeLands && card.getRules().getType().isLand())
+                return !this.shouldBeEqual;
+            if (!this.editions.isEmpty() && !printedIn(card, this.editions))
+                return !this.shouldBeEqual;
+            if (!excludedEditions.isEmpty() && printedIn(card, excludedEditions))
+                return !this.shouldBeEqual;
             if (!this.minDate.isEmpty()) {
                 boolean found = false;
                 List<PaperCard> allPrintings = FModel.getMagicDb().getCommonCards().getAllCards(card);
@@ -294,6 +296,10 @@ public class CardUtil {
             if (type.editions != null && type.editions.length != 0) {
                 editions.addAll(Arrays.asList(type.editions));
             }
+            if (type.excludedEditions != null) {
+                excludedEditions.addAll(Arrays.asList(type.excludedEditions));
+            }
+            excludeLands = type.excludeLands;
             if (type.superTypes != null) {
                 for (String string : type.superTypes)
                     superType.add(CardType.Supertype.getEnum(string));

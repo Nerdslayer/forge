@@ -20,7 +20,15 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 2
+        "count": 2,
+        "editions": ["HP"]
+      },
+      {
+        "type": "deckCard",
+        "probability": 0.2,
+        "count": 1,
+        "excludedEditions": ["HP"],
+        "excludeLands": true
       },
       {
         "type": "gold",
@@ -57,7 +65,15 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 2
+        "count": 2,
+        "editions": ["HP"]
+      },
+      {
+        "type": "deckCard",
+        "probability": 0.2,
+        "count": 1,
+        "excludedEditions": ["HP"],
+        "excludeLands": true
       },
       {
         "type": "gold",
@@ -93,7 +109,15 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 2
+        "count": 2,
+        "editions": ["HP"]
+      },
+      {
+        "type": "deckCard",
+        "probability": 0.2,
+        "count": 1,
+        "excludedEditions": ["HP"],
+        "excludeLands": true
       },
       {
         "type": "gold",
@@ -129,7 +153,15 @@
       {
         "type": "deckCard",
         "probability": 1,
-        "count": 2
+        "count": 2,
+        "editions": ["HP"]
+      },
+      {
+        "type": "deckCard",
+        "probability": 0.2,
+        "count": 1,
+        "excludedEditions": ["HP"],
+        "excludeLands": true
       },
       {
         "type": "gold",
