@@ -368,6 +368,9 @@ public final class FlatMonteCarloPicker {
             return result;
         } catch (final AITimeoutTracker.Expired e) {
             return new Result(heuristicChoice, heuristicChoice == null, false, 0, 0, System.nanoTime() - start, "deadline");
+        } catch (final forge.ai.effect.LiveGameRestorationException failure) {
+            // Candidate revalidation, unlike a rollout, can touch the live game.
+            throw failure;
         } catch (final RuntimeException e) {
             // Rollouts only ever run on copies of the game, so whatever went wrong in there must not take the real
             // game down: play what the heuristics wanted to play anyway.

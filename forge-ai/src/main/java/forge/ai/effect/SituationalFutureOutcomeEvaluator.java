@@ -98,6 +98,8 @@ final class SituationalFutureOutcomeEvaluator {
             if (ready == null || !ready.canPlay()) {
                 return Evaluation.unsupported("activation is not currently playable and payable");
             }
+        } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException unavailable) {
             SituationalAnalysisSession.noteFailure(evaluatingAi);
             return Evaluation.unsupported("activation playability could not be established");

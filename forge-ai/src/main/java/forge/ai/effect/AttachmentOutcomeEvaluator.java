@@ -19,6 +19,7 @@ import forge.game.keyword.Keyword;
 import forge.game.spellability.SpellAbility;
 import forge.game.staticability.StaticAbility;
 import forge.game.zone.ZoneType;
+import forge.util.AITimeoutTracker;
 
 /** Values supported Aura and Equipment attachment-state changes. */
 final class AttachmentOutcomeEvaluator implements OutcomeEvaluator {
@@ -55,7 +56,10 @@ final class AttachmentOutcomeEvaluator implements OutcomeEvaluator {
         try {
             return outcome.getApi() == ApiType.Attach
                     ? evaluateAttach(outcome, context) : evaluateUnattach(outcome, context);
+        } catch (final AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException ignored) {
+            AITimeoutTracker.check();
             // Dynamic, illegal, or malformed attachment changes contribute no outcome value.
             return context.unsupported();
         }
@@ -125,6 +129,7 @@ final class AttachmentOutcomeEvaluator implements OutcomeEvaluator {
 
     private static int evaluateAttachmentChange(final OutcomeEvaluationContext context,
             final Card attachment, final Card newTarget, final boolean detaching) {
+        AITimeoutTracker.check();
         final Map<Integer, Card> beforeCache = new HashMap<>();
         final Card attachmentBefore = copyForAnalysis(attachment, beforeCache, false);
         final Card oldTarget = attachment.getAttachedTo();
@@ -159,6 +164,8 @@ final class AttachmentOutcomeEvaluator implements OutcomeEvaluator {
         }
         final Set<Card> affectedCopies = new HashSet<>(preList);
 
+        AITimeoutTracker.check();
+        final int value;
         try {
             attachment.getGame().getAction().checkStaticAbilities(
                     false, affectedCopies, preList);
@@ -171,10 +178,16 @@ final class AttachmentOutcomeEvaluator implements OutcomeEvaluator {
             if (newTarget != null) {
                 changes.put(newTargetBefore, newTargetCopy);
             }
-            return CardStateDeltaEvaluator.evaluateBoardChanges(context, changes);
+            value = CardStateDeltaEvaluator.evaluateBoardChanges(context, changes);
         } finally {
-            attachment.getGame().getAction().checkStaticAbilities(false);
+            try {
+                attachment.getGame().getAction().checkStaticAbilities(false);
+            } catch (final RuntimeException failure) {
+                throw new LiveGameRestorationException(failure);
+            }
         }
+        AITimeoutTracker.check();
+        return value;
     }
 
     private static Card copyForAnalysis(final Card original,

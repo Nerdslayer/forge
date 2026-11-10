@@ -1,6 +1,7 @@
 package forge.ai.effect;
 
 import forge.ai.MastermindEffort;
+import forge.util.AITimeoutTracker;
 import java.util.function.LongSupplier;
 
 /** Cooperative wall-clock budget shared by one bounded effect-analysis evaluation. */
@@ -41,7 +42,8 @@ final class EffectEvaluationBudget {
     String limits() { return "effort=" + effort + ", timeoutMs=" + timeoutMillis; }
 
     void check() {
-        if (Thread.currentThread().isInterrupted() || clock.getAsLong() >= deadlineNanos) {
+        if (Thread.currentThread().isInterrupted() || clock.getAsLong() >= deadlineNanos
+                || AITimeoutTracker.remainingNanos() <= 0) {
             throw new Exceeded();
         }
     }

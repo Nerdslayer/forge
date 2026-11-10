@@ -194,6 +194,8 @@ public final class ManaActionCombinationSelector {
             final boolean admitted;
             try {
                 admitted = candidateFilter == null || candidateFilter.test(ability);
+            } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+                throw abort;
             } catch (final RuntimeException ignored) {
                 admissionResults.put(ability, false);
                 return false;
@@ -246,6 +248,8 @@ public final class ManaActionCombinationSelector {
             final Selection timeout = timedOut(timeoutMana, evaluated, budget);
             return comparison(timeout, timeout, "evaluation_timeout",
                     List.of("analysis budget exceeded after " + evaluated + " candidate(s); " + budget.limits()));
+        } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException exception) {
             final Selection empty = emptySelection(availableMana, 0);
             return comparison(empty, empty, "evaluation_error",
@@ -288,6 +292,8 @@ public final class ManaActionCombinationSelector {
                 }
                 addDiagnostic(rejected, actionName(ability) + ": "
                         + safeFilterReason(ability, candidateFilterReason));
+            } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+                throw abort;
             } catch (final RuntimeException exception) {
                 addDiagnostic(rejected, actionName(ability)
                         + ": legacy admission check failed ("
@@ -318,6 +324,8 @@ public final class ManaActionCombinationSelector {
             return selectPrepared(prepared, requiredFirstAction, snapshot, budget);
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
             return timedOut(snapshot == null ? 0 : snapshot.availableMana(), 0, budget);
+        } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException ignored) {
             // The existing chooser remains the safe fallback if mana estimation is unavailable.
             return emptySelection(0, 0);
@@ -356,6 +364,8 @@ public final class ManaActionCombinationSelector {
                                 + safeFilterReason(ability, candidateFilterReason));
                         continue;
                     }
+                } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+                    throw abort;
                 } catch (final RuntimeException exception) {
                     addDiagnostic(candidateDiagnostics, actionName(ability)
                             + ": legacy admission check failed ("
@@ -376,6 +386,8 @@ public final class ManaActionCombinationSelector {
                 }
             } catch (final EffectEvaluationBudget.Exceeded exceeded) {
                 throw exceeded;
+            } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+                throw abort;
             } catch (final RuntimeException exception) {
                 addDiagnostic(candidateDiagnostics, actionName(ability)
                         + ": valuation failed (" + exception.getClass().getSimpleName() + ")");
@@ -1037,6 +1049,8 @@ public final class ManaActionCombinationSelector {
             final String reason = candidateFilterReason.apply(ability);
             return reason == null || reason.isBlank()
                     ? "legacy admission filter rejected action" : reason;
+        } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException exception) {
             return "legacy admission reason unavailable ("
                     + exception.getClass().getSimpleName() + ")";

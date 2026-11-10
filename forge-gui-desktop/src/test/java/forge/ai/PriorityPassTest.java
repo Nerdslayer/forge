@@ -1,24 +1,111 @@
 package forge.ai;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import forge.ai.effect.EarlyActionAffordability;
 import forge.card.mana.ManaAtom;
 import forge.game.Game;
 import forge.game.GameActionUtil;
 import forge.game.card.Card;
+import forge.game.card.CardCollection;
 import forge.game.mana.Mana;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.OptionalCost;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
+import forge.util.AITimeoutTracker;
 
 import org.mockito.Mockito;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 public class PriorityPassTest extends AITest {
+    @Test
+    public void liveChooserFinishesExpiredProbeCleanupBeforeReturningEarlierApproval() {
+        final Game game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, ai);
+        final var controller = Mockito.spy(new AiController(ai, game));
+        final Card first = addCard("Icy Manipulator", ai);
+        final Card second = addCard("Pacification Array", ai);
+        final Card third = addCard("Sol Ring", ai);
+        final var candidates = new ArrayList<>(ComputerUtilAbility.getSpellAbilities(
+                new CardCollection(List.of(first, second, third)), ai));
+        Assert.assertTrue(candidates.size() >= 3);
+        final Thread caller = Thread.currentThread();
+        final var probes = new AtomicInteger();
+        final List<SpellAbility> approved = new ArrayList<>();
+        Mockito.doAnswer(invocation -> {
+            Assert.assertSame(Thread.currentThread(), caller);
+            final SpellAbility ability = invocation.getArgument(0);
+            if (probes.incrementAndGet() == 1) {
+                approved.add(ability);
+                return AiPlayDecision.WillPlay;
+            }
+            try {
+                first.setTapped(true);
+                // The chooser's scope restores the previous deadline on exit.
+                AITimeoutTracker.arm(System.nanoTime() - 1, false);
+                return AiPlayDecision.WillPlay;
+            } finally {
+                first.setTapped(false);
+            }
+        }).when(controller).canPlayAndPayFor(Mockito.any(), Mockito.anyBoolean());
+        Assert.assertEquals(controller.chooseSpellAbilitiesToPlayFromList(candidates, false, 3), approved);
+        Assert.assertEquals(probes.get(), 2);
+        Assert.assertFalse(first.isTapped());
+        Assert.assertFalse(AITimeoutTracker.isActive(AITimeoutTracker.key(game.getId(), ai.getId())));
+        Assert.assertEquals(AITimeoutTracker.remainingNanos(), Long.MAX_VALUE);
+        final Object expired = AITimeoutTracker.arm(System.nanoTime() - 1, false);
+        try {
+            Assert.assertTrue(controller.chooseSpellAbilitiesToPlayFromList(candidates, false, 3).isEmpty());
+            Assert.assertEquals(probes.get(), 2);
+        } finally {
+            AITimeoutTracker.disarm(expired);
+        }
+    }
+
+    @Test
+    public void legacyAdmissionStopsAfterAnExpiredProbe() {
+        for (final boolean throwInProbe : List.of(false, true)) {
+            final Game game = initAndCreateGame();
+            final Player ai = game.getPlayers().get(1);
+            game.getPhaseHandler().devModeSet(PhaseType.MAIN1, ai);
+            addCards("Island", 3, ai);
+            final Card first = addCard("Icy Manipulator", ai);
+            final Card second = addCard("Pacification Array", ai);
+            final var candidates = new ArrayList<>(ComputerUtilAbility.getSpellAbilities(
+                    new CardCollection(List.of(first, second)), ai));
+            Assert.assertTrue(candidates.size() >= 2);
+            final var controller = Mockito.spy(new AiController(ai, game));
+            Mockito.doReturn(true).when(controller).getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW);
+            final var probes = new AtomicInteger();
+            final Thread caller = Thread.currentThread();
+            Mockito.doAnswer(invocation -> {
+                Assert.assertSame(Thread.currentThread(), caller);
+                final SpellAbility probe = invocation.getArgument(0);
+                Assert.assertTrue(candidates.stream().noneMatch(candidate -> candidate == probe),
+                        "The expired probe must be in legacy admission, not the final scan");
+                probes.incrementAndGet();
+                try {
+                    first.setTapped(true);
+                    AITimeoutTracker.arm(System.nanoTime() - 1, false);
+                    if (throwInProbe) { AITimeoutTracker.check(); }
+                    return AiPlayDecision.CantPlaySa;
+                } finally {
+                    first.setTapped(false);
+                }
+            }).when(controller).canPlayAndPayFor(Mockito.any(), Mockito.anyBoolean());
+            Assert.assertTrue(controller.chooseSpellAbilitiesToPlayFromList(candidates, false, 1).isEmpty());
+            Assert.assertEquals(probes.get(), 1);
+            Assert.assertFalse(first.isTapped());
+            Assert.assertEquals(AITimeoutTracker.remainingNanos(), Long.MAX_VALUE);
+        }
+    }
+
     private AiController controllerWithPriorityChecks(final Game game, final Player ai) {
         final AiController controller = Mockito.spy(new AiController(ai, game));
         Mockito.doReturn(true).when(controller).getBoolProperty(AiProps.ENABLE_EARLY_ACTION_AFFORDABILITY);

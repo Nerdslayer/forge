@@ -104,6 +104,8 @@ public final class SpellAbilityOutcomePlanner {
             return new OutcomePlanner<OutcomeState>(4096, budget).evaluate(outcome, state);
         } catch (final EffectEvaluationBudget.Exceeded exceeded) {
             throw exceeded;
+        } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException unsupported) {
             return OutcomePlan.unsupported(state, unsupported.getMessage());
         }
@@ -112,6 +114,8 @@ public final class SpellAbilityOutcomePlanner {
     static boolean supports(final SpellAbility ability) {
         try {
             return supports(ability, 0, null);
+        } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException unsupported) {
             return false;
         }

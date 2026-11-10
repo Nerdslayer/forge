@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import forge.util.AITimeoutTracker;
+
 /** Selects among concrete actions without replacing a caller's safe fallback. */
 public final class ActionValueSelector {
     private ActionValueSelector() {
@@ -45,19 +47,28 @@ public final class ActionValueSelector {
 
         final Map<T, CardValueBreakdown> values = new IdentityHashMap<>();
         for (final T candidate : candidates) {
+            AITimeoutTracker.check();
+            final CardValueBreakdown value;
             try {
-                if (!supportedCandidate.test(candidate)) {
+                final boolean supported = supportedCandidate.test(candidate);
+                AITimeoutTracker.check();
+                if (!supported) {
                     return fallback(candidates, "At least one action is outside the supported slice.");
                 }
-                final CardValueBreakdown value = UnifiedActionValueEvaluator.evaluate(
-                        actionFactory.apply(candidate), context);
-                if (!value.isComplete()) {
-                    return fallback(candidates, "At least one action is not completely understood.");
-                }
-                values.put(candidate, value);
+                final ValuationAction action = actionFactory.apply(candidate);
+                AITimeoutTracker.check();
+                value = UnifiedActionValueEvaluator.evaluate(action, context);
+            } catch (final AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+                throw abort;
             } catch (final RuntimeException unsupported) {
+                AITimeoutTracker.check();
                 return fallback(candidates, "At least one action could not be evaluated safely.");
             }
+            AITimeoutTracker.check();
+            if (!value.isComplete()) {
+                return fallback(candidates, "At least one action is not completely understood.");
+            }
+            values.put(candidate, value);
         }
 
         final List<CandidateEvaluation<T>> evaluations = candidates.stream()

@@ -29,6 +29,7 @@ import forge.ai.effect.ActionCombinationOverrideGate;
 import forge.ai.effect.ActionDecisionSnapshot;
 import forge.ai.effect.CastCardValueTieBreaker;
 import forge.ai.effect.EarlyActionAffordability;
+import forge.ai.effect.LiveGameRestorationException;
 import forge.ai.effect.SituationalAnalysisSession;
 import forge.ai.effect.ManaActionCombinationSelector;
 import forge.ai.effect.PlaneswalkerActivationSupport;
@@ -81,7 +82,7 @@ import io.sentry.Breadcrumb;
 import io.sentry.Sentry;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -931,7 +932,7 @@ public class AiController {
         return canPlayAndPayFor(sa, false);
     }
 
-    private AiPlayDecision canPlayAndPayFor(final SpellAbility sa,
+    AiPlayDecision canPlayAndPayFor(final SpellAbility sa,
             final boolean allowValuedLoyaltyActivation) {
         AITimeoutTracker.check();
         final Card host = sa.getHostCard();
@@ -1874,7 +1875,7 @@ public class AiController {
             FlatMonteCarloStats.noteDecisionPoint(approved.size(), mcCfg == null);
             try {
                 chosenSa = refineWithFlatMonteCarlo(approved, extras, mcCfg, FlatMonteCarloPicker.Mode.MAIN);
-            } catch (final AITimeoutTracker.Expired e) {
+            } catch (final AITimeoutTracker.Expired | LiveGameRestorationException e) {
                 throw e;
             } catch (final RuntimeException e) {
                 // Monte Carlo is a refinement: never let it break a turn, fall back to the heuristic choice.
@@ -2013,7 +2014,7 @@ public class AiController {
                 }
             }
             return chosen;
-        } catch (final AITimeoutTracker.Expired e) {
+        } catch (final AITimeoutTracker.Expired | LiveGameRestorationException e) {
             throw e;
         } catch (final RuntimeException e) {
             noteFlatMcOutcome("error");
@@ -2197,6 +2198,7 @@ public class AiController {
 
     /** The heuristic verdict on one play, the way the spell choice loop asks for it. */
     private AiPlayDecision playDecision(final SpellAbility sa) {
+        AITimeoutTracker.check();
         sa.setActivatingPlayer(player);
         final SpellAbility root = sa.getRootAbility();
         if (root.isSpell() || root.isTrigger() || root.isReplacementAbility()) {
@@ -2204,14 +2206,16 @@ public class AiController {
             sa.setLastStateGraveyard(game.getLastStateGraveyard());
         }
         try {
-            return canPlayAndPayFor(sa);
+            final AiPlayDecision decision = canPlayAndPayFor(sa);
+            AITimeoutTracker.check();
+            return decision;
         } finally {
             sa.clearLastState();
         }
     }
 
     /** Like {@link #chooseSpellAbilityToPlayFromList} but keeps looking until {@code maxResults} plays are approved. */
-    private List<SpellAbility> chooseSpellAbilitiesToPlayFromList(final List<SpellAbility> all, boolean skipCounter, final int maxResults) {
+    List<SpellAbility> chooseSpellAbilitiesToPlayFromList(final List<SpellAbility> all, boolean skipCounter, final int maxResults) {
         return chooseSpellAbilitiesToPlayFromList(all, skipCounter, maxResults, null);
     }
 
@@ -2223,6 +2227,8 @@ public class AiController {
                                                                   final List<SpellAbility> extrasOut) {
         if (all == null || all.isEmpty())
             return Collections.emptyList();
+
+        if (AITimeoutTracker.remainingNanos() <= 0) { return Collections.emptyList(); }
 
         if (!useLivingEnd && !game.getStack().isEmpty()
                 && getBoolProperty(AiProps.ENABLE_EARLY_ACTION_AFFORDABILITY)
@@ -2249,12 +2255,15 @@ public class AiController {
         final long timeoutNanos = TimeUnit.SECONDS.toNanos(game.getAITimeout());
         AITimeoutTracker.begin(aiId, timeoutNanos);
         final long deadlineNanos = AITimeoutTracker.deadlineNanos(aiId, timeoutNanos);
-        FutureTask<List<SpellAbility>> future = new FutureTask<>(() -> {
+        // Live probes must finish restoration before the calling thread advances priority.
+        final long started = System.nanoTime();
+        try {
             final List<SpellAbility> approvedPlays = new ArrayList<>();
-            // the eval thread aborts itself at the shared deadline (or when cancelled) instead of running on as a zombie
-            final Object evalLimit = AITimeoutTracker.arm(deadlineNanos, true);
+            final String[] stage = {"candidate preparation"};
+            final Object evalLimit = AITimeoutTracker.arm(deadlineNanos, false);
             try {
                 return withSituationalAnalysis(() -> {
+                    AITimeoutTracker.check();
                     //avoid ComputerUtil.aiLifeInDanger in loops as it slows down a lot.. call this outside loops will generally be fast...
                     boolean isLifeInDanger = useLivingEnd && ComputerUtil.aiLifeInDanger(player, true, 0);
                     final List<SpellAbility> playableAbilities =
@@ -2302,6 +2311,7 @@ public class AiController {
                             ability -> legacyCandidateFilter.test(ability)
                                     || planeswalkerLoyaltySelectionEnabled
                                             && PlaneswalkerActivationSupport.isLoyaltyAction(ability);
+                    stage[0] = "legacy admission";
                     final SpellAbility legacyFirstAction = analyzeActionCombination
                             ? findLegacyFirstAction(playableAbilities, skipCounter, legacyCandidateFilter) : null;
                     final LegacyActionAssessment legacyFirstAssessment = legacyFirstAction == null
@@ -2320,6 +2330,7 @@ public class AiController {
                     String actionCombinationOverrideReason = "not_analyzed";
                     String actionCombinationDiagnostics = "not available";
                     if (analyzeActionCombination && !skipUnsafeActiveCombinationAnalysis) {
+                        stage[0] = "action comparison";
                         // The loyalty parameter admits only fully supported planeswalker candidates in
                         // the selector. All other actions still need complete legacy willingness.
                         final ManaActionCombinationSelector.Comparison comparison =
@@ -2328,6 +2339,7 @@ public class AiController {
                                         combinationCandidateFilter,
                                         ability -> legacyAssessmentReason(
                                                 legacyAssessments.get(ability)));
+                        AITimeoutTracker.check();
                         combinationSelection = comparison.proposed();
                         legacyPlan = comparison.legacy();
                         actionCombinationDiagnostics = comparison.diagnosticSummary();
@@ -2373,6 +2385,7 @@ public class AiController {
                     }
                     boolean shadowLogged = false;
                     for (final SpellAbility sa : playableAbilities) {
+                        stage[0] = "candidate evaluation";
                         AITimeoutTracker.check();
                         if (Thread.currentThread().isInterrupted()) {
                             break;
@@ -2449,6 +2462,7 @@ public class AiController {
                             // Clear probe state even when upstream's shared deadline expires.
                             sa.clearLastState();
                         }
+                        AITimeoutTracker.check();
                         // PhaseHandler ph = game.getPhaseHandler();
                         // System.out.printf("Ai thinks '%s' of %s -> %s @ %s %s >>> \n", opinion, sa.getHostCard(), sa, Lang.getInstance().getPossesive(ph.getPlayerTurn().getName()), ph.getPhase());
 
@@ -2484,52 +2498,14 @@ public class AiController {
                     return approvedPlays;
                 });
             } catch (AITimeoutTracker.Expired e) {
+                System.out.printf("AI spell choice deadline reached: stage=%s, elapsedMs=%d, priorityLimitMs=%d, retainedActions=%d%n",
+                        stage[0],
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started),
+                        TimeUnit.NANOSECONDS.toMillis(timeoutNanos), approvedPlays.size());
                 return approvedPlays; // whatever was approved before time ran out
             } finally {
                 AITimeoutTracker.disarm(evalLimit);
             }
-        });
-        Thread t = new Thread(future, "Game AI Eval");
-        t.setDaemon(true);
-        t.start();
-        try {
-            // wait only for what is left of the shared deadline (not a fresh full timeout per call)
-            return future.get(Math.max(0, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            e.printStackTrace();
-            if (e instanceof TimeoutException) {
-                // log where the eval thread currently is - each timeout doubles as a
-                // profiler sample for diagnosing remaining AI slowdowns from user logs
-                StringBuilder sb = new StringBuilder("AI eval thread at timeout:");
-                StackTraceElement[] evalStack = t.getStackTrace();
-                for (int i = 0; i < Math.min(30, evalStack.length); i++) {
-                    sb.append("\n\tat ").append(evalStack[i]);
-                }
-                System.out.println(sb);
-            }
-            // ask the eval thread to exit at the next SpellAbility check first: a brutal
-            // Thread.stop() mid-evaluation can leave partially mutated shared state behind
-            future.cancel(true);
-            try {
-                // join returns as soon as the eval thread exits, so the common case costs nothing. The full 2 s only matters
-                // for a thread inside code without check() (mana payment, threat prediction, simulation): giving up earlier
-                // just starts the stop() fallback sooner, and on Java 20+/Android stop() throws, so the thread would keep
-                // running next to the game thread
-                t.join(2000); // 2 seconds wait
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-            }
-            if (t.isAlive()) {
-                // last resort, see #8302: the eval thread may be stuck inside a single
-                // evaluation or an infinite loop and never reach the cooperative exit
-                try {
-                    t.stop();
-                } catch (UnsupportedOperationException | NoSuchMethodError ex) {
-                    // Stop support: dropped by Android and Java 20 / 26 removed it completely - so sadly thread will keep running
-                }
-            }
-            // TODO mark some as skipped to increase chance to find something playable next priority
-            return Collections.emptyList();
         } finally {
             AITimeoutTracker.end(aiId);
         }
@@ -3174,6 +3150,7 @@ public class AiController {
     }
 
     private LegacyActionAssessment assessLegacyAction(final SpellAbility ability) {
+        AITimeoutTracker.check();
         if (ability == null || ability.getHostCard() == null) {
             return new LegacyActionAssessment(ability, AiPlayDecision.CantPlaySa,
                     LegacyActionAssessment.TimingDisposition.REJECTED);
@@ -3189,6 +3166,7 @@ public class AiController {
 
         final Card host = ability.getHostCard();
         SpellAbility probe = null;
+        LegacyActionAssessment assessment;
         try {
             probe = ability.isSpell() ? ability.copy(host, player, false) : ability.copy(host, false);
             probe.setActivatingPlayer(player);
@@ -3198,12 +3176,14 @@ public class AiController {
                 probe.setLastStateGraveyard(game.getLastStateGraveyard());
             }
             final AiPlayDecision decision = canPlayAndPayFor(probe);
-            return new LegacyActionAssessment(ability, decision,
+            assessment = new LegacyActionAssessment(ability, decision,
                     LegacyActionAssessment.classify(decision));
+        } catch (final AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException ignored) {
             // A failed probe must not become evidence for an experimental reorder. The normal
             // live chooser will still assess the original ability through its existing path.
-            return new LegacyActionAssessment(ability, AiPlayDecision.CantPlaySa,
+            assessment = new LegacyActionAssessment(ability, AiPlayDecision.CantPlaySa,
                     LegacyActionAssessment.TimingDisposition.REJECTED, false);
         } finally {
             // The probe is deliberately discarded. The real ability is checked again immediately
@@ -3212,6 +3192,8 @@ public class AiController {
                 probe.clearLastState();
             }
         }
+        AITimeoutTracker.check();
+        return assessment;
     }
 
     public CardCollectionView chooseSacrificeType(String type, SpellAbility ability, boolean effect, int amount, final CardCollectionView exclude) {

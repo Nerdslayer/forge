@@ -47,6 +47,8 @@ final class TriggeredRelationshipEvaluator {
             final int totalValue = EffectMath.multiply(production.expectedBatches(), value);
             if (totalValue != 0) { trace.triggeredRelationship(production, consequence, value, totalValue); }
             return new Evaluation(totalValue, true);
+        } catch (final forge.util.AITimeoutTracker.Expired | LiveGameRestorationException abort) {
+            throw abort;
         } catch (final RuntimeException ignored) {
             return new Evaluation(0, false);
         }
