@@ -339,11 +339,13 @@ public class MapDialog {
     }
 
     private void emitQuestAccepted(){
-        if (questAcceptedList != null && questAcceptedList.size() > 0) {
-            ChangeListener.ChangeEvent evt = new ChangeListener.ChangeEvent();
-            for (ChangeListener listener : questAcceptedList) {
-                listener.changed(evt, null);
-            }
+        if (questAcceptedList.isEmpty()) {
+            Current.player().addQuest(questAccepted, false);
+            return;
+        }
+        ChangeListener.ChangeEvent evt = new ChangeListener.ChangeEvent();
+        for (ChangeListener listener : questAcceptedList) {
+            listener.changed(evt, null);
         }
     }
 
