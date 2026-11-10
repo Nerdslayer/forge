@@ -406,6 +406,29 @@ public final class GameActionUtil {
         return alternatives;
     }
 
+    /**
+     * Read-only timing possibility check, not an affordability or legality check.
+     * Do not enumerate optional costs here: that resets the spell's pip reductions.
+     */
+    public static boolean couldCastWithOptionalTiming(final SpellAbility sa, final Player activator) {
+        if (sa.canCastTiming(activator)) {
+            return true;
+        }
+        final Card host = sa.getHostCard();
+        if (!sa.isSpell() || host.isInPlay()) {
+            return false;
+        }
+        // These are the optional costs that add instant speed in addOptionalCosts.
+        if (host.hasKeyword(Keyword.MAYFLASHCOST) || host.hasKeyword(Keyword.OFFERING)) {
+            return true;
+        }
+        // TODO: A projected host can acquire different keywords after static effects
+        // are reapplied. Defer these cases rather than creating or mutating a host here.
+        return (host.isFaceDown() && host.isInZone(ZoneType.Exile))
+                || sa.isBestow() || sa.isCastFaceDown() || sa.hasParam("Prototype")
+                || (sa.getCardState() != null && host.getCurrentStateName() != sa.getCardStateName());
+    }
+
     public static List<OptionalCostValue> getOptionalCostValues(final SpellAbility sa) {
         final List<OptionalCostValue> costs = Lists.newArrayList();
         if (sa == null || !sa.isSpell()) {

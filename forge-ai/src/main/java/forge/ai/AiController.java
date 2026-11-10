@@ -258,6 +258,10 @@ public class AiController {
             for (final SpellAbility sa : c.getNonManaAbilities()) {
                 if (sa instanceof SpellPermanent) {
                     sa.setActivatingPlayer(player);
+                    // Alternative and optional costs can change timing (e.g. MayFlashCost).
+                    if (!couldCastEtbCounterNow(sa)) {
+                        continue;
+                    }
                     if (checkETBEffects(c, sa, ApiType.Counter)) {
                         spellAbilities.add(sa);
                     }
@@ -265,6 +269,20 @@ public class AiController {
             }
         }
         return spellAbilities;
+    }
+
+    private boolean couldCastEtbCounterNow(final SpellAbility sa) {
+        if (sa.canCastTiming(player)) {
+            return true;
+        }
+        for (final SpellAbility announcement : GameActionUtil.getAdditionalCostSpell(sa)) {
+            if (GameActionUtil.couldCastWithOptionalTiming(announcement, player)
+                    || GameActionUtil.getAlternativeCosts(announcement, player, false).stream()
+                            .anyMatch(alt -> GameActionUtil.couldCastWithOptionalTiming(alt, player))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // look for cards on the battlefield that should prevent the AI from using that spellability
@@ -462,9 +480,14 @@ public class AiController {
                     continue;
                 }
 
-                SpellAbility exSA = tr.ensureAbility().copy(activator);
-
-                if (exSA.getApi() == api) {
+                final SpellAbility chapter = tr.ensureAbility();
+                if (api != null && chapter.getApi() != api) {
+                    // Only the first chapter is probed. Do not score its targets
+                    // while looking for a different effect, such as a counterspell.
+                    break;
+                }
+                final SpellAbility exSA = chapter.copy(activator);
+                if (api != null) {
                     rightapi = true;
                 }
 
@@ -2201,6 +2224,12 @@ public class AiController {
         if (all == null || all.isEmpty())
             return Collections.emptyList();
 
+        if (!useLivingEnd && !game.getStack().isEmpty()
+                && getBoolProperty(AiProps.ENABLE_EARLY_ACTION_AFFORDABILITY)
+                && EarlyActionAffordability.noPriorityActionBeforeOrdering(player, all, skipCounter)) {
+            return Collections.emptyList();
+        }
+
         try {
             all.sort(ComputerUtilAbility.saEvaluator); // put best spells first
             ComputerUtilAbility.sortCreatureSpells(all);
@@ -2231,6 +2260,11 @@ public class AiController {
                     final List<SpellAbility> playableAbilities =
                             ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player);
                     playableAbilities.removeIf(this::isFailedActionSuppressed);
+                    if (!useLivingEnd && !game.getStack().isEmpty()
+                            && getBoolProperty(AiProps.ENABLE_EARLY_ACTION_AFFORDABILITY)
+                            && EarlyActionAffordability.noPriorityAction(player, playableAbilities, skipCounter)) {
+                        return approvedPlays;
+                    }
                     final boolean actionCombinationConfigured =
                             getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SELECTION)
                                     || getBoolProperty(AiProps.ENABLE_ACTION_COMBINATION_VALUE_SHADOW)

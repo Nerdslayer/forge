@@ -1,9 +1,15 @@
 package forge.ai.effect;
 
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
+import forge.game.GameActionUtil;
+import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostPartMana;
@@ -23,6 +29,47 @@ public final class EarlyActionAffordability {
     private EarlyActionAffordability() { }
 
     public static Result assess(final Player ai, final SpellAbility ability) {
+        return assess(ai, ability, () -> manaUpperBound(ai));
+    }
+
+    /** Check possibilities without scoring or choosing an optional cost. */
+    public static boolean noPriorityActionBeforeOrdering(final Player ai, final List<SpellAbility> candidates,
+            final boolean skipCounter) {
+        final Supplier<OptionalLong> mana = Suppliers.memoize(() -> manaUpperBound(ai));
+        for (final SpellAbility candidate : candidates) {
+            if (couldPlayAnnouncement(ai, candidate, skipCounter, mana)) {
+                return false;
+            }
+            for (final SpellAbility additional : GameActionUtil.getAdditionalCostSpell(candidate)) {
+                if (couldPlayAnnouncement(ai, additional, skipCounter, mana)
+                        || GameActionUtil.getAlternativeCosts(additional, ai, false).stream()
+                                .anyMatch(alt -> couldPlayAnnouncement(ai, alt, skipCounter, mana))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static boolean couldPlayAnnouncement(final Player ai, final SpellAbility candidate,
+            final boolean skipCounter, final Supplier<OptionalLong> mana) {
+        if (skipCounter && candidate.getApi() == ApiType.Counter) {
+            return false;
+        }
+        return GameActionUtil.couldCastWithOptionalTiming(candidate, ai)
+                && assess(ai, candidate, mana) != Result.UNAVAILABLE;
+    }
+
+    /** Candidates must already include the chooser's alternative and optional announcements. */
+    public static boolean noPriorityAction(final Player ai, final List<SpellAbility> candidates,
+            final boolean skipCounter) {
+        final Supplier<OptionalLong> mana = Suppliers.memoize(() -> manaUpperBound(ai));
+        return candidates.stream().allMatch(candidate ->
+                (skipCounter && candidate.getApi() == ApiType.Counter) || !candidate.canCastTiming(ai)
+                        || assess(ai, candidate, mana) == Result.UNAVAILABLE);
+    }
+
+    private static Result assess(final Player ai, final SpellAbility ability, final Supplier<OptionalLong> mana) {
         // TODO: Admit spells, target-dependent costs, colored feasibility and adjustments only
         // after their read-only admission semantics are established. Unknown is not unaffordable.
         if (ability == null || !ability.isActivatedAbility() || !ability.getHostCard().isInPlay()
@@ -41,16 +88,24 @@ public final class EarlyActionAffordability {
                 return Result.NEEDS_NORMAL_CHECK;
             }
         }
-        if (!ability.getPayCosts().hasManaCost() || hasPossibleReduction(ai, ability)
-                || hasUnmodeledMana(ai)
+        if (!ability.getPayCosts().hasManaCost() || hasPossibleReduction(ai, ability)) {
+            return Result.NEEDS_NORMAL_CHECK;
+        }
+        final OptionalLong capacity = mana.get();
+        return capacity.isPresent() && ability.getPayCosts().getTotalMana().getCMC() > capacity.getAsLong()
+                ? Result.UNAVAILABLE : Result.NEEDS_NORMAL_CHECK;
+    }
+
+    private static OptionalLong manaUpperBound(final Player ai) {
+        if (hasUnmodeledMana(ai)
                 || ai.getCardsActivatableInExternalZones(true).stream()
                         .anyMatch(card -> !card.getManaAbilities().isEmpty())) {
-            return Result.NEEDS_NORMAL_CHECK;
+            return OptionalLong.empty();
         }
         final ActionDecisionSnapshot snapshot = ActionDecisionSnapshot.captureForAffordability(ai);
         if (!snapshot.manaResourcesComplete() || snapshot.hasResourceReservation()
                 || snapshot.manaSources().stream().anyMatch(ActionManaSource::uncertain)) {
-            return Result.NEEDS_NORMAL_CHECK;
+            return OptionalLong.empty();
         }
         // Count an upper bound, not the legacy available-mana estimate. Different activations
         // of one tap source are alternatives; floating mana units are independent resources.
@@ -67,12 +122,12 @@ public final class EarlyActionAffordability {
         for (final int capacity : capacities.values()) {
             upperBound += capacity;
         }
-        return ability.getPayCosts().getTotalMana().getCMC() > upperBound
-                ? Result.UNAVAILABLE : Result.NEEDS_NORMAL_CHECK;
+        return OptionalLong.of(upperBound);
     }
 
     private static boolean hasPossibleReduction(final Player ai, final SpellAbility ability) {
-        if (Set.of("ReduceCost", "SetCost", "RaiseCost").stream().anyMatch(ability::hasParam)) {
+        if (Set.of("ReduceCost", "SetCost", "RaiseCost", "TapCreaturesForMana").stream()
+                .anyMatch(ability::hasParam) || ability.getMaxWaterbend() != null) {
             return true;
         }
         for (final ZoneType zone : Set.of(ZoneType.Battlefield, ZoneType.Command, ZoneType.Stack)) {

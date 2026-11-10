@@ -1,11 +1,15 @@
 package forge.ai.effect;
 
+import java.util.List;
 import java.util.Set;
 
 import forge.ai.AITest;
 import forge.ai.AiCardMemory;
+import forge.card.mana.ManaAtom;
 import forge.game.ability.AbilityFactory;
 import forge.game.card.Card;
+import forge.game.mana.Mana;
+import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 
@@ -74,5 +78,26 @@ public class EarlyActionAffordabilityTest extends AITest {
         ability.getHostCard().setTapped(false);
         ability.getHostCard().setSickness(true);
         Assert.assertEquals(EarlyActionAffordability.assess(ai, ability), EarlyActionAffordability.Result.UNAVAILABLE);
+    }
+
+    @Test
+    public void priorityPassRequiresEveryAnnouncementToBeUnavailable() {
+        final var game = initAndCreateGame();
+        final Player ai = game.getPlayers().get(1);
+        game.getPhaseHandler().devModeSet(PhaseType.END_OF_TURN, game.getPlayers().get(0));
+        final SpellAbility sorcerySpeed = createCard("Grizzly Bears", ai).getFirstSpellAbility();
+        sorcerySpeed.setActivatingPlayer(ai);
+        final SpellAbility paid = activation(ai, "1");
+        final Card land = addCard("Plains", ai);
+        land.setTapped(true);
+
+        Assert.assertTrue(EarlyActionAffordability.noPriorityAction(ai, List.of(sorcerySpeed, paid), false));
+        final SpellAbility free = activation(ai, "0 Sac<1/CARDNAME>");
+        Assert.assertFalse(EarlyActionAffordability.noPriorityAction(ai, List.of(sorcerySpeed, paid, free), false));
+        final SpellAbility instant = createCard("Lightning Bolt", ai).getFirstSpellAbility();
+        instant.setActivatingPlayer(ai);
+        Assert.assertFalse(EarlyActionAffordability.noPriorityAction(ai, List.of(sorcerySpeed, paid, instant), false));
+        ai.getManaPool().addMana(new Mana((byte) ManaAtom.COLORLESS, land, null, ai));
+        Assert.assertFalse(EarlyActionAffordability.noPriorityAction(ai, List.of(sorcerySpeed, paid), false));
     }
 }
