@@ -21,7 +21,7 @@ import forge.adventure.util.KeyBinding;
 import java.util.ArrayList;
 import java.util.List;
 
-/** A modal overlay shared by Scene2D exploration/menu screens and classic match/editor screens. */
+/** A modal overlay for Adventure save warnings. */
 public final class AdventureExitDialog {
     private static AdventureExitDialog current;
     private final Stage stage;
@@ -31,20 +31,20 @@ public final class AdventureExitDialog {
     private final List<Runnable> actions = new ArrayList<>();
     private int selected;
 
-    private AdventureExitDialog(String message, boolean canSave, Runnable cancel, Runnable save, Runnable discard) {
+    private AdventureExitDialog(String title, String message, List<String> labels, List<Runnable> actions) {
         previousInput = Gdx.input.getInputProcessor();
         stage = new Stage(new ScalingViewport(Scaling.fit, Scene.getIntendedWidth(), Scene.getIntendedHeight()),
                 Forge.getGraphics().getBatch());
-        dialog = new Dialog(text("lblAdventureUnsavedProgress"), Controls.getSkin());
+        dialog = new Dialog(title, Controls.getSkin());
         float width = Scene.getIntendedWidth() * 0.85f;
         Label label = Controls.newLabel(message);
         label.setWrap(true);
         label.setAlignment(Align.topLeft);
         label.setWidth(width);
         dialog.getContentTable().add(label).width(width).pad(8);
-        addButton("lblAdventureKeepPlaying", cancel);
-        if (canSave) addButton("lblAdventureSaveAndContinue", save);
-        addButton("lblAdventureContinueWithoutSaving", discard);
+        for (int i = 0; i < labels.size(); i++) {
+            addButton(labels.get(i), actions.get(i));
+        }
         dialog.pack();
         float overflow = dialog.getHeight() - Scene.getIntendedHeight() * 0.94f;
         if (overflow > 0) {
@@ -62,7 +62,7 @@ public final class AdventureExitDialog {
                 return key(keycode);
             }
         });
-        select(0); // Enter/controller activation defaults to keeping the live session.
+        select(0);
         Gdx.input.setInputProcessor(stage);
     }
 
@@ -98,7 +98,19 @@ public final class AdventureExitDialog {
     }
 
     public static void show(String message, boolean canSave, Runnable cancel, Runnable save, Runnable discard) {
-        if (current == null) current = new AdventureExitDialog(message, canSave, cancel, save, discard);
+        if (current != null) return;
+        List<String> labels = canSave
+                ? List.of("lblAdventureKeepPlaying", "lblAdventureSaveAndContinue", "lblAdventureContinueWithoutSaving")
+                : List.of("lblAdventureKeepPlaying", "lblAdventureContinueWithoutSaving");
+        List<Runnable> actions = canSave ? List.of(cancel, save, discard) : List.of(cancel, discard);
+        current = new AdventureExitDialog(text("lblAdventureUnsavedProgress"), message, labels, actions);
+    }
+
+    public static void showAutosaveFailure(Runnable startBattle) {
+        if (current == null) {
+            current = new AdventureExitDialog(text("lblSaveErrorWarning"), text("lblAdventureBattleAutosaveFailed"),
+                    List.of("lblOK"), List.of(startBattle));
+        }
     }
 
     public static boolean isOpen() { return current != null; }

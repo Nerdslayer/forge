@@ -62,6 +62,7 @@ public class MapStage extends GameStage {
     MapLayer spriteLayer;
     private PointOfInterestChanges changes;
     private EnemySprite currentMob;
+    private boolean settlingBattle;
     private MapDialog pendingDuelVictory;
     Queue<Vector2> positions = new LinkedList<>();
     private boolean isLoadingMatch = false;
@@ -102,12 +103,23 @@ public class MapStage extends GameStage {
         }
     };
 
+    public boolean canSaveProgress() {
+        // Loot and battle results can still be pending while the map is visible.
+        return onEndAction == null && !settlingBattle;
+    }
+
+    @Override
+    public void openMenu() {
+        if (canSaveProgress()) super.openMenu();
+    }
+
     public boolean canEscape() {
         return !preventEscape;
     } //Check if escape is possible.
 
     public void clearIsInMap() {
         isInMap = false;
+        settlingBattle = false;
         effect = null; //Reset effect so battles outside the dungeon don't use the last visited dungeon's effects.
         battleBackground = null;
         currentMap = null;
@@ -878,6 +890,7 @@ public class MapStage extends GameStage {
     @Override
     public void setWinner(boolean playerWins, boolean isArena) {
         isLoadingMatch = false;
+        settlingBattle = true;
         freezeAllEnemyBehaviors = true;
         if (playerWins) {
             currentMob.clearCollisionHeight();
@@ -926,6 +939,7 @@ public class MapStage extends GameStage {
                     exitDungeon(defeated, currentMob.getData().boss && !isArena);
                 MapStage.this.stop();
                 currentMob = null;
+                settlingBattle = false;
             });
         }
     }
@@ -935,6 +949,7 @@ public class MapStage extends GameStage {
         getReward();
         AdventureQuestController.instance().updateQuestsWin(defeated, enemies);
         currentMob = null;
+        settlingBattle = false;
         if (defeated.rematchNextDay) {
             pendingDuelVictory = defeated.defeatDialog;
         } else {
@@ -1274,7 +1289,7 @@ public class MapStage extends GameStage {
                         duelScene.initDuels(player, mob);
                         if (isInMap && effect != null && !mob.ignoreDungeonEffect)
                             duelScene.setDungeonEffect(effect);
-                        Forge.switchScene(duelScene);
+                        duelScene.startDuel();
                     }, ScreenUtil.getInstance().takeScreenshot(), true, false, false, false, "", Current.player().avatar(), mob.getAtlasPath(), Current.player().getName(), mob.getName()));
                 }
             });

@@ -21,6 +21,7 @@ import forge.adventure.stage.IAfterMatch;
 import forge.adventure.util.AdventureEventController;
 import forge.adventure.util.Config;
 import forge.adventure.util.Current;
+import forge.adventure.world.WorldSave;
 import forge.assets.FBufferedImage;
 import forge.assets.FSkin;
 import forge.card.ColorSet;
@@ -815,6 +816,15 @@ public class DuelScene extends ForgeScene {
         this.chaosBattle = this.enemy.getData().copyPlayerDeck && Current.player().isFantasyMode();
         this.AIExtras.clear();
         this.playerExtras.clear();
+    }
+
+    public void startDuel() {
+        if (WorldSave.getCurrentSave().autoSaveBeforeBattle()) {
+            Forge.switchScene(this);
+            return;
+        }
+        Forge.clearTransitionScreen(true);
+        AdventureExitDialog.showAutosaveFailure(() -> Forge.switchScene(this));
     }
 
     private String selectAI(String ai) { //Decide opponent AI.

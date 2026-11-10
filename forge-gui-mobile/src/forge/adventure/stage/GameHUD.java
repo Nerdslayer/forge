@@ -773,9 +773,10 @@ public class GameHUD extends Stage {
     private void exitToWorldMap() {
         if (console.isVisible())
             return;
-        if (!MapStage.getInstance().isInMap()) //prevent showing this dialog to WorldMap
+        MapStage map = MapStage.getInstance();
+        if (!map.isInMap())
             return;
-        if (!MapStage.getInstance().canEscape())
+        if (!map.canEscape() || !map.canSaveProgress())
             return;
         if (Forge.advFreezePlayerControls)
             return;

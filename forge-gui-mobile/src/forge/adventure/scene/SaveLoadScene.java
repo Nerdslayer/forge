@@ -279,15 +279,6 @@ public class SaveLoadScene extends UIScene {
         loaded = true;
         switch (mode) {
             case Save:
-                if (TileMapScene.instance().currentMap().isInMap()) {
-                    //Access to screen should be disabled, but stop the process just in case.
-                    //Saving needs to be disabled inside maps until we can capture and load exact map state
-                    //Otherwise location based events for quests can be skipped by saving and then loading outside the map
-                    Dialog noSave = createGenericDialog("", Forge.getLocalizer().getMessage("lblGameNotSaved"), Forge.getLocalizer().getMessage("lblOK"), null, null, null);
-                    showDialog(noSave);
-                    loaded = false;
-                    return;
-                }
                 if (currentSlot > 0) {
                     //prevent NPE, allowed saveslot is 1 to 10..
                     textInput.setText(buttons.get(currentSlot).actor.getText());
@@ -365,33 +356,28 @@ public class SaveLoadScene extends UIScene {
 
 
     public void save() {
-        if (!TileMapScene.instance().currentMap().isInMap()) {
-            WorldStage.getInstance().getPlayerSprite().storePos();
-            if (WorldSave.getCurrentSave().save(textInput.getText() + getSaveFileSuffix(), currentSlot)) {
-                updateFiles();
-                if (afterSave != null) {
-                    Runnable continuation = afterSave;
-                    clearSaveContinuation();
-                    continuation.run();
-                    return;
-                }
-                //ensure the dialog is hidden before switching
+        if (!WorldSave.getCurrentSave().save(textInput.getText() + getSaveFileSuffix(), currentSlot)) {
+            showDialog(createGenericDialog(Forge.getLocalizer().getMessage("lblSaveErrorWarning"),
+                    Forge.getLocalizer().getMessage("lblAdventureSaveFailed"),
+                    Forge.getLocalizer().getMessage("lblOK"), null, this::removeDialog, null));
+            return;
+        }
 
-                Scene restoreScene = Forge.switchToLast();
-                if (restoreScene != null) {
-                    restoreScene = Forge.switchToLast();
-                }
+        updateFiles();
+        if (afterSave != null) {
+            Runnable continuation = afterSave;
+            clearSaveContinuation();
+            continuation.run();
+            return;
+        }
 
-                if (restoreScene == null) {
-                    restoreScene = GameScene.instance();
-                }
-
-                Forge.switchScene(restoreScene);
-            } else {
-                showDialog(createGenericDialog(Forge.getLocalizer().getMessage("lblSaveErrorWarning"),
-                        Forge.getLocalizer().getMessage("lblAdventureSaveFailed"),
-                        Forge.getLocalizer().getMessage("lblOK"), null, this::removeDialog, null));
-            }
+        // Return through the menu to the scene where the player opened it.
+        Scene restoreScene = Forge.switchToLast();
+        if (restoreScene instanceof StartScene) {
+            restoreScene = Forge.switchToLast();
+        }
+        if (restoreScene == null) {
+            Forge.switchScene(GameScene.instance());
         }
     }
 

@@ -29,7 +29,6 @@ import forge.Graphics;
 import forge.adventure.character.CharacterSprite;
 import forge.adventure.character.MapActor;
 import forge.adventure.character.PlayerSprite;
-import forge.adventure.data.DialogData;
 import forge.adventure.data.EffectData;
 import forge.adventure.data.PointOfInterestData;
 import forge.adventure.pointofintrest.PointOfInterest;
@@ -41,7 +40,6 @@ import forge.adventure.util.AdventureExit;
 import forge.adventure.util.Controls;
 import forge.adventure.util.Current;
 import forge.adventure.util.KeyBinding;
-import forge.adventure.util.MapDialog;
 import forge.adventure.util.Paths;
 import forge.adventure.world.WorldSave;
 import forge.assets.FBufferedImage;
@@ -306,7 +304,7 @@ public abstract class GameStage extends Stage {
     }
 
     public void startPause(float i) {
-        startPause(i, null);
+        startPause(i, onEndAction);
     }
 
     public void startPause(float i, Runnable runnable) {
@@ -478,22 +476,9 @@ public abstract class GameStage extends Stage {
         if (KeyBinding.Down.isPressed(keycode)) {
             keyboardInput.y = -1;
         }
-        if (keycode == Input.Keys.F5)//todo config
-        {
-            if (TileMapScene.instance().currentMap().isInMap()) {
-                DialogData noQuicksave = new DialogData();
-                DialogData noQuicksaveOK = new DialogData();
-                noQuicksave.text = Forge.getLocalizer().getMessageorUseDefault("lblQuicksaveOnlyOnWorldMap", "Game not saved. Quicksave is only available on the world map.");
-                noQuicksaveOK.name = Forge.getLocalizer().getMessage("lblOK");
-                noQuicksave.options = new DialogData[]{noQuicksaveOK};
-                MapDialog noQuicksaveDialog = new MapDialog(noQuicksave, MapStage.getInstance(), -1, null);
-                showDialog();
-                noQuicksaveDialog.activate();
-            } else {
-                getPlayerSprite().storePos();
-                WorldSave.requestPreview();
-                WorldSave.getCurrentSave().quickSave();
-            }
+        if (keycode == Input.Keys.F5 && (!(this instanceof MapStage map) || map.canSaveProgress())) { //todo config
+            WorldSave.requestPreview();
+            WorldSave.getCurrentSave().quickSave();
         }
         if (keycode == Input.Keys.F8)//todo config
         {

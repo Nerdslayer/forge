@@ -533,7 +533,7 @@ public class EventScene extends MenuScene implements IAfterMatch {
             TransitionScreen transitionScreen = new TransitionScreen(() -> {
                 duelScene.initDuels(WorldStage.getInstance().getPlayerSprite(), enemy, false, currentEvent);
                 advance.setDisabled(false);
-                Forge.switchScene(duelScene);
+                duelScene.startDuel();
             }, ScreenUtil.getInstance().takeScreenshot(), true, false, false, false,"",
             Current.player().avatar(), enemy.getAtlasPath(), Current.player().getName(), enemy.getName(), humanMatch.p1.getRecord(), humanMatch.p2.getRecord());
             transitionScreen.eventDuel = true;

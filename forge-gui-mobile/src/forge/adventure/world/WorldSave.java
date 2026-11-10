@@ -8,6 +8,7 @@ import forge.adventure.data.DifficultyData;
 import forge.adventure.player.AdventurePlayer;
 import forge.adventure.pointofintrest.PointOfInterest;
 import forge.adventure.pointofintrest.PointOfInterestChanges;
+import forge.adventure.scene.GameScene;
 import forge.adventure.scene.MapViewScene;
 import forge.adventure.scene.SaveLoadScene;
 import forge.adventure.shop.ShopCatalog;
@@ -194,6 +195,10 @@ public class WorldSave {
         return save("auto save" + SaveLoadScene.instance().getSaveFileSuffix(), AUTO_SAVE_SLOT);
     }
 
+    public boolean autoSaveBeforeBattle() {
+        return save("auto save" + SaveLoadScene.instance().getSaveFileSuffix(), AUTO_SAVE_SLOT, false);
+    }
+
     public boolean quickSave() {
         return save("quick save" + SaveLoadScene.instance().getSaveFileSuffix(), QUICK_SAVE_SLOT);
     }
@@ -203,11 +208,19 @@ public class WorldSave {
     }
 
     public boolean save(String text, int currentSlot) {
+        return save(text, currentSlot, true);
+    }
+
+    private boolean save(String text, int currentSlot, boolean announceErrors) {
         String oldName = header.name;
         Date oldDate = header.saveDate;
         Map<String, byte[]> savedProgress;
         header.name = text;
         try {
+            // Interior and menu scenes already have the overworld position from WorldStage.leave().
+            if (Forge.getCurrentScene() instanceof GameScene) {
+                WorldStage.getInstance().getPlayerSprite().storePos();
+            }
             SaveFileData player = currentSave.player.save();
             SaveFileData world = currentSave.world.save();
             SaveFileData worldStage = WorldStage.getInstance().save();
@@ -238,13 +251,18 @@ public class WorldSave {
             header.saveDate = oldDate;
             AdventureExit.PROGRESS.markChanged();
             e.printStackTrace();
-            finish(Forge.getLocalizer().getMessage("lblAdventureSaveFailed"));
+            finish(announceErrors ? Forge.getLocalizer().getMessage("lblAdventureSaveFailed") : null);
             return false;
         }
 
         AdventureExit.PROGRESS.checkpoint(header.saveDate.getTime(), savedProgress);
         Config.instance().getSettingData().lastActiveSave = WorldSave.filename(currentSlot);
-        Config.instance().saveSettings();
+        try {
+            Config.instance().saveSettings();
+        } catch (RuntimeException e) {
+            // The checkpoint is already usable from the Load menu.
+            org.tinylog.Logger.error(e, "Adventure save succeeded but the last active slot could not be written to settings");
+        }
         finish(null);
         return true;
     }

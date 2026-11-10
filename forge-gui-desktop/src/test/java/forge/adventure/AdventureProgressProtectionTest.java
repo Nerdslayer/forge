@@ -3,6 +3,7 @@ package forge.adventure;
 import forge.Forge;
 import forge.adventure.scene.AdventureExitDialog;
 import forge.adventure.scene.DuelScene;
+import forge.adventure.scene.TileMapScene;
 import forge.adventure.stage.MapStage;
 import forge.adventure.util.AdventureExit;
 import forge.adventure.util.AdventureExitRequest;
@@ -34,13 +35,11 @@ public class AdventureProgressProtectionTest {
         AtomicInteger exits = new AtomicInteger();
         AtomicReference<Runnable> keepPlaying = new AtomicReference<>();
         try (MockedStatic<Forge> forge = mockStatic(Forge.class);
-             MockedStatic<MapStage> maps = mockStatic(MapStage.class);
              MockedStatic<AdventureExitDialog> dialogs = mockStatic(AdventureExitDialog.class)) {
             Forge.isMobileAdventureMode = true;
             forge.when(Forge::getCurrentScene).thenReturn(mock(DuelScene.class));
             Localizer localizer = mock(Localizer.class, invocation -> "warning");
             forge.when(Forge::getLocalizer).thenReturn(localizer);
-            maps.when(MapStage::getInstance).thenReturn(mock(MapStage.class)); // An overworld encounter, not a dungeon.
             dialogs.when(() -> AdventureExitDialog.show(anyString(), eq(false), any(), any(), any()))
                     .thenAnswer(invocation -> {
                         keepPlaying.set(invocation.getArgument(2));
@@ -65,6 +64,86 @@ public class AdventureProgressProtectionTest {
             if (keepPlaying.get() != null) keepPlaying.get().run();
             AdventureExit.PROGRESS.checkpoint(System.currentTimeMillis(), Map.of());
             Forge.isMobileAdventureMode = previousAdventureMode;
+        }
+    }
+
+    @Test
+    public void interiorExitOffersSaveOnlyWhenProgressChanged() {
+        boolean previousAdventureMode = Forge.isMobileAdventureMode;
+        Map<String, byte[]> savedState = Map.of("player/cards", new byte[]{1});
+        Runnable continuation = mock(Runnable.class);
+        AtomicReference<Runnable> keepPlaying = new AtomicReference<>();
+        try (MockedStatic<Forge> forge = mockStatic(Forge.class);
+             MockedStatic<AdventureExitDialog> dialogs = mockStatic(AdventureExitDialog.class)) {
+            Forge.isMobileAdventureMode = true;
+            TileMapScene location = mock(TileMapScene.class);
+            MapStage map = mock(MapStage.class);
+            when(location.currentMap()).thenReturn(map);
+            when(map.canSaveProgress()).thenReturn(true);
+            Localizer localizer = mock(Localizer.class, invocation -> "warning");
+            forge.when(Forge::getCurrentScene).thenReturn(location);
+            forge.when(Forge::getLocalizer).thenReturn(localizer);
+
+            try (MockedStatic<WorldSave> saves = mockStatic(WorldSave.class)) {
+                WorldSave save = mock(WorldSave.class);
+                saves.when(WorldSave::getCurrentSave).thenReturn(save);
+                when(save.captureProgress()).thenReturn(savedState);
+                AdventureExit.PROGRESS.checkpoint(System.currentTimeMillis(), savedState);
+                Assert.assertFalse(AdventureExit.requestIfNeeded(continuation));
+                dialogs.verify(() -> AdventureExitDialog.show(anyString(), anyBoolean(), any(), any(), any()), never());
+
+                when(save.captureProgress()).thenReturn(Map.of("player/cards", new byte[]{2}));
+                dialogs.when(() -> AdventureExitDialog.show(anyString(), eq(true), any(), any(), any()))
+                        .thenAnswer(invocation -> {
+                            keepPlaying.set(invocation.getArgument(2));
+                            return null;
+                        });
+                Assert.assertTrue(AdventureExit.requestIfNeeded(continuation));
+                keepPlaying.get().run();
+
+                when(map.canSaveProgress()).thenReturn(false);
+                dialogs.when(() -> AdventureExitDialog.show(anyString(), eq(false), any(), any(), any()))
+                        .thenAnswer(invocation -> {
+                            keepPlaying.set(invocation.getArgument(2));
+                            return null;
+                        });
+                Assert.assertTrue(AdventureExit.requestIfNeeded(continuation));
+            }
+            dialogs.verify(() -> AdventureExitDialog.show(anyString(), eq(true), any(), any(), any()));
+            dialogs.verify(() -> AdventureExitDialog.show(anyString(), eq(false), any(), any(), any()));
+            verifyNoInteractions(continuation);
+        } finally {
+            if (keepPlaying.get() != null) keepPlaying.get().run();
+            AdventureExit.PROGRESS.checkpoint(System.currentTimeMillis(), Map.of());
+            Forge.isMobileAdventureMode = previousAdventureMode;
+        }
+    }
+
+    @Test
+    public void failedBattleAutosaveWaitsForAcknowledgement() {
+        DuelScene duel = mock(DuelScene.class);
+        doCallRealMethod().when(duel).startDuel();
+        AtomicReference<Runnable> acknowledge = new AtomicReference<>();
+        try (MockedStatic<Forge> forge = mockStatic(Forge.class);
+             MockedStatic<AdventureExitDialog> dialogs = mockStatic(AdventureExitDialog.class)) {
+            Localizer localizer = mock(Localizer.class, invocation -> "warning");
+            forge.when(Forge::getLocalizer).thenReturn(localizer);
+            dialogs.when(() -> AdventureExitDialog.showAutosaveFailure(any())).thenAnswer(invocation -> {
+                acknowledge.set(invocation.getArgument(0));
+                return null;
+            });
+
+            try (MockedStatic<WorldSave> saves = mockStatic(WorldSave.class)) {
+                WorldSave save = mock(WorldSave.class);
+                saves.when(WorldSave::getCurrentSave).thenReturn(save);
+                when(save.autoSaveBeforeBattle()).thenReturn(false);
+                duel.startDuel();
+            }
+            forge.verify(() -> Forge.clearTransitionScreen(true));
+            forge.verify(() -> Forge.switchScene(duel), never());
+            Assert.assertNotNull(acknowledge.get());
+            acknowledge.get().run();
+            forge.verify(() -> Forge.switchScene(duel));
         }
     }
 
