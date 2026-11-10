@@ -12,6 +12,7 @@ import forge.adventure.data.RewardData;
 import forge.adventure.util.AdventureBackgroundDownloader;
 import forge.adventure.util.Config;
 import forge.adventure.util.Controls;
+import forge.ai.MastermindEffort;
 import forge.assets.FSkinTexture;
 import forge.assets.ImageCache;
 import forge.gui.GuiBase;
@@ -37,6 +38,7 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
  */
 public class SettingsScene extends UIScene {
     private final Table settingGroup;
+    private final SelectBox<String> mastermindEffort;
     TextraButton backButton;
     TextraButton newPlane;
     ScrollPane scrollPane;
@@ -133,6 +135,22 @@ public class SettingsScene extends UIScene {
         settingGroup.add(plane).align(Align.right).pad(2);
         //addLabel(localizer.getMessage("lblCreate") + localizer.getMessage("lblWorld"));
         settingGroup.add(newPlane).align(Align.right).pad(2);
+
+        final var effortSetting = ForgePreferences.FPref.MASTERMIND_AI_EFFORT;
+        final var effortLabels = MastermindEffort.localizedOptions();
+        final var preferences = FModel.getPreferences();
+        mastermindEffort = Controls.newComboBox(effortLabels.keySet().toArray(new String[0]),
+                MastermindEffort.parse(preferences.getPref(effortSetting)).localizedLabel(), selected -> {
+                    final String value = effortLabels.get(selected);
+                    if (value != null && !value.equals(MastermindEffort.parse(preferences.getPref(effortSetting)).name())) {
+                        preferences.setPref(effortSetting, value);
+                        MastermindEffort.configure(value);
+                        preferences.save();
+                    }
+                    return null;
+                });
+        addLabel(localizer.getMessage("cbMastermindEffort"));
+        settingGroup.add(mastermindEffort).align(Align.right).pad(2);
 
         if (!GuiBase.isAndroid()) {
             SelectBox<String> videomode = Controls.newComboBox(ForgeConstants.VIDEO_MODES, Config.instance().getSettingData().videomode, o -> {
@@ -584,6 +602,14 @@ public class SettingsScene extends UIScene {
         return object;
     }
 
+
+    @Override
+    public void enter() {
+        // The scene is cached and Classic can change the same preference.
+        mastermindEffort.setSelected(MastermindEffort.parse(FModel.getPreferences()
+                .getPref(ForgePreferences.FPref.MASTERMIND_AI_EFFORT)).localizedLabel());
+        super.enter();
+    }
 
     @Override
     public void dispose() {
