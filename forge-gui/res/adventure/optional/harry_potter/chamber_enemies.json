@@ -11,7 +11,7 @@
     "difficulty": 0.1,
     "spawnRate": 0,
     "speed": 0,
-    "scale": 0.0546875,
+    "scale": 0.07109375,
     "questTags": [
       "HarryPotter",
       "Hogwarts"
@@ -55,7 +55,7 @@
     "difficulty": 0.1,
     "spawnRate": 0,
     "speed": 0,
-    "scale": 2.25,
+    "scale": 2.925,
     "questTags": [
       "HarryPotter",
       "Hogwarts"
@@ -100,7 +100,7 @@
     "difficulty": 1,
     "spawnRate": 0.16,
     "speed": 0.75,
-    "scale": 0.0546875,
+    "scale": 0.07109375,
     "questTags": [
       "HarryPotter",
       "Roaming"
@@ -144,7 +144,7 @@
     "difficulty": 2,
     "spawnRate": 0.12,
     "speed": 0.75,
-    "scale": 2.25,
+    "scale": 2.925,
     "questTags": [
       "HarryPotter",
       "Roaming"

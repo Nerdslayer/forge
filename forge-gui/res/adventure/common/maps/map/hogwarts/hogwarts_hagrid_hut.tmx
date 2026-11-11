@@ -34,7 +34,7 @@
     <property name="direction" value="up" />
    </properties>
   </object>
-  <object id="104" name="HP Hagrid" type="enemy" x="231" y="216" width="16" height="16">
+  <object id="104" name="HP Hagrid" type="enemy" x="228.6" y="211.2" width="20.8" height="20.8">
    <properties>
     <property name="enemy" value="HP Hagrid" />
     <property name="speedModifier" value="0" />
