@@ -17,6 +17,7 @@ import forge.game.card.*;
 import forge.game.card.sticker.AppliedSticker;
 import forge.game.card.sticker.Sticker;
 import forge.game.card.sticker.StickerKind;
+import forge.game.combat.Combat;
 import forge.game.cost.Cost;
 import forge.game.cost.CostAdjustment;
 import forge.game.keyword.Keyword;
@@ -1132,7 +1133,13 @@ public class AbilityUtils {
                 players.add(game.getCombat().getAttackingPlayer());
             }
         } else if (defined.equals("DefendingPlayer")) {
-            players.add(game.getCombat().getDefendingPlayerRelatedTo(card));
+            final Combat combat = game.getCombat();
+            if (combat != null) {
+                final Player defender = combat.getDefendingPlayerRelatedTo(card);
+                if (defender != null) {
+                    players.add(defender);
+                }
+            }
         } else if (defined.equals("ChoosingPlayer")) {
             players.add(((SpellAbility) sa).getRootAbility().getChoosingPlayer());
         } else if (defined.equals("ChosenPlayer")) {
