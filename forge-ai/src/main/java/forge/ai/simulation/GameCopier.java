@@ -202,23 +202,30 @@ public class GameCopier {
     }
 
     private void copyStack(Game origGame, Game newGame, IEntityMap map) {
-        for (SpellAbilityStackInstance origEntry : origGame.getStack()) {
+        stackMap.clear();
+        List<SpellAbilityStackInstance> entries = Lists.newArrayList(origGame.getStack());
+        // Register every copy first. A retargeted spell can point above or below itself.
+        for (SpellAbilityStackInstance origEntry : entries) {
             SpellAbility origSa = origEntry.getSpellAbility();
-            Card origHostCard = origSa.getHostCard();
-            Card newCard = map.map(origHostCard);
-            SpellAbility newSa = null;
             if (origSa.isSpell()) {
-                newSa = findSAInCard(origSa, newCard);
+                SpellAbility newSa = findSAInCard(origSa, map.map(origSa.getHostCard()));
+                if (newSa != null) {
+                    newSa.setActivatingPlayer(map.map(origSa.getActivatingPlayer()));
+                    stackMap.put(origSa, newSa);
+                }
             }
+        }
+        // MagicStack.add pushes at the top, so rebuild from bottom to top.
+        for (SpellAbilityStackInstance origEntry : Lists.reverse(entries)) {
+            SpellAbility origSa = origEntry.getSpellAbility();
+            SpellAbility newSa = stackMap.get(origSa);
             if (newSa != null) {
-                newSa.setActivatingPlayer(map.map(origSa.getActivatingPlayer()));
                 if (origSa.usesTargeting()) {
                     for (GameObject o : origSa.getTargets()) {
                         newSa.getTargets().add(map.map(o));
                     }
                 }
                 newGame.getStack().add(newSa);
-                stackMap.put(origSa, newSa);
             }
         } 
     }

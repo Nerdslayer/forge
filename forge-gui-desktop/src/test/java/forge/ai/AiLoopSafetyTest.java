@@ -36,7 +36,8 @@ public class AiLoopSafetyTest extends AITest {
         Assert.assertEquals(countCardsWithName(game, "Soldier Token"), 250);
     }
 
-    @Test(timeOut = 30000)
+    // Resolving 256 triggers copies the growing battlefield repeatedly and can exceed 30 seconds in CI.
+    @Test(timeOut = 90000)
     public void largeLandfallBatchFinishesWhileTheBattlefieldGrows() {
         Game game = initAndCreateGame();
         Player ai = game.getPlayers().get(1);

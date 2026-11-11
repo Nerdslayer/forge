@@ -29,6 +29,54 @@ import java.util.stream.Collectors;
 public class GameSimulationTest extends SimulationTest {
 
     @Test
+    public void copiesCounterspellWithTargetsAboveAndBelowItOnTheStack() {
+        Game game = initAndCreateGame();
+        Player caster = game.getPlayers().get(0);
+        Player responder = game.getPlayers().get(1);
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, caster);
+        Card burnCard = createCard("Lava Spike", caster);
+        game.getStackZone().add(burnCard);
+        SpellAbility burn = burnCard.getFirstSpellAbility();
+        burn.setActivatingPlayer(caster);
+        burn.getTargets().add(responder);
+        game.getStack().add(burn);
+
+        Card counterCard = createCard("Counterspell", responder);
+        game.getStackZone().add(counterCard);
+        SpellAbility counter = counterCard.getFirstSpellAbility();
+        counter.setActivatingPlayer(responder);
+        counter.getTargets().add(burn);
+        game.getStack().add(counter);
+
+        Game copy = new GameCopier(game).withStack(true).makeCopy();
+        AssertJUnit.assertEquals(2, copy.getStack().size());
+        var spells = copy.getStack().iterator();
+        SpellAbility copiedCounter = spells.next().getSpellAbility();
+        SpellAbility copiedBurn = spells.next().getSpellAbility();
+        AssertJUnit.assertEquals("Counterspell", copiedCounter.getHostCard().getName());
+        AssertJUnit.assertEquals("Lava Spike", copiedBurn.getHostCard().getName());
+        AssertJUnit.assertSame(copiedBurn, copiedCounter.getTargets().getFirstTargetedSpell());
+
+        Card instantCard = createCard("Shock", caster);
+        game.getStackZone().add(instantCard);
+        SpellAbility instant = instantCard.getFirstSpellAbility();
+        instant.setActivatingPlayer(caster);
+        instant.getTargets().add(responder);
+        game.getStack().add(instant);
+        counter.clearTargets();
+        counter.getTargets().add(instant);
+
+        Game retargetedCopy = new GameCopier(game).withStack(true).makeCopy();
+        AssertJUnit.assertEquals(3, retargetedCopy.getStack().size());
+        var retargetedSpells = retargetedCopy.getStack().iterator();
+        SpellAbility copiedInstant = retargetedSpells.next().getSpellAbility();
+        SpellAbility retargetedCounter = retargetedSpells.next().getSpellAbility();
+        AssertJUnit.assertEquals("Shock", copiedInstant.getHostCard().getName());
+        AssertJUnit.assertEquals("Counterspell", retargetedCounter.getHostCard().getName());
+        AssertJUnit.assertSame(copiedInstant, retargetedCounter.getTargets().getFirstTargetedSpell());
+    }
+
+    @Test
     public void testActivateAbilityTriggers() {
         Game game = initAndCreateGame();
         Player p = game.getPlayers().get(1);
