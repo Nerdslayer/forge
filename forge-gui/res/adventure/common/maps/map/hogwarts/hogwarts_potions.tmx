@@ -34,7 +34,7 @@
     <property name="direction" value="left" />
    </properties>
   </object>
-  <object id="107" name="HP Snape" type="enemy" x="324.5" y="174.5" width="15" height="17.5">
+  <object id="107" name="HP Snape" type="enemy" x="322.25" y="169.25" width="19.5" height="22.75">
    <properties>
     <property name="enemy" value="HP Snape" />
     <property name="speedModifier" value="0" />

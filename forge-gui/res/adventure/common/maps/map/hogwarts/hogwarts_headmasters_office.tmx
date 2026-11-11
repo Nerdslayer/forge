@@ -34,7 +34,7 @@
     <property name="direction" value="up" />
    </properties>
   </object>
-  <object id="101" name="HP Dumbledore" type="enemy" x="324.5" y="257" width="15" height="15">
+  <object id="101" name="HP Dumbledore" type="enemy" x="322.25" y="252.5" width="19.5" height="19.5">
    <properties>
     <property name="enemy" value="HP Dumbledore" />
     <property name="speedModifier" value="0" />

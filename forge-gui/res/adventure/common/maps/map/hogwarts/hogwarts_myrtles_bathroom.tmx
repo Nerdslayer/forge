@@ -44,7 +44,7 @@
     <property name="lockedText" value="The old sink is sealed. A tiny snake is engraved on the tap." />
    </properties>
   </object>
-  <object id="301" name="Moaning Myrtle" type="dialog" x="247.5" y="176" width="9" height="13" gid="26502">
+  <object id="301" name="Moaning Myrtle" type="dialog" x="246.15" y="176" width="11.7" height="16.9" gid="26502">
    <properties>
     <property name="dialog" value="[{&quot;text&quot;: &quot;Myrtle: I died here. I heard a boy speaking, and then I saw a pair of enormous yellow eyes by those sinks. Look at the tap. There's a little snake on it.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Ask Harry to speak to the snake.&quot;, &quot;text&quot;: &quot;Harry whispers in Parseltongue. The basin sinks into the floor, revealing a passage into the rock.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Descend into the Chamber.&quot;, &quot;action&quot;: [{&quot;setQuestFlag&quot;: {&quot;key&quot;: &quot;hpChamberOpened&quot;, &quot;val&quot;: 1}}]}]}], &quot;condition&quot;: [{&quot;checkQuestFlag&quot;: &quot;hpChamberOpened&quot;, &quot;not&quot;: true}]}, {&quot;text&quot;: &quot;Myrtle: The stairs are where the sink used to be. Try to avoid looking it in the eyes.&quot;, &quot;options&quot;: [{&quot;name&quot;: &quot;Continue&quot;}], &quot;condition&quot;: [{&quot;checkQuestFlag&quot;: &quot;hpChamberOpened&quot;}]}]" />
    </properties>

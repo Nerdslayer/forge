@@ -10,7 +10,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 0.05859375,
+    "scale": 0.076171875,
     "life": 22,
     "colors": "WUR",
     "questTags": [
@@ -57,7 +57,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 0.0546875,
+    "scale": 0.07109375,
     "life": 20,
     "colors": "WR",
     "questTags": [
@@ -104,7 +104,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 0.0546875,
+    "scale": 0.07109375,
     "life": 20,
     "colors": "WURG",
     "questTags": [
@@ -151,7 +151,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 0.0625,
+    "scale": 0.08125,
     "life": 24,
     "colors": "WUBRG",
     "questTags": [
@@ -198,7 +198,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 0.05859375,
+    "scale": 0.076171875,
     "life": 28,
     "colors": "UBR",
     "questTags": [
@@ -251,7 +251,7 @@
     "spawnRate": 0.25,
     "difficulty": 3,
     "speed": 20,
-    "scale": 0.05859375,
+    "scale": 0.076171875,
     "life": 22,
     "colors": "WUR",
     "questTags": [
@@ -298,7 +298,7 @@
     "spawnRate": 0.25,
     "difficulty": 2,
     "speed": 22,
-    "scale": 0.0546875,
+    "scale": 0.07109375,
     "life": 20,
     "colors": "WR",
     "questTags": [
@@ -345,7 +345,7 @@
     "spawnRate": 0.25,
     "difficulty": 2,
     "speed": 22,
-    "scale": 0.0546875,
+    "scale": 0.07109375,
     "life": 20,
     "colors": "WURG",
     "questTags": [
@@ -392,7 +392,7 @@
     "spawnRate": 0.25,
     "difficulty": 2,
     "speed": 17,
-    "scale": 0.0625,
+    "scale": 0.08125,
     "life": 24,
     "colors": "WUBRG",
     "questTags": [
@@ -439,7 +439,7 @@
     "spawnRate": 0.25,
     "difficulty": 3,
     "speed": 20,
-    "scale": 0.05859375,
+    "scale": 0.076171875,
     "life": 28,
     "colors": "UBR",
     "questTags": [
@@ -486,7 +486,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 2.0,
+    "scale": 2.6,
     "life": 26,
     "colors": "BG",
     "questTags": [
@@ -534,7 +534,7 @@
     "spawnRate": 0,
     "difficulty": 0.1,
     "speed": 0,
-    "scale": 0.078125,
+    "scale": 0.1015625,
     "life": 22,
     "colors": "WUBR",
     "questTags": [

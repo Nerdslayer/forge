@@ -74,7 +74,7 @@
     <property name="hidden" value="false" type="bool" />
    </properties>
   </object>
-  <object id="106" name="HP Aragog" type="enemy" x="1488" y="912" width="48" height="48">
+  <object id="106" name="HP Aragog" type="enemy" x="1480.8" y="897.6" width="62.4" height="62.4">
    <properties>
     <property name="enemy" value="HP Aragog" />
     <property name="speedModifier" value="0" />
@@ -167,7 +167,7 @@
     <property name="spawn.Insane" value="true" type="bool" />
    </properties>
   </object>
-  <object id="105" name="HP Voldemort" type="enemy" x="1492.5" y="209" width="15" height="15">
+  <object id="105" name="HP Voldemort" type="enemy" x="1490.25" y="204.5" width="19.5" height="19.5">
    <properties>
     <property name="enemy" value="HP Voldemort" />
     <property name="speedModifier" value="0" />
