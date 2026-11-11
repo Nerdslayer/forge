@@ -177,21 +177,23 @@ public class FlatMonteCarloStrategyTest extends AITest {
 
     @Test(timeOut = LONG_TIMEOUT_MS)
     public void drawsIntoTheCounterspellInResponseToAThreat() {
-        // Five Islands, Brainstorm in hand, a library full of counterspells and Islands: cast Brainstorm first and
-        // counter with what it finds. Neither line works with the heuristics alone.
+        // Every shuffled draw of three must contain a counterspell so the test measures the follow-up play.
         final Game game = newGame(true);
+        game.AI_FLAT_MONTE_CARLO_MAX = true; // Give the response rollouts time to finish on busy CI runners.
         final Player ai = game.getPlayers().get(1);
         final Player opp = game.getPlayers().get(0);
         addCards("Island", 5, ai);
         addCardToZone("Brainstorm", ai, ZoneType.Hand);
-        fill(ai, "Counterspell", "Counterspell", "Island");
+        fill(ai, "Counterspell");
+        addCardToZone("Island", ai, ZoneType.Library);
+        addCardToZone("Island", ai, ZoneType.Library);
         addCards("Plains", 5, opp);
         addCardToZone("Serra Angel", opp, ZoneType.Hand);
         fill(opp, "Plains");
         opponentCasts(game, opp, "Serra Angel");
         final String play = nextPlay(ai);
         System.out.println("drawsIntoTheCounterspell -> " + play);
-        AssertJUnit.assertEquals("Brainstorm", play);
+        AssertJUnit.assertEquals("AI decision: " + brainOf(ai).getLastFlatMonteCarloResult(), "Brainstorm", play);
     }
 
     @Test(timeOut = LONG_TIMEOUT_MS)
