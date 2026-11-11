@@ -36,6 +36,8 @@
           "name": "Claim quest reward",
           "action": [
             {
+              "addMapReputation": 3,
+              "POIReference": "$(poi_1)",
               "grantRewards": [
                 {
                   "type": "gold",
@@ -61,7 +63,7 @@
         }
       ]
     },
-    "rewardDescription": "500 gold, 10 shards, and 3 random HP cards",
+    "rewardDescription": "500 gold, 10 shards, 3 random HP cards, and +3 Hogwarts reputation",
     "stages": [
       {
         "id": 1,

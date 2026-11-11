@@ -9,7 +9,7 @@
     "questSourceTags": [
       "hp_chamber_hermione"
     ],
-    "rewardDescription": "The Chamber of Secrets, Basilisk of the Chamber, Tom Riddle's Diary, and Sword of Gryffindor as both a card and a right-hand item",
+    "rewardDescription": "The Chamber of Secrets, Basilisk of the Chamber, Tom Riddle's Diary, Sword of Gryffindor as both a card and a right-hand item, and +3 Hogwarts reputation",
     "epilogue": {
       "text": "Quest complete: The Chamber of Secrets\n\nWith the Basilisk defeated, Harry drives one of its fangs into the diary. The ink bleeds out and Ginny wakes. Fawkes perches beside her while you pick up the Sword of Gryffindor.",
       "options": [
@@ -17,6 +17,8 @@
           "name": "Claim quest rewards",
           "action": [
             {
+              "addMapReputation": 3,
+              "POIReference": "$(poi_5)",
               "grantRewards": [
                 {
                   "type": "card",

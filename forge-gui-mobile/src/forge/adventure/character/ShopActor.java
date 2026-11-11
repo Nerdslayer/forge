@@ -7,6 +7,10 @@ import forge.adventure.pointofintrest.PointOfInterestChanges;
 import forge.adventure.scene.RewardScene;
 import forge.adventure.stage.MapStage;
 import forge.adventure.util.Reward;
+import forge.adventure.world.WorldSave;
+
+import java.time.LocalDate;
+import java.util.Random;
 
 
 /**
@@ -18,6 +22,7 @@ public class ShopActor extends MapActor {
     Array<Reward> rewardData;
     private final String pointOfInterestChangesKey;
     private final String locationName;
+    private Long dailyStockSeedOffset;
 
     public ShopActor(MapStage stage, int id, Array<Reward> rewardData, ShopData data,
                      String pointOfInterestChangesKey, String locationName) {
@@ -42,6 +47,9 @@ public class ShopActor extends MapActor {
 
     @Override
     public void onPlayerCollide() {
+        if (dailyStockSeedOffset != null) {
+            refreshDailyStock();
+        }
         stage.getPlayerSprite().stop();
         RewardScene.instance().loadRewards(rewardData, RewardScene.Type.Shop, this);
         Forge.switchScene(RewardScene.instance());
@@ -79,6 +87,29 @@ public class ShopActor extends MapActor {
 
     public Array<Reward> getRewardData() {
         return rewardData;
+    }
+
+    public void generateStock(long seed) {
+        WorldSave.getCurrentSave().getWorld().getRandom().setSeed(seed);
+        rewardData.clear();
+        for (var reward : shopData.rewards) {
+            rewardData.addAll(reward.generate(false, false));
+        }
+    }
+
+    public void setDailyStockSeedOffset(long seedOffset) {
+        dailyStockSeedOffset = seedOffset;
+        refreshDailyStock();
+    }
+
+    private void refreshDailyStock() {
+        long day = LocalDate.now().toEpochDay();
+        long seed = new Random(dailyStockSeedOffset ^ objectId ^ (day << 32)).nextLong();
+        PointOfInterestChanges changes = stage.getChanges();
+        if (rewardData.isEmpty() || seed != changes.getShopSeed(objectId)) {
+            changes.setRotatingShopSeed(objectId, seed);
+            generateStock(seed);
+        }
     }
 
     public String getPointOfInterestChangesKey() {

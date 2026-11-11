@@ -24,6 +24,7 @@ import forge.item.PaperCard;
 import forge.item.PaperCardPredicates;
 import forge.item.SealedTemplate;
 import forge.item.generation.UnOpenedProduct;
+import forge.itemmanager.SFilterUtil;
 import forge.model.FModel;
 import forge.util.Aggregates;
 import forge.util.IterableUtil;
@@ -65,6 +66,7 @@ public class CardUtil {
         private final List<CardType.Supertype> superType = new ArrayList<>();
         private final List<Integer> manaCosts = new ArrayList<>();
         private final Pattern text;
+        private final Predicate<PaperCard> search;
         private final boolean matchAllSubTypes;
         private final boolean matchAllColors;
         private int colors;
@@ -127,6 +129,8 @@ public class CardUtil {
             if (!this.manaCosts.isEmpty() && !this.manaCosts.contains(card.getRules().getManaCost().getCMC()))
                 return !this.shouldBeEqual;
             if (this.text != null && !this.text.matcher(card.getRules().getOracleText()).find())
+                return !this.shouldBeEqual;
+            if (search != null && !search.test(card))
                 return !this.shouldBeEqual;
 
             if (this.matchAllColors) {
@@ -270,6 +274,8 @@ public class CardUtil {
             for (int i = 0; type.manaCosts != null && i < type.manaCosts.length; i++)
                 manaCosts.add(type.manaCosts[i]);
             text = getPattern(type);
+            search = type.cardSearch == null || type.cardSearch.isBlank() ? null
+                    : SFilterUtil.buildTextFilter(type.cardSearch, false, true, true, true, false);
             if (type.colors == null || type.colors.length == 0) {
                 this.colors = MagicColor.ALL_COLORS;
             } else {
@@ -341,11 +347,27 @@ public class CardUtil {
 
         final List<PaperCard> result = new ArrayList<>();
         List<PaperCard> pool = getPredicateResult(cards, data);
+        boolean fixedPrinting = data.printingEdition != null && !data.printingEdition.isBlank();
+        if (fixedPrinting) {
+            var db = FModel.getMagicDb();
+            var edition = db.getEditions().get(data.printingEdition);
+            if (edition == null) {
+                return result;
+            }
+            Map<String, PaperCard> printings = new HashMap<>();
+            for (PaperCard card : db.getCommonCards().getAllCards(edition)) {
+                if (edition.getCode().equals(card.getEdition())) {
+                    printings.putIfAbsent(card.getName(), card);
+                }
+            }
+            pool.replaceAll(card -> printings.get(card.getName()));
+            pool.removeIf(Objects::isNull);
+        }
         if (!pool.isEmpty()) {
             for (int i = 0; i < count; i++) {
                 PaperCard candidate = pool.get(r.nextInt(pool.size()));
                 if (candidate != null) {
-                    if (allCardVariants) {
+                    if (allCardVariants && !fixedPrinting) {
                         // Get a random variant, preserving edition when specified
                         PaperCard finalCandidate = CardUtil.getCardByNameAndEdition(candidate.getCardName(), candidate.getEdition());
                         result.add(finalCandidate);

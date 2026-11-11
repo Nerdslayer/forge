@@ -698,6 +698,11 @@ public class MapStage extends GameStage {
                         }
                         break;
 
+                    case "DailyShop":
+                        ShopData dailyShop = new Json().fromJson(ShopData.class, prop.get("shop", String.class));
+                        loadShop(obj, prop, id, dailyShop, true);
+                        break;
+
                     case "Rotating":
                         String rotation = "";
                         if (prop.containsKey("rotation")) {
@@ -781,36 +786,41 @@ public class MapStage extends GameStage {
 
                         ShopData data = shops.get(WorldSave.getCurrentSave().getWorld().getRandom().nextInt(shops.size));
                         shopsAlreadyPresent.add(data.name);
-                        Array<Reward> ret = new Array<>();
-                        WorldSave.getCurrentSave().getWorld().getRandom().setSeed(changes.getShopSeed(id));
-                        for (RewardData rdata : new Array.ArrayIterator<>(data.rewards)) {
-                            ret.addAll(rdata.generate(false, false));
-                        }
-                        ShopActor actor = new ShopActor(this, id, ret, data,
-                                TileMapScene.instance().getPointOfInterestChangesKey(),
-                                TileMapScene.instance().rootPoint.getDisplayName());
-                        addMapActor(obj, actor);
-                        if (prop.containsKey("hasSign") && (boolean) prop.get("hasSign") && prop.containsKey("signYOffset") && prop.containsKey("signXOffset")) {
-                            try {
-                                TextureSprite sprite = new TextureSprite(Config.instance().getAtlasSprite(data.spriteAtlas, data.sprite));
-                                sprite.setX(actor.getX() + Float.parseFloat(prop.get("signXOffset").toString()));
-                                sprite.setY(actor.getY() + Float.parseFloat(prop.get("signYOffset").toString()));
-                                addMapActor(sprite);
-
-                                if (!(data.overlaySprite == null || data.overlaySprite.isEmpty())) {
-                                    TextureSprite overlay = new TextureSprite(Config.instance().getAtlasSprite(data.spriteAtlas, data.overlaySprite));
-                                    overlay.setX(actor.getX() + Float.parseFloat(prop.get("signXOffset").toString()));
-                                    overlay.setY(actor.getY() + Float.parseFloat(prop.get("signYOffset").toString()));
-                                    addMapActor(overlay);
-                                }
-                            } catch (Exception e) {
-                                System.err.print("Can not create Texture for " + data.sprite + " Obj:" + data);
-                            }
-                        }
+                        loadShop(obj, prop, id, data, false);
                         break;
                     default:
                         System.err.println("Unexpected value: " + type);
                 }
+            }
+        }
+    }
+
+    private void loadShop(MapObject obj, MapProperties prop, int id, ShopData data, boolean daily) {
+        var scene = TileMapScene.instance();
+        var point = scene.rootPoint;
+        String changesKey = daily ? point.getID() : scene.getPointOfInterestChangesKey();
+        ShopActor actor = new ShopActor(this, id, new Array<>(), data, changesKey, point.getDisplayName());
+        if (daily) {
+            actor.setDailyStockSeedOffset(point.getSeedOffset());
+        } else {
+            actor.generateStock(changes.getShopSeed(id));
+        }
+        addMapActor(obj, actor);
+        if (prop.containsKey("hasSign") && (boolean) prop.get("hasSign") && prop.containsKey("signYOffset") && prop.containsKey("signXOffset")) {
+            try {
+                TextureSprite sprite = new TextureSprite(Config.instance().getAtlasSprite(data.spriteAtlas, data.sprite));
+                sprite.setX(actor.getX() + Float.parseFloat(prop.get("signXOffset").toString()));
+                sprite.setY(actor.getY() + Float.parseFloat(prop.get("signYOffset").toString()));
+                addMapActor(sprite);
+
+                if (!(data.overlaySprite == null || data.overlaySprite.isEmpty())) {
+                    TextureSprite overlay = new TextureSprite(Config.instance().getAtlasSprite(data.spriteAtlas, data.overlaySprite));
+                    overlay.setX(actor.getX() + Float.parseFloat(prop.get("signXOffset").toString()));
+                    overlay.setY(actor.getY() + Float.parseFloat(prop.get("signYOffset").toString()));
+                    addMapActor(overlay);
+                }
+            } catch (Exception e) {
+                System.err.print("Can not create Texture for " + data.sprite + " Obj:" + data);
             }
         }
     }

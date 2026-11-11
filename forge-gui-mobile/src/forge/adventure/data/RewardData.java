@@ -40,6 +40,7 @@ public class RewardData implements Serializable {
     public String itemName;
     public String[] itemNames;
     public String[] editions;
+    public String printingEdition;
     public String[] excludedEditions;
     public boolean excludeLands;
     public String[] colors;
@@ -53,6 +54,7 @@ public class RewardData implements Serializable {
     public String[] keyWords;
     public String colorType;
     public String cardText;
+    public String cardSearch;
     public boolean matchAllSubTypes;
     public boolean matchAllColors;
     public RewardData[] cardUnion;
@@ -78,6 +80,7 @@ public class RewardData implements Serializable {
         endDate          = rewardData.endDate;
         itemNames        = rewardData.itemNames == null ? null : rewardData.itemNames.clone();
         editions         = rewardData.editions == null ? null : rewardData.editions.clone();
+        printingEdition  = rewardData.printingEdition;
         excludedEditions = rewardData.excludedEditions == null ? null : rewardData.excludedEditions.clone();
         excludeLands     = rewardData.excludeLands;
         colors           = rewardData.colors == null ? null : rewardData.colors.clone();
@@ -89,6 +92,7 @@ public class RewardData implements Serializable {
         keyWords         = rewardData.keyWords == null ? null : rewardData.keyWords.clone();
         colorType        = rewardData.colorType;
         cardText         = rewardData.cardText;
+        cardSearch       = rewardData.cardSearch;
         matchAllSubTypes = rewardData.matchAllSubTypes;
         matchAllColors   = rewardData.matchAllColors;
         cardUnion        = rewardData.cardUnion == null ? null : rewardData.cardUnion.clone();
