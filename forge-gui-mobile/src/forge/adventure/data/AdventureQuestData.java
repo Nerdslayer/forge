@@ -34,6 +34,7 @@ public class AdventureQuestData implements Serializable {
     }
     public boolean isTemplate = false;
     public boolean oneTime = false;
+    public String completionItem; // A one-time template's item grant, skipped if already owned.
     public String requiredPOI = ""; // Offer only while this named location exists and is available.
     public String name = "";
     public String description = "";

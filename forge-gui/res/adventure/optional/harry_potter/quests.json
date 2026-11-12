@@ -3,6 +3,7 @@
     "id": 90701,
     "isTemplate": true,
     "oneTime": true,
+    "completionItem": "Hogwarts Portkey",
     "requiredPOI": "Hogwarts",
     "name": "A Castle Out of Place",
     "description": "A magical castle has been transported to Shandalar from another plane. Seek Dumbledore upstairs at Hogwarts, then defeat Voldemort in the northern forest. A previous castle victory counts; no return trip is required.",
@@ -30,7 +31,7 @@
     },
     "prologue": {},
     "epilogue": {
-      "text": "With Voldemort defeated, the displaced castle is safe from his immediate threat. Dumbledore's promised supplies are yours: 500 gold, 10 shards, and three random Harry Potter cards.",
+      "text": "With Voldemort defeated, the displaced castle is safe from his immediate threat. Dumbledore has set aside supplies for you. Keep your Hogwarts Portkey close if you need to return.",
       "options": [
         {
           "name": "Claim quest reward",
@@ -63,7 +64,7 @@
         }
       ]
     },
-    "rewardDescription": "500 gold, 10 shards, 3 random HP cards, and +3 Hogwarts reputation",
+    "rewardDescription": "500 gold, 10 shards, 3 random HP cards, +3 Hogwarts reputation, and a Hogwarts Portkey if you don't already have one",
     "stages": [
       {
         "id": 1,

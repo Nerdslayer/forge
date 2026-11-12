@@ -222,7 +222,24 @@ public class AdventureQuestController implements Serializable {
             }
 
             Current.player().removeQuest(toRemove);
+            if (toRemove.oneTime && toRemove.completed && !toRemove.failed) {
+                grantCompletionItem(toRemove);
+            }
             //Todo: Add quest to a separate "completed / failed" log?
+        }
+    }
+
+    private void grantCompletionItem(AdventureQuestData quest) {
+        // Read the template so quests accepted before the item was added also grant it.
+        for (AdventureQuestData template : allQuests) {
+            String item = template.completionItem;
+            if (template.isTemplate && item != null && !item.isEmpty() && template.getID() == quest.getID()) {
+                var player = Current.player();
+                if (!player.hasItem(item)) {
+                    player.addItem(item);
+                }
+                return;
+            }
         }
     }
 
