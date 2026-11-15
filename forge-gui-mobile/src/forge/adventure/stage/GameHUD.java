@@ -45,6 +45,7 @@ import forge.adventure.data.AdventureQuestData;
 import forge.adventure.data.ItemData;
 import forge.adventure.player.AdventurePlayer;
 import forge.adventure.scene.DeckSelectScene;
+import forge.adventure.scene.ChallengesScene;
 import forge.adventure.scene.GameScene;
 import forge.adventure.scene.InventoryScene;
 import forge.adventure.scene.MapViewScene;
@@ -84,6 +85,9 @@ public class GameHUD extends Stage {
     private final InputEvent eventTouchDown, eventTouchUp;
     private final TextraButton deckActor, openMapActor, menuActor, logbookActor, inventoryActor,
             catalogActor, exitToWorldMapActor, bookmarkActor;
+    private final TextraButton challengesActor;
+    private int displayedChallengeLevel = -1;
+    private boolean displayedChallengeActive;
     public final UIActor ui;
     private final Touchpad touchpad;
     private final Console console;
@@ -136,6 +140,7 @@ public class GameHUD extends Stage {
         gamehud = ui.findActor("gamehud");
         exitToWorldMapActor = ui.findActor("exittoworldmap");
         bookmarkActor = ui.findActor("bookmark");
+        challengesActor = ui.findActor("challenges");
         dialog = Controls.newDialog("");
 
         miniMapPlayer = new Image(Forge.getAssets().getTexture(Config.instance().getFile("ui/minimap_player.png")));
@@ -165,6 +170,7 @@ public class GameHUD extends Stage {
         ui.onButtonPress("catalog", this::openCatalog);
         ui.onButtonPress("exittoworldmap", this::exitToWorldMap);
         ui.onButtonPress("bookmark", this::bookmark);
+        ui.onButtonPress("challenges", this::openChallenges);
         keyCollection = ui.findActor("keyCollection");
         keyCollection.skipToTheEnd();
         lifePoints = ui.findActor("lifePoints");
@@ -257,6 +263,9 @@ public class GameHUD extends Stage {
         menuGroup.addActor(inventoryActor);
         menuGroup.addActor(catalogActor);
         menuGroup.addActor(exitToWorldMapActor);
+        if (challengesActor != null) {
+            menuGroup.addActor(challengesActor);
+        }
         menuGroup.addActor(bookmarkActor);
         ui.addActor(menuGroup);
         //AVATAR
@@ -279,6 +288,21 @@ public class GameHUD extends Stage {
         if (Forge.advFreezePlayerControls)
             return;
         Forge.switchScene(QuestLogScene.instance(Forge.getCurrentScene()));
+    }
+
+    private void openChallenges() {
+        GameStage activeStage = Current.player().getCurrentGameStage();
+        if (console.isVisible() || dialogOnlyInput || activeStage.isDialogOnlyInput()
+                || Forge.advFreezePlayerControls || Forge.getTransitionScreen() != null || activeStage.isPaused()
+                || activeStage.onEndAction != null
+                || (activeStage instanceof MapStage map && !map.canSaveProgress())) {
+            return;
+        }
+        Forge.switchScene(ChallengesScene.instance());
+    }
+
+    public boolean hasChallengesButton() {
+        return challengesActor != null;
     }
 
     public static GameHUD getInstance() {
@@ -352,6 +376,7 @@ public class GameHUD extends Stage {
                     && !(Controls.actorContainsVector(catalogActor, touchDownCoords)) //not inside shop catalog button
                     && !(Controls.actorContainsVector(exitToWorldMapActor, touchDownCoords)) //not inside exit button
                     && !(Controls.actorContainsVector(bookmarkActor, touchDownCoords)) //not inside bookmark button
+                    && !(Controls.actorContainsVector(challengesActor, touchDownCoords))
                     && !(Controls.actorContainsVector(abilityButtonMap, touchDownCoords)) //not inside abilityButtonMap
                     && (Controls.actorContainsVector(ui, touchDownCoords)) //inside display bounds
                     && pointer < 1) { //not more than 1 pointer
@@ -667,6 +692,16 @@ public class GameHUD extends Stage {
 
     @Override
     public void act(float delta) {
+        if (challengesActor != null) {
+            var challenges = Current.player().getChallenges();
+            int level = challenges.getLevel();
+            boolean active = challenges.hasEnabledChallenges();
+            if (level != displayedChallengeLevel || active != displayedChallengeActive) {
+                challengesActor.setText("[+VS] " + level + (active ? "*" : ""));
+                displayedChallengeLevel = level;
+                displayedChallengeActive = active;
+            }
+        }
         super.act(delta);
 
         updateBGM();
@@ -944,6 +979,9 @@ public class GameHUD extends Stage {
         Button pressedButton = ui.buttonPressed(keycode);
         if (pressedButton != null) {
             pressedButton.fire(eventTouchUp);
+        } else if (challengesActor == null && KeyBinding.Challenges.isPressed(keycode)) {
+            openChallenges();
+            return true;
         }
 
         return super.keyUp(keycode);

@@ -12,6 +12,7 @@ import forge.OverlayText;
 import forge.adventure.character.CharacterSprite;
 import forge.adventure.character.EnemySprite;
 import forge.adventure.data.*;
+import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.pointofintrest.PointOfInterest;
 import forge.adventure.scene.DuelScene;
 import forge.adventure.scene.GameScene;
@@ -169,7 +170,13 @@ public class WorldStage extends GameStage implements SaveFileContent {
 
     @Override
     public void setWinner(boolean playerIsWinner, boolean isArena) {
+        setWinner(playerIsWinner, isArena, Snapshot.NONE);
+    }
+
+    @Override
+    public void setWinner(boolean playerIsWinner, boolean isArena, Snapshot challenges) {
         if (playerIsWinner) {
+            Forge.advFreezePlayerControls = true;
             currentMob.clearCollisionHeight();
             Current.player().win();
             player.setAnimation(CharacterSprite.AnimationTypes.Attack);
@@ -183,7 +190,7 @@ public class WorldStage extends GameStage implements SaveFileContent {
                     currentMob.resetCollisionHeight();
                     float deathDuration = currentMob.getActionAnimationDuration(CharacterSprite.AnimationTypes.Death, 0.3f);
                     startPause(deathDuration, () -> {
-                        RewardScene.instance().loadRewards(currentMob.getRewards(), RewardScene.Type.Loot, null);
+                        ChallengeProgress.showVictoryLoot(currentMob, challenges);
                         WorldStage.this.removeEnemy(currentMob);
                         AdventureQuestController.instance().updateQuestsWin(currentMob);
                         AdventureQuestController.instance().showQuestDialogs(MapStage.getInstance());

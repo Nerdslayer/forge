@@ -158,6 +158,17 @@
       "type": "TextButton",
       "name": "bookmark",
       "text": "[%120][+Bookmark]",
+      "binding": "Bookmark",
+      "width": 25,
+      "height": 25,
+      "x": 82,
+      "y": 5
+    },
+    {
+      "type": "TextButton",
+      "name": "challenges",
+      "text": "[+VS] 0",
+      "binding": "Challenges",
       "width": 25,
       "height": 25,
       "x": 73,

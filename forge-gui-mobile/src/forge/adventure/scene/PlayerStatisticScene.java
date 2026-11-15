@@ -193,10 +193,7 @@ public class PlayerStatisticScene extends UIScene {
         Adventure.getInstance().renderTransitionScreen = false;
         super.enter();
         GameHUD.getInstance().updateBGM();
-        achievementContainer.clear();
-        updateAchievements(cardActivation, true);
-        updateAchievements(planeswalkers, true);
-        updateAchievements(achievements, false);
+        populateAchievements(achievementContainer, null);
         scrollContainer.clear();
 
         if (playerName != null) {
@@ -269,7 +266,15 @@ public class PlayerStatisticScene extends UIScene {
         performTouch(scrollPaneOfActor(scrollContainer)); //can use mouse wheel if available to scroll
     }
 
-    void updateAchievements(AchievementCollection achievementCollection, boolean isActive) {
+    static void populateAchievements(Table destination, com.badlogic.gdx.graphics.Color textColor) {
+        destination.clear();
+        updateAchievements(destination, CardActivationAchievements.instance, true, textColor);
+        updateAchievements(destination, PlaneswalkerAchievements.instance, true, textColor);
+        updateAchievements(destination, FModel.getAchievements(GameType.Adventure), false, textColor);
+    }
+
+    private static void updateAchievements(Table achievementContainer, AchievementCollection achievementCollection,
+                                           boolean isActive, com.badlogic.gdx.graphics.Color textColor) {
         for (Achievement a : achievementCollection) {
             if (isActive) {
                 if (!a.isActive()) //skip inactive
@@ -293,6 +298,9 @@ public class PlayerStatisticScene extends UIScene {
             if (subTitle != null)
                 value += "\n" + subTitle;
             TextraLabel label = Controls.newTextraLabel(value);
+            if (textColor != null) {
+                label.setColor(textColor);
+            }
             label.getColor().a = alpha;
             achievementContainer.add(label).left().pad(5);
             achievementContainer.row();

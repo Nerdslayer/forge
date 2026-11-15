@@ -121,6 +121,10 @@ public class WorldSave {
                         return false;
                 }
 
+                String recovered = ChallengeProgress.recoverHistory(currentSave.player, currentSave.pointOfInterestChanges);
+                if (!recovered.isEmpty()) {
+                    WorldStage.getInstance().setExtraAnnouncement(recovered);
+                }
                 currentSave.onLoadList.emit();
 
             }

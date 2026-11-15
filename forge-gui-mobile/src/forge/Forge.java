@@ -1163,7 +1163,8 @@ public class Forge implements ApplicationListener {
         return switchScene(newScene, false);
     }
     public static boolean switchScene(Scene newScene, boolean skipPreview) {
-        if (newScene instanceof RewardScene || newScene instanceof SpellSmithScene || newScene instanceof DeckSelectScene || newScene instanceof PlayerStatisticScene || newScene instanceof QuestLogScene) {
+        if (newScene instanceof RewardScene || newScene instanceof SpellSmithScene || newScene instanceof DeckSelectScene
+                || newScene instanceof PlayerStatisticScene || newScene instanceof QuestLogScene || newScene instanceof ChallengesScene) {
             if (!(currentScene instanceof ForgeScene || skipPreview)) //prevent overwriting the last preview if last scene is instance of ForgeScene
                 WorldSave.requestPreview();
         }

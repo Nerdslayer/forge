@@ -21,6 +21,8 @@ import forge.adventure.stage.IAfterMatch;
 import forge.adventure.util.AdventureEventController;
 import forge.adventure.util.Config;
 import forge.adventure.util.Current;
+import forge.adventure.util.ChallengeProgress;
+import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.world.WorldSave;
 import forge.assets.FBufferedImage;
 import forge.assets.FSkin;
@@ -84,6 +86,7 @@ public class DuelScene extends ForgeScene {
     boolean callbackExit = false;
     boolean arenaBattleChallenge = false;
     boolean isArena = false;
+    private Snapshot challenges = Snapshot.NONE;
     AdventureEventData eventData;
     final int enemyAvatarKey = 90001;
     final int playerAvatarKey = 90000;
@@ -245,6 +248,7 @@ public class DuelScene extends ForgeScene {
     Runnable endRunnable = null;
 
     void afterGameEnd(String enemyName, boolean winner) {
+        Snapshot battleChallenges = challenges;
         Forge.advFreezePlayerControls = winner;
         endRunnable = () -> Gdx.app.postRunnable(() -> {
             GameHUD.getInstance().updateBGM();
@@ -256,7 +260,9 @@ public class DuelScene extends ForgeScene {
             Scene last = Forge.switchToLast();
             Current.player().getStatistic().setResult(enemyName, winner);
 
-            if (last instanceof IAfterMatch) {
+            if (last instanceof HudScene hud) {
+                hud.setWinner(winner, isArena, battleChallenges);
+            } else if (last instanceof IAfterMatch) {
                 ((IAfterMatch) last).setWinner(winner, isArena);
             }
         });
@@ -456,6 +462,9 @@ public class DuelScene extends ForgeScene {
         }
 
         addEffects(humanPlayer, playerEffects);
+        if (challenges.hasModifiers()) {
+            oppEffects.add(challenges.startingEffect());
+        }
 
         currentEnemy = enemy.getData();
         boolean bossBattle = currentEnemy.boss;
@@ -502,7 +511,8 @@ public class DuelScene extends ForgeScene {
             enemyPlayer.setAvatarIndex(enemyAvatarKey + i);
             aiPlayer.setPlayer(enemyPlayer);
             aiPlayer.setTeamNumber(currentEnemy.teamNumber);
-            aiPlayer.setStartingLife(eventData != null ? eventData.eventRules.startingLife : Math.round((float) currentEnemy.life * advPlayer.getDifficulty().enemyLifeFactor));
+            aiPlayer.setStartingLife(eventData != null ? eventData.eventRules.startingLife
+                    : challenges.startingLife(currentEnemy.life, advPlayer.getDifficulty().enemyLifeFactor));
 
             Array<EffectData> equipmentEffects = new Array<>();
             if (eventData != null && eventData.eventRules.allowsItems) {
@@ -806,6 +816,13 @@ public class DuelScene extends ForgeScene {
         enemyAvatar.clear();
         this.isArena = isArena;
         this.eventData = eventData;
+        this.challenges = Snapshot.NONE;
+        if (!isArena && eventData == null && !enemySprite.getData().copyPlayerDeck) {
+            String bossId = enemySprite.getData().boss
+                    ? ChallengeProgress.bossId(enemySprite.getData().name, enemySprite.challengeBossId)
+                    : null;
+            this.challenges = Current.player().getChallenges().snapshot(bossId);
+        }
         if (eventData != null && eventData.eventRules == null)
             eventData.eventRules = new AdventureEventData.AdventureEventRules(AdventureEventController.EventFormat.Constructed, 1.0f);
         this.arenaBattleChallenge = isArena && Current.player().isHardorInsaneDifficulty();

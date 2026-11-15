@@ -39,6 +39,8 @@ public class StartScene extends UIScene {
     private static StartScene object;
     Dialog exitDialog, backupDialog, zipDialog, unzipDialog;
     TextraButton saveButton, resumeButton, continueButton;
+    private final TextraButton challengesButton;
+    private final float resumeWidth;
     TypingLabel version = Controls.newTypingLabel("{GRADIENT}[%80]v." + Forge.getDeviceAdapter().getVersionString() + "{ENDGRADIENT}");
 
 
@@ -59,6 +61,12 @@ public class StartScene extends UIScene {
         saveButton = ui.findActor("Save");
         resumeButton = ui.findActor("Resume");
         continueButton = ui.findActor("Continue");
+        resumeWidth = resumeButton.getWidth();
+        challengesButton = Controls.newTextButton(Forge.getLocalizer().getMessage("lblChallenges"),
+                () -> Forge.switchScene(ChallengesScene.instance(), true));
+        challengesButton.setVisible(false);
+        ui.addActor(challengesButton);
+        addToSelectable(challengesButton);
 
         saveButton.setVisible(false);
         resumeButton.setVisible(false);
@@ -315,6 +323,12 @@ public class StartScene extends UIScene {
     public void updateResumeContinue() {
         boolean hasResumeButton = WorldSave.getCurrentSave().getWorld().getData() != null;
         resumeButton.setVisible(hasResumeButton);
+        boolean showChallenges = hasResumeButton && !GameHUD.getInstance().hasChallengesButton();
+        float buttonWidth = showChallenges ? (resumeWidth - 4) / 2 : resumeWidth;
+        resumeButton.setWidth(buttonWidth);
+        challengesButton.setBounds(resumeButton.getX() + buttonWidth + 4, resumeButton.getY(),
+                buttonWidth, resumeButton.getHeight());
+        challengesButton.setVisible(showChallenges);
 
         // Continue button mutually exclusive with resume button
         if (Config.instance().getSettingData().lastActiveSave != null && !hasResumeButton) {

@@ -9,6 +9,7 @@ import forge.Forge;
 import forge.adventure.stage.GameHUD;
 import forge.adventure.stage.GameStage;
 import forge.adventure.stage.IAfterMatch;
+import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.stage.MapStage;
 import forge.adventure.util.KeyBinding;
 
@@ -186,6 +187,10 @@ public abstract class HudScene extends Scene implements InputProcessor, IAfterMa
     @Override
     public void setWinner(boolean winner, boolean isArena) {
         stage.setWinner(winner, isArena);
+    }
+
+    public void setWinner(boolean winner, boolean isArena, Snapshot challenges) {
+        stage.setWinner(winner, isArena, challenges);
     }
 
     public boolean isInHudOnlyMode() {

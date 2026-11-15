@@ -82,6 +82,15 @@
       "height": 20,
       "x": 200,
       "y": 0
+    },
+    {
+      "type": "TypingLabel",
+      "name": "challengeBonus",
+      "style": "background",
+      "width": 62,
+      "height": 60,
+      "x": 416,
+      "y": 4
     }
   ]
 }

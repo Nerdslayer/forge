@@ -22,6 +22,7 @@ public enum KeyBinding {
     Equip("Equip", new int[]{Input.Keys.E, Input.Keys.BUTTON_X}),
     ExitToWorldMap("ExitToWorldMap", new int[]{Input.Keys.F4, Input.Keys.BUTTON_L2}),
     Bookmark("Bookmark", new int[]{Input.Keys.B, Input.Keys.BUTTON_R2}),
+    Challenges("Challenges", new int[]{Input.Keys.H, Input.Keys.BUTTON_L1}),
     Use("Use", new int[]{Input.Keys.ENTER, Input.Keys.BUTTON_A}),
     Enter("Enter", new int[]{Input.Keys.ENTER, Input.Keys.BUTTON_START}),
     Back("Back", new int[]{Input.Keys.ESCAPE, Input.Keys.BUTTON_B, Input.Keys.BACK}),

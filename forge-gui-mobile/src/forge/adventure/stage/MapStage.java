@@ -28,6 +28,7 @@ import forge.Forge;
 import forge.adventure.character.*;
 import forge.adventure.data.*;
 import forge.adventure.player.AdventurePlayer;
+import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.pointofintrest.PointOfInterestChanges;
 import forge.adventure.scene.*;
 import forge.adventure.util.*;
@@ -538,6 +539,7 @@ public class MapStage extends GameStage {
                                 EN = world.getData().GetBiomes().get(currentBiome).getEnemy(1.0f);
                             }
                             EnemySprite mob = new EnemySprite(id, EN);
+                            mob.challengeBossId = prop.get("challengeBossId", String.class);
                             Object dialogObject = prop.get("dialog"); //Check if the enemy has a dialogue attached to it.
                             if (dialogObject != null && !dialogObject.toString().isEmpty()) {
                                 mob.dialog = new MapDialog(dialogObject.toString(), this, mob.getId(), currentMap);
@@ -899,6 +901,11 @@ public class MapStage extends GameStage {
 
     @Override
     public void setWinner(boolean playerWins, boolean isArena) {
+        setWinner(playerWins, isArena, Snapshot.NONE);
+    }
+
+    @Override
+    public void setWinner(boolean playerWins, boolean isArena, Snapshot challenges) {
         isLoadingMatch = false;
         settlingBattle = true;
         freezeAllEnemyBehaviors = true;
@@ -907,7 +914,7 @@ public class MapStage extends GameStage {
             Current.player().win();
             if (currentMob.rematchNextDay) {
                 currentMob.resetCollisionHeight();
-                finishVictory();
+                finishVictory(challenges);
                 return;
             }
             player.setAnimation(CharacterSprite.AnimationTypes.Attack);
@@ -920,7 +927,7 @@ public class MapStage extends GameStage {
                     currentMob.setAnimation(CharacterSprite.AnimationTypes.Death);
                     currentMob.resetCollisionHeight();
                     float deathDuration = currentMob.getActionAnimationDuration(CharacterSprite.AnimationTypes.Death, 0.3f);
-                    startPause(deathDuration, MapStage.this::finishVictory);
+                    startPause(deathDuration, () -> finishVictory(challenges));
                     player.setAnimation(CharacterSprite.AnimationTypes.Idle);
                 }
             }, attackDuration);
@@ -954,9 +961,9 @@ public class MapStage extends GameStage {
         }
     }
 
-    private void finishVictory() {
+    private void finishVictory(Snapshot challenges) {
         var defeated = currentMob;
-        getReward();
+        getReward(challenges);
         AdventureQuestController.instance().updateQuestsWin(defeated, enemies);
         currentMob = null;
         settlingBattle = false;
@@ -1076,7 +1083,7 @@ public class MapStage extends GameStage {
         return null;
     }
 
-    protected void getReward() {
+    private void getReward(Snapshot challenges) {
         isLoadingMatch = false;
         var location = getChanges();
         String enemyName = currentMob.getData().name;
@@ -1084,7 +1091,7 @@ public class MapStage extends GameStage {
         if (currentMob.rematchNextDay) {
             location.recordDuelWin(enemyName, LocalDate.now());
         }
-        RewardScene.instance().loadRewards(currentMob.getRewards(), RewardScene.Type.Loot, null);
+        ChallengeProgress.showVictoryLoot(currentMob, challenges);
         Forge.switchScene(RewardScene.instance());
         if (currentMob.defeatDialog == null) {
             currentMob.remove();

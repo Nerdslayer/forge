@@ -33,6 +33,7 @@ import forge.adventure.data.EffectData;
 import forge.adventure.data.PointOfInterestData;
 import forge.adventure.pointofintrest.PointOfInterest;
 import forge.adventure.scene.Scene;
+import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.scene.StartScene;
 import forge.adventure.scene.TileMapScene;
 import forge.adventure.util.Config;
@@ -341,6 +342,10 @@ public abstract class GameStage extends Stage {
     public void setWinner(boolean b, boolean a) {
     }
 
+    public void setWinner(boolean winner, boolean isArena, Snapshot challenges) {
+        setWinner(winner, isArena);
+    }
+
     public void setBounds(float width, float height) {
         getViewport().setWorldSize(width, height);
     }
@@ -476,11 +481,12 @@ public abstract class GameStage extends Stage {
         if (KeyBinding.Down.isPressed(keycode)) {
             keyboardInput.y = -1;
         }
-        if (keycode == Input.Keys.F5 && (!(this instanceof MapStage map) || map.canSaveProgress())) { //todo config
+        if (keycode == Input.Keys.F5 && !Forge.advFreezePlayerControls
+                && (!(this instanceof MapStage map) || map.canSaveProgress())) { //todo config
             WorldSave.requestPreview();
             WorldSave.getCurrentSave().quickSave();
         }
-        if (keycode == Input.Keys.F8)//todo config
+        if (keycode == Input.Keys.F8 && !Forge.advFreezePlayerControls) //todo config
         {
             if (!TileMapScene.instance().currentMap().isInMap()) {
                 Runnable load = () -> {

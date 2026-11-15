@@ -25,14 +25,16 @@ public final class AdventureExit {
 
         boolean pendingMapProgress = Forge.getCurrentScene() instanceof TileMapScene map
                 && !map.currentMap().canSaveProgress();
-        boolean canSave = Forge.getCurrentScene() instanceof GameScene
+        boolean pendingWorldProgress = Forge.getCurrentScene() instanceof GameScene && Forge.advFreezePlayerControls;
+        boolean canSave = (Forge.getCurrentScene() instanceof GameScene && !pendingWorldProgress)
                 || (Forge.getCurrentScene() instanceof TileMapScene && !pendingMapProgress)
                 || Forge.getCurrentScene() instanceof StartScene || Forge.getCurrentScene() instanceof SaveLoadScene;
         if (Forge.getCurrentScene() instanceof GameScene) WorldStage.getInstance().getPlayerSprite().storePos();
         // A pre-duel autosave cannot preserve the match being played; player data changes only at GameEnd().
         if (Forge.getCurrentScene() instanceof DuelScene) PROGRESS.markChanged();
         try {
-            if (!pendingMapProgress && !PROGRESS.hasChanges(WorldSave.getCurrentSave().captureProgress())) return false;
+            if (!pendingMapProgress && !pendingWorldProgress
+                    && !PROGRESS.hasChanges(WorldSave.getCurrentSave().captureProgress())) return false;
         } catch (RuntimeException e) {
             // A failed comparison must never authorize discarding a live session.
             PROGRESS.markChanged();

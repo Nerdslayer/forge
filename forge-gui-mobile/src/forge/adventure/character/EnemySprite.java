@@ -68,6 +68,7 @@ public class EnemySprite extends CharacterSprite implements Steerable<Vector2> {
     public String battleBackground = ""; //Override the battle background folder for this encounter.
     public String bossInsult = ""; //Override the generated insult text when you are defeated.
     public RewardData[] rewards; //Additional rewards for this enemy.
+    public String challengeBossId; //Optional stable ID for distinct bosses sharing an enemy definition.
     public DialogData.ConditionData spawnCondition; //Condition to spawn.
     public LinkedList<MovementBehavior> movementBehaviors = new LinkedList<>();
 

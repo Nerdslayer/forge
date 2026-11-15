@@ -38,6 +38,7 @@ import java.util.function.Predicate;
  */
 public class AdventurePlayer implements Serializable, SaveFileContent {
     public static final int MIN_DECK_COUNT = 10;
+    public static final int VICTORY_SHARDS = 1;
     // this is a purely arbitrary limit, could be higher or lower; just meant as some sort of reasonable limit for the user
     private int maxDeckCount = 20;
     // Player profile data.
@@ -65,6 +66,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
     private int shards = 0;
     private EffectData blessing; //Blessing to apply for next battle.
     private final PlayerStatistic statistic = new PlayerStatistic();
+    private final AdventureChallenges challenges = new AdventureChallenges();
     private final Map<String, Byte> questFlags = new HashMap<>();
     private final Map<String, Byte> characterFlags = new HashMap<>();
     private final Map<String, Byte> tutorialFlags = new HashMap<>();
@@ -100,6 +102,10 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
 
     public PlayerStatistic getStatistic() {
         return statistic;
+    }
+
+    public AdventureChallenges getChallenges() {
+        return challenges;
     }
 
     public int getDeckCount() { return decks.size(); }
@@ -138,6 +144,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         events.clear();
         cards.clear();
         statistic.clear();
+        challenges.clear();
         newCards.clear();
         autoSellCards.clear();
         favoriteCards.clear();
@@ -396,6 +403,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         boolean migration = false;
         clear(); // Reset player data.
         this.statistic.load(data.readSubData("statistic"));
+        challenges.load(data.containsKey("challenges") ? data.readSubData("challenges") : null);
         this.difficultyData.startingLife = data.readInt("startingLife");
         // Support for old typo
         if (data.containsKey("staringMoney")) {
@@ -799,6 +807,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         SaveFileData data = new SaveFileData();
 
         data.store("statistic", this.statistic.save());
+        data.store("challenges", challenges.save());
         data.store("startingLife", this.difficultyData.startingLife);
         data.store("startingMoney", this.difficultyData.startingMoney);
         data.store("startingDifficulty", this.difficultyData.startingDifficulty);
@@ -1136,7 +1145,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
     }
 
     public void win() {
-        Current.player().addShards(1);
+        Current.player().addShards(VICTORY_SHARDS);
     }
 
     public void addMaxLife(int count) {
@@ -1577,6 +1586,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         if (quest.oneTime && quest.completed && !quest.failed) {
             // Engine bookkeeping, not a scripted flag event (which could re-enter quest updates).
             questFlags.put("questCompleted:" + quest.getID(), (byte) 1);
+            ChallengeProgress.questCompleted(this, quest.getID());
         }
     }
 

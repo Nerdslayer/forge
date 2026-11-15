@@ -1,0 +1,77 @@
+{
+  "width": 480,
+  "height": 270,
+  "yDown": true,
+  "elements": [
+    {
+      "type": "Image",
+      "name": "lastScreen",
+      "width": 480,
+      "height": 270
+    },
+    {
+      "type": "Scroll",
+      "name": "achievementPanel",
+      "style": "paper",
+      "x": 8,
+      "y": 38,
+      "width": 464,
+      "height": 191
+    },
+    {
+      "type": "Scroll",
+      "name": "levelPanel",
+      "style": "paper",
+      "x": 8,
+      "y": 38,
+      "width": 464,
+      "height": 78
+    },
+    {
+      "type": "Scroll",
+      "name": "listPanel",
+      "style": "paper",
+      "x": 8,
+      "y": 119,
+      "width": 167,
+      "height": 110
+    },
+    {
+      "type": "Scroll",
+      "name": "detailPanel",
+      "style": "paper",
+      "x": 180,
+      "y": 119,
+      "width": 292,
+      "height": 110
+    },
+    {
+      "type": "TextButton",
+      "name": "challenges",
+      "text": "tr(lblChallenges)",
+      "x": 8,
+      "y": 5,
+      "width": 110,
+      "height": 30
+    },
+    {
+      "type": "TextButton",
+      "name": "achievements",
+      "text": "tr(lblAchievements)",
+      "x": 120,
+      "y": 5,
+      "width": 125,
+      "height": 30
+    },
+    {
+      "type": "TextButton",
+      "name": "return",
+      "text": "tr(lblBack)",
+      "x": 392,
+      "y": 235,
+      "width": 80,
+      "height": 30,
+      "binding": "Back"
+    }
+  ]
+}

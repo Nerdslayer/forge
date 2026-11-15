@@ -43,6 +43,8 @@ import java.util.List;
  * Displays the rewards of a fight or a treasure
  */
 public class RewardScene extends UIScene {
+    private String pendingChallengeBoss;
+    private TypingLabel challengeBonusLabel;
     private TextraButton doneButton, detailButton, restockButton;
     private TextraLabel playerGold, playerShards;
     private TypingLabel headerLabel;
@@ -86,6 +88,7 @@ public class RewardScene extends UIScene {
         playerGold = Controls.newAccountingLabel(ui.findActor("playerGold"), false);
         playerShards = Controls.newAccountingLabel(ui.findActor("playerShards"), true);
         headerLabel = ui.findActor("shopName");
+        challengeBonusLabel = ui.findActor("challengeBonus");
         headerLabelOrigPos = new Vector2(headerLabel.getX(), headerLabel.getY());
         if (ui.findActor("market_background") instanceof Image image)
             this.marketBackgroundImg = image;
@@ -200,6 +203,10 @@ public class RewardScene extends UIScene {
                 stage.getActors().removeValue(rewardActor, true);
             } catch (Exception e) {
             }
+        }
+        if (pendingChallengeBoss != null) {
+            Current.player().getChallenges().creditBoss(pendingChallengeBoss);
+            pendingChallengeBoss = null;
         }
     }
 
@@ -346,7 +353,30 @@ public class RewardScene extends UIScene {
         this.collectionPool.addAllFlat(AdventurePlayer.current().getCollectionCards(true).toFlatList());
     }
 
+    public void loadChallengeRewards(Array<Reward> rewards, String bossId, int gold, int shards, int cards) {
+        String bonus = gold > 0 || shards > 0 || cards > 0
+                ? Forge.getLocalizer().getMessage("lblAdventureChallengeLoot", gold, shards, cards) : null;
+        loadRewards(rewards, Type.Loot, null, bonus);
+        pendingChallengeBoss = bossId;
+    }
+
     public void loadRewards(Array<Reward> newRewards, Type type, ShopActor shopActor) {
+        loadRewards(newRewards, type, shopActor, null);
+    }
+
+    private void loadRewards(Array<Reward> newRewards, Type type, ShopActor shopActor, String bonus) {
+        pendingChallengeBoss = null;
+        boolean showBonus = challengeBonusLabel != null && bonus != null;
+        if (challengeBonusLabel != null) {
+            challengeBonusLabel.setVisible(showBonus);
+            if (showBonus) {
+                challengeBonusLabel.setText(bonus);
+                challengeBonusLabel.skipToTheEnd();
+                if (Forge.isLandscapeMode()) {
+                    challengeBonusLabel.setX(ui.getWidth() - challengeBonusLabel.getWidth() - 4);
+                }
+            }
+        }
         // Merge Gold and Shards rewards into single entries
         int totalGold = 0;
         int totalShards = 0;
@@ -448,6 +478,13 @@ public class RewardScene extends UIScene {
         float targetHeight = card.getHeight();
         float xOff = card.getX();
         float yOff = card.getY();
+        if (showBonus) {
+            if (Forge.isLandscapeMode()) {
+                targetWidth = Math.min(targetWidth, challengeBonusLabel.getX() - xOff - 4);
+            } else {
+                targetHeight = Math.min(targetHeight, challengeBonusLabel.getY() - yOff - 4);
+            }
+        }
 
         int numberOfRows = 0;
         float cardWidth = 0;
@@ -542,6 +579,9 @@ public class RewardScene extends UIScene {
             }
         }
         cardWidth = (cardHeight / CARD_WIDTH_TO_HEIGHT) * mul;
+        if (showBonus && numberOfColumns > 0) {
+            cardWidth = Math.min(cardWidth, targetWidth / numberOfColumns);
+        }
 
         yOff += (targetHeight - (cardHeight * numberOfRows)) / 2f;
         xOff += (targetWidth - (cardWidth * numberOfColumns)) / 2f;
