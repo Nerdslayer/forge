@@ -51,6 +51,12 @@ public final class CombatOutcomePredictor {
         if (!assignment.attackersToDefenders().equals(snapshot.attackersToDefenders())) {
             return CombatProjection.rejected(true, List.of("Attack declaration differs from frozen snapshot"));
         }
+        // TODO: Recheck the boosted attacker's P/T-dependent block pairs and bounds.
+        if (snapshot.exalted().bonus() > 0 && snapshot.exalted().statDependentBlocks()
+                && snapshot.creatures().values().stream().anyMatch(creature ->
+                        creature.controllerId() == snapshot.defendingPlayerId())) {
+            return CombatProjection.rejected(false, List.of("Exalted can change frozen block legality"));
+        }
         for (final int key : assignment.attackersToDefenders().values()) {
             final var destination = CombatAttackDestination.fromKey(key);
             if (destination.kind() == CombatAttackDestination.Kind.PLANESWALKER
@@ -125,7 +131,7 @@ public final class CombatOutcomePredictor {
                     snapshot, assignment, damage, deathtouched, lost, true, shields);
             for (final int id : assignment.attackersToDefenders().keySet().stream().sorted().toList()) {
                 if (lost.contains(id)) { continue; }
-                final PublicCombatSnapshot.Creature attacker = snapshot.creatureAfterLosses(id, lost);
+                final PublicCombatSnapshot.Creature attacker = snapshot.combatCreature(id, lost);
                 final List<Integer> group = assignment.blockersByAttacker().getOrDefault(id, List.of());
                 final List<Integer> survivingBlockers = group.stream().filter(blocker -> !lost.contains(blocker)).toList();
                 if (dealsDamage(attacker, first)) {
@@ -134,7 +140,7 @@ public final class CombatOutcomePredictor {
                     if (!survivingBlockers.isEmpty()) {
                         final List<CombatDamageAllocation.Target> targets = survivingBlockers.stream().map(blocker ->
                                 new CombatDamageAllocation.Target(blocker, attacker.deathtouch() ? 1
-                                        : Math.max(0, snapshot.creatureAfterLosses(blocker, lost).toughness() - damage.get(blocker)))).toList();
+                                        : Math.max(0, snapshot.combatCreature(blocker, lost).toughness() - damage.get(blocker)))).toList();
                         if (resolver != null) {
                             allocation = resolver.apply(new AllocationRequest(first, id, power, targets,
                                     attacker.trample(), snapshot.legacyDamageOrder()));
@@ -177,7 +183,7 @@ public final class CombatOutcomePredictor {
                     }
                 }
                 for (final int blockerId : survivingBlockers) {
-                    final PublicCombatSnapshot.Creature blocker = snapshot.creatureAfterLosses(blockerId, lost);
+                    final PublicCombatSnapshot.Creature blocker = snapshot.combatCreature(blockerId, lost);
                     if (dealsDamage(blocker, first)) {
                         hit(blocker, id, blocker.combatDamage(), cardHits, gains,
                                 events, CombatEventBatch.Recipient.CREATURE);
@@ -210,7 +216,7 @@ public final class CombatOutcomePredictor {
                 final Set<Integer> removed = new java.util.LinkedHashSet<>();
                 for (final int id : snapshot.creatures().keySet().stream().sorted().toList()) {
                     if (lost.contains(id)) { continue; }
-                    final var creature = snapshot.creatureAfterLosses(id, lost);
+                    final var creature = snapshot.combatCreature(id, lost);
                     if (creature.toughness() <= 0 || !creature.indestructible()
                             && (damage.get(id) >= creature.toughness() || deathtouched.contains(id))) {
                         removed.add(id);
@@ -332,7 +338,7 @@ public final class CombatOutcomePredictor {
         final Map<Integer, CombatEventBatch.CardState> state = new LinkedHashMap<>();
         snapshot.creatures().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             final int id = entry.getKey();
-            final PublicCombatSnapshot.Creature creature = snapshot.creatureAfterLosses(id, lost);
+            final PublicCombatSnapshot.Creature creature = snapshot.combatCreature(id, lost);
             if (!lost.contains(id)) {
                 state.put(id, new CombatEventBatch.CardState(creature.withShieldCounters(shields.get(id)), damage.get(id), deathtouched.contains(id),
                         creature.tapped() || declared && assignment.attackersToDefenders().containsKey(id)

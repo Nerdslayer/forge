@@ -314,7 +314,7 @@ public final class CombatBlockSearch {
             continuationEstimator = continuationEstimator0;
             // Dangerous attackers first for the beam; public ID is a stable final tie breaker.
             attackers = snapshot.attackersToDefenders().keySet().stream().sorted(Comparator
-                    .<Integer>comparingInt(id -> snapshot.creatures().get(id).combatDamage()).reversed()
+                    .<Integer>comparingInt(id -> snapshot.combatCreature(id).combatDamage()).reversed()
                     .thenComparingInt(Integer::intValue)).toList();
             final boolean defendingObserver = snapshot.observingPlayerId() == snapshot.defendingPlayerId();
             ordering = (left, right) -> {
@@ -370,7 +370,7 @@ public final class CombatBlockSearch {
                 final List<Integer> eligible = snapshot.legalBlockers().getOrDefault(attacker, Set.of()).stream()
                         .filter(id -> !reservedBlockers.contains(id)).sorted().toList();
                 final List<List<Integer>> choices = new ArrayList<>();
-                final var creature = snapshot.creatures().get(attacker);
+                final var creature = snapshot.combatCreature(attacker);
                 if (creature.permitsBlockerCount(required.size())) { choices.add(required); }
                 final int minimum = Math.max(required.size() + 1, Math.max(1, creature.minimumBlockers()));
                 final int maximum = Math.min(eligible.size() + required.size(), creature.maximumBlockers());

@@ -73,7 +73,7 @@ final class CombatAttackEquivalence {
         // equivalence is possible. TODO: Audit broader source-sensitive permutation support,
         // including matching lifetime roles; a disposable body cannot stand in for a durable one.
         if (candidates.size() < 2 || !snapshot.singletonPermutationSafe() || !readiness.singletonPermutationSafe()
-                || !snapshot.triggers().isEmpty() || !snapshot.preventionRules().isEmpty() || !snapshot.protection().creatures().isEmpty()
+                || !snapshot.exalted().sources().isEmpty() || !snapshot.triggers().isEmpty() || !snapshot.preventionRules().isEmpty() || !snapshot.protection().creatures().isEmpty()
                 || !snapshot.departures().entries().isEmpty()
                 || !snapshot.staticWorlds().equals(PreparedCombatStaticWorlds.empty())
                 || !snapshot.unsupportedReasons().isEmpty() || !snapshot.unavailableReasons().isEmpty()

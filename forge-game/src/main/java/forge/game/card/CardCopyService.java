@@ -320,7 +320,7 @@ public class CardCopyService {
         newCopy.setBaseToughness(copyFrom.getCurrentToughness());
 
         // extra copy PT boost
-        newCopy.setPTBoost(copyFrom.getPTBoostTable());
+        newCopy.copyPTBoostsFrom(copyFrom);
 
         newCopy.copyFrom(copyFrom);
         newCopy.setCounters(HashMultiset.create(copyFrom.getCounters()));

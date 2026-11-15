@@ -59,6 +59,10 @@ public class PumpEffect extends SpellAbilityEffect {
                 gameCard.addPerpetual(new PerpetualPTBoost(timestamp, a, d));
             }
             gameCard.addPTBoost(a, d, timestamp, 0);
+            if (a == 1 && d == 1 && duration == null && sa.getTrigger() != null
+                    && sa.getTrigger().isKeyword(forge.game.keyword.Keyword.EXALTED)) {
+                gameCard.markExaltedBoost(timestamp);
+            }
             redrawPT = true;
         }
 

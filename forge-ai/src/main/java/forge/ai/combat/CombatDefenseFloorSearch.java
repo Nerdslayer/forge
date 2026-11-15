@@ -225,7 +225,7 @@ final class CombatDefenseFloorSearch {
     private void gangs(final Map<Integer, List<Integer>> blocks) {
         for (final int attacker : attackers) {
             if (!capacity() || groups >= budget.scale(MAX_GROUPS) || !budget.tryConsume()) { return; }
-            final var body = snapshot.creatures().get(attacker);
+            final var body = snapshot.combatCreature(attacker);
             if (body.maximumBlockers() < 2 || body.minimumBlockers() > 4) { continue; }
             final var used = usedElsewhere(blocks, attacker);
             final var pool = snapshot.legalBlockers().getOrDefault(attacker, Set.of()).stream().filter(id -> !used.contains(id)).sorted().toList();

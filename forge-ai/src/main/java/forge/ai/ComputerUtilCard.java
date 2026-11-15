@@ -1985,7 +1985,7 @@ public class ComputerUtilCard {
         final long timestamp = advanceGameTimestamp
                 ? c.getGame().getNextTimestamp() : c.getGame().getTimestamp() + 1;
         pumped.addNewPT(c.getCurrentPower(), c.getCurrentToughness(), timestamp, 0);
-        pumped.setPTBoost(c.getPTBoostTable());
+        pumped.copyPTBoostsFrom(c);
         pumped.addPTBoost(power + berserkPower, toughness, timestamp, 0);
 
         if (!kws.isEmpty()) {

@@ -58,6 +58,18 @@ public final class CombatDecisionTrace {
                     .append(", declarations evaluated: ").append(search.declarationsEvaluated());
             search.noAttack().ifPresent(candidate -> text.append("\nNo additional attacks: ").append(candidate.total())
                     .append(", public reply=").append(candidate.reply()));
+            search.best().ifPresent(candidate -> {
+                final var snapshot = plan.snapshot().orElseThrow();
+                final var exalted = snapshot.exalted().forDeclaration(snapshot.attackingPlayerId(),
+                        candidate.combat().assignment().attackersToDefenders().keySet());
+                if (exalted.bonus() > 0) {
+                    final var stats = exalted.apply(snapshot.creatures().get(exalted.recipient()), null);
+                    text.append("\nExalted projection: attacker=").append(exalted.recipient())
+                            .append(", instances=").append(exalted.bonus())
+                            .append(", combatDamage=").append(stats.combatDamage())
+                            .append(", toughness=").append(stats.toughness());
+                }
+            });
             search.best().ifPresent(candidate -> text.append("\nChosen attackers: ").append(candidate.attackers())
                     .append(", hypothetical crews (Vehicle=pilots): ").append(candidate.hypotheticalCrews())
                     .append(", destinations=").append(candidate.destinations())

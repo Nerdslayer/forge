@@ -285,6 +285,7 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
     private Table<Long, Long, Pair<Integer,Integer>> newPTCharacterDefining = TreeBasedTable.create(); // Layer 7a
     private Table<Long, Long, Pair<Integer,Integer>> newPT = TreeBasedTable.create(); // Layer 7b
     private Table<Long, Long, Pair<Integer,Integer>> boostPT = TreeBasedTable.create(); // Layer 7c
+    private Set<Long> exaltedBoosts;
 
     private CardDamageHistory damageHistory = new CardDamageHistory();
     private final Map<Card, Integer> assignedDamageMap = Maps.newTreeMap();
@@ -4590,15 +4591,32 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
         boostPT.put(timestamp, staticId, Pair.of(power, toughness));
     }
     public boolean removePTBoost(final long timestamp, final long staticId) {
+        if (staticId == 0 && exaltedBoosts != null) {
+            exaltedBoosts.remove(timestamp);
+        }
         return boostPT.remove(timestamp, staticId) != null;
+    }
+
+    public void markExaltedBoost(final long timestamp) {
+        if (exaltedBoosts == null) { exaltedBoosts = new HashSet<>(); }
+        exaltedBoosts.add(timestamp);
+    }
+
+    public int getExaltedBoost() {
+        if (exaltedBoosts == null) { return 0; }
+        return exaltedBoosts.stream().map(timestamp -> boostPT.get(timestamp, 0L))
+                .filter(Objects::nonNull).mapToInt(Pair::getLeft).sum();
     }
 
     public Table<Long, Long, Pair<Integer, Integer>> getPTBoostTable() {
         return boostPT;
     }
-    public void setPTBoost(Table<Long, Long, Pair<Integer, Integer>> table) {
+    /** Copy active additive modifiers and their cleanup provenance together. */
+    public void copyPTBoostsFrom(final Card other) {
+        if (this == other) { return; }
         this.boostPT.clear();
-        boostPT.putAll(table);
+        boostPT.putAll(other.boostPT);
+        exaltedBoosts = other.exaltedBoosts == null ? null : new HashSet<>(other.exaltedBoosts);
     }
 
     public List<String> getDraftActions() {

@@ -47,13 +47,24 @@ final class CombatTurnProjectionBuilder {
             final int id = entry.getKey();
             final var survivor = entry.getValue();
             if (scheduled.contains(id)) { continue; }
-            final PublicCombatSnapshot.Creature card = before.creatureAfterLosses(id, gone);
-            if (!scheduled.isEmpty() && (card.toughness() <= 0 || !card.indestructible() && survivor.markedDamage() >= card.toughness())) {
-                return new Result(Optional.empty(), List.of("Scheduled static-source departure needs subsequent state-based deaths"));
+            if (!scheduled.isEmpty()) {
+                final var endStep = before.combatCreature(id, gone);
+                if (endStep.toughness() <= 0 || !endStep.indestructible() && survivor.markedDamage() >= endStep.toughness()) {
+                    return new Result(Optional.empty(), List.of("Scheduled static-source departure needs subsequent state-based deaths"));
+                }
             }
             // End-step source loss is checked before cleanup reversion. Crew lasts until
             // cleanup, not until the permanent leaves; retain its enduring loss ledger.
             if (before.temporaryCrew().contains(id)) { continue; }
+            final var card = before.exalted().afterCleanup(before.creatureAfterLosses(id, gone),
+                    before.exalted().resolved().containsKey(id) ? before.staticWorlds().afterLosses(gone).get(id) : null);
+            if (before.exalted().resolved().containsKey(id) && before.exalted().statDependentBlocks()) {
+                return new Result(Optional.empty(), List.of("Exalted cleanup needs updated stat-dependent block legality"));
+            }
+            if (card.toughness() <= 0 && (before.exalted().resolved().containsKey(id)
+                    || before.exalted().bonus() > 0 && before.exalted().recipient() == id)) {
+                return new Result(Optional.empty(), List.of("Exalted cleanup needs subsequent state-based deaths"));
+            }
             // The next active player untaps; the other side does not. Combat damage clears.
             final boolean attemptsUntap = card.controllerId() == active && survivor.tapped();
             final boolean tapped = survivor.tapped() && (!attemptsUntap || card.stunCounters() > 0);
@@ -97,13 +108,18 @@ final class CombatTurnProjectionBuilder {
                     .filter(blocker -> creatures.containsKey(blocker) && creatures.get(blocker).controllerId() == defending
                             && !creatures.get(blocker).tapped()).collect(java.util.stream.Collectors.toSet()));
         }
+        final var nextExalted = before.exalted().nextTurn(gone);
+        if (!eligible.isEmpty() && nextExalted.sources().stream().anyMatch(source -> source.uncertain()
+                && source.controller() == active)) {
+            return new Result(Optional.empty(), List.of("Granted Exalted needs a duration/eligibility forecast"));
+        }
         final PublicCombatSnapshot alternatives = new PublicCombatSnapshot(before.observingPlayerId(), active, defending,
                 creatures, players, attacks, blockers, List.of(), List.of(), before.legacyDamageOrder(), resources,
                 before.triggers().stream().filter(trigger -> !gone.contains(trigger.ability().sourceId())).toList(), Set.of(), Set.of(),
                 before.preventionRules().stream().filter(rule -> !gone.contains(rule.providerId())).toList(),
-                before.staticWorlds().surviving(gone).withoutCreatures(before.temporaryCrew()), readiness.ignoredEffects(), walkers,
+                before.staticWorlds().surviving(gone).withoutCreatures(before.temporaryCrew()).afterExaltedCleanup(before.exalted()), readiness.ignoredEffects(), walkers,
                 before.singletonPermutationSafe() && readiness.singletonPermutationSafe(), before.protection().surviving(gone).surviving(before.temporaryCrew()),
-                PreparedCombatDepartures.empty());
+                PreparedCombatDepartures.empty(), Set.of(), nextExalted);
         final List<String> reasons = new java.util.ArrayList<>(readiness.ignoredEffects());
         if (!scheduled.isEmpty()) { reasons.add("Known end-step departures removed before future combat: " + scheduled); }
         if (!before.temporaryCrew().isEmpty()) {

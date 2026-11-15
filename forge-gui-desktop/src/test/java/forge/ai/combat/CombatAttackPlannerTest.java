@@ -27,6 +27,188 @@ public class CombatAttackPlannerTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent, Combat combat) { }
 
     @Test
+    public void staleBlockLegalityCannotProduceAnApplicableExaltedWin() {
+        final Fixture f = fixture();
+        f.opponent().setLife(3, null);
+        final Card attacker = creature(f.ai(), 2, 2, List.of());
+        creature(f.ai(), 0, 2, List.of("K:Exalted", "K:Defender"));
+        final Card blocker = addCard("Cyclops Tyrant", f.opponent());
+
+        final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000, 500, () -> 0L));
+        Assert.assertFalse(plan.applicable());
+        Assert.assertTrue(plan.reasons().contains("Exalted can change frozen block legality"));
+
+        f.game().getAction().moveToGraveyard(blocker, null);
+        final var safe = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000, 500, () -> 0L));
+        Assert.assertTrue(safe.applicable(), safe.reasons().toString());
+        Assert.assertEquals(safe.search().orElseThrow().best().orElseThrow().attackers(), List.of(attacker.getId()));
+    }
+
+    @Test
+    public void exaltedMakesLoneAttackProfitableAgainstLargerBlocker() {
+        for (final boolean exalted : List.of(false, true)) {
+            final Fixture f = fixture();
+            final Card attacker = creature(f.ai(), 2, 2, List.of());
+            final Card second = creature(f.ai(), 0, 1, List.of());
+            final List<String> keywords = exalted ? List.of("K:Exalted") : List.of();
+            creature(f.ai(), 0, 2, keywords).setSickness(true);
+            creature(f.ai(), 0, 2, keywords).setTapped(true);
+            final var source = Card.fromPaperCard(new PaperCard(CardRules.fromScript(exalted
+                    ? List.of("Name:Exalted Fixture", "Types:Enchantment", "K:Exalted")
+                    : List.of("Name:Exalted Fixture", "Types:Enchantment")),
+                    CardEdition.UNKNOWN_CODE, CardRarity.Special), f.ai());
+            f.ai().getZone(ZoneType.Battlefield).add(source);
+            creature(f.opponent(), 4, 4, List.of("K:Defender"));
+
+            final var plan = CombatAttackPlanner.plan(f.ai(), f.combat(), new CombatSearchBudget(100000, 500, () -> 0L));
+            Assert.assertTrue(plan.applicable(), plan.reasons().toString());
+            Assert.assertEquals(plan.search().orElseThrow().best().orElseThrow().attackers(),
+                    exalted ? List.of(attacker.getId()) : List.of());
+            final var lone = CombatAttackCandidates.select(plan.snapshot().orElseThrow(), List.of(attacker.getId()));
+            Assert.assertEquals(lone.combatCreature(attacker.getId()).combatDamage(), exalted ? 5 : 2);
+            final var pair = CombatAttackCandidates.assign(plan.snapshot().orElseThrow(), java.util.Map.of(
+                    attacker.getId(), f.opponent().getId(), second.getId(), f.opponent().getId()));
+            Assert.assertEquals(pair.combatCreature(attacker.getId()).combatDamage(), 2);
+            Assert.assertEquals(attacker.getNetPower(), 2);
+        }
+    }
+
+    @Test
+    public void exaltedProjectsSignedPowerAndUsesObservedStatsAfterResolution() {
+        final Fixture f = fixture();
+        final Card attacker = creature(f.ai(), -1, 2, List.of("K:Exalted"));
+        final Combat detached = new Combat(f.ai());
+        detached.addAttackerForValidation(attacker, f.opponent());
+        final var candidate = PublicCombatSnapshot.capture(f.ai(), detached);
+        Assert.assertEquals(candidate.combatCreature(attacker.getId()).combatDamage(), 0);
+        Assert.assertEquals(candidate.combatCreature(attacker.getId()).toughness(), 3);
+
+        f.combat().addAttacker(attacker, f.opponent());
+        f.game().getPhaseHandler().devModeSet(PhaseType.COMBAT_DECLARE_BLOCKERS, f.ai(), false);
+        attacker.addPTBoost(1, 1, f.game().getNextTimestamp(), 0);
+        final var observed = PublicCombatSnapshot.capture(f.ai(), f.combat());
+        Assert.assertEquals(observed.exalted().bonus(), 0);
+        Assert.assertEquals(observed.combatCreature(attacker.getId()).toughness(), 3);
+        Assert.assertTrue(PublicCombatReadiness.capture(f.ai(), observed).unsupportedReasons().isEmpty());
+    }
+
+    @Test
+    public void liveForecastExpiresOnlyTheResolvedExaltedBoost() {
+        final Fixture f = fixture();
+        final Card attacker = creature(f.ai(), 2, 2, List.of());
+        final Card source = creature(f.ai(), 0, 2, List.of("K:Exalted", "K:Exalted"));
+        f.combat().addAttacker(attacker, f.opponent());
+        f.game().getPhaseHandler().devModeSet(PhaseType.COMBAT_DECLARE_BLOCKERS, f.ai(), false);
+        for (final var trigger : source.getTriggers()) {
+            final var pump = trigger.ensureAbility();
+            pump.setActivatingPlayer(f.ai());
+            pump.setTriggeringObject(forge.game.ability.AbilityKey.Attacker, attacker);
+            pump.resolve();
+        }
+        f.game().getAction().moveToGraveyard(source, null);
+        Assert.assertEquals(attacker.getExaltedBoost(), 2);
+        attacker.addPTBoost(3, 3, f.game().getNextTimestamp(), 0);
+        final var snapshot = PublicCombatSnapshot.capture(f.ai(), f.combat());
+        Assert.assertTrue(snapshot.exalted().sources().isEmpty());
+        Assert.assertEquals(snapshot.combatCreature(attacker.getId()).toughness(), 7);
+        final var projection = CombatOutcomePredictor.predict(snapshot,
+                new CombatAssignment(snapshot.attackersToDefenders(), java.util.Map.of()));
+        final var values = new PreparedCombatValuation(java.util.Map.of(), List.of(),
+                forge.ai.effect.ValuationCompleteness.COMPLETE, List.of());
+        final var next = CombatTurnProjectionBuilder.advance(snapshot, projection,
+                PublicCombatReadiness.capture(f.ai(), snapshot), values).turn().orElseThrow().alternatives();
+        Assert.assertEquals(next.creatures().get(attacker.getId()).toughness(), 5);
+        Assert.assertEquals(next.creatures().get(attacker.getId()).combatDamage(), 5);
+        Assert.assertEquals(forge.game.card.CardCopyService.getLKICopy(attacker).getExaltedBoost(), 2);
+        final Game copy = new forge.ai.simulation.GameCopier(f.game()).makeCopy();
+        final Card copiedAttacker = copy.getCardsIn(ZoneType.Battlefield).stream()
+                .filter(card -> card.getId() == attacker.getId()).findFirst().orElseThrow();
+        Assert.assertEquals(copiedAttacker.getNetToughness(), 7);
+        Assert.assertEquals(copiedAttacker.getExaltedBoost(), 2);
+        final var moved = f.game().getAction().moveToGraveyard(attacker, null);
+        Assert.assertEquals(moved.getExaltedBoost(), 0);
+        f.game().getEndOfTurn().executeUntil();
+        Assert.assertEquals(attacker.getExaltedBoost(), 0);
+    }
+
+    @Test
+    public void futureExaltedDropsTheGrantButRetainsThePrintedInstance() {
+        final Fixture f = fixture();
+        final Card printed = creature(f.opponent(), 2, 2, List.of("K:Exalted"));
+        final Card grantor = addCard("Sublime Archangel", f.opponent());
+        final Card attacker = creature(f.ai(), 5, 5, List.of("K:Flying"));
+        f.game().getAction().checkStaticAbilities();
+        final Combat detached = new Combat(f.ai());
+        detached.addAttackerForValidation(attacker, f.opponent());
+        final var snapshot = PublicCombatSnapshot.capture(f.ai(), detached);
+        final var readiness = PublicCombatReadiness.capture(f.ai(), snapshot);
+        final var values = new PreparedCombatValuation(java.util.Map.of(), List.of(),
+                forge.ai.effect.ValuationCompleteness.COMPLETE, List.of());
+        final var projection = CombatOutcomePredictor.predict(snapshot, new CombatAssignment(
+                snapshot.attackersToDefenders(), java.util.Map.of(attacker.getId(), List.of(grantor.getId()))));
+        Assert.assertTrue(projection.available(), projection.reasons().toString());
+        Assert.assertTrue(projection.lostCreatures().contains(grantor.getId()));
+        Assert.assertEquals(snapshot.exalted().sources().size(), 3);
+        final var next = CombatTurnProjectionBuilder.advance(snapshot, projection, readiness, values)
+                .turn().orElseThrow().alternatives();
+        final var alone = CombatAttackCandidates.select(next, List.of(printed.getId()));
+        Assert.assertEquals(alone.exalted().bonus(), 1);
+    }
+
+    @Test
+    public void opponentForecastRecountsSurvivingSourcesAfterCleanup() {
+        final Fixture f = fixture();
+        f.ai().setLife(3, null);
+        final Card attacker = creature(f.ai(), 2, 2, List.of("K:Exalted"));
+        final Card source = creature(f.opponent(), 0, 2, List.of("K:Exalted", "K:Defender"));
+        final Card reply = creature(f.opponent(), 2, 2, List.of());
+        final Combat detached = new Combat(f.ai());
+        detached.addAttackerForValidation(attacker, f.opponent());
+        final var snapshot = PublicCombatSnapshot.capture(f.ai(), detached);
+        final var readiness = PublicCombatReadiness.capture(f.ai(), snapshot);
+        final var values = new PreparedCombatValuation(java.util.Map.of(), List.of(),
+                forge.ai.effect.ValuationCompleteness.COMPLETE, List.of());
+        for (final boolean blocked : List.of(false, true)) {
+            final var blocks = blocked ? java.util.Map.of(attacker.getId(), List.of(source.getId()))
+                    : java.util.Map.<Integer, List<Integer>>of();
+            final var projection = CombatOutcomePredictor.predict(snapshot,
+                    new CombatAssignment(snapshot.attackersToDefenders(), blocks));
+            Assert.assertTrue(projection.available(), projection.reasons().toString());
+            Assert.assertEquals(projection.lostCreatures().contains(source.getId()), blocked);
+            final var next = CombatTurnProjectionBuilder.advance(snapshot, projection, readiness, values)
+                    .turn().orElseThrow().alternatives();
+            final var candidate = CombatAttackCandidates.select(next, List.of(reply.getId()));
+            Assert.assertEquals(candidate.combatCreature(reply.getId()).combatDamage(), blocked ? 2 : 3);
+            Assert.assertEquals(candidate.creatures().get(attacker.getId()).toughness(), 2);
+            Assert.assertEquals(CombatSafetyEvaluator.nextAttack(snapshot, projection, readiness, values,
+                    new CombatSearchBudget(20000)).lethalOpportunity(), !blocked);
+        }
+    }
+
+    @Test
+    public void exaltedCountsInstancesAndAppliesAcrossBothDoubleStrikeSteps() {
+        final Fixture f = fixture();
+        final Card attacker = creature(f.ai(), 1, 2, List.of("K:Double strike", "K:Exalted", "K:Exalted"));
+        final Card second = creature(f.ai(), 1, 2, List.of("K:Exalted"));
+        second.getTriggers().getFirst().setSuppressed(true);
+        final Card walker = addCard("Jace Beleren", f.opponent());
+        walker.setCounters(forge.game.card.CounterEnumType.LOYALTY, 7);
+        final Combat detached = new Combat(f.ai());
+        detached.addAttackerForValidation(attacker, walker);
+        detached.addAttackerForValidation(second, f.opponent());
+        final var alternatives = PublicCombatSnapshot.capture(f.ai(), detached);
+        final var alone = CombatAttackCandidates.select(alternatives, List.of(attacker.getId()));
+        Assert.assertEquals(alone.exalted().bonus(), 2);
+        final var projection = CombatOutcomePredictor.predict(alone,
+                new CombatAssignment(alone.attackersToDefenders(), java.util.Map.of()));
+        Assert.assertTrue(projection.available(), projection.reasons().toString());
+        Assert.assertEquals(projection.planeswalkerLoyaltyAfter().get(walker.getId()), Integer.valueOf(1));
+        final var split = CombatAttackCandidates.select(alternatives,
+                List.of(attacker.getId(), second.getId()));
+        Assert.assertEquals(split.exalted().bonus(), 0);
+    }
+
+    @Test
     public void redundantLooterStaysHomeButFixedAndUsefulZeroPowerAttackersRemain() {
         for (final boolean fixed : List.of(false, true)) {
             for (final boolean usefulTrigger : List.of(false, true)) {

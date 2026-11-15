@@ -29,6 +29,30 @@ public class CombatDeparturesTest extends AITest {
     private record Fixture(Game game, Player ai, Player opponent, Combat combat) { }
 
     @Test
+    public void replyForecastUsesLoneAttackStatsUntilCleanup() {
+        final var f = fixture();
+        final Card attacker = creature(f.ai(), 2, 2, List.of());
+        final Card other = creature(f.ai(), 1, 1, List.of());
+        creature(f.ai(), 0, 2, List.of("K:Exalted", "K:Defender"));
+        final Card blocker = creature(f.opponent(), 2, 3, List.of());
+        final Card expiring = unearth(creature(f.ai(), 1, 1, List.of("K:Unearth:0")));
+        final Combat alternatives = new Combat(f.ai());
+        alternatives.addAttackerForValidation(attacker, f.opponent());
+        alternatives.addAttackerForValidation(other, f.opponent());
+        final var board = PublicCombatSnapshot.capture(f.ai(), alternatives);
+        final var selected = CombatAttackCandidates.select(board, List.of(attacker.getId()));
+        final var outcome = CombatOutcomePredictor.predict(selected, new CombatAssignment(
+                selected.attackersToDefenders(), Map.of(attacker.getId(), List.of(blocker.getId()))));
+        Assert.assertEquals(outcome.survivors().get(attacker.getId()).markedDamage(), 2);
+        Assert.assertTrue(board.departures().expiringIds().contains(expiring.getId()));
+        Assert.assertEquals(board.exalted().bonus(), 0);
+        final var values = CombatPlanningPreparation.values(f.ai(), ValuationDecision.ATTACK, budget()).orElseThrow();
+        final var forecasts = new CombatAttackForecasts(PublicCombatReadiness.capture(f.ai(), board), values, budget());
+        final var reply = forecasts.reply(selected, outcome);
+        Assert.assertTrue(reply.usable(), reply.reasons().toString());
+    }
+
+    @Test
     public void expiringMenaceAttackerTakesAProfitableTradeButOrdinaryCounterpartCanHold() {
         for (final boolean expiring : List.of(false, true)) {
             final var f = fixture();

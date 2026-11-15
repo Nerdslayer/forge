@@ -122,7 +122,7 @@ public final class CombatAttackSearch {
             startingNodes = budget.used();
             // Follow-ups depend on the projected state and frozen public board, not on which
             // declaration produced it. Reuse equal projections across singleton/joint candidates.
-            forecasts = new CombatAttackForecasts(alternatives, readiness, values, budget);
+            forecasts = new CombatAttackForecasts(readiness, values, budget);
         }
 
         private Evaluation(final Evaluation source, final CombatSearchBudget allowance) {
@@ -174,7 +174,7 @@ public final class CombatAttackSearch {
             boolean candidateSupported = true;
             final List<Integer> group = current.attackersToDefenders().keySet().stream().sorted().toList();
             final CombatBlockSearch.Result blocks = CombatBlockSearch.searchWithReplySafety(current, values, budget,
-                    forecasts::reply, forecasts::pressure);
+                    state -> forecasts.reply(current, state), state -> forecasts.pressure(current, state));
             reasons.addAll(blocks.reasons());
             candidateSupported &= blocks.outcomeDomainComplete() && blocks.searchExhaustive();
             if (blocks.best().isEmpty()) { supported = false; return null; }
@@ -207,7 +207,7 @@ public final class CombatAttackSearch {
             final boolean certifiedWin = alternatives.ignoredEffects().isEmpty() && blocks.outcomeDomainComplete() && blocks.searchExhaustive()
                     && combat.projection().terminal() == CombatProjection.Terminal.WIN;
             final Candidate candidate = new Candidate(group, combat, reply, adjustment, certifiedWin,
-                    forecasts.cachedPressure(combat.projection()));
+                    forecasts.cachedPressure(current, combat.projection()));
             if (baseline == null) { baseline = candidate; }
             supported &= candidateSupported;
             if (candidateSupported || certifiedWin) { completed.put(current.attackersToDefenders(), candidate); }

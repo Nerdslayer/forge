@@ -71,11 +71,11 @@ public final class CombatDamagePlanner {
         final var preparedReadiness = PublicCombatReadiness.capture(observer, snapshot, budget::tryConsume);
         if (preparedReadiness.isEmpty()) { return rejected("Shared combat budget exhausted during readiness preparation"); }
         final PublicCombatReadiness readiness = preparedReadiness.orElseThrow();
-        final var forecasts = new CombatAttackForecasts(snapshot, readiness, values, budget);
+        final var forecasts = new CombatAttackForecasts(readiness, values, budget);
         final boolean[] supported = {true};
         final java.util.function.Function<CombatProjection, CombatSafetyEvaluator.FollowUp> forecast = state -> {
             if (state.terminal() != CombatProjection.Terminal.NONE) { return null; }
-            final var reply = forecasts.reply(state);
+            final var reply = forecasts.reply(snapshot, state);
             supported[0] &= reply.usable();
             reasons.addAll(reply.reasons());
             return reply;
@@ -84,7 +84,7 @@ public final class CombatDamagePlanner {
                 state -> {
                     final var reply = forecast.apply(state);
                     if (reply == null || !reply.usable()) { return 0; }
-                    final var future = forecasts.pressure(state);
+                    final var future = forecasts.pressure(snapshot, state);
                     supported[0] &= future.usable();
                     reasons.addAll(future.reasons());
                     return CombatOutcomePredictor.add(CombatSafetyEvaluator.discountedFollowUpValue(reply.nonterminalUtility()), future.value());
@@ -104,7 +104,7 @@ public final class CombatDamagePlanner {
         final var execution = CombatExecutionPlan.create(observer, combat, snapshot, chosen.assignment(), chosen.damagePlan());
         if (execution.isEmpty()) { reasons.add("Actual combat state failed execution-plan validation"); }
         return new Preparation(execution, Optional.of(result), reasons.stream().distinct().toList(),
-                forecasts.cachedPressure(chosen.projection()));
+                forecasts.cachedPressure(snapshot, chosen.projection()));
     }
 
     private static Preparation rejected(final String reason) {

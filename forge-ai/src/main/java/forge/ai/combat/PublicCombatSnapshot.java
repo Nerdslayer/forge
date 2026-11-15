@@ -30,7 +30,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         Set<Integer> observedAttackers, Set<Integer> observedBlockers, List<CombatDamagePreventionRule> preventionRules,
         PreparedCombatStaticWorlds staticWorlds, List<String> ignoredEffects,
         Map<Integer, Planeswalker> planeswalkers, boolean singletonPermutationSafe, PreparedCombatProtection protection,
-        PreparedCombatDepartures departures, Set<Integer> temporaryCrew) {
+        PreparedCombatDepartures departures, Set<Integer> temporaryCrew, PreparedCombatExalted exalted) {
     public PublicCombatSnapshot {
         creatures = Map.copyOf(creatures);
         players = Map.copyOf(players);
@@ -48,6 +48,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         observedBlockers = Set.copyOf(observedBlockers);
         preventionRules = List.copyOf(preventionRules);
         temporaryCrew = Set.copyOf(temporaryCrew);
+        exalted = exalted.forDeclaration(attackingPlayerId, attackersToDefenders.keySet());
         if (staticWorlds == null) { throw new IllegalArgumentException("Explicit static coverage required"); }
         if (protection == null) { throw new IllegalArgumentException("Explicit protection coverage required"); }
         if (departures == null) { throw new IllegalArgumentException("Explicit departure coverage required"); }
@@ -64,7 +65,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
             final PreparedCombatProtection protection, final PreparedCombatDepartures departures) {
         this(observer, attacker, defender, creatures, players, attacks, blocks, unavailable, unsupported, legacy,
                 resources, triggers, observedAttacks, observedBlocks, prevention, worlds, ignored, walkers,
-                permutationSafe, protection, departures, Set.of());
+                permutationSafe, protection, departures, Set.of(), PreparedCombatExalted.empty());
     }
 
     /** Existing synthetic fixtures have no established scheduled departures. */
@@ -245,11 +246,22 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         return changed == null ? original : original.withPowerToughness(changed.combatDamage(), changed.toughness());
     }
 
+    Creature combatCreature(final int id, final Set<Integer> losses) {
+        final Creature original = creatures.get(id);
+        final var changed = staticWorlds.afterLosses(losses).get(id);
+        final Creature enduring = changed == null ? original : original.withPowerToughness(changed.combatDamage(), changed.toughness());
+        return exalted.apply(enduring, changed);
+    }
+
+    Creature combatCreature(final int id) {
+        return exalted.apply(creatures.get(id), null);
+    }
+
     PublicCombatSnapshot withCrew(final Set<Integer> vehicles) {
         return new PublicCombatSnapshot(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players,
                 attackersToDefenders, legalBlockers, unavailableReasons, unsupportedReasons, legacyDamageOrder,
                 resources, triggers, observedAttackers, observedBlockers, preventionRules, staticWorlds, ignoredEffects,
-                planeswalkers, false, protection, departures, vehicles);
+                planeswalkers, false, protection, departures, vehicles, exalted);
     }
 
     PublicCombatSnapshot withModeledCrew(final Player observer, final Set<Integer> vehicles) {
@@ -264,7 +276,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         return new PublicCombatSnapshot(observingPlayerId, attackingPlayerId, defendingPlayerId, creatures, players,
                 attackersToDefenders, legalBlockers, unavailableReasons, unsupportedReasons, legacyDamageOrder,
                 resources, triggers, observedAttackers, observedBlockers, preventionRules, staticWorlds, ignored,
-                planeswalkers, false, protection, departures, temporaryCrew);
+                planeswalkers, false, protection, departures, temporaryCrew, exalted);
     }
 
     public record LifeState(int life, boolean canLoseLife, boolean canGainLife,
@@ -320,6 +332,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
                 .map(card -> overrides.getOrDefault(card.getId(), card)).toList();
         final List<Card> sources = observer.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES).stream()
                 .map(card -> overrides.getOrDefault(card.getId(), card)).toList();
+        final boolean newDeclaration = !execution && declaration != observer.getGame().getCombat();
         final var preparedProtection = CombatProtectionPreparation.prepare(observer, checkpoint, battlefield, overrides.keySet());
         if (preparedProtection.isEmpty()) { return null; }
         final var protection = preparedProtection.orElseThrow();
@@ -446,6 +459,8 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
                     player.getCardsIn(ZoneType.Library).size()));
         }
         final List<CombatTriggerDescription> triggers = new ArrayList<>();
+        final List<PreparedCombatExalted.Source> exaltedSources = new ArrayList<>();
+        final Map<Integer, Integer> resolvedExalted = new LinkedHashMap<>();
         final List<CombatDamagePreventionRule> preventionRules = new ArrayList<>();
         for (final Card card : sources) {
             if (!checkpoint.getAsBoolean()) { return null; }
@@ -455,8 +470,20 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         for (final Card card : battlefield) {
             if (!checkpoint.getAsBoolean()) { return null; }
             if (card.isPhasedOut() || card.isFaceDown()) { continue; }
-            card.getTriggers().forEach(trigger -> CombatTriggerDescription.parse(trigger).ifPresent(triggers::add));
+            for (final var trigger : card.getTriggers()) {
+                if (PreparedCombatExalted.isActive(trigger)) {
+                    exaltedSources.add(PreparedCombatExalted.source(card, trigger));
+                } else {
+                    CombatTriggerDescription.parse(trigger).ifPresent(triggers::add);
+                }
+            }
+            final int boost = card.getExaltedBoost();
+            if (boost != 0) { resolvedExalted.put(card.getId(), boost); }
         }
+        final var exalted = PreparedCombatExalted.capture(exaltedSources, resolvedExalted, battlefield, sources,
+                newDeclaration, checkpoint);
+        if (exalted == null) { return null; }
+        ignored.addAll(exalted.limitations());
         // A fixed declaration on the real combat has already generated its triggers. Additional
         // detached alternatives must not redraw those cards from the now-updated hand/library.
         final Combat live = observer.getGame().getPhaseHandler().getCombat();
@@ -500,7 +527,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         return new PublicCombatSnapshot(observer.getId(), attacking.getId(), defending == null ? -1 : defending.getId(),
                 creatures, players, attacks, blocks, unavailable, reasons, observer.getGame().getRules().hasOrderCombatants(),
                 resources, triggers, observedAttacks, observedBlocks, preventionRules, staticWorlds, ignored, walkers,
-                permutationSafe && protection.creatures().isEmpty(), protection, departures);
+                permutationSafe && protection.creatures().isEmpty(), protection, departures, Set.of(), exalted);
     }
 
     /** Structured admission, independent of diagnostic wording and lethal certification. */
@@ -533,7 +560,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         if (card.isInPlay()) {
             for (final var keyword : card.getKeywords()) {
                 // Preparation owns Protection's structural admission, including lifetime/quality coverage.
-                if (keyword.getKeyword() == Keyword.PROTECTION) { continue; }
+                if (keyword.getKeyword() == Keyword.PROTECTION || keyword.getKeyword() == Keyword.EXALTED) { continue; }
                 if (!SUPPORTED_KEYWORDS.contains(keyword.getKeyword())) {
                     // These change damage representation, prevention or assignment ownership;
                     // ignoring them would not even preserve the baseline combat calculation.
@@ -558,6 +585,7 @@ public record PublicCombatSnapshot(int observingPlayerId, int attackingPlayerId,
         }
         for (final var trigger : card.getTriggers()) {
             if (!trigger.isSuppressed() && trigger.zonesCheck(card.getZone())
+                    && !PreparedCombatExalted.isActive(trigger)
                     && ScheduledTriggerParser.parse(trigger.getMapParams()).isEmpty()
                     && CombatTriggerDescription.parse(trigger).isEmpty()) {
                 ignored.add("Unprojected public trigger: " + trigger.getMode() + " on " + card.getId());

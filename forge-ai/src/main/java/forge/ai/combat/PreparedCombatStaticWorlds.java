@@ -46,6 +46,17 @@ public record PreparedCombatStaticWorlds(boolean supported, Set<Integer> provide
         return new PreparedCombatStaticWorlds(supported, providers, kept, reasons);
     }
 
+    PreparedCombatStaticWorlds afterExaltedCleanup(final PreparedCombatExalted exalted) {
+        if (exalted.resolved().isEmpty()) { return this; }
+        final Map<Set<Integer>, Map<Integer, CreatureState>> cleaned = new LinkedHashMap<>();
+        worlds.forEach((key, world) -> {
+            final Map<Integer, CreatureState> entries = new LinkedHashMap<>();
+            world.forEach((id, state) -> entries.put(id, exalted.afterCleanup(id, state)));
+            cleaned.put(key, entries);
+        });
+        return new PreparedCombatStaticWorlds(supported, providers, cleaned, reasons);
+    }
+
     /** Rebases both mechanics and body deltas after one combat, without any live recalculation. */
     public PreparedCombatStaticWorlds surviving(final Set<Integer> losses) {
         final var baseline = afterLosses(losses);
