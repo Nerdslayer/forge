@@ -3,7 +3,9 @@ package forge.adventure.player;
 import forge.adventure.data.EffectData;
 import forge.adventure.util.SaveFileContent;
 import forge.adventure.util.SaveFileData;
+import forge.card.MagicColor;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Random;
 import java.util.Set;
@@ -15,8 +17,30 @@ public final class AdventureChallenges implements SaveFileContent {
     public enum Challenge {
         WASTED_POTENTIAL,
         WELL_PREPARED,
-        WAR_CHEST
+        WAR_CHEST,
+        MOX_PEARL("Mox Pearl", "White Key", MagicColor.WHITE, 1),
+        MOX_SAPPHIRE("Mox Sapphire", "Blue Key", MagicColor.BLUE, 1),
+        MOX_JET("Mox Jet", "Black Key", MagicColor.BLACK, 1),
+        MOX_RUBY("Mox Ruby", "Red Key", MagicColor.RED, 1),
+        MOX_EMERALD("Mox Emerald", "Green Key", MagicColor.GREEN, 1),
+        SOL_RING("Sol Ring", null, MagicColor.COLORLESS, 2);
+
+        private final ArtifactChallenge artifact;
+
+        Challenge() {
+            artifact = null;
+        }
+
+        Challenge(String cardName, String key, byte color, int rewardCount) {
+            artifact = new ArtifactChallenge(cardName, key, color, rewardCount);
+        }
+
+        public ArtifactChallenge artifact() {
+            return artifact;
+        }
     }
+
+    public record ArtifactChallenge(String cardName, String key, byte color, int rewardCount) { }
 
     private static final int HISTORY_VERSION = 1;
     private final Set<String> bosses = new TreeSet<>();
@@ -73,6 +97,13 @@ public final class AdventureChallenges implements SaveFileContent {
             enabled.add(challenge);
         } else {
             enabled.remove(challenge);
+        }
+    }
+
+    public void setAllEnabled(boolean active) {
+        enabled.clear();
+        if (active) {
+            enabled.addAll(unlocked);
         }
     }
 
@@ -139,19 +170,26 @@ public final class AdventureChallenges implements SaveFileContent {
     }
 
     public Snapshot snapshot(String bossId) {
-        return new Snapshot(level, isEnabled(Challenge.WASTED_POTENTIAL), isEnabled(Challenge.WELL_PREPARED),
-                isEnabled(Challenge.WAR_CHEST), bossId);
+        return new Snapshot(level, enabled, bossId);
     }
 
-    public record Snapshot(int level, boolean wastes, boolean extraHand, boolean treasure, String bossId) {
-        public static final Snapshot NONE = new Snapshot(0, false, false, false, null);
+    public record Snapshot(int level, Set<Challenge> enabled, String bossId) {
+        public static final Snapshot NONE = new Snapshot(0, Set.of(), null);
+
+        public Snapshot {
+            enabled = Set.copyOf(enabled);
+        }
 
         public int lifePercent() {
             return level * 10;
         }
 
         public int goldPercent() {
-            return shardPercent() + (treasure ? 50 : 0);
+            return shardPercent();
+        }
+
+        public int bonusGold(int baseGold, Random random) {
+            return bonusCurrency(baseGold, goldPercent(), random) + (enabled.contains(Challenge.WAR_CHEST) ? 50 : 0);
         }
 
         public int shardPercent() {
@@ -171,19 +209,25 @@ public final class AdventureChallenges implements SaveFileContent {
         }
 
         public boolean hasModifiers() {
-            return level > 0 || wastes || extraHand || treasure;
+            return level > 0 || !enabled.isEmpty();
         }
 
         public EffectData startingEffect() {
             EffectData effect = new EffectData();
-            if (wastes && treasure) {
-                effect.startBattleWithCard = new String[] {"Wastes", "c_a_treasure_sac"};
-            } else if (wastes) {
-                effect.startBattleWithCard = new String[] {"Wastes"};
-            } else if (treasure) {
-                effect.startBattleWithCard = new String[] {"c_a_treasure_sac"};
+            var permanents = new ArrayList<String>();
+            if (enabled.contains(Challenge.WASTED_POTENTIAL)) {
+                permanents.add("Wastes");
             }
-            effect.changeStartCards = extraHand ? 1 : 0;
+            if (enabled.contains(Challenge.WAR_CHEST)) {
+                permanents.add("c_a_treasure_sac");
+            }
+            for (Challenge challenge : Challenge.values()) {
+                if (challenge.artifact() != null && enabled.contains(challenge)) {
+                    permanents.add(challenge.artifact().cardName());
+                }
+            }
+            effect.startBattleWithCard = permanents.toArray(String[]::new);
+            effect.changeStartCards = enabled.contains(Challenge.WELL_PREPARED) ? 1 : 0;
             return effect;
         }
 

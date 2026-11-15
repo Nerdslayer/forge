@@ -1,16 +1,88 @@
 package forge.adventure.util;
 
+import forge.adventure.data.ItemData;
+import forge.adventure.player.AdventureChallenges.Challenge;
+import forge.adventure.player.AdventurePlayer;
 import forge.adventure.player.PlayerStatistic;
 import forge.adventure.pointofintrest.PointOfInterestChanges;
+import forge.card.CardRarity;
+import forge.card.CardRules;
+import forge.card.ColorSet;
+import forge.card.MagicColor;
+import forge.item.PaperCard;
 import org.testng.annotations.Test;
 
 import java.util.Map;
 
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @Test(groups = {"UnitTest", "fast"})
 public class ChallengeHistoryTest {
+    private static final String EMRAKUL_CASTLE = "48Emrakul/../common/maps/map/emrakul/emrakul.tmx";
+
+    public void recoversCastleKeysWithoutEnablingTheirChallenges() {
+        var player = new AdventurePlayer();
+        giveKey(player, "Blue Key");
+        ChallengeProgress.recoverShandalarStoryChallenges(player, Map.of());
+        var progress = player.getChallenges();
+        assertTrue(progress.isUnlocked(Challenge.MOX_SAPPHIRE));
+        assertFalse(progress.isUnlocked(Challenge.MOX_RUBY));
+        assertFalse(progress.hasEnabledChallenges());
+
+        giveKey(player, "Strange Key");
+        ChallengeProgress.recoverShandalarStoryChallenges(player, Map.of());
+        assertTrue(progress.isUnlocked(Challenge.MOX_RUBY));
+        assertFalse(progress.isUnlocked(Challenge.SOL_RING));
+    }
+
+    public void distinguishesConsumedKeysFromAnEmrakulVictory() {
+        var player = new AdventurePlayer();
+        var castle = new PointOfInterestChanges();
+        castle.deleteObject(71);
+        castle.deleteObject(73);
+        var progress = player.getChallenges();
+        ChallengeProgress.recoverShandalarStoryChallenges(player, Map.of(EMRAKUL_CASTLE, castle));
+        assertTrue(progress.isUnlocked(Challenge.MOX_EMERALD));
+        assertFalse(progress.isUnlocked(Challenge.SOL_RING));
+
+        player.getStatistic().setResult("Emrakul", true);
+        ChallengeProgress.recoverShandalarStoryChallenges(player, Map.of("unrelated", castle));
+        assertFalse(progress.isUnlocked(Challenge.SOL_RING));
+        ChallengeProgress.recoverShandalarStoryChallenges(player, Map.of(EMRAKUL_CASTLE, castle));
+        assertTrue(progress.isUnlocked(Challenge.SOL_RING));
+        assertFalse(progress.hasEnabledChallenges());
+    }
+
+    public void artifactRewardsUseCardColorAndPrintingRarity() {
+        var blueRare = printedCard(MagicColor.BLUE | MagicColor.RED, CardRarity.Rare);
+        var blueUncommon = printedCard(MagicColor.BLUE, CardRarity.Uncommon);
+        var colorlessMythic = printedCard(MagicColor.COLORLESS, CardRarity.MythicRare);
+        assertTrue(ChallengeProgress.isArtifactReward(blueRare, MagicColor.BLUE));
+        assertFalse(ChallengeProgress.isArtifactReward(blueRare, MagicColor.WHITE));
+        assertFalse(ChallengeProgress.isArtifactReward(blueRare, MagicColor.COLORLESS));
+        assertFalse(ChallengeProgress.isArtifactReward(blueUncommon, MagicColor.BLUE));
+        assertTrue(ChallengeProgress.isArtifactReward(colorlessMythic, MagicColor.COLORLESS));
+        assertFalse(ChallengeProgress.isArtifactReward(colorlessMythic, MagicColor.BLUE));
+    }
+
+    private static PaperCard printedCard(int colors, CardRarity rarity) {
+        var card = mock(PaperCard.class);
+        var rules = mock(CardRules.class);
+        when(card.getRules()).thenReturn(rules);
+        when(card.getRarity()).thenReturn(rarity);
+        when(rules.getColor()).thenReturn(ColorSet.fromMask(colors));
+        return card;
+    }
+
+    private static void giveKey(AdventurePlayer player, String name) {
+        var key = new ItemData();
+        key.name = name;
+        player.getItems().add(key);
+    }
+
     public void oldXiraWinNeedsEvidenceFromTheCorrectRoom() {
         var history = new PlayerStatistic();
         var room = new PointOfInterestChanges();

@@ -1455,6 +1455,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         if (item == null)
             return false;
         inventoryItems.add(item);
+        ChallengeProgress.recordStoryItem(this, item.name);
         if (updateEvent)
             AdventureQuestController.instance().updateItemReceived(item);
         return true;

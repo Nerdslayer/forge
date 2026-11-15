@@ -1088,6 +1088,7 @@ public class MapStage extends GameStage {
         var location = getChanges();
         String enemyName = currentMob.getData().name;
         location.recordEnemyDefeat(enemyName);
+        ChallengeProgress.recordStoryVictory(Current.player(), TileMapScene.instance().rootPoint.getID(), enemyName);
         if (currentMob.rematchNextDay) {
             location.recordDuelWin(enemyName, LocalDate.now());
         }

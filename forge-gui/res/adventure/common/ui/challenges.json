@@ -34,7 +34,7 @@
       "x": 8,
       "y": 119,
       "width": 167,
-      "height": 110
+      "height": 146
     },
     {
       "type": "Scroll",
@@ -61,6 +61,24 @@
       "x": 120,
       "y": 5,
       "width": 125,
+      "height": 30
+    },
+    {
+      "type": "TextButton",
+      "name": "none",
+      "text": "tr(lblNone)",
+      "x": 224,
+      "y": 235,
+      "width": 80,
+      "height": 30
+    },
+    {
+      "type": "TextButton",
+      "name": "all",
+      "text": "tr(lblAdventureChallengeAll)",
+      "x": 308,
+      "y": 235,
+      "width": 80,
       "height": 30
     },
     {

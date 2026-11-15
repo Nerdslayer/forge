@@ -65,6 +65,24 @@
     },
     {
       "type": "TextButton",
+      "name": "none",
+      "text": "tr(lblNone)",
+      "x": 14,
+      "y": 445,
+      "width": 80,
+      "height": 30
+    },
+    {
+      "type": "TextButton",
+      "name": "all",
+      "text": "tr(lblAdventureChallengeAll)",
+      "x": 98,
+      "y": 445,
+      "width": 80,
+      "height": 30
+    },
+    {
+      "type": "TextButton",
       "name": "return",
       "text": "tr(lblBack)",
       "x": 182,

@@ -220,6 +220,21 @@ public class UIScene extends Scene {
                 pointerMoved(screenX, screenY);
                 return super.mouseMoved(screenX, screenY);
             }
+
+            @Override
+            public boolean scrolled(float amountX, float amountY) {
+                Actor previousFocus = getScrollFocus();
+                Actor wheelTarget = getMouseWheelTarget();
+                if (wheelTarget == previousFocus) {
+                    return super.scrolled(amountX, amountY);
+                }
+                setScrollFocus(wheelTarget);
+                try {
+                    return super.scrolled(amountX, amountY);
+                } finally {
+                    setScrollFocus(previousFocus);
+                }
+            }
         };
         ui = new UIActor(Config.instance().getFile(uiFile));
         for (Actor actor : ui.getChildren()) {
@@ -229,6 +244,10 @@ public class UIScene extends Scene {
         possibleSelectionStack.add(ui.selectActors);
         screenImage = ui.findActor("lastScreen");
         stage.addActor(ui);
+    }
+
+    protected Actor getMouseWheelTarget() {
+        return stage.getScrollFocus();
     }
 
     public void removeDialog() {

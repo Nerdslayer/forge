@@ -6,6 +6,7 @@ import forge.adventure.player.AdventureChallenges.Snapshot;
 import org.testng.annotations.Test;
 
 import java.util.Random;
+import java.util.Set;
 
 import static org.testng.Assert.*;
 
@@ -42,7 +43,7 @@ public class AdventureChallengesTest {
         loaded.setLevel(0);
         loaded.setEnabled(Challenge.WASTED_POTENTIAL, false);
         assertEquals(snapshot.level(), 2);
-        assertTrue(snapshot.wastes());
+        assertTrue(snapshot.enabled().contains(Challenge.WASTED_POTENTIAL));
         loaded.load(null);
         assertEquals(loaded.getMaxLevel(), 0);
         assertFalse(loaded.isUnlocked(Challenge.WASTED_POTENTIAL));
@@ -62,20 +63,22 @@ public class AdventureChallengesTest {
         assertEquals(zero.bonusCards(unused), 0);
         assertEquals(Snapshot.bonusCurrency(3, 0, unused), 0);
 
-        var levelFive = new Snapshot(5, true, true, true, null);
+        var levelFive = new Snapshot(5, Set.of(Challenge.WASTED_POTENTIAL, Challenge.WELL_PREPARED, Challenge.WAR_CHEST), null);
         assertEquals(levelFive.startingLife(25, 0.82f), 31);
-        assertEquals(levelFive.goldPercent(), 75);
+        assertEquals(levelFive.goldPercent(), 25);
+        assertEquals(levelFive.bonusGold(0, unused), 50);
+        assertEquals(levelFive.bonusGold(100, unused), 75);
         assertEquals(levelFive.shardPercent(), 25);
         assertEquals(levelFive.startingEffect().startBattleWithCard, new String[] {"Wastes", "c_a_treasure_sac"});
         assertEquals(levelFive.guaranteedCards(), 0);
         assertEquals(levelFive.startingEffect().changeStartCards, 1);
-        assertEquals(new Snapshot(1, false, false, false, null).bonusCards(roll(4)), 1);
-        assertEquals(new Snapshot(1, false, false, false, null).bonusCards(roll(5)), 0);
-        assertEquals(new Snapshot(19, false, false, false, null).bonusCards(roll(94)), 1);
-        assertEquals(new Snapshot(19, false, false, false, null).bonusCards(roll(95)), 0);
-        assertEquals(new Snapshot(20, false, false, false, null).bonusCards(unused), 1);
-        assertEquals(new Snapshot(25, false, false, false, null).bonusCards(roll(24)), 2);
-        assertEquals(new Snapshot(25, false, false, false, null).bonusCards(roll(25)), 1);
+        assertEquals(new Snapshot(1, Set.of(), null).bonusCards(roll(4)), 1);
+        assertEquals(new Snapshot(1, Set.of(), null).bonusCards(roll(5)), 0);
+        assertEquals(new Snapshot(19, Set.of(), null).bonusCards(roll(94)), 1);
+        assertEquals(new Snapshot(19, Set.of(), null).bonusCards(roll(95)), 0);
+        assertEquals(new Snapshot(20, Set.of(), null).bonusCards(unused), 1);
+        assertEquals(new Snapshot(25, Set.of(), null).bonusCards(roll(24)), 2);
+        assertEquals(new Snapshot(25, Set.of(), null).bonusCards(roll(25)), 1);
         assertEquals(Snapshot.bonusCurrency(3, 5, roll(14)), 1);
         assertEquals(Snapshot.bonusCurrency(3, 5, roll(15)), 0);
     }
@@ -90,8 +93,22 @@ public class AdventureChallengesTest {
         progress.recordGoldBalance(0);
         var loaded = new AdventureChallenges();
         loaded.load(progress.save());
-        assertTrue(loaded.snapshot(null).treasure());
-        assertEquals(loaded.snapshot(null).goldPercent(), 50);
+        assertTrue(loaded.snapshot(null).enabled().contains(Challenge.WAR_CHEST));
+        assertEquals(loaded.snapshot(null).bonusGold(0, roll(0)), 50);
+    }
+
+    public void artifactChallengesStackWithExistingStartingPermanents() {
+        var progress = new AdventureChallenges();
+        for (Challenge challenge : Challenge.values()) {
+            progress.unlock(challenge);
+        }
+        progress.setAllEnabled(true);
+        var snapshot = progress.snapshot(null);
+        progress.setAllEnabled(false);
+        assertEquals(snapshot.startingEffect().startBattleWithCard,
+                new String[] {"Wastes", "c_a_treasure_sac", "Mox Pearl", "Mox Sapphire", "Mox Jet",
+                        "Mox Ruby", "Mox Emerald", "Sol Ring"});
+        assertEquals(snapshot.startingEffect().changeStartCards, 1);
     }
 
     private static Random roll(int value) {

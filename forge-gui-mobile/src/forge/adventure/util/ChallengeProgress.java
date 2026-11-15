@@ -7,12 +7,14 @@ import forge.adventure.data.EnemyData;
 import forge.adventure.data.RewardData;
 import forge.adventure.data.WorldData;
 import forge.adventure.player.AdventureChallenges.Challenge;
+import forge.adventure.player.AdventureChallenges.ArtifactChallenge;
 import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.player.AdventurePlayer;
 import forge.adventure.player.PlayerStatistic;
 import forge.adventure.pointofintrest.PointOfInterestChanges;
 import forge.adventure.scene.RewardScene;
 import forge.card.CardRulesPredicates;
+import forge.card.MagicColor;
 import forge.deck.Deck;
 import forge.item.PaperCard;
 import forge.item.PaperCardPredicates;
@@ -32,6 +34,11 @@ public final class ChallengeProgress {
     private static final int PEST_CONTROL = 24;
     private static final String BASILISK = "HP Chamber Basilisk";
     private static final String XIRA_MAP = "/maps/map/minibosses/xira.tmx";
+    private static final String EMRAKUL_CASTLE = "Emrakul/../common/maps/map/emrakul/emrakul.tmx";
+    private static final String STRANGE_KEY = "Strange Key";
+    private static final int EMRAKUL_WARD = 71;
+    private static final int HARD_EMRAKUL = 72;
+    private static final int NORMAL_EMRAKUL = 73;
     // Other planes may carry the template without its quest source or tagged target.
     private static final Set<String> PEST_CONTROL_PLANES = Set.of(
             "Shandalar", "Shandalar Old Border", "Crystal_Kingdoms");
@@ -53,7 +60,58 @@ public final class ChallengeProgress {
         }
     }
 
+    public static boolean hasShandalarStoryChallenges() {
+        return "Shandalar".equals(Config.instance().getSettingData().plane);
+    }
+
+    public static void recordStoryItem(AdventurePlayer player, String item) {
+        if (item.endsWith(" Key") && hasShandalarStoryChallenges()) {
+            unlockMoxes(player, key -> item.equals(key) || STRANGE_KEY.equals(item));
+        }
+    }
+
+    public static void recordStoryVictory(AdventurePlayer player, String location, String enemy) {
+        if ("Emrakul".equals(enemy) && location.endsWith(EMRAKUL_CASTLE) && hasShandalarStoryChallenges()) {
+            player.getChallenges().unlock(Challenge.SOL_RING);
+        }
+    }
+
+    private static void unlockMoxes(AdventurePlayer player, Predicate<String> hasKey) {
+        for (Challenge challenge : Challenge.values()) {
+            ArtifactChallenge artifact = challenge.artifact();
+            if (artifact != null && artifact.key() != null && hasKey.test(artifact.key())) {
+                player.getChallenges().unlock(challenge);
+            }
+        }
+    }
+
+    static void recoverShandalarStoryChallenges(AdventurePlayer player, Map<String, PointOfInterestChanges> locations) {
+        boolean tradedKeys = player.hasItem(STRANGE_KEY);
+        boolean defeatedEmrakul = false;
+        for (var location : locations.entrySet()) {
+            if (!location.getKey().endsWith(EMRAKUL_CASTLE)) {
+                continue;
+            }
+            var castle = location.getValue();
+            tradedKeys |= castle.isObjectDeleted(EMRAKUL_WARD);
+            defeatedEmrakul |= castle.isEnemyDefeated("Emrakul")
+                    || (player.getStatistic().hasWonAgainst("Emrakul")
+                    && (castle.isObjectDeleted(HARD_EMRAKUL) || castle.isObjectDeleted(NORMAL_EMRAKUL)));
+        }
+        if (tradedKeys) {
+            unlockMoxes(player, key -> true);
+        } else {
+            unlockMoxes(player, player::hasItem);
+        }
+        if (defeatedEmrakul) {
+            player.getChallenges().unlock(Challenge.SOL_RING);
+        }
+    }
+
     public static String recoverHistory(AdventurePlayer player, Map<String, PointOfInterestChanges> locations) {
+        if (hasShandalarStoryChallenges()) {
+            recoverShandalarStoryChallenges(player, locations);
+        }
         var progress = player.getChallenges();
         if (!progress.hasLegacyHistory()) {
             return "";
@@ -124,7 +182,7 @@ public final class ChallengeProgress {
                     shards += reward.getCount();
                 }
             }
-            extraGold = Snapshot.bonusCurrency(gold, challenge.goldPercent(), random);
+            extraGold = challenge.bonusGold(gold, random);
             extraShards = Snapshot.bonusCurrency(shards, challenge.shardPercent(), random);
             if (extraGold > 0) {
                 rewards.add(new Reward(extraGold));
@@ -143,18 +201,42 @@ public final class ChallengeProgress {
                     extraCards = cards;
                 }
             }
-            if (challenge.wastes()) {
+            if (challenge.enabled().contains(Challenge.WASTED_POTENTIAL)) {
                 List<PaperCard> lands = opponent == null ? List.of() : opponent.getMain().getFilteredPool(NONBASIC_LAND).toFlatList();
                 if (lands.isEmpty()) {
                     lands = FModel.getMagicDb().getCommonCards().getUniqueCards().stream().filter(NONBASIC_LAND).toList();
                 }
                 extraCards += addRandomCard(rewards, lands, random);
             }
-            if (challenge.extraHand() && opponent != null) {
+            if (challenge.enabled().contains(Challenge.WELL_PREPARED) && opponent != null) {
                 extraCards += addRandomCard(rewards, opponent.getMain().toFlatList(), random);
+            }
+            for (Challenge active : Challenge.values()) {
+                if (active.artifact() != null && challenge.enabled().contains(active)) {
+                    extraCards += addArtifactRewards(rewards, active.artifact(), random);
+                }
             }
         }
         RewardScene.instance().loadChallengeRewards(rewards, challenge.bossId(), extraGold, extraShards, extraCards);
+    }
+
+    private static int addArtifactRewards(Array<Reward> rewards, ArtifactChallenge artifact, Random random) {
+        var pool = new ArrayList<PaperCard>();
+        for (PaperCard card : RewardData.getAllCards()) {
+            if (isArtifactReward(card, artifact.color())) {
+                pool.add(card);
+            }
+        }
+        int awarded = 0;
+        for (int i = 0; i < artifact.rewardCount(); i++) {
+            awarded += addRandomCard(rewards, pool, random);
+        }
+        return awarded;
+    }
+
+    static boolean isArtifactReward(PaperCard card, byte color) {
+        return PaperCardPredicates.IS_RARE_OR_MYTHIC.test(card) && (color == MagicColor.COLORLESS
+                ? card.getRules().getColor().isColorless() : card.getRules().getColor().hasAnyColor(color));
     }
 
     private static int addRandomCard(Array<Reward> rewards, List<PaperCard> pool, Random random) {
