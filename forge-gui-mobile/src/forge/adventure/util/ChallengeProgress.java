@@ -16,6 +16,7 @@ import forge.card.CardRulesPredicates;
 import forge.deck.Deck;
 import forge.item.PaperCard;
 import forge.item.PaperCardPredicates;
+import forge.model.FModel;
 import forge.util.MyRandom;
 
 import java.util.ArrayList;
@@ -23,8 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Predicate;
 
 public final class ChallengeProgress {
+    private static final Predicate<PaperCard> NONBASIC_LAND =
+            PaperCardPredicates.fromRules(CardRulesPredicates.IS_NONBASIC_LAND);
     private static final int PEST_CONTROL = 24;
     private static final String BASILISK = "HP Chamber Basilisk";
     private static final String XIRA_MAP = "/maps/map/minibosses/xira.tmx";
@@ -129,8 +133,9 @@ public final class ChallengeProgress {
                 rewards.add(new Reward(Reward.Type.Shards, extraShards));
             }
             int cards = challenge.bonusCards(random);
+            Deck opponent = Current.latestDeck();
             if (cards > 0) {
-                List<PaperCard> pool = bonusPool(Current.latestDeck());
+                List<PaperCard> pool = bonusPool(opponent);
                 if (!pool.isEmpty()) {
                     for (int i = 0; i < cards; i++) {
                         rewards.add(new Reward(pool.get(random.nextInt(pool.size()))));
@@ -138,8 +143,26 @@ public final class ChallengeProgress {
                     extraCards = cards;
                 }
             }
+            if (challenge.wastes()) {
+                List<PaperCard> lands = opponent == null ? List.of() : opponent.getMain().getFilteredPool(NONBASIC_LAND).toFlatList();
+                if (lands.isEmpty()) {
+                    lands = FModel.getMagicDb().getCommonCards().getUniqueCards().stream().filter(NONBASIC_LAND).toList();
+                }
+                extraCards += addRandomCard(rewards, lands, random);
+            }
+            if (challenge.extraHand() && opponent != null) {
+                extraCards += addRandomCard(rewards, opponent.getMain().toFlatList(), random);
+            }
         }
         RewardScene.instance().loadChallengeRewards(rewards, challenge.bossId(), extraGold, extraShards, extraCards);
+    }
+
+    private static int addRandomCard(Array<Reward> rewards, List<PaperCard> pool, Random random) {
+        if (pool.isEmpty()) {
+            return 0;
+        }
+        rewards.add(new Reward(pool.get(random.nextInt(pool.size()))));
+        return 1;
     }
 
     private static List<PaperCard> bonusPool(Deck enemyDeck) {

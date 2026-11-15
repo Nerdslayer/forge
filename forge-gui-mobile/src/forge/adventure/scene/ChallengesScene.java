@@ -8,12 +8,14 @@ import com.badlogic.gdx.utils.Align;
 import com.github.tommyettinger.textra.TextraButton;
 import com.github.tommyettinger.textra.TextraLabel;
 import forge.Forge;
+import forge.adventure.player.AdventureChallenges;
 import forge.adventure.player.AdventureChallenges.Challenge;
 import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.util.ChallengeProgress;
 import forge.adventure.util.Controls;
 import forge.adventure.util.Current;
 
+import java.text.NumberFormat;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +27,9 @@ public final class ChallengesScene extends UIScene {
             new ChallengeEntry(Challenge.WASTED_POTENTIAL, "lblAdventureChallengeWastes",
                     "lblAdventureChallengeWastesDescription", "lblAdventureChallengeWastesReward"),
             new ChallengeEntry(Challenge.WELL_PREPARED, "lblAdventureChallengeHand",
-                    "lblAdventureChallengeHandDescription", "lblAdventureChallengeHandReward"));
+                    "lblAdventureChallengeHandDescription", "lblAdventureChallengeHandReward"),
+            new ChallengeEntry(Challenge.WAR_CHEST, "lblAdventureChallengeWarChest",
+                    "lblAdventureChallengeWarChestDescription", "lblAdventureChallengeWarChestReward"));
 
     private static ChallengesScene instance;
     private final ScrollPane levelPanel;
@@ -148,7 +152,7 @@ public final class ChallengesScene extends UIScene {
 
     private void refreshLevel() {
         var progress = Current.player().getChallenges();
-        var levelOnly = new Snapshot(progress.getLevel(), false, false, null);
+        var levelOnly = new Snapshot(progress.getLevel(), false, false, false, null);
         level.setText(label("lblAdventureChallengeLevel", progress.getLevel(), progress.getMaxLevel()));
         lower.setDisabled(progress.getLevel() == 0);
         raise.setDisabled(progress.getLevel() == progress.getMaxLevel());
@@ -181,11 +185,13 @@ public final class ChallengesScene extends UIScene {
         detailReward.setText(label("lblAdventureChallengeReward", label(selected.reward())));
         boolean unlocked = progress.isUnlocked(selected.challenge());
         String required = switch (selected.challenge()) {
-            case WASTED_POTENTIAL -> "lblAdventureChallengeBossRequired";
-            case WELL_PREPARED -> ChallengeProgress.hasQuestUnlock()
-                    ? "lblAdventureChallengeQuestRequired" : "lblAdventureChallengeUnavailable";
+            case WASTED_POTENTIAL -> label("lblAdventureChallengeBossRequired");
+            case WELL_PREPARED -> label(ChallengeProgress.hasQuestUnlock()
+                    ? "lblAdventureChallengeQuestRequired" : "lblAdventureChallengeUnavailable");
+            case WAR_CHEST -> label("lblAdventureChallengeWarChestRequired",
+                    NumberFormat.getIntegerInstance().format(AdventureChallenges.WAR_CHEST_GOLD));
         };
-        requirement.setText(unlocked ? "" : label("lblAdventureChallengeRequirement", label(required)));
+        requirement.setText(unlocked ? "" : label("lblAdventureChallengeRequirement", required));
         toggleButton.setVisible(unlocked);
         toggleButton.setDisabled(!unlocked);
         toggleButton.setText(label(progress.isEnabled(selected.challenge())

@@ -10,9 +10,12 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public final class AdventureChallenges implements SaveFileContent {
+    public static final int WAR_CHEST_GOLD = 10_000;
+
     public enum Challenge {
         WASTED_POTENTIAL,
-        WELL_PREPARED
+        WELL_PREPARED,
+        WAR_CHEST
     }
 
     private static final int HISTORY_VERSION = 1;
@@ -57,6 +60,12 @@ public final class AdventureChallenges implements SaveFileContent {
 
     public void unlock(Challenge challenge) {
         unlocked.add(challenge);
+    }
+
+    public void recordGoldBalance(int gold) {
+        if (gold >= WAR_CHEST_GOLD) {
+            unlock(Challenge.WAR_CHEST);
+        }
     }
 
     public void setEnabled(Challenge challenge, boolean active) {
@@ -130,18 +139,19 @@ public final class AdventureChallenges implements SaveFileContent {
     }
 
     public Snapshot snapshot(String bossId) {
-        return new Snapshot(level, isEnabled(Challenge.WASTED_POTENTIAL), isEnabled(Challenge.WELL_PREPARED), bossId);
+        return new Snapshot(level, isEnabled(Challenge.WASTED_POTENTIAL), isEnabled(Challenge.WELL_PREPARED),
+                isEnabled(Challenge.WAR_CHEST), bossId);
     }
 
-    public record Snapshot(int level, boolean wastes, boolean extraHand, String bossId) {
-        public static final Snapshot NONE = new Snapshot(0, false, false, null);
+    public record Snapshot(int level, boolean wastes, boolean extraHand, boolean treasure, String bossId) {
+        public static final Snapshot NONE = new Snapshot(0, false, false, false, null);
 
         public int lifePercent() {
             return level * 10;
         }
 
         public int goldPercent() {
-            return shardPercent() + (extraHand ? 20 : 0);
+            return shardPercent() + (treasure ? 50 : 0);
         }
 
         public int shardPercent() {
@@ -149,7 +159,7 @@ public final class AdventureChallenges implements SaveFileContent {
         }
 
         public int guaranteedCards() {
-            return shardPercent() / 100 + (wastes ? 1 : 0);
+            return shardPercent() / 100;
         }
 
         public int bonusCardChance() {
@@ -161,13 +171,17 @@ public final class AdventureChallenges implements SaveFileContent {
         }
 
         public boolean hasModifiers() {
-            return level > 0 || wastes || extraHand;
+            return level > 0 || wastes || extraHand || treasure;
         }
 
         public EffectData startingEffect() {
             EffectData effect = new EffectData();
-            if (wastes) {
+            if (wastes && treasure) {
+                effect.startBattleWithCard = new String[] {"Wastes", "c_a_treasure_sac"};
+            } else if (wastes) {
                 effect.startBattleWithCard = new String[] {"Wastes"};
+            } else if (treasure) {
+                effect.startBattleWithCard = new String[] {"c_a_treasure_sac"};
             }
             effect.changeStartCards = extraHand ? 1 : 0;
             return effect;

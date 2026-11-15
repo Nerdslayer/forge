@@ -62,21 +62,36 @@ public class AdventureChallengesTest {
         assertEquals(zero.bonusCards(unused), 0);
         assertEquals(Snapshot.bonusCurrency(3, 0, unused), 0);
 
-        var levelFive = new Snapshot(5, true, true, null);
+        var levelFive = new Snapshot(5, true, true, true, null);
         assertEquals(levelFive.startingLife(25, 0.82f), 31);
-        assertEquals(levelFive.goldPercent(), 45);
+        assertEquals(levelFive.goldPercent(), 75);
         assertEquals(levelFive.shardPercent(), 25);
-        assertEquals(levelFive.startingEffect().startBattleWithCard, new String[] {"Wastes"});
+        assertEquals(levelFive.startingEffect().startBattleWithCard, new String[] {"Wastes", "c_a_treasure_sac"});
+        assertEquals(levelFive.guaranteedCards(), 0);
         assertEquals(levelFive.startingEffect().changeStartCards, 1);
-        assertEquals(new Snapshot(1, false, false, null).bonusCards(roll(4)), 1);
-        assertEquals(new Snapshot(1, false, false, null).bonusCards(roll(5)), 0);
-        assertEquals(new Snapshot(19, false, false, null).bonusCards(roll(94)), 1);
-        assertEquals(new Snapshot(19, false, false, null).bonusCards(roll(95)), 0);
-        assertEquals(new Snapshot(20, false, false, null).bonusCards(unused), 1);
-        assertEquals(new Snapshot(25, false, false, null).bonusCards(roll(24)), 2);
-        assertEquals(new Snapshot(25, false, false, null).bonusCards(roll(25)), 1);
+        assertEquals(new Snapshot(1, false, false, false, null).bonusCards(roll(4)), 1);
+        assertEquals(new Snapshot(1, false, false, false, null).bonusCards(roll(5)), 0);
+        assertEquals(new Snapshot(19, false, false, false, null).bonusCards(roll(94)), 1);
+        assertEquals(new Snapshot(19, false, false, false, null).bonusCards(roll(95)), 0);
+        assertEquals(new Snapshot(20, false, false, false, null).bonusCards(unused), 1);
+        assertEquals(new Snapshot(25, false, false, false, null).bonusCards(roll(24)), 2);
+        assertEquals(new Snapshot(25, false, false, false, null).bonusCards(roll(25)), 1);
         assertEquals(Snapshot.bonusCurrency(3, 5, roll(14)), 1);
         assertEquals(Snapshot.bonusCurrency(3, 5, roll(15)), 0);
+    }
+
+    public void warChestUnlockPersistsAfterSpendingGold() {
+        var progress = new AdventureChallenges();
+        progress.recordGoldBalance(AdventureChallenges.WAR_CHEST_GOLD - 1);
+        assertFalse(progress.isUnlocked(Challenge.WAR_CHEST));
+        progress.recordGoldBalance(AdventureChallenges.WAR_CHEST_GOLD);
+        assertFalse(progress.isEnabled(Challenge.WAR_CHEST));
+        progress.setEnabled(Challenge.WAR_CHEST, true);
+        progress.recordGoldBalance(0);
+        var loaded = new AdventureChallenges();
+        loaded.load(progress.save());
+        assertTrue(loaded.snapshot(null).treasure());
+        assertEquals(loaded.snapshot(null).goldPercent(), 50);
     }
 
     private static Random roll(int value) {

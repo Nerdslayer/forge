@@ -192,6 +192,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
         this.difficultyData.lifeLoss = difficultyData.lifeLoss;
 
         gold = difficultyData.startingMoney;
+        challenges.recordGoldBalance(gold);
         name = n;
         heroRace = race;
         avatarIndex = avatar;
@@ -472,6 +473,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
             colorIdentity = ColorSet.WUBRG;
 
         gold = data.readInt("gold");
+        challenges.recordGoldBalance(gold);
         maxLife = data.readInt("maxLife");
         life = data.readInt("life");
         shards = data.containsKey("shards") ? data.readInt("shards") : 0;
@@ -1060,6 +1062,7 @@ public class AdventurePlayer implements Serializable, SaveFileContent {
 
     private void addGold(int goldCount) {
         gold += goldCount;
+        challenges.recordGoldBalance(gold);
         onGoldChangeList.emit();
     }
 
