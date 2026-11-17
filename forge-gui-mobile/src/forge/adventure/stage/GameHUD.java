@@ -140,6 +140,7 @@ public class GameHUD extends Stage {
         gamehud = ui.findActor("gamehud");
         exitToWorldMapActor = ui.findActor("exittoworldmap");
         bookmarkActor = ui.findActor("bookmark");
+        bookmarkActor.setVisible(false);
         challengesActor = ui.findActor("challenges");
         dialog = Controls.newDialog("");
 
@@ -909,6 +910,7 @@ public class GameHUD extends Stage {
 
         setDisabled(exitToWorldMapActor, !MapStage.getInstance().isInMap(), "[%120][+ExitToWorldMap]", "\u2613");
         setDisabled(bookmarkActor, !MapStage.getInstance().isInMap(), "[%120][+Bookmark]", "\u2613");
+        bookmarkActor.setVisible(MapStage.getInstance().isInMap());
 
         for (TextraButton button : abilityButtonMap) {
             setAlpha(button, visible);
