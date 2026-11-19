@@ -22,6 +22,7 @@ import com.google.common.collect.Multiset;
 
 import forge.game.GameEntity;
 import forge.game.card.Card;
+import forge.game.card.CardCopyService;
 import forge.game.card.CardLists;
 import forge.game.card.CounterEnumType;
 import forge.game.card.CounterType;
@@ -183,14 +184,20 @@ public class CostRemoveCounter extends CostPart {
 
     @Override
     public boolean payAsDecided(Player ai, PaymentDecision decision, SpellAbility ability, final boolean effect) {
+        // TODO: Support this paid-card reference for RemoveAnyCounter if a script needs it.
+        final boolean trackSource = ability.hasParam("TrackCounterRemoval");
         int removed = 0;
         for (Map.Entry<GameEntity, Multiset<CounterType>> e : decision.counterTable.row(Optional.empty()).entrySet()) {
+            boolean removedFromEntity = false;
             for (Multiset.Entry<CounterType> v : e.getValue().entrySet()) {
                 removed += v.getCount();
-                e.getKey().subtractCounter(v.getElement(), v.getCount(), ai);
+                removedFromEntity |= e.getKey().subtractCounter(v.getElement(), v.getCount(), ai) > 0;
             }
             if (e.getKey() instanceof Card c) {
                 e.getKey().getGame().updateLastStateForCard(c);
+                if (trackSource && removedFromEntity) {
+                    ability.getRootAbility().addCostToHashList(CardCopyService.getLKICopy(c), "CounterRemovedFrom", true);
+                }
             }
         }
 
