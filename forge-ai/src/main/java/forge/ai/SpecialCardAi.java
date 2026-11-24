@@ -17,6 +17,7 @@
  */
 package forge.ai;
 
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import forge.ai.ability.AnimateAi;
 import forge.ai.ability.FightAi;
@@ -26,7 +27,10 @@ import forge.card.MagicColor;
 import forge.card.mana.ManaCost;
 import forge.game.Game;
 import forge.game.GameEntity;
+import forge.game.GameObject;
 import forge.game.GameType;
+import forge.game.StaticEffect;
+import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.card.*;
@@ -41,11 +45,13 @@ import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.player.PlayerCollection;
 import forge.game.player.PlayerPredicates;
+import forge.game.spellability.AbilitySub;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityPredicates;
 import forge.game.spellability.SpellPermanent;
 import forge.game.staticability.StaticAbility;
 import forge.game.trigger.Trigger;
+import forge.game.trigger.TriggerType;
 import forge.game.zone.ZoneType;
 import forge.util.Aggregates;
 import forge.util.IterableUtil;
@@ -77,6 +83,169 @@ import java.util.stream.Collectors;
  * own file, inside its own package, for example, forge.ai.cards.
  */
 public class SpecialCardAi {
+
+    // Akiri, Fearless Voyager
+    public static class Akiri {
+        public static Card chooseCreature(final Player ai, final SpellAbility sa, final Iterable<Card> choices) {
+            final Game game = ai.getGame();
+            final boolean respondingToStack = hasPendingStackItem(game);
+            final Combat combat = respondingToStack ? null : getRescueCombat(game);
+            if ((!respondingToStack && combat == null) || Iterables.isEmpty(choices)) {
+                return null;
+            }
+            final SpellAbility pump = sa.findSubAbilityByType(ApiType.Pump);
+            final List<GameObject> threatened = respondingToStack
+                    ? ComputerUtil.predictThreatenedObjects(ai, pump, true, true) : List.of();
+
+            final CardCollection candidates = CardLists.filter(choices, creature -> {
+                if (creature.hasKeyword(Keyword.INDESTRUCTIBLE)) {
+                    return false;
+                }
+                final boolean needsRescue = respondingToStack ? threatened.contains(creature)
+                        : ComputerUtilCombat.combatantWouldBeDestroyed(ai, creature, combat);
+                return needsRescue
+                        && chooseEquipment(ai, pump, creature, creature.getEquippedBy(), combat) != null;
+            });
+            return ComputerUtilCard.getBestCreatureAI(candidates);
+        }
+
+        public static Card chooseEquipment(final Player ai, final SpellAbility sa, final Iterable<Card> choices) {
+            final Card creature = sa.getHostCard().getChosenCard();
+            if (creature == null) {
+                return null;
+            }
+            final SpellAbility pump = sa.findSubAbilityByType(ApiType.Pump);
+            final Game game = ai.getGame();
+            return chooseEquipment(ai, pump, creature, choices, hasPendingStackItem(game) ? null : getRescueCombat(game));
+        }
+
+        private static boolean hasPendingStackItem(final Game game) {
+            return game.getStack().size() > (game.getStack().isResolving() ? 1 : 0);
+        }
+
+        private static Combat getRescueCombat(final Game game) {
+            return game.getPhaseHandler().is(PhaseType.COMBAT_DECLARE_BLOCKERS) ? game.getCombat() : null;
+        }
+
+        private static Card chooseEquipment(final Player ai, final SpellAbility pump, final Card creature,
+                final Iterable<Card> choices, final Combat combat) {
+            final CardCollection candidates = CardLists.filter(choices, equipment -> {
+                if (!equipment.isInPlay() || equipment.isPhasedOut() || !equipment.isAttachedToEntity(creature)) {
+                    return false;
+                }
+                final Card preview = projectRescuedCreature(creature, equipment);
+                final int remainingToughness = preview.getNetToughness();
+                if (remainingToughness <= 0 || !preview.hasKeyword(Keyword.INDESTRUCTIBLE)
+                        || detachmentSacrificesCreature(creature, equipment, preview)) {
+                    return false;
+                }
+                if (combat != null) {
+                    return survivesCounterDamage(combat, creature, preview);
+                }
+                final int toughnessLost = creature.getNetToughness() - remainingToughness;
+                if (toughnessLost > 0) {
+                    // Losing a toughness bonus can turn survivable damage into a lethal toughness reduction.
+                    final SpellAbility rescue = pump.copy(ai);
+                    rescue.putParam("NumDef", Integer.toString(-toughnessLost));
+                    return ComputerUtil.predictThreatenedObjects(ai, rescue, true, true).contains(creature);
+                }
+                return true;
+            });
+            return ComputerUtilCard.getCheapestPermanentAI(candidates, null, false);
+        }
+
+        private static boolean detachmentSacrificesCreature(final Card creature, final Card equipment,
+                final Card preview) {
+            final var triggers = creature.getGame().getTriggerHandler();
+            if (triggers.isTriggerSuppressed(TriggerType.Unattached)) {
+                return false;
+            }
+            final Map<AbilityKey, Object> event = AbilityKey.newMap();
+            event.put(AbilityKey.AttachSource, equipment);
+            event.put(AbilityKey.Object, creature);
+            for (final Trigger trigger : triggers.getActiveTrigger(TriggerType.Unattached, event)) {
+                final SpellAbility effect = trigger.getOverridingAbility();
+                // TODO: Model other detachment consequences, including chained or choice-based sacrifice effects.
+                if (!(effect instanceof AbilitySub) || effect.getApi() != ApiType.SacrificeAll
+                        || !effect.hasParam("Defined") || effect.usesTargeting() || effect.hasParam("UnlessCost")
+                        || trigger.hasParam("OptionalDecider") || trigger.hasParam("TriggerController")) {
+                    continue;
+                }
+                final Card host = trigger.getHostCard();
+                final SpellAbility sacrifice = effect.copy(host, host.getController(), true, true);
+                sacrifice.setTrigger(trigger);
+                trigger.setTriggeringObjects(sacrifice, event);
+                if (sacrifice.metConditions() && preview.canBeSacrificedBy(sacrifice, true)
+                        && AbilityUtils.getDefinedCards(host, sacrifice.getParam("Defined"), sacrifice).contains(creature)
+                        && (!sacrifice.hasParam("Controller") || AbilityUtils.getDefinedPlayers(host,
+                                sacrifice.getParam("Controller"), sacrifice).contains(creature.getController()))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static Card projectRescuedCreature(final Card creature, final Card equipment) {
+            final Map<Integer, Card> copies = new HashMap<>();
+            final Card preview = CardCopyService.getLKICopy(creature, copies);
+            final Card detached = CardCopyService.getLKICopy(equipment, copies);
+            preview.copyBasePTFrom(creature);
+            preview.removeAttachedCard(detached);
+            detached.setEntityAttachedTo(null);
+            preview.setTapped(true);
+
+            // TODO: Recompute SVar conditions, effect amounts and layer dependencies when detaching changes them.
+            // Recheck the affected-card selectors of the creature's active effects on the detached copy.
+            for (final StaticEffect effect : creature.getGame().getStaticEffects().getEffects()) {
+                if (!effect.getAffectedCards().contains(creature)) {
+                    continue;
+                }
+                final StaticAbility ability = effect.getAbility();
+                final Card source = effect.getSource();
+                final Card projectedSource = copies.getOrDefault(source.getId(), source);
+                if (stillAffected(preview, projectedSource, ability)
+                        && ability.checkPresentCondition(projectedSource,
+                                cards -> IterableUtil.transform(cards, card -> copies.getOrDefault(card.getId(), card)))) {
+                    continue;
+                }
+                preview.removeNewPTbyText(effect.getTimestamp(), ability.getId());
+                preview.removeNewPT(effect.getTimestamp(), ability.getId(), false);
+                preview.removePTBoost(effect.getTimestamp(), ability.getId());
+                preview.removeChangedCardKeywords(effect.getTimestamp(), ability.getId(), false);
+            }
+            preview.addChangedCardKeywords(List.of("Indestructible"), null, false,
+                    creature.getGame().getTimestamp() + 1, null, false);
+            preview.updateKeywordsCache();
+            return preview;
+        }
+
+        private static boolean stillAffected(final Card creature, final Card source, final StaticAbility ability) {
+            if (ability.hasParam("AffectedDefined")
+                    && !AbilityUtils.getDefinedCards(source, ability.getParam("AffectedDefined"), ability).contains(creature)) {
+                return false;
+            }
+            return !ability.hasParam("Affected")
+                    || creature.isValid(ability.getParam("Affected").split(","), source.getController(), source, ability);
+        }
+
+        private static boolean survivesCounterDamage(final Combat combat, final Card creature, final Card preview) {
+            if (!preview.canReceiveCounters(CounterEnumType.M1M1)) {
+                return true;
+            }
+            final CardCollection opponents = combat.isAttacking(creature) ? combat.getBlockers(creature)
+                    : combat.getAttackersBlockedBy(creature);
+            int remainingToughness = preview.getNetToughness();
+            // TODO: Allow for reduced assignments and combatants dying in the first-strike damage step.
+            for (final Card opponent : opponents) {
+                if (opponent.isWitherDamage()) {
+                    final int counters = ComputerUtilCombat.predictDamageTo(preview,
+                            Math.max(0, opponent.getNetCombatDamage()), opponent, true);
+                    remainingToughness -= opponent.hasDoubleStrike() ? 2 * counters : counters;
+                }
+            }
+            return remainingToughness > 0;
+        }
+    }
 
     // Arena and Magus of the Arena
     public static class Arena {

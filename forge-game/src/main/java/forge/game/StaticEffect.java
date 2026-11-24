@@ -100,6 +100,10 @@ public class StaticEffect {
         return this.source;
     }
 
+    public final StaticAbility getAbility() {
+        return ability;
+    }
+
     /**
      * <p>
      * Getter for the field <code>affectedCards</code>.
