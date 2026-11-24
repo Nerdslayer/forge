@@ -7,6 +7,8 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Clipboard;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3WindowAdapter;
 import com.badlogic.gdx.graphics.glutils.HdpiMode;
+import com.badlogic.gdx.utils.Os;
+import com.badlogic.gdx.utils.SharedLibraryLoader;
 import forge.util.HWInfo;
 import forge.Forge;
 import forge.adventure.util.Config;
@@ -110,6 +112,7 @@ public class GameLauncher {
         if (Config.instance().getSettingData().fullScreen) {
             config.setFullscreenMode(Lwjgl3ApplicationConfiguration.getDisplayMode());
             config.setAutoIconify(true);
+            config.setSuspendFullscreenPresentationWhenMinimized(SharedLibraryLoader.os == Os.Windows);
         } else {
             config.setWindowedMode(windowWidth, windowHeight);
             config.setResizable(false);

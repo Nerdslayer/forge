@@ -18,6 +18,31 @@
             <useProjectArtifact>true</useProjectArtifact>
             <unpack>true</unpack>
             <scope>runtime</scope>
+            <excludes>
+                <exclude>com.badlogicgames.gdx:gdx-backend-lwjgl3</exclude>
+            </excludes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>/</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <unpack>true</unpack>
+            <scope>runtime</scope>
+            <includes>
+                <include>com.badlogicgames.gdx:gdx-backend-lwjgl3</include>
+            </includes>
+            <unpackOptions>
+                <excludes>
+                    <!-- Adventure compiles these patched classes into its project artifact. -->
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3Application.class</exclude>
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3Application$*.class</exclude>
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3ApplicationConfiguration.class</exclude>
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3ApplicationConfiguration$*.class</exclude>
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3Graphics.class</exclude>
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3Graphics$*.class</exclude>
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3Window.class</exclude>
+                    <exclude>com/badlogic/gdx/backends/lwjgl3/Lwjgl3Window$*.class</exclude>
+                </excludes>
+            </unpackOptions>
         </dependencySet>
     </dependencySets>
 </assembly>

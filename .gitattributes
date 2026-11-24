@@ -1,1 +1,2 @@
 * text=auto
+/forge-gui-mobile-dev/src/main/patches/*.patch text eol=lf -whitespace

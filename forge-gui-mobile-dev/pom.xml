@@ -3,6 +3,8 @@
     <properties>
         <timestamp>${maven.build.timestamp}</timestamp>
         <maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>
+        <lwjgl3.backend.version>1.14.2</lwjgl3.backend.version>
+        <lwjgl3.patched.sources>${project.build.directory}/generated-sources/lwjgl3</lwjgl3.patched.sources>
         <mandatory.java.args>--add-opens java.desktop/java.beans=ALL-UNNAMED --add-opens java.desktop/javax.swing.border=ALL-UNNAMED --add-opens java.desktop/javax.swing.event=ALL-UNNAMED --add-opens java.desktop/sun.swing=ALL-UNNAMED --add-opens java.desktop/java.awt.image=ALL-UNNAMED --add-opens java.desktop/java.awt.color=ALL-UNNAMED --add-opens java.desktop/sun.awt.image=ALL-UNNAMED --add-opens java.desktop/javax.swing=ALL-UNNAMED --add-opens java.desktop/java.awt=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED --add-opens java.base/java.text=ALL-UNNAMED --add-opens java.desktop/java.awt.font=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED --add-opens java.base/java.util.concurrent=ALL-UNNAMED --add-opens java.base/java.net=ALL-UNNAMED -Dio.netty.tryReflectionSetAccessible=true -Dfile.encoding=UTF-8</mandatory.java.args>
     </properties>
 
@@ -18,12 +20,91 @@
 
     <build>
         <sourceDirectory>src</sourceDirectory>
+        <testSourceDirectory>test</testSourceDirectory>
         <plugins>
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-lwjgl3-sources</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>com.badlogicgames.gdx</groupId>
+                                    <artifactId>gdx-backend-lwjgl3</artifactId>
+                                    <version>${lwjgl3.backend.version}</version>
+                                    <classifier>sources</classifier>
+                                    <outputDirectory>${project.build.directory}</outputDirectory>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>patch-lwjgl3-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <property name="lwjgl3.source.jar"
+                                          location="${project.build.directory}/gdx-backend-lwjgl3-${lwjgl3.backend.version}-sources.jar"/>
+                                <checksum file="${lwjgl3.source.jar}" algorithm="SHA-256" property="lwjgl3.source.sha256"/>
+                                <fail message="The LWJGL3 sources have changed. Review and rebase the fullscreen presentation patch.">
+                                    <condition>
+                                        <not>
+                                            <equals arg1="${lwjgl3.source.sha256}"
+                                                    arg2="240dccc7248ae8d28ee56a5bb0aa51b6ff0face113d96990816bfbe1972abea3"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                                <delete dir="${lwjgl3.patched.sources}"/>
+                                <unzip src="${lwjgl3.source.jar}" dest="${lwjgl3.patched.sources}">
+                                    <patternset>
+                                        <include name="com/badlogic/gdx/backends/lwjgl3/Lwjgl3Application.java"/>
+                                        <include name="com/badlogic/gdx/backends/lwjgl3/Lwjgl3ApplicationConfiguration.java"/>
+                                        <include name="com/badlogic/gdx/backends/lwjgl3/Lwjgl3Graphics.java"/>
+                                        <include name="com/badlogic/gdx/backends/lwjgl3/Lwjgl3Window.java"/>
+                                    </patternset>
+                                </unzip>
+                                <exec executable="git" dir="${lwjgl3.patched.sources}" failonerror="true">
+                                    <!-- Run outside the source worktree so paths in the patch are relative to these extracted sources. -->
+                                    <env key="GIT_CEILING_DIRECTORIES" value="${project.build.directory}"/>
+                                    <arg value="apply"/>
+                                    <arg value="--whitespace=error"/>
+                                    <arg file="${project.basedir}/src/main/patches/lwjgl3-minimized-fullscreen.patch"/>
+                                </exec>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
                 <version>3.6.0</version>
                 <executions>
+                    <execution>
+                        <id>add-patched-lwjgl3-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${lwjgl3.patched.sources}</source>
+                            </sources>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>timestamp-property</id>
                         <phase>initialize</phase>
@@ -202,7 +283,7 @@
         <dependency>
             <groupId>com.badlogicgames.gdx</groupId>
             <artifactId>gdx-backend-lwjgl3</artifactId>
-            <version>1.14.2</version>
+            <version>${lwjgl3.backend.version}</version>
         </dependency>
         <dependency>
             <groupId>com.badlogicgames.gdx</groupId>
@@ -243,6 +324,18 @@
             <groupId>com.github.oshi</groupId>
             <artifactId>oshi-core</artifactId>
             <version>6.9.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>7.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>5.14.2</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
