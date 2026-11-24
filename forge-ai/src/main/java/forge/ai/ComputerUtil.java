@@ -1629,6 +1629,12 @@ public class ComputerUtil {
      * @return list of threatened objects
      */
     public static List<GameObject> predictThreatenedObjects(final Player ai, SpellAbility sa, boolean top) {
+        return predictThreatenedObjects(ai, sa, top, false);
+    }
+
+    /** With {@code skipResolving}, start at the next stack item during an ability's resolution. */
+    public static List<GameObject> predictThreatenedObjects(final Player ai, SpellAbility sa, boolean top,
+            boolean skipResolving) {
         final MagicStack stack = ai.getGame().getStack();
         final List<GameObject> objects = new ArrayList<>();
         if (stack.isEmpty()) {
@@ -1643,11 +1649,16 @@ public class ComputerUtil {
             saviour = null;
         }
 
+        final SpellAbility resolving = skipResolving && stack.isResolving() ? stack.peekAbility() : null;
         // check stack for something that will kill this
         for (SpellAbilityStackInstance si : stack) {
             // iterate from top of stack to find SpellAbility, including sub-abilities,
             // that does not match "sa"
-            SpellAbility spell = si.getSpellAbility(), sub = spell.getSubAbility();
+            SpellAbility spell = si.getSpellAbility();
+            if (spell == resolving) {
+                continue;
+            }
+            SpellAbility sub = spell.getSubAbility();
             if (spell.isWrapper()) {
                 spell = ((WrappedAbility) spell).getWrappedAbility();
             }

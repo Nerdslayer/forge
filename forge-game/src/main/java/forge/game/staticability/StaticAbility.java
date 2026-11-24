@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 
 import com.google.common.collect.*;
 
@@ -424,22 +425,8 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
             }
         }
 
-        if (hasParam("IsPresent")) {
-            final List<ZoneType> zone = hasParam("PresentZone") ? ZoneType.listValueOf(getParam("PresentZone")) : List.of(ZoneType.Battlefield);
-            final String compare = getParamOrDefault("PresentCompare", "GE1");
-            CardCollectionView list = game.getCardsIn(zone);
-            final String present = getParam("IsPresent");
-
-            list = CardLists.getValidCards(list, present, controller, hostCard, this);
-
-            int right = 1;
-            final String rightString = compare.substring(2);
-            right = AbilityUtils.calculateAmount(hostCard, rightString, this);
-            final int left = list.size();
-
-            if (!Expressions.compare(left, compare, right)) {
-                return false;
-            }
+        if (!checkPresentCondition(hostCard, Function.identity())) {
+            return false;
         }
 
         if (hasParam("GameStage")) {
@@ -543,6 +530,20 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
     public void clearIgnoreEffects() {
         ignoreEffectPlayers.clear();
         ignoreEffectCards = new CardCollection();
+    }
+
+    /** Evaluate IsPresent using the supplied source and a projection of the cards in its zones. */
+    public final boolean checkPresentCondition(final Card source, final Function<Iterable<Card>, Iterable<Card>> projectCards) {
+        if (!hasParam("IsPresent")) {
+            return true;
+        }
+        final List<ZoneType> zones = hasParam("PresentZone")
+                ? ZoneType.listValueOf(getParam("PresentZone")) : List.of(ZoneType.Battlefield);
+        final String compare = getParamOrDefault("PresentCompare", "GE1");
+        final Iterable<Card> cards = projectCards.apply(source.getGame().getCardsIn(zones));
+        final int present = CardLists.getValidCards(cards, getParam("IsPresent"), source.getController(), source, this).size();
+        final int required = AbilityUtils.calculateAmount(source, compare.substring(2), this);
+        return Expressions.compare(present, compare, required);
     }
 
     /**

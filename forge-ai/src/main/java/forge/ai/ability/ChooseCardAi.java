@@ -61,6 +61,9 @@ public class ChooseCardAi extends SpellAbilityAi {
         if (sa.hasParam("TargetControls")) {
             choices = CardLists.filterControlledBy(choices, ai.getOpponents());
         }
+        if (aiLogic.equals("AkiriRescue")) {
+            return SpecialCardAi.Akiri.chooseCreature(ai, sa, choices) != null;
+        }
         if (aiLogic.equals("AtLeast1") || aiLogic.equals("OppPreferred")) {
             return !choices.isEmpty();
         } else if (aiLogic.equals("AtLeast2") || aiLogic.equals("BestBlocker")) {
@@ -149,6 +152,11 @@ public class ChooseCardAi extends SpellAbilityAi {
         final Card host = sa.getHostCard();
         final Player ctrl = host.getController();
         String logic = sa.getParamOrDefault("AILogic", "");
+        if (logic.equals("AkiriRescue")) {
+            return SpecialCardAi.Akiri.chooseCreature(ai, sa, options);
+        } else if (logic.equals("AkiriRescueEquipment")) {
+            return SpecialCardAi.Akiri.chooseEquipment(ai, sa, options);
+        }
         if (logic.contains("NotSelf")) {
             CardCollection opt = (CardCollection) options;
             if (opt.contains(host)) {

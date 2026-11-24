@@ -4392,6 +4392,17 @@ public class Card extends GameEntity implements Comparable<Card>, IHasSVars, ITr
         newPTCharacterDefining.putAll(table);
     }
 
+    /** Reconstruct the base power and toughness layers for a projection from a last-known-information copy. */
+    public final void copyBasePTFrom(final Card other) {
+        if (this == other) { return; }
+        setBasePower(other.getBasePower());
+        setBaseToughness(other.getBaseToughness());
+        newPTText.clear();
+        newPTText.putAll(other.newPTText);
+        setPTCharacterDefiningTable(other.newPTCharacterDefining);
+        setPTTable(other.newPT);
+    }
+
     public final void addNewPTByText(final Integer power, final Integer toughness, final long timestamp, final long staticId) {
         newPTText.put(timestamp, staticId, Pair.of(power, toughness));
     }
