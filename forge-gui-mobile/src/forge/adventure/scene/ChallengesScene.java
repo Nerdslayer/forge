@@ -221,7 +221,7 @@ public final class ChallengesScene extends UIScene {
                     : label("lblAdventureChallengeCardsCombined", levelOnly.guaranteedCards(), levelOnly.bonusCardChance());
         }
         summary.setText(label("lblAdventureChallengeLevelBonuses", levelOnly.lifePercent(),
-                levelOnly.goldPercent(), levelOnly.shardPercent(), cards));
+                levelOnly.goldPercent(), levelOnly.flatGold(), levelOnly.shardPercent(), levelOnly.flatShards(), cards));
     }
 
     private void refreshChallenges() {

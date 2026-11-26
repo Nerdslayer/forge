@@ -190,12 +190,25 @@ public final class AdventureChallenges implements SaveFileContent {
             return shardPercent();
         }
 
+        public int flatGold() {
+            return level * 5;
+        }
+
         public int bonusGold(int baseGold, Random random) {
-            return bonusCurrency(baseGold, goldPercent(), random) + (enabled.contains(Challenge.WAR_CHEST) ? 50 : 0);
+            return bonusCurrency(baseGold, goldPercent(), random) + flatGold()
+                    + (enabled.contains(Challenge.WAR_CHEST) ? 50 : 0);
         }
 
         public int shardPercent() {
             return level * 5;
+        }
+
+        public int flatShards() {
+            return level;
+        }
+
+        public int bonusShards(int baseShards, Random random) {
+            return bonusCurrency(baseShards, shardPercent(), random) + flatShards();
         }
 
         public int guaranteedCards() {

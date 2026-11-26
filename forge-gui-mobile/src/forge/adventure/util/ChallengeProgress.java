@@ -183,7 +183,7 @@ public final class ChallengeProgress {
                 }
             }
             extraGold = challenge.bonusGold(gold, random);
-            extraShards = Snapshot.bonusCurrency(shards, challenge.shardPercent(), random);
+            extraShards = challenge.bonusShards(shards, random);
             if (challenge.enabled().contains(Challenge.SECOND_WIND)) {
                 extraGold += 60;
                 extraShards += 3;

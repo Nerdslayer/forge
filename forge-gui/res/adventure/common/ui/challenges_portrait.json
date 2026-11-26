@@ -25,16 +25,16 @@
       "x": 8,
       "y": 38,
       "width": 254,
-      "height": 84
+      "height": 98
     },
     {
       "type": "Scroll",
       "name": "listPanel",
       "style": "paper",
       "x": 8,
-      "y": 127,
+      "y": 141,
       "width": 254,
-      "height": 150
+      "height": 136
     },
     {
       "type": "Scroll",

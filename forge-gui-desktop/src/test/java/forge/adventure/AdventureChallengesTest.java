@@ -62,13 +62,21 @@ public class AdventureChallengesTest {
         assertEquals(zero.startingLife(25, 0.82f), 21);
         assertEquals(zero.bonusCards(unused), 0);
         assertEquals(Snapshot.bonusCurrency(3, 0, unused), 0);
+        assertEquals(zero.bonusGold(100, unused), 0);
+        assertEquals(zero.bonusShards(20, unused), 0);
+
+        var levelOne = new Snapshot(1, Set.of(), null);
+        assertEquals(levelOne.bonusGold(0, unused), 5);
+        assertEquals(levelOne.bonusShards(1, roll(4)), 2);
+        assertEquals(levelOne.bonusShards(1, roll(5)), 1);
 
         var levelFive = new Snapshot(5, Set.of(Challenge.WASTED_POTENTIAL, Challenge.WELL_PREPARED, Challenge.WAR_CHEST), null);
         assertEquals(levelFive.startingLife(25, 0.82f), 31);
         assertEquals(levelFive.goldPercent(), 25);
-        assertEquals(levelFive.bonusGold(0, unused), 50);
-        assertEquals(levelFive.bonusGold(100, unused), 75);
+        assertEquals(levelFive.bonusGold(0, unused), 75);
+        assertEquals(levelFive.bonusGold(100, unused), 100);
         assertEquals(levelFive.shardPercent(), 25);
+        assertEquals(levelFive.bonusShards(20, unused), 10);
         assertEquals(levelFive.startingEffect().startBattleWithCard, new String[] {"Wastes", "c_a_treasure_sac"});
         assertEquals(levelFive.guaranteedCards(), 0);
         assertEquals(levelFive.startingEffect().changeStartCards, 1);

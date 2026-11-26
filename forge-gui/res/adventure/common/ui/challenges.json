@@ -25,25 +25,25 @@
       "x": 8,
       "y": 38,
       "width": 464,
-      "height": 78
+      "height": 98
     },
     {
       "type": "Scroll",
       "name": "listPanel",
       "style": "paper",
       "x": 8,
-      "y": 119,
+      "y": 139,
       "width": 167,
-      "height": 146
+      "height": 126
     },
     {
       "type": "Scroll",
       "name": "detailPanel",
       "style": "paper",
       "x": 180,
-      "y": 119,
+      "y": 139,
       "width": 292,
-      "height": 110
+      "height": 90
     },
     {
       "type": "TextButton",
