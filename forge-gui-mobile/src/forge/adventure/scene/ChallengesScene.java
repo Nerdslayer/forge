@@ -47,6 +47,10 @@ public final class ChallengesScene extends UIScene {
                     "lblAdventureChallengeHandDescription", "lblAdventureChallengeHandReward"),
             new ChallengeEntry(Challenge.WAR_CHEST, "lblAdventureChallengeWarChest",
                     "lblAdventureChallengeWarChestDescription", "lblAdventureChallengeWarChestReward"),
+            new ChallengeEntry(Challenge.SECOND_WIND, "lblAdventureChallengeSecondWind",
+                    "lblAdventureChallengeSecondWindDescription", "lblAdventureChallengeSecondWindReward"),
+            new ChallengeEntry(Challenge.BACKWATER, "lblAdventureChallengeBackwater",
+                    "lblAdventureChallengeBackwaterDescription", "lblAdventureChallengeBackwaterReward"),
             new ChallengeEntry(Challenge.MOX_PEARL),
             new ChallengeEntry(Challenge.MOX_SAPPHIRE),
             new ChallengeEntry(Challenge.MOX_JET),
@@ -246,6 +250,8 @@ public final class ChallengesScene extends UIScene {
             case WAR_CHEST -> label("lblAdventureChallengeWarChestRequired",
                     NumberFormat.getIntegerInstance().format(AdventureChallenges.WAR_CHEST_GOLD));
             case SOL_RING -> label("lblAdventureChallengeSolRingRequired");
+            case SECOND_WIND -> label("lblAdventureChallengeSecondWindRequired");
+            case BACKWATER -> label("lblAdventureChallengeBackwaterRequired");
             default -> label("lblAdventureChallengeCastleKeyRequired", artifact.key());
         };
         requirement.setText(unlocked ? "" : label("lblAdventureChallengeRequirement", required));

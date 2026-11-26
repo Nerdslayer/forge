@@ -21,6 +21,7 @@ import java.util.Map;
 
 import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
+import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 
 /**
@@ -52,6 +53,10 @@ public class TriggerAlways extends Trigger {
     /** {@inheritDoc} */
     @Override
     public final boolean performTest(final Map<AbilityKey, Object> runParams) {
+        if ("ControllerSurvivesLifeTotal".equals(getParam("Condition"))) {
+            Player controller = getHostCard().getController();
+            return controller.isInGame() && (controller.getLife() > 0 || controller.cantLoseForZeroOrLessLife());
+        }
         return true;
     }
 

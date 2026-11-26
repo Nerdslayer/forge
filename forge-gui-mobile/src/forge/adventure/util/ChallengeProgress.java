@@ -184,6 +184,10 @@ public final class ChallengeProgress {
             }
             extraGold = challenge.bonusGold(gold, random);
             extraShards = Snapshot.bonusCurrency(shards, challenge.shardPercent(), random);
+            if (challenge.enabled().contains(Challenge.SECOND_WIND)) {
+                extraGold += 60;
+                extraShards += 3;
+            }
             if (extraGold > 0) {
                 rewards.add(new Reward(extraGold));
             }
@@ -210,6 +214,11 @@ public final class ChallengeProgress {
             }
             if (challenge.enabled().contains(Challenge.WELL_PREPARED) && opponent != null) {
                 extraCards += addRandomCard(rewards, opponent.getMain().toFlatList(), random);
+            }
+            if (challenge.enabled().contains(Challenge.BACKWATER)) {
+                List<PaperCard> pool = backwaterPool(opponent);
+                extraCards += addRandomCard(rewards, pool, random);
+                extraCards += addRandomCard(rewards, pool, random);
             }
             for (Challenge active : Challenge.values()) {
                 if (active.artifact() != null && challenge.enabled().contains(active)) {
@@ -245,6 +254,22 @@ public final class ChallengeProgress {
         }
         rewards.add(new Reward(pool.get(random.nextInt(pool.size()))));
         return 1;
+    }
+
+    private static List<PaperCard> backwaterPool(Deck enemyDeck) {
+        if (enemyDeck != null) {
+            var commons = enemyDeck.getMain().getFilteredPool(PaperCardPredicates.IS_COMMON).toFlatList();
+            if (!commons.isEmpty()) {
+                return commons;
+            }
+        }
+        var fallback = new ArrayList<PaperCard>();
+        for (PaperCard card : RewardData.getAllCards()) {
+            if (PaperCardPredicates.IS_COMMON.test(card)) {
+                fallback.add(card);
+            }
+        }
+        return fallback;
     }
 
     private static List<PaperCard> bonusPool(Deck enemyDeck) {

@@ -16,11 +16,14 @@ import forge.adventure.character.EnemySprite;
 import forge.adventure.character.PlayerSprite;
 import forge.adventure.data.*;
 import forge.adventure.player.AdventurePlayer;
+import forge.adventure.player.AdventureChallenges.Challenge;
 import forge.adventure.stage.GameHUD;
 import forge.adventure.stage.IAfterMatch;
 import forge.adventure.util.AdventureEventController;
+import forge.adventure.util.Backwater;
 import forge.adventure.util.Config;
 import forge.adventure.util.Current;
+import forge.adventure.util.SecondWind;
 import forge.adventure.util.ChallengeProgress;
 import forge.adventure.player.AdventureChallenges.Snapshot;
 import forge.adventure.world.WorldSave;
@@ -87,6 +90,7 @@ public class DuelScene extends ForgeScene {
     boolean arenaBattleChallenge = false;
     boolean isArena = false;
     private Snapshot challenges = Snapshot.NONE;
+    private SecondWind secondWind;
     AdventureEventData eventData;
     final int enemyAvatarKey = 90001;
     final int playerAvatarKey = 90000;
@@ -249,6 +253,8 @@ public class DuelScene extends ForgeScene {
 
     void afterGameEnd(String enemyName, boolean winner) {
         Snapshot battleChallenges = challenges;
+        boolean unlockSecondWind = winner && secondWind.wonAtLowLife();
+        boolean unlockBackwater = winner && Backwater.qualifies(playerDeck);
         Forge.advFreezePlayerControls = winner;
         endRunnable = () -> Gdx.app.postRunnable(() -> {
             GameHUD.getInstance().updateBGM();
@@ -259,6 +265,12 @@ public class DuelScene extends ForgeScene {
             Forge.advFreezePlayerControls = false;
             Scene last = Forge.switchToLast();
             Current.player().getStatistic().setResult(enemyName, winner);
+            if (unlockSecondWind) {
+                Current.player().getChallenges().unlock(Challenge.SECOND_WIND);
+            }
+            if (unlockBackwater) {
+                Current.player().getChallenges().unlock(Challenge.BACKWATER);
+            }
 
             if (last instanceof HudScene hud) {
                 hud.setWinner(winner, isArena, battleChallenges);
@@ -555,6 +567,16 @@ public class DuelScene extends ForgeScene {
         guiMap.put(humanPlayer, MatchController.instance);
 
         hostedMatch = MatchController.hostMatch();
+        var comeback = new SecondWind(challenges.enabled().contains(Challenge.SECOND_WIND));
+        var adventurer = humanPlayer;
+        boolean backwaterEnabled = challenges.enabled().contains(Challenge.BACKWATER);
+        secondWind = comeback;
+        hostedMatch.setBeforeGameHook(game -> {
+            comeback.trackGame(game, adventurer);
+            if (backwaterEnabled) {
+                Backwater.trackGame(game, adventurer);
+            }
+        });
 
         GameRules rules;
 

@@ -23,7 +23,9 @@ public final class AdventureChallenges implements SaveFileContent {
         MOX_JET("Mox Jet", "Black Key", MagicColor.BLACK, 1),
         MOX_RUBY("Mox Ruby", "Red Key", MagicColor.RED, 1),
         MOX_EMERALD("Mox Emerald", "Green Key", MagicColor.GREEN, 1),
-        SOL_RING("Sol Ring", null, MagicColor.COLORLESS, 2);
+        SOL_RING("Sol Ring", null, MagicColor.COLORLESS, 2),
+        SECOND_WIND,
+        BACKWATER;
 
         private final ArtifactChallenge artifact;
 

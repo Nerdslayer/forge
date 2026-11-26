@@ -44,6 +44,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.function.Consumer;
 
 public class HostedMatch {
     private Match match;
@@ -52,6 +53,7 @@ public class HostedMatch {
     private MusicPlaylist matchPlaylist = null;
     public HashMap<LobbySlot, IGameController> gameControllers = null;
     private Runnable startGameHook = null;
+    private Consumer<Game> beforeGameHook;
     private Runnable endGameHook = null;
     private Runnable onMatchOver = null;
     private final List<PlayerControllerHuman> humanControllers = Lists.newArrayList();
@@ -64,6 +66,10 @@ public class HostedMatch {
     public int subGameCount = 0;
 
     public HostedMatch() {}
+
+    public void setBeforeGameHook(Consumer<Game> hook) {
+        beforeGameHook = hook;
+    }
 
     public void setStartGameHook(Runnable hook) {
         startGameHook = hook;
@@ -295,6 +301,9 @@ public class HostedMatch {
             }
             // Actually start the game!
             try {
+                if (beforeGameHook != null) {
+                    beforeGameHook.accept(currentGame);
+                }
                 match.startGame(currentGame, startGameHook);
             } catch (final RuntimeException | Error ex) {
                 if (replay != null) {
