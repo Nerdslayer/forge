@@ -120,19 +120,8 @@ public class FGameClient implements IToServer, IHasForgeLog {
 
             // Start the connection attempt.
             final Channel newChannel = b.connect(this.hostname, this.port).sync().channel();
-            synchronized (reconnectLock) {
-                if (shuttingDown) {
-                    newChannel.close();
-                    return;
-                }
-                channel = newChannel;
-            }
             final ChannelFuture ch = newChannel.closeFuture();
             attached = true;
-            // A reconnect on a brand-new channel can't inherit the prior pipeline's
-            // simulated-disconnect blockers, so clear the gate that would otherwise
-            // keep dropping outbound writes after /simulatedisconnect.
-            disconnectSimulated = false;
             new Thread(() -> {
                 try {
                     ch.sync();
@@ -473,6 +462,21 @@ public class FGameClient implements IToServer, IHasForgeLog {
     }
 
     private class LobbyUpdateHandler extends ChannelInboundHandlerAdapter {
+        @Override
+        public void channelActive(final ChannelHandlerContext ctx) throws Exception {
+            synchronized (reconnectLock) {
+                if (shuttingDown) {
+                    ctx.close();
+                    return;
+                }
+                // Publish before GameClientHandler sends login. A fast refusal can close this channel
+                // before the thread waiting in connect() resumes.
+                channel = ctx.channel();
+                disconnectSimulated = false;
+            }
+            super.channelActive(ctx);
+        }
+
         @Override
         public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
             if (msg instanceof SeatLostEvent) {
